@@ -182,6 +182,91 @@ describe('GET /api/courses/[id]/assignments/[aid]/similarity', () => {
     expect(JSON.stringify(body)).not.toContain('s1');
   });
 
+  it('counts groups of students for the badge, not pairs', async () => {
+    // s2 shares one attempt with s1 and another with s3. That is two matches and one
+    // situation, and the badge has to agree with the page, which shows one card.
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+      { problemId: 'p1', shapeHash: 'shape-b', contentHash: 'hash-b', studentId: 's2' },
+      { problemId: 'p1', shapeHash: 'shape-b', contentHash: 'hash-b', studentId: 's3' },
+      // Enough of a cohort that two students sharing work is not the expected answer.
+      ...['s4', 's5', 's6', 's7', 's8', 's9'].map((studentId) => ({
+        problemId: 'p1',
+        shapeHash: `shape-${studentId}`,
+        contentHash: `hash-${studentId}`,
+        studentId,
+      })),
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        problemId: 'p1',
+        contentHash: 'hash-a',
+        shapeHash: 'shape-a',
+        assignmentId: 'a1',
+        submittedAt: new Date('2026-08-14T12:00:00Z'),
+        correct: false,
+        fileName: 'stored-1.jff',
+        originalFileName: 'mine.jff',
+        studentId: 's1',
+        studentGroupId: null,
+        student: student('s1'),
+        studentGroup: null,
+      },
+      {
+        id: 'sub-2',
+        problemId: 'p1',
+        contentHash: 'hash-a',
+        shapeHash: 'shape-a',
+        assignmentId: 'a1',
+        submittedAt: new Date('2026-08-14T13:00:00Z'),
+        correct: false,
+        fileName: 'stored-2.jff',
+        originalFileName: 'mine.jff',
+        studentId: 's2',
+        studentGroupId: null,
+        student: student('s2'),
+        studentGroup: null,
+      },
+      {
+        id: 'sub-3',
+        problemId: 'p1',
+        contentHash: 'hash-b',
+        shapeHash: 'shape-b',
+        assignmentId: 'a1',
+        submittedAt: new Date('2026-08-14T14:00:00Z'),
+        correct: false,
+        fileName: 'stored-3.jff',
+        originalFileName: 'mine.jff',
+        studentId: 's2',
+        studentGroupId: null,
+        student: student('s2'),
+        studentGroup: null,
+      },
+      {
+        id: 'sub-4',
+        problemId: 'p1',
+        contentHash: 'hash-b',
+        shapeHash: 'shape-b',
+        assignmentId: 'a1',
+        submittedAt: new Date('2026-08-14T15:00:00Z'),
+        correct: false,
+        fileName: 'stored-4.jff',
+        originalFileName: 'mine.jff',
+        studentId: 's3',
+        studentGroupId: null,
+        student: student('s3'),
+        studentGroup: null,
+      },
+    ]);
+
+    const body = await (await callCount()).json();
+
+    expect(body.matches).toBe(2);
+    expect(body.notable).toBe(1);
+  });
+
   it('writes no access entry for a count, which discloses nobody', async () => {
     await callCount();
 

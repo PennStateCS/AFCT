@@ -83,6 +83,17 @@ What seeded demo data already shows: with twenty students and machines of three 
 - A cohort where the problem itself invites an odd construction will make that construction look rare when it is not.
 - Fewer than roughly eight students on a problem means nothing can be rare enough to report at all. The check is quiet rather than wrong, but do not read its silence as a clean bill.
 
+## The presentation layer
+
+Everything the tab decides about *display* lives in `components/assignments/similarity-evidence.ts`, as pure functions over what the API returns. Nothing there touches the detector.
+
+- `matchTypeOf` maps a group to one of `exact`, `same-machine`, `structural` or `common`. Commonality is checked first: past the threshold it is convergence whatever the files look like.
+- `STRENGTH_OF` maps that to the word shown on the card. It grades the artifact evidence, never the likelihood of misconduct, and `common` sits outside the scale rather than at the bottom of it.
+- `clusterMatches` runs union-find over shared students, per problem, so four students who all share work are one card rather than six. Common groups are never folded into a cluster of findings. Relationships stay on the cluster and are rendered behind one control.
+- `compareClusters` orders the page: match type first, then reuse after passing, then size, then recency.
+
+The card and its parts are `SimilarityMatchCard`, `SimilarityEvidenceBadge`, `SimilarityInfoPopover`, `SimilarityTimeline` and `SimilarityFilters`. The popover copy is the feature's explanation of itself and is worth as much care as the code.
+
 ## Changing this safely
 
 - The wording lives in `components/assignments/similarity-format.ts`, deliberately apart from the components. Implementation vocabulary (hash, fingerprint, sha256) must not reach the UI.

@@ -46,36 +46,34 @@ const submission = (over: Record<string, unknown> = {}) => ({
   fileName: 'stored-1.jff',
   originalFileName: 'mine.jff',
   contentKey: 'aaaa1111',
-  student: student('s1', 'Alex'),
+  student: student('s1', 'Sarah'),
   studentGroup: null,
   ...over,
 });
+
+const pairOf = (a: string, b: string) => [
+  submission({ id: `sub-${a}`, student: student(a, a), submittedAt: '2026-08-14T22:42:00.000Z' }),
+  submission({
+    id: `sub-${b}`,
+    student: student(b, b),
+    submittedAt: '2026-08-14T22:49:00.000Z',
+  }),
+];
 
 const group = (over: Record<string, unknown> = {}) => ({
   matchId: 'abcd1234',
   kind: 'same-work' as const,
   evidence: [] as string[],
+  stateCount: 11,
+  transitionCount: 17,
   problem: { id: 'p1', title: 'Strings ending in 01', type: 'FA' },
   studentCount: 2,
-  problemStudentCount: 38,
+  problemStudentCount: 84,
   identicalStudentCount: 2,
-  closestGapMs: 11 * 60 * 1000,
+  closestGapMs: 7 * 60 * 1000,
   reusedAfterPass: false,
   matchesAnswerFile: false,
-  submissions: [
-    submission({
-      id: 'sub-1',
-      submittedAt: '2026-08-14T22:53:00.000Z',
-      student: student('s2', 'Jamie'),
-      attempt: 1,
-    }),
-    submission({
-      id: 'sub-2',
-      submittedAt: '2026-08-14T22:42:00.000Z',
-      student: student('s1', 'Alex'),
-      attempt: 3,
-    }),
-  ],
+  submissions: pairOf('sarah', 'michael'),
   ...over,
 });
 
@@ -98,116 +96,183 @@ describe('AssignmentSimilarityPanel', () => {
   it('answers "is there anything to review" in one line', async () => {
     renderPanel();
 
-    expect(await screen.findByText('No two students submitted matching work.')).toBeInTheDocument();
+    expect(await screen.findByText('No two students submitted related work.')).toBeInTheDocument();
   });
 
-  it('counts what is worth reviewing, and says when work was reused after a pass', async () => {
+  it('summarises in match groups, not pairs, and calls out exact artifacts', async () => {
+    getMock.mockResolvedValue([
+      group({ matchId: 'ab', submissions: pairOf('a', 'b') }),
+      group({ matchId: 'ac', submissions: pairOf('a', 'c') }),
+    ]);
+
+    renderPanel();
+
+    expect(await screen.findByText('1 match group worth reviewing across 1 problem.')).toBeInTheDocument();
+    expect(screen.getByText('1 contains an exact artifact match.')).toBeInTheDocument();
+    expect(
+      screen.getByText('2 similarity relationships are contained in these groups.'),
+    ).toBeInTheDocument();
+  });
+
+  it('gives an exact artifact the strongest presentation', async () => {
+    getMock.mockResolvedValue([group()]);
+
+    renderPanel();
+
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Very strong')).toBeInTheDocument();
+    expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
+    expect(
+      within(card).getByRole('heading', {
+        name: '2 of 84 students submitted the same saved machine',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('All 11 state positions are identical.')).toBeInTheDocument();
+    expect(screen.getByText('11 states · 17 transitions')).toBeInTheDocument();
+  });
+
+  it('calls a grammar a grammar, and claims nothing about its layout', async () => {
+    getMock.mockResolvedValue([
+      group({
+        problem: { id: 'p2', title: 'Balanced parentheses', type: 'CFG' },
+        stateCount: 0,
+        transitionCount: 0,
+      }),
+    ]);
+
+    renderPanel();
+
+    const card = await screen.findByRole('article');
+    expect(
+      within(card).getByRole('heading', { name: '2 of 84 students submitted the same saved grammar' }),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByText('The contents are identical once formatting is set aside.'),
+    ).toBeInTheDocument();
+    // Nothing has states, so nothing says it has none.
+    expect(within(card).queryByText(/0 states/)).not.toBeInTheDocument();
+  });
+
+  it('gives the same machine the middle presentation', async () => {
+    getMock.mockResolvedValue([group({ studentCount: 3, identicalStudentCount: 2 })]);
+
+    renderPanel();
+
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Strong')).toBeInTheDocument();
+    expect(within(card).getByText('Same machine')).toBeInTheDocument();
+    expect(screen.getByText('State names or positions differ.')).toBeInTheDocument();
+  });
+
+  it('gives a structural near-match the weakest presentation, with its evidence', async () => {
+    getMock.mockResolvedValue([
+      group({
+        kind: 'near',
+        identicalStudentCount: 1,
+        evidence: ['9 of 13 pieces of local structure are the same', 'They differ by 2 transitions'],
+      }),
+    ]);
+
+    renderPanel();
+
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Possible')).toBeInTheDocument();
+    expect(within(card).getByText('Structurally similar')).toBeInTheDocument();
+    expect(screen.getByText('They differ by 2 transitions')).toBeInTheDocument();
+  });
+
+  it('keeps reuse after passing as secondary context beside the match type', async () => {
     getMock.mockResolvedValue([group({ reusedAfterPass: true })]);
 
     renderPanel();
 
-    expect(await screen.findByText('1 match worth reviewing across 1 problem.')).toBeInTheDocument();
-    expect(
-      screen.getByText('1 includes work reused after another student received a correct result.'),
-    ).toBeInTheDocument();
+    // Both are present, and reuse is a badge beside the match type rather than in place of it.
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
+    expect(within(card).getByText('Reused after passing')).toBeInTheDocument();
   });
 
-  it('heads each problem with its title and how many submitted it', async () => {
+  it('explains a match type in a popover reachable by keyboard', async () => {
+    const person = userEvent.setup();
     getMock.mockResolvedValue([group()]);
-
     renderPanel();
+    await screen.findByRole('button', { name: 'Explain exact jflap artifact match' });
 
-    expect(await screen.findByRole('heading', { name: 'Strings ending in 01' })).toBeInTheDocument();
-    expect(screen.getByText('38 students submitted · 1 match')).toBeInTheDocument();
+    await person.click(screen.getByRole('button', { name: 'Explain exact jflap artifact match' }));
+
+    expect(await screen.findByRole('heading', { name: 'What this means' })).toBeInTheDocument();
+    expect(screen.getByText(/same saved JFLAP artifact/)).toBeInTheDocument();
+    // And the facts about this particular match.
+    expect(screen.getByRole('heading', { name: 'This match' })).toBeInTheDocument();
+    expect(screen.getByText('2 of 84 students are involved')).toBeInTheDocument();
+
+    await person.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'What this means' })).not.toBeInTheDocument(),
+    );
   });
 
-  it('leads a card with what kind of match it is, then what that means', async () => {
-    getMock.mockResolvedValue([group()]);
-
-    renderPanel();
-
-    expect(await screen.findByRole('heading', { name: 'Identical file' })).toBeInTheDocument();
-    expect(screen.getByText('2 of 38 students submitted the identical file')).toBeInTheDocument();
-    expect(screen.getByText('Closest submissions were 11 minutes apart.')).toBeInTheDocument();
-  });
-
-  it('describes a shape-only match in the words of the problem type', async () => {
-    getMock.mockResolvedValue([group({ identicalStudentCount: 1 })]);
-
-    renderPanel();
-
-    expect(
-      await screen.findByRole('heading', { name: 'Same work, drawn differently' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('2 of 38 students submitted the same machine')).toBeInTheDocument();
-    expect(screen.getByText('State names or positions differ.')).toBeInTheDocument();
-  });
-
-  it('says how many of a mixed match sent the very same file', async () => {
+  it('folds related pairs into one group instead of a card each', async () => {
     getMock.mockResolvedValue([
-      group({
-        studentCount: 3,
-        identicalStudentCount: 2,
-        problem: { id: 'p1', title: 'P', type: 'CFG' },
-      }),
+      group({ matchId: 'ab', submissions: pairOf('a', 'b') }),
+      group({ matchId: 'ac', submissions: pairOf('a', 'c') }),
+      group({ matchId: 'bc', submissions: pairOf('b', 'c') }),
     ]);
 
     renderPanel();
 
-    expect(await screen.findByRole('heading', { name: 'Same work' })).toBeInTheDocument();
-    // A grammar is not a machine.
-    expect(screen.getByText('3 of 38 students submitted the same grammar')).toBeInTheDocument();
-    expect(screen.getByText('2 of them submitted the identical file.')).toBeInTheDocument();
+    const cards = await screen.findAllByRole('article');
+    expect(cards).toHaveLength(1);
+    expect(
+      screen.getByRole('heading', { name: '3 of 84 students submitted the same saved machine' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/3 exact jflap artifact relationships/i)).toBeInTheDocument();
   });
 
-  it('lists the students in order, with times, results and the gap from the first', async () => {
-    getMock.mockResolvedValue([group()]);
-
-    renderPanel();
-
-    const rows = await screen.findAllByRole('listitem');
-    expect(within(rows[0] as HTMLElement).getByText('Alex Student')).toBeInTheDocument();
-    expect(within(rows[0] as HTMLElement).getByText('First')).toBeInTheDocument();
-    expect(within(rows[0] as HTMLElement).getByText(/10:42 PM/)).toBeInTheDocument();
-    expect(within(rows[0] as HTMLElement).getByText('Submission 3 · Correct')).toBeInTheDocument();
-
-    expect(within(rows[1] as HTMLElement).getByText('Jamie Student')).toBeInTheDocument();
-    expect(within(rows[1] as HTMLElement).getByText('+11 min')).toBeInTheDocument();
-  });
-
-  it('marks an ungraded attempt as such rather than guessing', async () => {
-    getMock.mockResolvedValue([
-      group({
-        submissions: [
-          submission({ id: 'sub-1', correct: null, student: student('s1', 'Alex') }),
-          submission({
-            id: 'sub-2',
-            correct: false,
-            submittedAt: '2026-08-14T23:00:00.000Z',
-            student: student('s2', 'Jamie'),
-          }),
-        ],
-      }),
-    ]);
-
-    renderPanel();
-
-    expect(await screen.findByText(/Not graded/)).toBeInTheDocument();
-    expect(screen.getByText(/Incorrect/)).toBeInTheDocument();
-  });
-
-  it('notes the reference solution quietly, without a badge', async () => {
-    getMock.mockResolvedValue([group({ matchesAnswerFile: true })]);
-
-    renderPanel();
-
-    expect(await screen.findByText('Matches the instructor reference solution.')).toBeInTheDocument();
-  });
-
-  it('folds common matches away, and says what they are', async () => {
+  it('keeps a group\'s relationships behind one control', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([
-      group({ matchId: 'common-1', studentCount: 14, identicalStudentCount: 14 }),
+      group({ matchId: 'ab', submissions: pairOf('a', 'b') }),
+      group({ matchId: 'ac', submissions: pairOf('a', 'c') }),
+    ]);
+
+    renderPanel();
+    const toggle = await screen.findByRole('button', { name: /Review the 2 relationships/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+
+    await person.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findAllByRole('button', { name: 'Compare' })).toHaveLength(2);
+  });
+
+  it('filters to one kind of match, and says which is selected', async () => {
+    const person = userEvent.setup();
+    getMock.mockResolvedValue([
+      group({ matchId: 'exact', submissions: pairOf('a', 'b') }),
+      group({
+        matchId: 'near',
+        kind: 'near',
+        identicalStudentCount: 1,
+        submissions: pairOf('x', 'y'),
+      }),
+    ]);
+
+    renderPanel();
+    await screen.findAllByRole('article');
+
+    const exactFilter = screen.getByRole('button', { name: /Exact JFLAP artifact/ });
+    await person.click(exactFilter);
+
+    expect(exactFilter).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
+    expect(screen.queryByRole('heading', { name: 'Structurally similar' })).not.toBeInTheDocument();
+  });
+
+  it('collapses common answers, and renders none of them until asked', async () => {
+    const person = userEvent.setup();
+    getMock.mockResolvedValue([
+      group({ matchId: 'common', studentCount: 42, identicalStudentCount: 42 }),
     ]);
 
     renderPanel();
@@ -215,95 +280,76 @@ describe('AssignmentSimilarityPanel', () => {
     expect(
       await screen.findByText('No matches worth reviewing. 1 common answer set aside.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Common matches (1)' })).toBeInTheDocument();
-    // Collapsed to start: the card is not in the document until it is asked for.
-    expect(screen.queryByRole('heading', { name: /Common answer/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
 
-    const toggle = screen.getByRole('button', { name: /Show common matches/ });
+    const toggle = screen.getByRole('button', { name: /Show common answers/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
     await person.click(toggle);
 
-    expect(await screen.findByRole('heading', { name: /Common answer/ })).toBeInTheDocument();
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const card = await screen.findByRole('article');
+    // Named by its kind, and by the problem it belongs to, since this list is not grouped.
+    expect(
+      within(card).getByRole('heading', { name: /Strings ending in 01/ }),
+    ).toBeInTheDocument();
   });
 
-  it('lets the reader move where common begins, and remembers it', async () => {
-    const person = userEvent.setup();
-    // 10 of 38 is over a quarter: common at the default, not common at half.
-    getMock.mockResolvedValue([group({ studentCount: 10, identicalStudentCount: 10 })]);
-
-    renderPanel();
-    expect(await screen.findByRole('heading', { name: 'Common matches (1)' })).toBeInTheDocument();
-
-    await person.click(screen.getByRole('button', { name: /Adjust/ }));
-    fireEvent.change(await screen.findByLabelText('Common threshold'), {
-      target: { value: '0.5' },
-    });
-
-    await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: /Common matches/ })).not.toBeInTheDocument(),
-    );
-    expect(screen.getByText('Common threshold: 50%')).toBeInTheDocument();
-    expect(window.localStorage.getItem('afct.similarityCommonShare')).toBe('0.5');
-  });
-
-  it('names each match region so a reader can tell which one they are in', async () => {
+  it('lists the students in order, with times, results and the gap from the first', async () => {
     getMock.mockResolvedValue([group()]);
 
     renderPanel();
 
-    expect(
-      await screen.findByRole('article', { name: 'Identical file' }),
-    ).toBeInTheDocument();
+    const chronology = await screen.findByRole('list', { name: 'Submission order' });
+    const rows = within(chronology).getAllByRole('listitem');
+
+    expect(within(rows[0] as HTMLElement).getByText('sarah Student')).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText('First')).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText(/10:42 PM/)).toBeInTheDocument();
+    expect(within(rows[1] as HTMLElement).getByText('+7 min')).toBeInTheDocument();
   });
 
   it('never calls anybody suspicious, and shows no percentage of similarity', async () => {
     getMock.mockResolvedValue([group({ reusedAfterPass: true, matchesAnswerFile: true })]);
 
     const { container } = renderPanel();
-    await screen.findByText(/2 of 38 students/);
+    await screen.findByRole('article');
 
     const text = container.textContent?.toLowerCase() ?? '';
-    expect(text).not.toContain('suspicious');
-    expect(text).not.toContain('plagiar');
-    expect(text).not.toContain('cheat');
-    // No implementation vocabulary either.
+    for (const word of ['suspicious', 'plagiar', 'cheat', 'guilty', 'misconduct', 'likely copied']) {
+      expect(text).not.toContain(word);
+    }
     expect(text).not.toContain('hash');
-  });
-
-  it('shows a near match as the evidence behind it, not as a score', async () => {
-    getMock.mockResolvedValue([
-      group({
-        kind: 'near',
-        studentCount: 2,
-        identicalStudentCount: 1,
-        evidence: [
-          '9 of 10 pieces of local structure are the same, 3 of them uncommon in this class',
-          'They differ by 1 transition',
-          '2 transitions have the same hand-adjusted curve',
-        ],
-      }),
-    ]);
-
-    renderPanel();
-
-    expect(await screen.findByRole('heading', { name: 'Structurally similar' })).toBeInTheDocument();
-    expect(screen.getByText('They differ by 1 transition')).toBeInTheDocument();
-    expect(
-      screen.getByText('2 of 38 students share uncommon structure in their machines'),
-    ).toBeInTheDocument();
   });
 
   it('opens the comparison from the card, earliest student first', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([group()]);
     renderPanel();
-    await screen.findByText(/2 of 38 students/);
+    await screen.findByRole('article');
 
     await person.click(screen.getByRole('button', { name: /Compare submissions/ }));
 
     await waitFor(() => expect(screen.getByTestId('compare')).toBeInTheDocument());
-    expect(screen.getByTestId('compare').textContent).toBe('sub-2 vs sub-1');
+    expect(screen.getByTestId('compare').textContent).toBe('sub-sarah vs sub-michael');
+  });
+
+  it('lets the reader move where common begins, and remembers it', async () => {
+    const person = userEvent.setup();
+    // 20 of 84 is under a quarter, so it starts as a finding.
+    getMock.mockResolvedValue([group({ studentCount: 20, identicalStudentCount: 20 })]);
+
+    renderPanel();
+    await screen.findByRole('article');
+
+    await person.click(screen.getByRole('button', { name: /Adjust/ }));
+    fireEvent.change(await screen.findByLabelText('Common threshold'), {
+      target: { value: '0.2' },
+    });
+
+    // Past a fifth of the class it reads as the expected answer instead.
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Exact JFLAP artifact' })).not.toBeInTheDocument(),
+    );
+    expect(window.localStorage.getItem('afct.similarityCommonShare')).toBe('0.2');
   });
 });

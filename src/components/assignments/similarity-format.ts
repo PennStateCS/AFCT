@@ -5,7 +5,8 @@
 // reads and acts on. Implementation words (hash, fingerprint, sha256) never appear here;
 // nor do verdicts.
 
-import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/matches';
+import type { MatchSubmission } from '@/lib/similarity/matches';
+import { MATCH_LABEL, type MatchCluster, type MatchType } from '@/lib/similarity/evidence';
 
 /** What the students in this problem were asked to build, in the reader's words. */
 export function workNoun(problemType: string | null): string {
@@ -13,46 +14,6 @@ export function workNoun(problemType: string | null): string {
   if (problemType === 'RE') return 'expression';
   if (problemType === 'FA' || problemType === 'PDA' || problemType === 'TM') return 'machine';
   return 'work';
-}
-
-/** The heading of a match card: what kind of match it is, in three words or so. */
-export function matchTitle(group: SubmissionMatchGroup): string {
-  if (group.kind === 'near') return 'Structurally similar';
-  if (group.identicalStudentCount >= group.studentCount) return 'Identical file';
-  if (group.identicalStudentCount > 1) return 'Same work';
-  return 'Same work, drawn differently';
-}
-
-/** The one line under the heading: the counts, which are what the match means. */
-export function matchHeadline(group: SubmissionMatchGroup): string {
-  const of = `${group.studentCount} of ${group.problemStudentCount} students submitted`;
-  if (group.kind === 'near') {
-    return `2 of ${group.problemStudentCount} students share uncommon structure in their ${workNoun(group.problem.type)}s`;
-  }
-  if (group.identicalStudentCount >= group.studentCount) {
-    return `${of} the identical file`;
-  }
-  return `${of} the same ${workNoun(group.problem.type)}`;
-}
-
-/** The quieter lines after it: what differs, how close together, where it came from. */
-export function matchDetails(group: SubmissionMatchGroup): string[] {
-  // A near match carries its own evidence, each line of which the detector can point at, so
-  // it says those rather than the counts an exact match is described by.
-  if (group.kind === 'near') return group.evidence;
-
-  const lines: string[] = [];
-
-  if (group.identicalStudentCount > 1 && group.identicalStudentCount < group.studentCount) {
-    lines.push(`${group.identicalStudentCount} of them submitted the identical file.`);
-  } else if (group.identicalStudentCount <= 1) {
-    lines.push('State names or positions differ.');
-  }
-
-  const gap = gapLabel(group.closestGapMs);
-  if (gap) lines.push(`Closest submissions were ${gap} apart.`);
-
-  return lines;
 }
 
 /** "11 minutes", "1 hour 58 minutes", "3 days". Null when there is nothing to say. */
@@ -93,48 +54,122 @@ export function resultLabel(correct: boolean | null): string {
   return 'Not graded';
 }
 
-/** One entry per student, earliest first, counted from their earliest attempt at it. */
-export function studentsInOrder(group: SubmissionMatchGroup): MatchSubmission[] {
-  const earliest = new Map<string, MatchSubmission>();
-  for (const submission of group.submissions) {
-    const held = earliest.get(submission.student.id);
-    if (!held || submission.submittedAt < held.submittedAt) {
-      earliest.set(submission.student.id, submission);
-    }
-  }
-  return [...earliest.values()].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
-}
-
 export function studentName(student: MatchSubmission['student']): string {
   return `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || 'Unknown student';
 }
 
+
+/** "9 states · 17 transitions", or nothing when the artifact carried no description. */
+export function sizeLabel(cluster: {
+  stateCount: number | null;
+  transitionCount: number | null;
+}): string | null {
+  // A grammar or an expression has no states, and describing one as having none is worse
+  // than saying nothing about its size.
+  if (!cluster.stateCount) return null;
+  const states = `${cluster.stateCount} state${cluster.stateCount === 1 ? '' : 's'}`;
+  if (cluster.transitionCount === null) return states;
+  return `${states} · ${cluster.transitionCount} transition${cluster.transitionCount === 1 ? '' : 's'}`;
+}
+
+/** The one line under the heading of a cluster: who, how many, and of how many. */
+export function clusterHeadline(cluster: MatchCluster): string {
+  const students = cluster.students.length;
+  const of = `${students} of ${cluster.problemStudentCount} students`;
+
+  if (cluster.type === 'exact') {
+    return `${of} submitted the same saved ${workNoun(cluster.problem.type)}`;
+  }
+  if (cluster.type === 'same-machine') {
+    return `${of} submitted the same ${workNoun(cluster.problem.type)} with cosmetic differences`;
+  }
+  if (cluster.type === 'structural') {
+    return `${of} share uncommon structure in their ${workNoun(cluster.problem.type)}s`;
+  }
+  return `${of} submitted this same work`;
+}
+
 /**
- * The page's opening sentence, which is the whole point of the top of the tab: does the
- * reader need to look at anything, and is any of it the serious kind.
+ * The lines under that, each of which the implementation can substantiate.
+ *
+ * An exact match may say the saved coordinates agree because the fingerprint covers them: it
+ * is the same normalised artifact, layout and all. Nothing here claims anything the detector
+ * did not compute.
  */
-export function summarise(worthReviewing: SubmissionMatchGroup[], common: number): string[] {
-  if (worthReviewing.length === 0 && common === 0) {
-    return ['No two students submitted matching work.'];
-  }
+export function clusterDetails(cluster: MatchCluster): string[] {
+  const lines: string[] = [];
 
-  if (worthReviewing.length === 0) {
-    return [
-      `No matches worth reviewing. ${common} common answer${common === 1 ? '' : 's'} set aside.`,
-    ];
-  }
-
-  const problems = new Set(worthReviewing.map((group) => group.problem.id)).size;
-  const lines = [
-    `${worthReviewing.length} match${worthReviewing.length === 1 ? '' : 'es'} worth reviewing across ` +
-      `${problems} problem${problems === 1 ? '' : 's'}.`,
-  ];
-
-  const reused = worthReviewing.filter((group) => group.reusedAfterPass).length;
-  if (reused > 0) {
+  if (cluster.type === 'exact') {
+    // A grammar or an expression has no drawing to agree on, so saying the coordinates
+    // match would be describing something that does not exist.
     lines.push(
-      `${reused} include${reused === 1 ? 's' : ''} work reused after another student received a correct result.`,
+      cluster.stateCount
+        ? 'The structure and the saved drawing coordinates are identical.'
+        : 'The contents are identical once formatting is set aside.',
     );
+    if (cluster.stateCount !== null && cluster.stateCount > 0) {
+      lines.push(
+        `All ${cluster.stateCount} state position${cluster.stateCount === 1 ? '' : 's'} are identical.`,
+      );
+    }
   }
-  return lines;
+
+  if (cluster.type === 'same-machine') {
+    lines.push('State names or positions differ.');
+    const exact = cluster.relationships.filter(
+      (group) => group.identicalStudentCount > 1 && group.kind === 'same-work',
+    ).length;
+    if (exact > 0) {
+      lines.push(`Some of them submitted the identical saved artifact.`);
+    }
+  }
+
+  if (cluster.type === 'structural') {
+    lines.push(...cluster.relationships.flatMap((group) => group.evidence));
+  }
+
+  if (cluster.type === 'common') {
+    lines.push('Submitted by enough of the class to be the expected answer.');
+  }
+
+  const gap = gapLabel(cluster.closestGapMs);
+  if (gap && cluster.type !== 'common') lines.push(`Closest submissions were ${gap} apart.`);
+
+  if (cluster.matchesAnswerFile) lines.push('Matches the instructor reference solution.');
+
+  return [...new Set(lines)];
+}
+
+/** What the group is made of, for a cluster holding more than one relationship. */
+export function relationshipSummary(cluster: MatchCluster): string[] {
+  const parts: string[] = [];
+  // Lowercased to sit inside a sentence, except JFLAP, which is a name.
+  const say = (count: number, kind: MatchType) =>
+    `${count} ${MATCH_LABEL[kind].toLowerCase().replace('jflap', 'JFLAP')} relationship${count === 1 ? '' : 's'}`;
+
+  if (cluster.counts.exact > 0) parts.push(say(cluster.counts.exact, 'exact'));
+  if (cluster.counts['same-machine'] > 0) {
+    parts.push(say(cluster.counts['same-machine'], 'same-machine'));
+  }
+  if (cluster.counts.structural > 0) parts.push(say(cluster.counts.structural, 'structural'));
+  return parts;
+}
+
+/** The facts an info popover repeats back about this particular match. */
+export function clusterFacts(cluster: MatchCluster): string[] {
+  const facts = [`${cluster.students.length} of ${cluster.problemStudentCount} students are involved`];
+
+  const size = sizeLabel(cluster);
+  if (size) facts.push(size);
+
+  const gap = gapLabel(cluster.closestGapMs);
+  if (gap) facts.push(`The closest two submissions were ${gap} apart`);
+
+  if (cluster.relationships.length > 1) {
+    facts.push(...relationshipSummary(cluster).map((part) => part[0]!.toUpperCase() + part.slice(1)));
+  }
+
+  if (cluster.matchesAnswerFile) facts.push('The work is the problem\'s own reference solution');
+
+  return facts;
 }

@@ -1,153 +1,145 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { apiPaths } from '@/lib/api-paths';
-import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/matches';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown, Columns2 } from 'lucide-react';
+import type { MatchSubmission } from '@/lib/similarity/matches';
 import {
-  elapsedLabel,
-  matchDetails,
-  matchHeadline,
-  matchTitle,
-  resultLabel,
+  SimilarityEvidenceBadge,
+  ReusedAfterPassBadge,
+  ACCENT_BORDER,
+} from './SimilarityEvidenceBadge';
+import { SimilarityInfoPopover } from './SimilarityInfoPopover';
+import { SimilarityTimeline } from './SimilarityTimeline';
+import type { MatchCluster } from '@/lib/similarity/evidence';
+import {
+  clusterDetails,
+  clusterFacts,
+  clusterHeadline,
+  relationshipSummary,
+  sizeLabel,
   studentName,
-  studentsInOrder,
 } from './similarity-format';
 
 /**
- * One match: what kind it is, what it means, who was involved and in what order, and the
- * one action worth taking.
+ * One group of related submissions.
  *
- * The order of the card is the order the questions get asked. What kind of match, then the
- * counts that say how unusual it is, then the chronology, then Compare. Everything else is
- * quieter, and nothing on it decides anything.
+ * The first three lines carry the review: how strong the artifact evidence is, what kind of
+ * match it is, and why that matters here. Everything after is detail for somebody who has
+ * decided to look. Reuse after passing sits beside the kind rather than above it, because a
+ * weaker artifact match does not become a stronger one because of when it arrived.
+ *
+ * A group of two is the whole card. A group of more than two keeps its relationships behind
+ * one control, so a course where six students share work is one card to read rather than the
+ * fifteen nearly identical ones the pairs would make.
  */
 export function SimilarityMatchCard({
-  group,
-  common,
+  cluster,
   onCompare,
   formatDay,
   formatTime,
   showProblem = false,
 }: {
-  group: SubmissionMatchGroup;
-  /** Shared by enough of the class to be the answer rather than a finding. */
-  common?: boolean;
+  cluster: MatchCluster;
   onCompare: (students: MatchSubmission[]) => void;
-  /** "08/14/26", shown when a match runs across more than one day. */
   formatDay: (iso: string) => string;
-  /** "10:42 PM", which is what the chronology reads on. */
   formatTime: (iso: string) => string;
-  /** Set for the common list, which is not grouped under a problem heading. */
+  /** Set in the common list, which is not grouped under a problem heading. */
   showProblem?: boolean;
 }) {
-  const students = studentsInOrder(group);
-  // A named region: with several cards on a page, "Identical file" is what a screen reader
-  // user needs to hear to know which one they have landed in.
-  const headingId = `match-${group.matchId}-heading`;
-  const firstAt = students[0] ? Date.parse(students[0].submittedAt) : 0;
-  const spansDays =
-    new Set(students.map((submission) => formatDay(submission.submittedAt))).size > 1;
+  const [open, setOpen] = useState(false);
+  const headingId = `match-${cluster.id}-heading`;
+  const size = sizeLabel(cluster);
+  const details = clusterDetails(cluster);
+  const isGroup = cluster.relationships.length > 1;
 
   return (
     <article
       aria-labelledby={headingId}
-      className={
-        common ? 'bg-muted/30 space-y-3 rounded-lg border p-4' : 'space-y-3 rounded-lg border p-4'
-      }
+      className={`space-y-3 rounded-lg border p-4 ${ACCENT_BORDER[cluster.type]} ${
+        cluster.type === 'common' ? 'bg-muted/30' : ''
+      }`}
     >
-      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-        <div className="min-w-0">
-          <h4 id={headingId} className="font-semibold">
-            {common ? 'Common answer' : matchTitle(group)}
-            {showProblem && group.problem.title ? (
-              <span className="text-muted-foreground font-normal"> · {group.problem.title}</span>
-            ) : null}
-          </h4>
-        </div>
-        {/* The one status that changes what a reader does with the card, and the only one
-            given any weight. The rest are sentences below. */}
-        {group.reusedAfterPass ? <Badge variant="warning">Reused after passing</Badge> : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <SimilarityEvidenceBadge type={cluster.type} />
+        {cluster.reusedAfterPass ? <ReusedAfterPassBadge /> : null}
+        <SimilarityInfoPopover
+          type={cluster.type}
+          facts={clusterFacts(cluster)}
+          reusedAfterPass={cluster.reusedAfterPass}
+        />
+        {size ? <span className="text-muted-foreground ms-auto text-sm">{size}</span> : null}
       </div>
 
-      <div className="space-y-1 text-sm">
-        <p className={common ? 'text-muted-foreground' : ''}>{matchHeadline(group)}</p>
-        {group.kind === 'near' ? (
-          // A list, because each line is a separate thing a reader can check against the
-          // files rather than one paragraph to take on trust.
-          <ul className="text-muted-foreground list-disc space-y-0.5 ps-5">
-            {matchDetails(group).map((line) => (
+      <div className="space-y-1">
+        {/* The heading is the fact rather than the kind, because the badge above already
+            says the kind and a reader who has read it once does not need it twice. */}
+        <h4 id={headingId} className="font-semibold">
+          {clusterHeadline(cluster)}
+          {showProblem && cluster.problem.title ? (
+            <span className="text-muted-foreground font-normal"> · {cluster.problem.title}</span>
+          ) : null}
+        </h4>
+        {isGroup ? (
+          <p className="text-muted-foreground text-sm">{relationshipSummary(cluster).join(' · ')}</p>
+        ) : (
+          <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-sm">
+            {details.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
-        ) : (
-          matchDetails(group).map((line) => (
-            <p key={line} className="text-muted-foreground">
-              {line}
-            </p>
-          ))
         )}
-        {group.matchesAnswerFile ? (
-          <p className="text-muted-foreground">Matches the instructor reference solution.</p>
-        ) : null}
-        {common ? (
-          <p className="text-muted-foreground">
-            Submitted by enough of the class to be the expected answer.
-          </p>
-        ) : null}
       </div>
 
-      {/* An ordered list, and every relationship spelled out in words: the order, the gaps
-          and who was first all have to survive being read aloud, with no lines or arrows to
-          look at. */}
-      <ol className="divide-border divide-y text-sm">
-        {students.map((submission, index) => {
-          const name = studentName(submission.student);
-          const elapsed = index === 0 ? null : elapsedLabel(Date.parse(submission.submittedAt) - firstAt);
-          return (
-            <li
-              key={submission.id}
-              className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0"
-            >
-              <time dateTime={submission.submittedAt} className="tabular-nums">
-                {spansDays
-                  ? `${formatDay(submission.submittedAt)} ${formatTime(submission.submittedAt)}`
-                  : formatTime(submission.submittedAt)}
-              </time>
-              <span className="font-medium">{name}</span>
-              <span className="text-muted-foreground">
-                {submission.attempt ? `Submission ${submission.attempt} · ` : ''}
-                {resultLabel(submission.correct)}
-              </span>
-              <span className="text-muted-foreground ms-auto flex items-center gap-3">
-                {index === 0 ? (
-                  <span className="text-foreground font-medium">First</span>
-                ) : (
-                  <span>{elapsed}</span>
-                )}
-                {submission.fileName ? (
-                  <a
-                    className="underline"
-                    href={apiPaths.files.submission(encodeURIComponent(submission.fileName), {
-                      download: true,
-                    })}
-                    download={submission.originalFileName ?? 'submission'}
-                  >
-                    Open<span className="sr-only"> {name}&apos;s submission</span>
-                  </a>
-                ) : null}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      <SimilarityTimeline students={cluster.students} formatDay={formatDay} formatTime={formatTime} />
 
-      <div className="flex justify-end">
-        <Button variant="secondary" size="sm" onClick={() => onCompare(students)}>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {isGroup ? (
+          <Collapsible open={open} onOpenChange={setOpen} className="w-full">
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <ChevronDown
+                  className={open ? 'rotate-180 transition-transform' : 'transition-transform'}
+                />
+                {open ? 'Hide' : 'Review'} the {cluster.relationships.length} relationships
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3">
+              {/* Each relationship with its own compare, so a reader can go straight to the
+                  two files a given claim is about rather than guessing from a group of six. */}
+              <ul className="space-y-2">
+                {cluster.relationships.map((relationship) => (
+                  <li
+                    key={relationship.matchId}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm"
+                  >
+                    <span>
+                      {[
+                        ...new Set(relationship.submissions.map((s) => studentName(s.student))),
+                      ].join(' and ')}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onCompare(relationship.submissions)}
+                    >
+                      <Columns2 />
+                      Compare
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
+        ) : null}
+
+        <Button variant="secondary" size="sm" onClick={() => onCompare(cluster.students)}>
+          <Columns2 />
           Compare submissions
           <span className="sr-only">
             {' '}
-            for {students.map((submission) => studentName(submission.student)).join(' and ')}
+            for {cluster.students.map((s) => studentName(s.student)).join(' and ')}
           </span>
         </Button>
       </div>

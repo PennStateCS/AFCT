@@ -4,7 +4,8 @@ import { apiError } from '@/lib/api/http';
 import { withAssignmentAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { findSubmissionMatches } from '@/lib/similarity/matches';
-import { isCommon } from '@/lib/similarity/rarity';
+import { COMMON_SHARE } from '@/lib/similarity/rarity';
+import { clusterMatches } from '@/lib/similarity/evidence';
 
 type Ctx = { params: Promise<{ id: string; aid: string }> };
 
@@ -64,9 +65,14 @@ export const GET = withAssignmentAuth<Ctx>(
       // number, and the assignment page would otherwise write an access entry every time
       // anybody opened any tab.
       if (new URL(req.url).searchParams.get('part') === 'count') {
+        // `notable` counts what the page counts: groups of related students, not pairs.
+        // Nineteen pairs between six sets of students is six things to read, and a badge
+        // saying nineteen next to a page saying six is a badge nobody trusts. The reader's
+        // own commonality setting lives in their browser, so this uses the default.
+        const clusters = clusterMatches(groups, COMMON_SHARE);
         return NextResponse.json({
           matches: groups.length,
-          notable: groups.filter((group) => !isCommon(group)).length,
+          notable: clusters.filter((cluster) => cluster.type !== 'common').length,
           reusedAfterPass: groups.filter((group) => group.reusedAfterPass).length,
         });
       }

@@ -68,6 +68,13 @@ export type SubmissionMatchGroup = {
   kind: 'same-work' | 'near';
   /** Factual statements about what the two submissions share. Near matches only. */
   evidence: string[];
+  /**
+   * How big the work is: two students landing on the same three-state machine is a different
+   * proposition from two landing on the same eleven-state one, and a reader needs the size to
+   * judge which they are looking at. Empty when the artifact carried no description.
+   */
+  stateCount: number | null;
+  transitionCount: number | null;
   problem: { id: string; title: string | null; type: string | null };
   /** How many different students submitted this exact content. Always 2 or more. */
   studentCount: number;
@@ -203,6 +210,7 @@ export async function findSubmissionMatches(
       originalFileName: true,
       studentId: true,
       studentGroupId: true,
+      provenanceFeatures: true,
       student: { select: studentSelect },
       studentGroup: { select: { id: true, name: true } },
     },
@@ -236,6 +244,7 @@ export async function findSubmissionMatches(
         matchId: shapeKey.slice(0, 8),
         kind: 'same-work' as const,
         evidence: [],
+        ...sizeOf(submission.provenanceFeatures),
         problem: {
           id: submission.problemId,
           title: problems.get(submission.problemId)?.title ?? null,
@@ -355,6 +364,18 @@ async function numberAttempts(
     numbers.set(attempt.id, next);
   }
   return numbers;
+}
+
+/** The size of the work, from the description stored with it. */
+function sizeOf(features: unknown): { stateCount: number | null; transitionCount: number | null } {
+  const described = features as ProvenanceFeatures | null;
+  if (!described || typeof described !== 'object') {
+    return { stateCount: null, transitionCount: null };
+  }
+  return {
+    stateCount: described.stateCount ?? null,
+    transitionCount: described.transitionCount ?? null,
+  };
 }
 
 type TimedSubmission = {
@@ -510,6 +531,7 @@ async function findNearMatchGroups(
           ),
         ),
         matchesAnswerFile: false,
+        ...sizeOf(pair[0]?.provenanceFeatures),
         submissions: pair
           .slice()
           .sort((x, y) => y.submittedAt.getTime() - x.submittedAt.getTime())
