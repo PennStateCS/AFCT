@@ -126,6 +126,7 @@ const sidebars: SidebarsConfig = {
             'reference/login-protection',
             'reference/rich-descriptions',
             'reference/roles-and-permissions',
+            'reference/similarity-detection',
             'reference/system-architecture',
             'reference/toast-messages',
             'reference/evaluator-tests',

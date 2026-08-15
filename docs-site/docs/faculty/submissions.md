@@ -27,6 +27,8 @@ Use the status filters to focus on the results you need. For each submission, yo
 
 The **Rerun** button above the table reruns every submission currently visible after filtering. A submission that is pending or processing cannot be rerun yet.
 
+To see whether a submission shares an origin with another student's, use the assignment's [Similarity](similarity.md) tab.
+
 ## Enter a grade
 
 The grade field applies to the selected student and problem.
