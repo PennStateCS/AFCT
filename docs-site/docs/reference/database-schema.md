@@ -1045,6 +1045,7 @@ erDiagram
   String originalFileName "nullable"
   String contentHash "nullable"
   String shapeHash "nullable"
+  Json provenanceFeatures "nullable"
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK
@@ -1229,6 +1230,14 @@ Properties as follows:
   > same machine drawn differently, which is what a copied file looks like once somebody
   > has dragged the nodes about. Empty for a regular expression, which has no layout, and
   > for anything that could not be parsed.
+- `provenanceFeatures`
+  > A small description of the submitted artifact in pieces: local structure, the state
+  > identifiers JFLAP assigns behind the visible names, where states sit relative to each
+  > other, and any hand-adjusted transition curves. It exists so a copied file that has
+  > since been edited can still be recognised, which neither hash above can do. Carries its
+  > own version, so the rules can change without old rows becoming ambiguous.
+  >
+  > Never a similarity score, and never a copy of the file: a description of it.
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
 - `assignmentId`: The assignment.
@@ -1471,6 +1480,7 @@ erDiagram
   String originalFileName "nullable"
   String contentHash "nullable"
   String shapeHash "nullable"
+  Json provenanceFeatures "nullable"
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK

@@ -603,13 +603,37 @@ describe('createSubmission', () => {
       expect(secondData.contentHash).toBe(data.contentHash);
     });
 
+    it('describes the artifact it stores, for the check that survives an edit', async () => {
+      const { tx } = setup();
+
+      await call({
+        file: file(
+          '<structure><type>fa</type><automaton>' +
+            '<state id="0" name="q0"><x>10</x><y>10</y><initial/></state>' +
+            '<state id="1" name="q1"><x>90</x><y>10</y><final/></state>' +
+            '<transition><from>0</from><to>1</to><read>a</read></transition>' +
+            '</automaton></structure>',
+        ),
+      });
+
+      const [{ data }] = tx.submission.create.mock.calls[0] as [
+        { data: { provenanceFeatures: { version: number; features: string[] } } },
+      ];
+      expect(data.provenanceFeatures.version).toBe(1);
+      expect(data.provenanceFeatures.features.length).toBeGreaterThan(0);
+    });
+
     it('records no fingerprint for a submission with no file', async () => {
       const { tx } = setup();
 
       await call({ file: null });
 
-      const [{ data }] = tx.submission.create.mock.calls[0] as [{ data: { contentHash: null } }];
+      const [{ data }] = tx.submission.create.mock.calls[0] as [
+        { data: { contentHash: null; provenanceFeatures: unknown } },
+      ];
       expect(data.contentHash).toBeNull();
+      // Prisma's JSON null, not a description of nothing.
+      expect(data.provenanceFeatures).toBeDefined();
     });
 
     it('stores an accepted file under a generated name, never the client-supplied one', async () => {

@@ -22,6 +22,10 @@ import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import { lockGroupSetIfUsed } from '@/lib/group-set-service';
 import { submissionContentHash, submissionShapeHash } from '@/lib/similarity/content-hash';
+import {
+  extractProvenanceFeatures,
+  type ProvenanceFeatures,
+} from '@/lib/similarity/provenance';
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
 class SubmissionCapReachedError extends Error {}
@@ -392,6 +396,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
   let originalFileName: string | null = null;
   let contentHash: string | null = null;
   let shapeHash: string | null = null;
+  let provenanceFeatures: ProvenanceFeatures | null = null;
 
   if (file) {
     if (file.size > maxBytes) {
@@ -431,6 +436,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       try {
         contentHash = submissionContentHash(buffer);
         shapeHash = submissionShapeHash(buffer);
+        provenanceFeatures = extractProvenanceFeatures(buffer);
       } catch (hashError) {
         console.error('[createSubmission] Could not fingerprint the upload:', hashError);
       }
@@ -464,6 +470,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
               originalFileName,
               contentHash,
               shapeHash,
+              provenanceFeatures: provenanceFeatures ?? Prisma.JsonNull,
               feedback: null,
               correct: undefined,
               evaluationRaw: Prisma.JsonNull,

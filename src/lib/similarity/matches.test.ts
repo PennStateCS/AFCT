@@ -44,6 +44,73 @@ beforeEach(() => {
   prismaMock.submission.findMany.mockResolvedValue([]);
 });
 
+/**
+ * The third check reads a second time, for every submission that carries a description,
+ * and then once more to number the attempts. This drives those two calls without disturbing
+ * the exact-match ones above.
+ */
+function withNearMatchRows(rows: Record<string, unknown>[]) {
+  prismaMock.submission.findMany.mockImplementation(async (args: Record<string, any>) => {
+    if (args?.where?.provenanceFeatures) return rows;
+    // The attempt-numbering read.
+    if (args?.select?.studentId && !args?.select?.student) {
+      return rows.map((row) => ({
+        id: row.id,
+        problemId: row.problemId,
+        studentId: row.studentId,
+      }));
+    }
+    return [];
+  });
+}
+
+/**
+ * A class who each solved it their own way. Without them the two submissions under test are
+ * the whole cohort, every feature they share is held by 100% of it, and the rarity rule
+ * quite correctly finds nothing unusual about any of it.
+ */
+const nearCrowd = () =>
+  Array.from({ length: 10 }, (_, index) =>
+    nearRow({
+      id: `crowd-${index}`,
+      studentId: `crowd-student-${index}`,
+      shapeHash: `crowd-shape-${index}`,
+      contentHash: `crowd-hash-${index}`,
+      student: student(`crowd-student-${index}`),
+      provenanceFeatures: {
+        version: 1,
+        machineType: 'fa',
+        stateCount: 4,
+        transitionCount: 5,
+        features: [`f:s:own-${index}`, `f:e:own-${index}`, `t:${index}>${index + 1}`],
+      },
+    }),
+  );
+
+const nearRow = (over: Record<string, unknown> = {}) => ({
+  id: 'near-1',
+  problemId: 'p1',
+  studentId: 's1',
+  studentGroupId: null,
+  submittedAt: new Date('2026-08-15T12:00:00Z'),
+  correct: true,
+  assignmentId: 'a1',
+  fileName: 'stored.jff',
+  originalFileName: 'mine.jff',
+  contentHash: 'hash-1',
+  shapeHash: 'shape-1',
+  provenanceFeatures: {
+    version: 1,
+    machineType: 'fa',
+    stateCount: 4,
+    transitionCount: 5,
+    features: ['f:s:odd-a', 'f:e:odd-b', 't:4>7', 't:7>4', 'g:3,-2'],
+  },
+  student: student('s1'),
+  studentGroup: null,
+  ...over,
+});
+
 describe('findSubmissionMatches', () => {
   it('asks for nothing when the assignment has no problems', async () => {
     await expect(findSubmissionMatches([], problems)).resolves.toEqual([]);
@@ -79,8 +146,12 @@ describe('findSubmissionMatches', () => {
     ]);
 
     await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
-    // Nothing shared, so it never goes back for the submissions.
-    expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+    // Nothing shared, so it never goes back for the submissions an exact match would need.
+    // The third check still runs, which is the whole point of it.
+    const exactReads = prismaMock.submission.findMany.mock.calls.filter(
+      (call) => (call[0] as { where?: { OR?: unknown } } | undefined)?.where?.OR,
+    );
+    expect(exactReads).toHaveLength(0);
   });
 
   it('counts a student once however many times they submitted', async () => {
@@ -396,6 +467,69 @@ describe('findSubmissionMatches', () => {
     const [group] = await findSubmissionMatches(['p1'], withAnswer);
 
     expect(group?.matchesAnswerFile).toBe(true);
+  });
+
+  it('reports a near match for two submissions the exact checks left behind', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+    withNearMatchRows([
+      ...nearCrowd(),
+      nearRow(),
+      nearRow({
+        id: 'near-2',
+        studentId: 's2',
+        shapeHash: 'shape-2',
+        contentHash: 'hash-2',
+        student: student('s2'),
+        submittedAt: new Date('2026-08-15T12:20:00Z'),
+      }),
+    ]);
+
+    const [group, ...rest] = await findSubmissionMatches(['p1'], problems);
+
+    expect(rest).toHaveLength(0);
+    expect(group).toMatchObject({ kind: 'near', studentCount: 2, identicalStudentCount: 1 });
+    expect(group?.evidence.length).toBeGreaterThan(0);
+    expect(group?.submissions.map((s) => s.id).sort()).toEqual(['near-1', 'near-2']);
+  });
+
+  it('ignores a description written under rules this code does not know', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+    withNearMatchRows([
+      ...nearCrowd(),
+      nearRow({ provenanceFeatures: { ...nearRow().provenanceFeatures, version: 99 } }),
+      nearRow({
+        id: 'near-2',
+        studentId: 's2',
+        shapeHash: 'shape-2',
+        student: student('s2'),
+        provenanceFeatures: { ...nearRow().provenanceFeatures, version: 99 },
+      }),
+    ]);
+
+    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
+  });
+
+  it('does not repeat a pair the shape check already matched', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+    withNearMatchRows([
+      ...nearCrowd(),
+      nearRow(),
+      nearRow({ id: 'near-2', studentId: 's2', student: student('s2') }),
+    ]);
+
+    // Both carry shape-1, so they are already one match; saying it again here adds nothing.
+    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
+  });
+
+  it('says nothing about a pair when the cohort is too small for anything to be unusual', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+    // Two students and nobody else: everything they share is held by the whole class.
+    withNearMatchRows([
+      nearRow(),
+      nearRow({ id: 'near-2', studentId: 's2', shapeHash: 'shape-2', student: student('s2') }),
+    ]);
+
+    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
   });
 
   it('only looks at submissions that have a hash', async () => {

@@ -11,7 +11,7 @@ AFCT supports these problem types in the course interface:
 - Context-Free Grammar
 - Regular Expression
 
-The answer file is the solution AFCT uses to display the expected model and, when enabled, grade student submissions. Accepted file extensions include `.txt`, `.fa`, `.pda`, `.cfg`, `.re`, and `.jff`. The file must contain valid JFLAP XML and its type must match the problem type.
+The answer file is the solution AFCT uses to display the expected model and, when enabled, grade student submissions. It is also what lets the [Similarity](similarity.md) tab say when matching work is simply the answer you posted. Accepted file extensions include `.txt`, `.fa`, `.pda`, `.cfg`, `.re`, and `.jff`. The file must contain valid JFLAP XML and its type must match the problem type.
 
 ## Create a problem
 

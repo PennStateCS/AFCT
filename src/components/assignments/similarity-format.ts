@@ -17,6 +17,7 @@ export function workNoun(problemType: string | null): string {
 
 /** The heading of a match card: what kind of match it is, in three words or so. */
 export function matchTitle(group: SubmissionMatchGroup): string {
+  if (group.kind === 'near') return 'Structurally similar';
   if (group.identicalStudentCount >= group.studentCount) return 'Identical file';
   if (group.identicalStudentCount > 1) return 'Same work';
   return 'Same work, drawn differently';
@@ -25,6 +26,9 @@ export function matchTitle(group: SubmissionMatchGroup): string {
 /** The one line under the heading: the counts, which are what the match means. */
 export function matchHeadline(group: SubmissionMatchGroup): string {
   const of = `${group.studentCount} of ${group.problemStudentCount} students submitted`;
+  if (group.kind === 'near') {
+    return `2 of ${group.problemStudentCount} students share uncommon structure in their ${workNoun(group.problem.type)}s`;
+  }
   if (group.identicalStudentCount >= group.studentCount) {
     return `${of} the identical file`;
   }
@@ -33,6 +37,10 @@ export function matchHeadline(group: SubmissionMatchGroup): string {
 
 /** The quieter lines after it: what differs, how close together, where it came from. */
 export function matchDetails(group: SubmissionMatchGroup): string[] {
+  // A near match carries its own evidence, each line of which the detector can point at, so
+  // it says those rather than the counts an exact match is described by.
+  if (group.kind === 'near') return group.evidence;
+
   const lines: string[] = [];
 
   if (group.identicalStudentCount > 1 && group.identicalStudentCount < group.studentCount) {

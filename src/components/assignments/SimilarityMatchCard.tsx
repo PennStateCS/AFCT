@@ -42,19 +42,23 @@ export function SimilarityMatchCard({
   showProblem?: boolean;
 }) {
   const students = studentsInOrder(group);
+  // A named region: with several cards on a page, "Identical file" is what a screen reader
+  // user needs to hear to know which one they have landed in.
+  const headingId = `match-${group.matchId}-heading`;
   const firstAt = students[0] ? Date.parse(students[0].submittedAt) : 0;
   const spansDays =
     new Set(students.map((submission) => formatDay(submission.submittedAt))).size > 1;
 
   return (
     <article
+      aria-labelledby={headingId}
       className={
         common ? 'bg-muted/30 space-y-3 rounded-lg border p-4' : 'space-y-3 rounded-lg border p-4'
       }
     >
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <div className="min-w-0">
-          <h4 className="font-semibold">
+          <h4 id={headingId} className="font-semibold">
             {common ? 'Common answer' : matchTitle(group)}
             {showProblem && group.problem.title ? (
               <span className="text-muted-foreground font-normal"> · {group.problem.title}</span>
@@ -68,11 +72,21 @@ export function SimilarityMatchCard({
 
       <div className="space-y-1 text-sm">
         <p className={common ? 'text-muted-foreground' : ''}>{matchHeadline(group)}</p>
-        {matchDetails(group).map((line) => (
-          <p key={line} className="text-muted-foreground">
-            {line}
-          </p>
-        ))}
+        {group.kind === 'near' ? (
+          // A list, because each line is a separate thing a reader can check against the
+          // files rather than one paragraph to take on trust.
+          <ul className="text-muted-foreground list-disc space-y-0.5 ps-5">
+            {matchDetails(group).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        ) : (
+          matchDetails(group).map((line) => (
+            <p key={line} className="text-muted-foreground">
+              {line}
+            </p>
+          ))
+        )}
         {group.matchesAnswerFile ? (
           <p className="text-muted-foreground">Matches the instructor reference solution.</p>
         ) : null}

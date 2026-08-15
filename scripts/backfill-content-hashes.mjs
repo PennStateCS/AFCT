@@ -20,6 +20,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 require('tsx/cjs');
 const { submissionContentHash, submissionShapeHash } = require('../src/lib/similarity/content-hash.ts');
+const { extractProvenanceFeatures } = require('../src/lib/similarity/provenance.ts');
 const { prisma } = require('../src/lib/prisma.ts');
 
 const UPLOAD_DIR = path.join('/private', 'uploads', 'submissions');
@@ -62,7 +63,11 @@ try {
         } else {
           await prisma.submission.update({
             where: { id: submission.id },
-            data: { contentHash, shapeHash },
+            data: {
+              contentHash,
+              shapeHash,
+              provenanceFeatures: extractProvenanceFeatures(buffer) ?? undefined,
+            },
           });
         }
         hashed++;

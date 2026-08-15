@@ -83,6 +83,9 @@ export const GET = withAssignmentAuth<Ctx>(
         metadata: {
           matchGroups: groups.length,
           matchedSubmissions: groups.reduce((sum, group) => sum + group.submissions.length, 0),
+          // Broken out because the three checks answer different questions, and how often the
+          // third one surfaces anything is worth being able to read back later.
+          nearMatches: groups.filter((group) => group.kind === 'near').length,
         },
       });
 

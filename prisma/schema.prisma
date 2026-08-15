@@ -996,6 +996,15 @@ model Submission {
   /// for anything that could not be parsed.
   shapeHash String?
 
+  /// A small description of the submitted artifact in pieces: local structure, the state
+  /// identifiers JFLAP assigns behind the visible names, where states sit relative to each
+  /// other, and any hand-adjusted transition curves. It exists so a copied file that has
+  /// since been edited can still be recognised, which neither hash above can do. Carries its
+  /// own version, so the rules can change without old rows becoming ambiguous.
+  ///
+  /// Never a similarity score, and never a copy of the file: a description of it.
+  provenanceFeatures Json?
+
   /// When this record was created.
   createdAt DateTime @default(now())
   /// When this record was last changed.
