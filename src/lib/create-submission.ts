@@ -21,6 +21,7 @@ import { effectiveDeadline } from '@/lib/effective-deadline';
 import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import { lockGroupSetIfUsed } from '@/lib/group-set-service';
+import { submissionContentHash } from '@/lib/similarity/content-hash';
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
 class SubmissionCapReachedError extends Error {}
@@ -389,6 +390,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
 
   let fileName: string | null = null;
   let originalFileName: string | null = null;
+  let contentHash: string | null = null;
 
   if (file) {
     if (file.size > maxBytes) {
@@ -421,6 +423,15 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       // Random UUID + whitelisted extension; never a client-controlled path.
       fileName = safeStoredFilename(originalFileName);
       const buffer = Buffer.from(await file.arrayBuffer());
+      // Fingerprint the file here, not during grading: this way it covers both submission
+      // paths, a problem with autograding off still gets one, and nothing about matching
+      // sits in the code path that decides a grade. A hash that cannot be computed is a
+      // submission that simply never matches, never a failed submission.
+      try {
+        contentHash = submissionContentHash(buffer);
+      } catch (hashError) {
+        console.error('[createSubmission] Could not fingerprint the upload:', hashError);
+      }
       // Record the destination BEFORE writing: a write that throws partway through has
       // still created the file, and the cleanup handler can only remove a path it knows.
       uploadedFilePath = resolveInsideDir(SUBMISSION_UPLOAD_DIR, fileName);
@@ -449,6 +460,7 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
               studentGroupId: submissionGroupId,
               fileName,
               originalFileName,
+              contentHash,
               feedback: null,
               correct: undefined,
               evaluationRaw: Prisma.JsonNull,

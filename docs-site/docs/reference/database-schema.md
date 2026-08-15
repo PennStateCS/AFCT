@@ -1039,6 +1039,7 @@ erDiagram
   String fileHashData "nullable"
   String calcHashData "nullable"
   Json similarityReportJson "nullable"
+  String contentHash "nullable"
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK
@@ -1215,6 +1216,15 @@ Properties as follows:
 - `similarityReportJson`
   > Similarity findings for this submission, used to spot the same file submitted more
   > than once.
+- `contentHash`
+  > sha256 of the submitted file's normalised content, written by the server when the file
+  > arrives (both the browser and the native client). Two submissions of the same file
+  > carry the same value, which is what the Similarity tab groups on. Empty for a
+  > submission with no file, and for everything submitted before this column existed.
+  >
+  > On its own it means "these are the same file", never "somebody copied": students
+  > converge on the same right answer, and a grammar or regular expression has no layout
+  > to differ in. What carries meaning is how rare a value is within one problem.
 - `createdAt`: When this record was created.
 - `updatedAt`: When this record was last changed.
 - `assignmentId`: The assignment.
@@ -1456,6 +1466,7 @@ erDiagram
   String fileHashData "nullable"
   String calcHashData "nullable"
   Json similarityReportJson "nullable"
+  String contentHash "nullable"
   DateTime createdAt
   DateTime updatedAt
   String assignmentId FK
