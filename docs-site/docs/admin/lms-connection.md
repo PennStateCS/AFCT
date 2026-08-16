@@ -100,6 +100,31 @@ Removing an LMS from the **LTI** tab stops every launch from it immediately, for
 
 To disconnect a single course instead, leave the registration alone; faculty can disconnect their own course from the **Course status** card on the course **Settings** tab.
 
+## When a student has not opened AFCT from your LMS
+
+A grade is addressed to the identifier your LMS uses for a person, and AFCT normally learns it
+the first time that student opens AFCT from the LMS. Plenty of students never do: they work in
+AFCT directly, and the grade falls due before they have ever clicked the link.
+
+AFCT does not refuse in that case. When a grade has nowhere to go, it asks your LMS for the
+course roster, matches the student by the email address the LMS vouches for, remembers the
+answer, and sends the grade. It happens once per student; after that the grade goes straight
+through. The match is recorded in the system log, because it decides where that student's
+grades land.
+
+It is deliberately strict. The match must be on an email, it must be unique, and the LMS must
+still list the person as active in the course. If two people share an email, or the identifier
+already belongs to another AFCT account, nothing is linked and the grade stays queued with the
+reason shown, because a grade on the wrong student is worse than a grade that waits.
+
+Two things stop it working, and both are worth checking if a grade will not send:
+
+- **The registration has no roster permission.** AFCT needs the names and roles service to ask.
+  It is requested when you create the developer key or registration; without it, AFCT can only
+  place grades for students who have launched at least once.
+- **The email in AFCT differs from the one in your LMS.** Nothing else is used to match, so a
+  student with two addresses will not be found.
+
 ## Why your LMS can display AFCT inside a page
 
 Deep linking, where you pick an AFCT assignment from inside your LMS, happens in a dialog your

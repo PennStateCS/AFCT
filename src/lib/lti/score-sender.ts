@@ -8,6 +8,7 @@
 import { prisma } from '@/lib/prisma';
 import { claimNextScore, markSent, markFailed } from '@/lib/lti/score-queue';
 import { ensureLineItem, postScore, findLtiUserId, agsFailureMessage } from '@/lib/lti/ags';
+import { resolveIdentityFromRoster } from '@/lib/lti/identity-from-roster';
 import type { AgsFailure } from '@/lib/lti/ags';
 
 /** How often to look for work. */
@@ -97,13 +98,35 @@ export async function sendOneScore(): Promise<SendOutcome> {
   let lastDetail: string | undefined;
 
   for (const link of links) {
-    const ltiUserId = await findLtiUserId({
+    let ltiUserId = await findLtiUserId({
       userId: claimed.userId,
       issuer: link.platform.issuer,
     });
+
+    /**
+     * Nobody has told AFCT who this student is in the LMS, so ask the LMS.
+     *
+     * A student who works in AFCT without ever clicking the link in their LMS is ordinary, and
+     * their grade still has to arrive. The platform's roster carries the id a grade is
+     * addressed to, and AFCT is already registered for that scope. Only reached when the
+     * cheap lookup found nothing, so the usual case still costs one query.
+     */
     if (!ltiUserId) {
-      lastReason = 'no-lms-identity';
-      continue;
+      const resolved = await resolveIdentityFromRoster({ userId: claimed.userId, link });
+      if (resolved.ok) {
+        ltiUserId = resolved.ltiUserId;
+      } else {
+        // An unreachable LMS is worth waiting for; a student who is genuinely not in the
+        // course is not, and saying so immediately is what lets somebody act on it.
+        lastReason = resolved.retryable ? 'unreachable' : 'no-lms-identity';
+        // A refusal is its own thing: the student was found, and AFCT declined to attach the
+        // identity. Carrying the reason through means the queue says which, rather than
+        // sending somebody to check an enrolment that is perfectly correct.
+        if (!resolved.retryable && resolved.reason === 'link-refused') {
+          lastDetail = `the LMS account could not be attached: ${resolved.detail}`;
+        }
+        continue;
+      }
     }
 
     const lineItem = await ensureLineItem({

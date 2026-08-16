@@ -568,7 +568,9 @@ export async function findLtiUserId(opts: {
 export function agsFailureMessage(reason: AgsFailure): string {
   switch (reason) {
     case 'no-lms-identity':
-      return 'This student has not opened AFCT from your LMS yet, so their grade cannot be sent there.';
+      // Reached only after asking the LMS for its roster, so "they have not launched" is no
+      // longer the explanation and would send somebody looking in the wrong place.
+      return 'Your LMS does not list this student in this course, so AFCT has nowhere to put their grade. Check they are enrolled there, or that their email matches the one AFCT holds.';
     case 'no-line-items-endpoint':
       return 'Your LMS did not give AFCT permission to write grades for this course. An administrator needs to allow the grade services when registering AFCT.';
     case 'no-token':
