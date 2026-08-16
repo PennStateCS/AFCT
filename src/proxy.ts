@@ -45,6 +45,10 @@ const PUBLIC_API_PREFIXES = [
   // Nobody is signed in yet, which is the point of a launch. Both verify what they are handed.
   '/api/lti/login',
   '/api/lti/launch',
+  // Where an administrator types their AFCT password to attach the LMS account a launch
+  // matched. Necessarily unauthenticated, since it exists to establish who they are, and it
+  // proves that itself through the same credential check the login form uses.
+  '/api/lti/confirm-identity',
 ] as const;
 
 /**

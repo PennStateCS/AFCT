@@ -44,7 +44,15 @@ export type SignInRefusal =
   | 'already-linked-elsewhere';
 
 export type SignInOutcome =
-  { ok: true; userId: string; created: boolean } | { ok: false; reason: SignInRefusal };
+  | { ok: true; userId: string; created: boolean }
+  /**
+   * `userId` is present only for `admin-requires-deliberate-link`, and only so the caller can
+   * offer that person a way through: an LTI launch asks for their AFCT password and links the
+   * identity deliberately. Naming the account is safe there because the refusal is already
+   * telling them an administrator account matched; it is not returned for any other refusal,
+   * where saying which account matched would answer a question nobody proved they may ask.
+   */
+  | { ok: false; reason: SignInRefusal; userId?: string };
 
 export async function resolveFederatedSignIn(opts: {
   claims: FederatedClaims;
@@ -84,14 +92,15 @@ export async function resolveFederatedSignIn(opts: {
       context,
     });
     if (!linked.ok) {
+      if (linked.reason === 'admin-requires-deliberate-link') {
+        return { ok: false, reason: 'admin-requires-deliberate-link', userId: match.id };
+      }
       return {
         ok: false,
         reason:
           linked.reason === 'already-linked-elsewhere'
             ? 'already-linked-elsewhere'
-            : linked.reason === 'admin-requires-deliberate-link'
-              ? 'admin-requires-deliberate-link'
-              : 'account-inactive',
+            : 'account-inactive',
       };
     }
     return { ok: true, userId: match.id, created: false };

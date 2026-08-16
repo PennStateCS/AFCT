@@ -94,6 +94,22 @@ When somebody opens AFCT from the LMS and has no AFCT account, one is created fo
 
 You can see what is attached to any account from [User Accounts](user-accounts.md): open the account's menu and choose **Sign-in Methods**. This is also where you detach one, for example when somebody's LMS identity has changed. An account with no AFCT password and only one connected sign-in method cannot have it detached, because that would leave the person unable to sign in at all; give them a password first.
 
+## Opening AFCT from your LMS as an administrator
+
+An AFCT administrator account is never connected to an LMS automatically. The match would rest
+on the email address your LMS reports, and AFCT cannot see how carefully that address was
+checked. For a student a wrong match exposes one person's work; for an administrator it would
+expose every student record in the system.
+
+So the first time you open AFCT from your LMS with an administrator account, AFCT asks for your
+AFCT password. That is the one thing your LMS cannot assert on your behalf, and anybody who
+could supply it could already sign in as you, so nothing is weakened by accepting it. You are
+asked once. After that, launches go straight through like anybody else's, and the connection can
+be removed from your account page at any time.
+
+Nothing about this applies to students or to faculty who are not administrators. Their accounts
+connect on the first launch with no prompt.
+
 ## Removing a registration
 
 Removing an LMS from the **LTI** tab stops every launch from it immediately, for every course. Existing AFCT accounts, courses, submissions and grades are untouched, but people who signed in only through that LMS will not be able to get in until they have another way to sign in.

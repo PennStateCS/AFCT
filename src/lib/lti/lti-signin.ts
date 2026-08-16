@@ -6,7 +6,10 @@
  * platform's key, and the LMS is the institution's own record of who its people are.
  *
  * The administrator rule does not relax with it. An AFCT admin account is never attached
- * automatically, however trustworthy the source; admins connect from their own account page.
+ * automatically, however trustworthy the source: the address is asserted by the LMS, and
+ * AFCT cannot see how carefully it was verified. A launch that matches one is not refused
+ * outright any more, though. It pauses at `/lti/confirm`, which asks for the AFCT password,
+ * the one thing an LMS cannot assert, and links deliberately once it is given.
  */
 
 import { resolveFederatedSignIn } from '@/lib/federated-signin';
@@ -40,7 +43,9 @@ export async function resolveLaunchSignIn(opts: {
 export function launchSignInRefusalMessage(reason: SignInRefusal): string {
   switch (reason) {
     case 'admin-requires-deliberate-link':
-      return 'This is an AFCT administrator account, which must be connected deliberately. Sign in to AFCT directly, then connect your institution from your account page.';
+      // A launch reaching this message means the confirmation could not be offered, since a
+      // launch that can offer it never gets here. Whatever it says has to be doable.
+      return 'This is an AFCT administrator account, which must be connected deliberately. Sign in to AFCT directly and open AFCT from your LMS again.';
     case 'already-linked-elsewhere':
       return 'Your LMS account is already connected to a different AFCT account. Ask an administrator for help.';
     case 'account-inactive':

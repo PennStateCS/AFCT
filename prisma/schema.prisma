@@ -229,6 +229,8 @@ model User {
   // is a join order (the names live here, not on Roster), so this cannot make that plan
   // index-only; it does keep the sort side off a full scan as courses reach the thousands.
   @@index([lastName, firstName])
+  /// Launches that matched this account and are waiting for a password to confirm it.
+  ltiPendingIdentityLinks LtiPendingIdentityLink[]
 }
 
 /// Bearer token for the native submission client. The browser signs in with a session cookie;
@@ -1823,6 +1825,45 @@ model EvaluatorTrial {
   @@index([state, createdAt])
   /// The per-user cap: how many trials this person already has running.
   @@index([requestedById, state])
+  /// The expiry sweep.
+  @@index([expiresAt])
+}
+
+
+/// A launch that matched an AFCT administrator, waiting for them to prove it is them.
+///
+/// An administrator account is never attached to an LMS identity automatically, because the
+/// match rests on an email the LMS asserts, and AFCT cannot see how carefully that address was
+/// verified. For a student that would expose one person's work; for an administrator it would
+/// hand over every student record in the system.
+///
+/// Refusing outright left them nowhere to go, so the launch pauses here instead: they type
+/// their AFCT password, which is the one thing an LMS cannot assert, and the link is then a
+/// deliberate act rather than an automatic one. Short-lived, single use, and useless to
+/// anybody who cannot also sign in as that account.
+/// @namespace Identity
+model LtiPendingIdentityLink {
+  /// Unique identifier, and what the browser is handed to name this pending confirmation.
+  id String @id @default(cuid())
+
+  /// The platform's issuer and its own id for the person, exactly as the launch signed them.
+  /// Stored rather than re-derived: the confirmation must attach the identity that launched,
+  /// not whatever a later request claims.
+  issuer  String
+  subject String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The administrator account the launch matched by email.
+  userId String
+
+  /// Where the launch was headed, so confirming lands them where they were going.
+  next String?
+
+  /// When this stops being usable.
+  expiresAt DateTime
+  /// When this record was created.
+  createdAt DateTime @default(now())
+
   /// The expiry sweep.
   @@index([expiresAt])
 }
