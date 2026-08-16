@@ -24,6 +24,63 @@ type CourseSeed = {
   facultyEmail?: string;
 };
 
+/**
+ * A set of student groups in one course, and the group sizes to fill.
+ *
+ * Sizes are deliberately uneven: a set where every group holds three people hides the
+ * arithmetic mistakes, and a course whose groups all match makes a per-member fan-out look
+ * right even when it is counting the wrong thing.
+ */
+type GroupSetSeed = {
+  name: string;
+  courseIndex: number;
+  sizes: number[];
+};
+
+type AssignmentSeed = {
+  id?: string;
+  title: string;
+  description: string;
+  /** Where in the course's run it falls, 0 = the first day, 1 = the last. */
+  dueFraction: number;
+  isPublished: boolean;
+  courseIndex: number;
+  /**
+   * Which problems it covers, by title.
+   *
+   * Problems used to be picked at random, so an assignment called "Flip Flops" could hold a
+   * Turing machine and a course could set the same problem twice under different names. An
+   * explicit list is what makes a seeded assignment read like something a person set, and it is
+   * what lets the submissions step know which kind of file each student should be sending.
+   */
+  problemTitles: string[];
+  /**
+   * The group set this is assigned to, by name, or omitted for an individual assignment.
+   *
+   * Individual versus group is the single fact `groupSetId` carries, so an assignment naming a
+   * set here is a group assignment and one that does not is not. Both kinds are seeded because
+   * group submission, group grading and the per-member fan-out only exist on one side of that
+   * line, and nothing local exercised it.
+   */
+  groupSet?: string;
+  /** Points each problem is worth. Defaults to 20. */
+  pointsPerProblem?: number;
+  /** Attempts allowed per problem, or -1 for unlimited. Defaults to 5. */
+  maxSubmissions?: number;
+  /** Whether the autograder runs. Defaults to true. */
+  autograder?: boolean;
+  /**
+   * Assigned to only this many students instead of the whole class.
+   *
+   * Audience and dates are different things and get confused constantly, so one assignment is
+   * narrowed this way (through AssignmentAssignee) and given a date override on top. The seed
+   * needs a *separate* assignment for it: narrowing one the class had already submitted to left
+   * work in the database from students the assignment was not assigned to, which nothing in the
+   * app could have produced.
+   */
+  targetedStudents?: number;
+};
+
 export const facultyData: PersonSeed[] = [
   { email: 'faculty@example.com', firstName: 'Charles', lastName: 'Xavier' },
   { email: 'faculty2@example.com', firstName: 'Bruce', lastName: 'Wayne' },
@@ -79,6 +136,10 @@ export const courseData: CourseSeed[] = [
     isPublished: true,
     isArchived: false,
     assignTa: true,
+    // Pinned to a course that is running now. On the rolling academic term this one started on
+    // whatever day the seed happened to run, so in some months the demo course had not opened
+    // yet and every screen reached through it was empty.
+    lifecycle: 'current',
   },
   {
     title: 'Introduction to Digital Systems',
@@ -115,6 +176,10 @@ export const courseData: CourseSeed[] = [
     isPublished: true,
     isArchived: false,
     assignTa: false,
+    // The one course that sets every problem type AFCT grades, so it has to be running: on the
+    // rolling term it landed in a future semester and carried no submissions at all, which left
+    // the grammar, regular-expression, pushdown and Turing paths unseeded no matter what.
+    lifecycle: 'current',
   },
   // Charles Xavier's lifecycle set: one course in each state so the dev DB can
   // always exercise past / current / future / archived. Dates are pinned relative
@@ -333,7 +398,32 @@ export const problemData = [
   },
 ];
 
-export const assignmentData = [
+/**
+ * Group sets, and therefore which courses can hold a group assignment.
+ *
+ * Two courses get one: the introductory course, where a lab pairs up, and the theory course,
+ * where a term project runs in teams. Everything else stays individual, which is the ordinary
+ * case and needs to stay the majority.
+ */
+export const groupSetData: GroupSetSeed[] = [
+  { name: 'Lab Partners', courseIndex: 0, sizes: [3, 2, 4, 3] },
+  { name: 'Project Teams', courseIndex: 4, sizes: [4, 3, 3, 2] },
+];
+
+/**
+ * Assignments, written the way a course actually sets them.
+ *
+ * Two things here are deliberate. Each assignment names its problems, so a course reads as a
+ * sequence somebody planned rather than a shuffle: flip-flops before real-world machines, and in
+ * the theory course the standard progression from finite automata through to Turing machines.
+ * And the theory course covers **every problem type AFCT grades** (FA, RE, CFG, PDA, TM), because
+ * a developer who has only ever seen seeded finite automata has never seen the grammar and
+ * regular-expression paths, which behave differently: they carry no layout, so the similarity
+ * report and the evaluator both treat them unlike an automaton.
+ */
+export const assignmentData: AssignmentSeed[] = [
+  // CMPEN 271, both sections. The same two assignments, but grouped in one section and
+  // individual in the other, so the difference between them is visible side by side.
   {
     title: 'Flip Flops',
     description:
@@ -341,6 +431,9 @@ export const assignmentData = [
     dueFraction: 0.35,
     isPublished: true,
     courseIndex: 0,
+    problemTitles: ['D Flip-Flop', 'Toggle Flip-Flop'],
+    pointsPerProblem: 25,
+    maxSubmissions: 5,
   },
   {
     title: 'Real Life Examples',
@@ -349,6 +442,23 @@ export const assignmentData = [
     dueFraction: 0.75,
     isPublished: true,
     courseIndex: 0,
+    problemTitles: ['Traffic Light', 'Three Consecutive 1s'],
+    groupSet: 'Lab Partners',
+    pointsPerProblem: 30,
+    maxSubmissions: 3,
+  },
+  {
+    title: 'Sequential Circuits',
+    description:
+      'Build the state machine for a two-bit counter, and show the output for the first eight clock ticks.',
+    dueFraction: 0.9,
+    // Still a draft, which no student can see. The course view, the gradebook and the student
+    // side all treat an unpublished assignment differently, and nothing seeded one. It carries no
+    // submissions and no grades for the same reason: there is nothing for a student to submit to.
+    isPublished: false,
+    courseIndex: 0,
+    problemTitles: ['Three Consecutive 1s'],
+    pointsPerProblem: 20,
   },
   {
     title: 'Flip Flops',
@@ -357,6 +467,9 @@ export const assignmentData = [
     dueFraction: 0.35,
     isPublished: true,
     courseIndex: 1,
+    problemTitles: ['D Flip-Flop', 'Toggle Flip-Flop'],
+    pointsPerProblem: 25,
+    maxSubmissions: 5,
   },
   {
     title: 'Real Life Examples',
@@ -365,14 +478,131 @@ export const assignmentData = [
     dueFraction: 0.75,
     isPublished: true,
     courseIndex: 1,
+    problemTitles: ['Traffic Light', 'Three Consecutive 1s'],
+    pointsPerProblem: 30,
+    // Unlimited attempts, so the submission-limit code has a case where there is no cap.
+    maxSubmissions: -1,
   },
-  // Lifecycle courses (indices 5–8): a little content so each state isn't empty.
+
+  // CMPSC 131 and 132 had no assignments at all, which left two of the nine courses empty.
+  {
+    title: 'Modelling State in Code',
+    description:
+      'Build the finite automation behind a piece of stateful code, then explain which of your program variables the states correspond to.',
+    dueFraction: 0.5,
+    isPublished: true,
+    courseIndex: 2,
+    problemTitles: ['Three Consecutive 1s', 'D Flip-Flop'],
+    pointsPerProblem: 20,
+    maxSubmissions: 4,
+  },
+  {
+    title: 'Grammars for Data Structures',
+    description:
+      'Write the context-free grammar describing the bracket sequences your parser accepts, then build the pushdown automaton that recognises them.',
+    dueFraction: 0.6,
+    isPublished: true,
+    courseIndex: 3,
+    problemTitles: ['CFG Test', 'PDA Test'],
+    pointsPerProblem: 20,
+    maxSubmissions: 4,
+  },
+
+  // CMPSC 464, the theory course: the one place every problem type AFCT grades is set, in the
+  // order a term covers them.
+  {
+    title: 'Finite Automata',
+    description:
+      'Construct deterministic finite automata for each of the languages below, using the fewest states you can justify.',
+    dueFraction: 0.15,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['Three Consecutive 1s', 'Traffic Light'],
+    pointsPerProblem: 20,
+    maxSubmissions: 5,
+  },
+  {
+    title: 'Regular Expressions',
+    description:
+      'Write a regular expression for each language, and show that it describes the same language as your automaton from the previous assignment.',
+    dueFraction: 0.3,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['Regex Test'],
+    pointsPerProblem: 15,
+    maxSubmissions: -1,
+  },
+  {
+    title: 'Context-Free Grammars',
+    description:
+      'Give a context-free grammar for each language, in teams. Include a derivation of one string of length four or more.',
+    dueFraction: 0.45,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['CFG Test'],
+    groupSet: 'Project Teams',
+    pointsPerProblem: 25,
+    maxSubmissions: 4,
+  },
+  {
+    title: 'Pushdown Automata',
+    description:
+      'Build a pushdown automaton for the language in teams, and describe in a sentence what your stack holds at each point.',
+    dueFraction: 0.6,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['PDA Test'],
+    groupSet: 'Project Teams',
+    pointsPerProblem: 25,
+    maxSubmissions: 4,
+  },
+  {
+    title: 'Turing Machines',
+    description:
+      'Build each Turing machine, and state the number of steps yours takes on the worst input of length five.',
+    dueFraction: 0.8,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['Busy Beaver 4', 'Collatz Unary', 'To Lowercase TM'],
+    pointsPerProblem: 30,
+    maxSubmissions: 3,
+  },
+  {
+    title: 'Undecidability',
+    description:
+      'Reduce the halting problem to each of the questions below, then exhibit a machine that does not halt.',
+    dueFraction: 0.95,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['Infinite Loop TM'],
+    pointsPerProblem: 20,
+    // Hand-graded: a reduction is an argument, not something the evaluator can check. Students
+    // still submit and the grader still records a verdict; what it does not do is set a grade.
+    autograder: false,
+  },
+  {
+    title: 'Makeup: Finite Automata',
+    description:
+      'A second chance at the finite automata assignment, for students who arranged one.',
+    dueFraction: 0.5,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['Three Consecutive 1s'],
+    pointsPerProblem: 20,
+    maxSubmissions: 3,
+    // The one assignment that is not set for the whole class.
+    targetedStudents: 3,
+  },
+
+  // Lifecycle courses (indices 5-8): a little content so each state isn't empty.
   {
     title: 'Boolean Algebra Basics',
     description: 'Simplify the given Boolean expressions and build their circuits.',
     dueFraction: 0.4,
     isPublished: true,
     courseIndex: 5,
+    problemTitles: ['D Flip-Flop', 'Toggle Flip-Flop'],
+    pointsPerProblem: 20,
   },
   {
     title: 'Pipelining Lab',
@@ -380,6 +610,8 @@ export const assignmentData = [
     dueFraction: 0.5,
     isPublished: true,
     courseIndex: 6,
+    problemTitles: ['Three Consecutive 1s'],
+    pointsPerProblem: 20,
   },
   {
     title: 'Cache Simulation',
@@ -387,6 +619,8 @@ export const assignmentData = [
     dueFraction: 0.8,
     isPublished: true,
     courseIndex: 6,
+    problemTitles: ['Traffic Light', 'D Flip-Flop'],
+    pointsPerProblem: 25,
   },
   {
     title: 'Scheduling Project',
@@ -394,6 +628,8 @@ export const assignmentData = [
     dueFraction: 0.5,
     isPublished: true,
     courseIndex: 7,
+    problemTitles: ['PDA Test'],
+    pointsPerProblem: 20,
   },
   {
     title: 'Lexer Assignment',
@@ -401,5 +637,7 @@ export const assignmentData = [
     dueFraction: 0.6,
     isPublished: true,
     courseIndex: 8,
+    problemTitles: ['Regex Test', 'CFG Test'],
+    pointsPerProblem: 20,
   },
 ];

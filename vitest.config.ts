@@ -5,7 +5,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // `prisma/` is in here for the seed. It is the code every new developer runs before they run
+    // anything else, and its faults are the quiet kind: the seed completes, the counts look
+    // plausible, and a feature is being demonstrated against data that no longer demonstrates it.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'prisma/**/*.test.ts'],
     // `*.db.test.ts` needs a real Postgres and lives in its own project
     // (vitest.db.config.ts, run via `npm run test:db`). CI runs this config with no
     // database, so those must never be collected here.

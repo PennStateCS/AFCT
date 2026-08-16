@@ -21,6 +21,10 @@ import {
   studentData,
   taData,
 } from './seed-data';
+import { runDevelopmentExtras } from './seed-dev-extras';
+// Reproducible rather than random: a development database that differs per machine makes
+// "it happens on mine" meaningless. See `seed-random.ts`.
+import { seedRandom as random } from './seed-random';
 import {
   assignCourseRosters,
   getLifecycleDates,
@@ -60,7 +64,11 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     throw error;
   }
   if (existingUsers > 0) {
-    console.log(`[seed] development: ${existingUsers} users exist, skipping seed`);
+    // The base data is somebody's working database; leave it alone. The extras below still run,
+    // because each of those blocks skips itself when its own table has rows, so an existing
+    // database gains whatever the app grew since it was seeded instead of demanding a wipe.
+    console.log(`[seed] development: ${existingUsers} users exist, skipping the base seed`);
+    await runDevelopmentExtras(prisma);
     return;
   }
 
@@ -342,7 +350,11 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       console.log(`[seed] development: enrolled Oliver Green in ${targetCourses.length} course(s)`);
     }
   } catch (error) {
+    // Rethrown like every other step here. A seed that half-worked and said nothing is worse
+    // than one that stopped: the missing enrolment only shows up later as a demo account that
+    // cannot see its own course.
     console.error('[seed] development: error enrolling Oliver Green', error);
+    throw error;
   }
 
   console.log('[seed] development: creating problems for courses');
@@ -382,9 +394,18 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       originalToStoredFileName.set(problemSeed.originalFileName, storedFileName);
     }
 
+    // One row per distinct problem per course. `problemData` lists the flip-flop problems twice,
+    // once for each CMPEN 271 section, but every course is given the whole catalogue, so seeding
+    // it verbatim gave every course two problems called "D Flip-Flop" and left an assignment
+    // naming a problem with no way to say which one it meant.
+    const distinctProblems = problemData.filter(
+      (problemSeed, index) =>
+        problemData.findIndex((other) => other.title === problemSeed.title) === index,
+    );
+
     // Prepare all problem data for batch insertion
     const problemsToCreate = courses.flatMap((course) =>
-      problemData.map((problemSeed) => ({
+      distinctProblems.map((problemSeed) => ({
         title: problemSeed.title,
         description: problemSeed.description,
         fileName:
@@ -445,9 +466,9 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
         const courseDuration = new Date(course.endDate).getTime() - courseStart.getTime();
         const dueDateMs = courseStart.getTime() + courseDuration * assignmentSeed.dueFraction;
         const dueDate = new Date(dueDateMs);
-        const allowLateSubmissions = Math.random() < 0.5;
+        const allowLateSubmissions = random() < 0.5;
         const lateCutoff =
-          allowLateSubmissions && Math.random() < 0.5
+          allowLateSubmissions && random() < 0.5
             ? new Date(dueDate.getTime() + 4 * 24 * 60 * 60 * 1000)
             : null;
 
@@ -497,7 +518,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       autograderEnabled: boolean;
     }> = [];
 
-    for (const course of courses) {
+    for (const [courseIndex, course] of courses.entries()) {
       const courseProblems = createdProblems[course.id] || [];
       const courseAssignments = createdAssignments[course.id] || [];
 
@@ -505,24 +526,34 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
         continue;
       }
 
-      // For each assignment, assign 2-3 problems from the course
-      for (const assignment of courseAssignments) {
-        // Randomly pick 2-3 problems for this assignment
-        const numProblemsToAssign = Math.floor(Math.random() * 2) + 2; // 2 or 3
-        const selectedProblems = courseProblems
-          .sort(() => Math.random() - 0.5) // Shuffle
-          .slice(0, Math.min(numProblemsToAssign, courseProblems.length));
+      const problemsByTitle = new Map(courseProblems.map((problem) => [problem.title, problem]));
 
-        for (const problem of selectedProblems) {
-          const randomPoints = (Math.floor(Math.random() * 10) + 1) * 10;
-          const randomSubmissions = Math.random() < 0.5 ? -1 : Math.floor(Math.random() * 5) + 1;
-          const randomAutograderEnabled = Math.random() < 0.5;
+      for (const assignment of courseAssignments) {
+        // Each assignment names the problems it covers, so a seeded course reads as a sequence
+        // somebody set rather than a shuffle. Points, attempt limits and whether the autograder
+        // runs come from the same place: they used to be drawn at random, which produced a
+        // one-point problem next to a hundred-point one and turned the autograder off on half
+        // the work for no reason a person could see.
+        const seed = assignmentData.find(
+          (candidate) =>
+            candidate.courseIndex === courseIndex && candidate.title === assignment.title,
+        );
+        const titles = seed?.problemTitles ?? [];
+
+        for (const title of titles) {
+          const problem = problemsByTitle.get(title);
+          if (!problem) {
+            console.warn(
+              `[seed] development: ${assignment.title} names a problem that does not exist (${title})`,
+            );
+            continue;
+          }
           assignmentProblemsToCreate.push({
             assignmentId: assignment.id,
             problemId: problem.id,
-            maxPoints: randomPoints,
-            maxSubmissions: randomSubmissions,
-            autograderEnabled: randomAutograderEnabled,
+            maxPoints: seed?.pointsPerProblem ?? 20,
+            maxSubmissions: seed?.maxSubmissions ?? 5,
+            autograderEnabled: seed?.autograder ?? true,
           });
         }
       }
@@ -621,6 +652,11 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
               problemId: assignmentProblem.problemId,
               studentId: oliverId,
               submittedAt: submittedBase,
+              // Graded, not waiting: a row carrying a verdict and feedback but left in the
+              // queue's default PENDING state is one the app could never have written, and it
+              // made the seeded autograder queue look permanently backed up.
+              status: 'COMPLETED' as const,
+              attempts: 1,
               correct: false,
               feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
               fileName: firstStoredSubmission.fileName,
@@ -632,6 +668,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
               problemId: assignmentProblem.problemId,
               studentId: oliverId,
               submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
+              status: 'COMPLETED' as const,
+              attempts: 1,
               correct: true,
               feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
               fileName: revisedStoredSubmission.fileName,
@@ -677,6 +715,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     console.error('[seed] development: error seeding system settings', error);
     throw error;
   }
+
+  await runDevelopmentExtras(prisma);
 
   console.log('[seed] development: counting seeded records');
   // Report counts for quick verification in logs.

@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { seedRandomInt as randomInt } from './seed-random';
 import type { PrismaClient, CourseRole } from '@prisma/client';
 
 /**
@@ -7,8 +7,8 @@ import type { PrismaClient, CourseRole } from '@prisma/client';
 export const withRole = <T, R>(items: T[], role: R) => items.map((item) => ({ ...item, role }));
 
 /**
- * Pick a random item from a list. Uses the CSPRNG (`node:crypto`) for a uniform,
- * unbiased pick.
+ * Pick a random item from a list. Uses the seed's reproducible generator, so two developers
+ * running this get the same database (see `seed-random.ts`).
  */
 export const pickRandom = <T>(items: T[]): T | undefined => {
   if (items.length === 0) return undefined;
@@ -16,8 +16,8 @@ export const pickRandom = <T>(items: T[]): T | undefined => {
 };
 
 /**
- * Pick a random slice of items sized between min and max. Uses an unbiased
- * Fisher–Yates shuffle backed by the CSPRNG (`node:crypto`).
+ * Pick a random slice of items sized between min and max. Unbiased Fisher-Yates, backed by the
+ * seed's reproducible generator rather than the CSPRNG: this picks sample data, not secrets.
  */
 export const pickRandomRange = <T>(items: T[], min: number, max: number): T[] => {
   const count = Math.min(items.length, Math.max(min, randomInt(min, max + 1)));
@@ -145,7 +145,13 @@ export const getProductionAdminCredentials = async () => {
 type SeedPerson = { id: string };
 
 /**
- * Randomly assign course admins, optional TAs, and 3–5 students per course.
+ * Randomly assign course admins, optional TAs, and a class of students per course.
+ *
+ * Sized like a real section rather than the 3-5 students this used to seed. A four-student
+ * course cannot hold a group set, gives a gradebook with nothing to scroll, and makes the
+ * similarity report meaningless, since that works on how rare an answer is within a problem and
+ * everything is rare among four people. Students appear in several courses, which is also what a
+ * roster looks like.
  */
 export const assignCourseRosters = async (
   prisma: PrismaClient,
@@ -167,7 +173,7 @@ export const assignCourseRosters = async (
       }
     }
 
-    const courseStudents = pickRandomRange(studentUsers, 3, 5);
+    const courseStudents = pickRandomRange(studentUsers, 14, 22);
     for (const student of courseStudents) {
       await upsertRoster(prisma, course.id, student.id, 'STUDENT');
     }
@@ -278,6 +284,45 @@ export const logSeedCounts = async (prisma: PrismaClient) => {
   const rosterCount = await prisma.roster.count();
   const assignmentProblemCount = await prisma.assignmentProblem.count();
   const commentCount = await prisma.comment.count();
+  // The newer half of the app. These read zero for a long time because nothing seeded them,
+  // which looked like a broken step rather than a gap; they are counted here so the seed's own
+  // output says whether a developer can actually see those features.
+  const submissionCount = await prisma.submission.count();
+  const similarityCount = await prisma.submission.count({ where: { contentHash: { not: null } } });
+  const groupSetCount = await prisma.groupSet.count();
+  const groupCount = await prisma.studentGroup.count();
+  const gradeCount = await prisma.assignmentProblemGrade.count();
+  const grantCount = await prisma.submissionGrant.count();
+  const activityCount = await prisma.activityLog.count();
+  const groupAssignmentCount = await prisma.assignment.count({
+    where: { groupSetId: { not: null } },
+  });
+  const groupSubmissionCount = await prisma.submission.count({
+    where: { studentGroupId: { not: null } },
+  });
+  const queuedCount = await prisma.submission.count({
+    where: { status: { in: ['PENDING', 'PROCESSING'] } },
+  });
+  // Which problem types have work against them. AFCT grades five, and they do not behave alike:
+  // a grammar and a regular expression carry no layout, so the similarity report and the
+  // evaluator both treat them differently from an automaton. A seed that only ever produced
+  // finite automata looked complete and left two of those paths unseen.
+  const submissionsByType = await prisma.submission.groupBy({
+    by: ['problemId'],
+    _count: { _all: true },
+  });
+  const problemTypes = await prisma.problem.findMany({ select: { id: true, type: true } });
+  const typeById = new Map(problemTypes.map((problem) => [problem.id, problem.type]));
+  const countsByType = new Map<string, number>();
+  for (const row of submissionsByType) {
+    const type = typeById.get(row.problemId) ?? 'unknown';
+    countsByType.set(type, (countsByType.get(type) ?? 0) + row._count._all);
+  }
+  const typeSummary =
+    [...countsByType.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, count]) => `${type} ${count}`)
+      .join(', ') || 'none';
 
   console.log('[seed] completed');
   console.log('[seed] counts');
@@ -288,8 +333,15 @@ export const logSeedCounts = async (prisma: PrismaClient) => {
   console.log(`- users total: ${userCount}`);
   console.log(`- courses: ${courseCount}`);
   console.log(`- problems: ${problemCount}`);
-  console.log(`- assignments: ${assignmentCount}`);
+  console.log(`- assignments: ${assignmentCount} (${groupAssignmentCount} group, rest individual)`);
   console.log(`- rosters: ${rosterCount}`);
   console.log(`- assignment-problems: ${assignmentProblemCount}`);
   console.log(`- comments: ${commentCount}`);
+  console.log(`- submissions: ${submissionCount} (${similarityCount} with similarity data)`);
+  console.log(`  - by problem type: ${typeSummary}`);
+  console.log(`  - group work: ${groupSubmissionCount}, waiting in the queue: ${queuedCount}`);
+  console.log(`- group sets: ${groupSetCount}, groups: ${groupCount}`);
+  console.log(`- grades: ${gradeCount}`);
+  console.log(`- submission grants: ${grantCount}`);
+  console.log(`- activity log entries: ${activityCount}`);
 };
