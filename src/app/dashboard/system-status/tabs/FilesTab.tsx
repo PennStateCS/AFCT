@@ -2,7 +2,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { FolderCheck, TriangleAlert } from 'lucide-react';
+import { FileWarning, FolderCheck, HardDrive, TriangleAlert } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -15,6 +15,7 @@ import { showToast } from '@/lib/toast';
 import type { AbandonedFile, FilesStatusResponse } from '@/lib/status/types';
 import { formatBytes } from '../status-format';
 import { abandonedFileColumns } from '../abandoned-file-columns';
+import { uploadUsageColumns } from '../upload-usage-columns';
 import { Loading, Section, useStatusQuery } from '../status-ui';
 
 /** What a delete is waiting on: one named file, or a whole category. */
@@ -84,6 +85,8 @@ export default function FilesTab({
   );
 
   const files = data?.abandonedFiles;
+  const storage = data?.storage;
+  const usageColumns = useMemo(() => uploadUsageColumns(), []);
   const labels = useMemo(
     () => Object.fromEntries((files?.categories ?? []).map((c) => [c.category, c.label])),
     [files?.categories],
@@ -141,8 +144,88 @@ export default function FilesTab({
   const shown = files.categories.filter((c) => c.count > 0 || c.error);
   const truncated = files.total > files.files.length;
 
+  const volume = storage?.volume;
+  const usedPct =
+    volume && volume.totalBytes > 0
+      ? Math.round(((volume.totalBytes - volume.freeBytes) / volume.totalBytes) * 100)
+      : null;
+
   return (
     <>
+      <Section
+        title={
+          <>
+            <HardDrive className="size-4" aria-hidden />
+            Uploaded files
+            <Badge variant="neutral">
+              {storage?.inUseCount.toLocaleString() ?? 0} in use,{' '}
+              {formatBytes(storage?.inUseBytes ?? 0)}
+            </Badge>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-muted-foreground max-w-3xl text-sm">
+            Everything students and staff have uploaded: submitted work, reference solutions,
+            profile photos and evaluator trials. &ldquo;In use&rdquo; is what AFCT still needs. The
+            other two columns are the ones to act on, and they are opposites: abandoned files can be
+            deleted to free space, while a missing file is one AFCT expects and cannot find.
+          </p>
+
+          {volume && (
+            <div className="max-w-3xl rounded border px-3 py-2 text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium">Disk holding the uploads</span>
+                <span className="tabular-nums">
+                  {formatBytes(volume.freeBytes)} free of {formatBytes(volume.totalBytes)}
+                  {usedPct !== null && (
+                    <span className="text-muted-foreground"> ({usedPct}% used)</span>
+                  )}
+                </span>
+              </div>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Uploads are only part of what is on this disk; the application images and the
+                database are on it too.
+              </p>
+            </div>
+          )}
+
+          {(storage?.missingCount ?? 0) > 0 && (
+            // Worth an alert of its own. Everything else on this page is housekeeping; this is
+            // work AFCT believes it has and cannot produce, which for a submission means a
+            // student's file cannot be downloaded, re-graded or appealed.
+            <div
+              role="alert"
+              className="border-destructive/40 bg-destructive/5 max-w-3xl space-y-1 rounded border p-3"
+            >
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <FileWarning className="size-4" aria-hidden />
+                {storage?.missingCount} file{storage?.missingCount === 1 ? ' is' : 's are'} recorded
+                but not on the server
+              </div>
+              <p className="text-muted-foreground text-sm">
+                Something in AFCT points at {storage?.missingCount === 1 ? 'a file' : 'files'} that
+                cannot be found on disk, so {storage?.missingCount === 1 ? 'it' : 'they'} cannot be
+                downloaded or re-graded. This is not something deleting anything will fix: it
+                usually means files were restored from a backup without the uploads, or removed from
+                the server by hand. The affected kinds are marked below.
+              </p>
+            </div>
+          )}
+
+          <DataTable
+            columns={usageColumns}
+            data={storage?.categories ?? []}
+            storageKey="system-status-upload-usage"
+            tableLabel="Uploaded files by kind"
+            emptyTitle="Nothing has been uploaded yet"
+            emptyDescription="Submitted work, solutions and profile photos will be counted here."
+            // A five-row summary: nothing to search, filter or export.
+            showToolbar={false}
+          />
+        </div>
+      </Section>
+
       <Section
         title={
           <>

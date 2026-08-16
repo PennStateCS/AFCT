@@ -214,7 +214,43 @@ export type AbandonedFilesSummary = {
   error?: string;
 };
 
-export type FilesStatusResponse = { abandonedFiles: AbandonedFilesSummary };
+/** One upload directory: what it holds, in use and otherwise. */
+export type UploadCategoryUsage = {
+  category: string;
+  label: string;
+  /** Files on disk that a database row still points at. The working set. */
+  inUseCount: number;
+  inUseBytes: number;
+  /** Files on disk that nothing points at. Reclaimable. */
+  abandonedCount: number;
+  abandonedBytes: number;
+  /**
+   * Rows that name a file which is not on disk.
+   *
+   * The opposite of an abandoned file and much worse: a submission whose file has gone cannot
+   * be downloaded, re-graded or appealed. Nothing else in AFCT reports it.
+   */
+  missingCount: number;
+  /** A few of the missing filenames, as a starting point for finding out why. */
+  missingSamples: string[];
+  /** Set when the folder could not be read, in which case the numbers are not facts. */
+  error?: string;
+};
+
+/** What the uploads volume holds, before asking what is reclaimable. */
+export type StorageUsage = {
+  categories: UploadCategoryUsage[];
+  inUseCount: number;
+  inUseBytes: number;
+  missingCount: number;
+  /** The filesystem holding the uploads, when it could be read. */
+  volume?: { totalBytes: number; freeBytes: number };
+};
+
+export type FilesStatusResponse = {
+  storage: StorageUsage;
+  abandonedFiles: AbandonedFilesSummary;
+};
 
 /* ---------------- Rate limits ---------------- */
 /**

@@ -26,9 +26,11 @@ const stat = vi.hoisted(() => vi.fn());
 const existsSync = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+const statfs = vi.hoisted(() => vi.fn());
+
 vi.mock('fs', () => ({
-  default: { promises: { readdir, unlink, stat }, existsSync },
-  promises: { readdir, unlink, stat },
+  default: { promises: { readdir, unlink, stat, statfs }, existsSync },
+  promises: { readdir, unlink, stat, statfs },
   existsSync,
 }));
 
@@ -69,6 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   onDisk({});
   sized();
+  statfs.mockRejectedValue(new Error('not supported'));
   prismaMock.problem.findMany.mockResolvedValue([]);
   prismaMock.submission.findMany.mockResolvedValue([]);
   prismaMock.user.findMany.mockResolvedValue([]);
@@ -209,6 +212,87 @@ describe('collectAbandonedFiles', () => {
 
     expect(abandonedFiles.total).toBe(0);
     expect(abandonedFiles.categories.every((c) => !c.error)).toBe(true);
+  });
+});
+
+describe('what the volume holds, before asking what is reclaimable', () => {
+  it('counts and measures the files that are still in use', async () => {
+    // The working set is what says whether a filling disk is real work or rubbish, and those
+    // two call for opposite responses.
+    onDisk({ submissions: ['kept.jff', 'orphan.jff'] });
+    prismaMock.submission.findMany.mockResolvedValue([{ fileName: 'kept.jff' }]);
+    sized(4_096);
+
+    const { storage } = await collectAbandonedFiles();
+    const submissions = storage.categories.find((c) => c.category === 'submissions')!;
+
+    expect(submissions).toMatchObject({
+      inUseCount: 1,
+      inUseBytes: 4_096,
+      abandonedCount: 1,
+      abandonedBytes: 4_096,
+    });
+    expect(storage.inUseCount).toBe(1);
+    expect(storage.inUseBytes).toBe(4_096);
+  });
+
+  it('reports a row whose file is not on disk', async () => {
+    // The opposite of an abandoned file and much worse: a submission whose file has gone cannot
+    // be downloaded, re-graded or appealed, and nothing else in AFCT reports it.
+    onDisk({ submissions: [] });
+    prismaMock.submission.findMany.mockResolvedValue([
+      { fileName: 'gone.jff' },
+      { fileName: 'also-gone.jff' },
+    ]);
+
+    const { storage } = await collectAbandonedFiles();
+
+    expect(storage.missingCount).toBe(2);
+    expect(storage.categories.find((c) => c.category === 'submissions')?.missingSamples).toEqual([
+      'also-gone.jff',
+      'gone.jff',
+    ]);
+  });
+
+  it('does not report missing files for a folder that shares another folder’s column', async () => {
+    // Two folders are served from `Problem.fileName`, and the solutions folder is where those
+    // files are. Counting a reference satisfied over there as missing here reported thirteen
+    // imaginary missing files on a healthy install.
+    onDisk({ solutions: ['s1.jff', 's2.jff'] });
+    prismaMock.problem.findMany.mockResolvedValue([{ fileName: 's1.jff' }, { fileName: 's2.jff' }]);
+
+    const { storage } = await collectAbandonedFiles();
+
+    expect(storage.categories.find((c) => c.category === 'problems')?.missingCount).toBe(0);
+    expect(storage.missingCount).toBe(0);
+  });
+
+  it('does not call every file missing when the folder cannot be read', async () => {
+    // An unreadable folder holds no files as far as `readdir` is concerned, so counting its
+    // rows as missing would turn one permissions problem into a page-wide false alarm.
+    readdir.mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }));
+    prismaMock.submission.findMany.mockResolvedValue([{ fileName: 'present.jff' }]);
+
+    const { storage } = await collectAbandonedFiles();
+
+    expect(storage.missingCount).toBe(0);
+    expect(storage.categories.find((c) => c.category === 'submissions')?.error).toBeTruthy();
+  });
+
+  it('reports the space left on the uploads disk', async () => {
+    // Sizes only mean something against what is left; the deploy VM fills after about seven
+    // upgrades, so free space is what decides whether any of this is urgent.
+    statfs.mockResolvedValue({ blocks: 1_000, bavail: 250, bsize: 4_096 });
+
+    const { storage } = await collectAbandonedFiles();
+
+    expect(storage.volume).toEqual({ totalBytes: 4_096_000, freeBytes: 1_024_000 });
+  });
+
+  it('leaves the space unreported rather than guessing when it cannot be read', async () => {
+    const { storage } = await collectAbandonedFiles();
+
+    expect(storage.volume).toBeUndefined();
   });
 });
 
