@@ -74,10 +74,10 @@ jobs:
             linux/install.sh linux/build-bundle.sh linux/lib/*.sh \
             macos/install.sh macos/build-bundle.sh macos/lib/*.sh
 
-      # The scripts inside the container images. `entrypoint.sh` runs on every start and
-      # does the migrations; `backup.sh` writes and verifies every archive. Neither was
-      # checked by anything until now, and backup.sh has no bats coverage either, so this
-      # is the only automated reading it gets.
+      # The scripts inside the container images. `entrypoint.sh` runs on every start and does
+      # the migrations; `backup.sh` writes and verifies every archive. `backup.sh` now has a
+      # bats suite of its own below, so this is a second reading rather than the only one;
+      # `entrypoint.sh` still has nothing else.
       - name: Shellcheck the container scripts
         run: shellcheck -s sh docker/entrypoint.sh docker/backup/backup.sh
 
@@ -94,7 +94,7 @@ jobs:
       - name: Run deployment + updater tests
         run: |
           docker run --rm -v "$PWD:/code" -w /code --entrypoint sh bats/bats:latest -c \
-            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache git jq tar curl python3 util-linux shadow >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/deploy-fixes.bats deploy/test/deploy-remote.bats deploy/test/deploy-hardening.bats deploy/test/updater.bats deploy/test/ci-version-fallback.bats deploy/test/macos-deploy.bats deploy/test/macos-bootstrap.bats"
+            "chmod +x deploy/test/mocks/* deploy/test/mocks-service/* 2>/dev/null; apk add --no-cache git jq tar curl python3 util-linux shadow gnupg coreutils >/dev/null 2>&1; bats deploy/test/afctctl.bats deploy/test/linux-deploy.bats deploy/test/deploy-fixes.bats deploy/test/deploy-remote.bats deploy/test/deploy-hardening.bats deploy/test/updater.bats deploy/test/backup.bats deploy/test/ci-version-fallback.bats deploy/test/macos-deploy.bats deploy/test/macos-bootstrap.bats"
 
       # A real `docker compose config` against the actual installed layout (versioned
       # Compose file in a release directory, .env.production under shared), NOT a mock that
