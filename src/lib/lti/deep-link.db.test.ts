@@ -86,6 +86,28 @@ describe('the signed response', () => {
   });
 
   /**
+   * AFCT is a whole application rather than a widget: a student builds an automaton, submits it
+   * and reads feedback. Saying so here means Canvas ticks "Load this tool in a new tab" on the
+   * assignment it creates, instead of the person adding the link having to know to do it.
+   */
+  it('asks the platform to open the link in a new tab', async () => {
+    await createKeyPair();
+    const result = await build();
+    if (!result.ok) return;
+
+    const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
+    const { payload } = await jwtVerify(result.jwt, keyset, {
+      issuer: PLATFORM.clientId,
+      audience: PLATFORM.issuer,
+    });
+
+    const items = payload['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'] as {
+      window?: { targetName?: string };
+    }[];
+    expect(items[0]?.window).toEqual({ targetName: '_blank' });
+  });
+
+  /**
    * The platform's own state. Platforms reject a response without it, and it is how they know
    * which placement asked.
    */

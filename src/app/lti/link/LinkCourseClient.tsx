@@ -62,8 +62,11 @@ export default function LinkCourseClient({
   };
 
   return (
-    <main className="flex min-h-screen w-full items-start justify-center p-6">
-      <Card className="mt-12 w-full max-w-lg p-4">
+    // Centred in whatever space it is given, and with no fixed top margin: this page is
+    // reached from an LMS, where the frame can be a few hundred pixels tall. The card scrolls
+    // inside itself so a long list never puts its own top out of reach.
+    <main className="flex min-h-dvh w-full items-center justify-center p-4">
+      <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto p-4">
         <CardHeader className="pb-2">
           <CardTitle role="heading" aria-level={1} className="text-xl">
             {notReady ? 'This course is not ready yet' : 'Which course is this?'}
