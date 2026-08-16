@@ -235,6 +235,17 @@ services:
       # administrator runs against the same database, never the number of students.
       - -c
       - max_connections=200
+      # Reclaim connections whose client disappeared without closing them. A container that is
+      # killed rather than stopped takes its network namespace with it, so Postgres never hears
+      # the socket close and keeps the backend until the OS keepalive fires, which by default is
+      # two hours. Restarts during an upgrade are exactly when that happens, and the connections
+      # it strands are still held when the new containers ask for theirs.
+      - -c
+      - tcp_keepalives_idle=60
+      - -c
+      - tcp_keepalives_interval=10
+      - -c
+      - tcp_keepalives_count=6
       - -c
       - log_min_duration_statement=500
       - -c
