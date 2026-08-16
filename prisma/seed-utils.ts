@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { seedRandomInt as randomInt } from './seed-random';
 import type { PrismaClient, CourseRole } from '@prisma/client';
 
 /**
@@ -7,8 +7,8 @@ import type { PrismaClient, CourseRole } from '@prisma/client';
 export const withRole = <T, R>(items: T[], role: R) => items.map((item) => ({ ...item, role }));
 
 /**
- * Pick a random item from a list. Uses the CSPRNG (`node:crypto`) for a uniform,
- * unbiased pick.
+ * Pick a random item from a list. Uses the seed's reproducible generator, so two developers
+ * running this get the same database (see `seed-random.ts`).
  */
 export const pickRandom = <T>(items: T[]): T | undefined => {
   if (items.length === 0) return undefined;
@@ -16,8 +16,8 @@ export const pickRandom = <T>(items: T[]): T | undefined => {
 };
 
 /**
- * Pick a random slice of items sized between min and max. Uses an unbiased
- * Fisher–Yates shuffle backed by the CSPRNG (`node:crypto`).
+ * Pick a random slice of items sized between min and max. Unbiased Fisher-Yates, backed by the
+ * seed's reproducible generator rather than the CSPRNG: this picks sample data, not secrets.
  */
 export const pickRandomRange = <T>(items: T[], min: number, max: number): T[] => {
   const count = Math.min(items.length, Math.max(min, randomInt(min, max + 1)));
@@ -278,6 +278,16 @@ export const logSeedCounts = async (prisma: PrismaClient) => {
   const rosterCount = await prisma.roster.count();
   const assignmentProblemCount = await prisma.assignmentProblem.count();
   const commentCount = await prisma.comment.count();
+  // The newer half of the app. These read zero for a long time because nothing seeded them,
+  // which looked like a broken step rather than a gap; they are counted here so the seed's own
+  // output says whether a developer can actually see those features.
+  const submissionCount = await prisma.submission.count();
+  const similarityCount = await prisma.submission.count({ where: { contentHash: { not: null } } });
+  const groupSetCount = await prisma.groupSet.count();
+  const groupCount = await prisma.studentGroup.count();
+  const gradeCount = await prisma.assignmentProblemGrade.count();
+  const grantCount = await prisma.submissionGrant.count();
+  const activityCount = await prisma.activityLog.count();
 
   console.log('[seed] completed');
   console.log('[seed] counts');
@@ -292,4 +302,9 @@ export const logSeedCounts = async (prisma: PrismaClient) => {
   console.log(`- rosters: ${rosterCount}`);
   console.log(`- assignment-problems: ${assignmentProblemCount}`);
   console.log(`- comments: ${commentCount}`);
+  console.log(`- submissions: ${submissionCount} (${similarityCount} with similarity data)`);
+  console.log(`- group sets: ${groupSetCount}, groups: ${groupCount}`);
+  console.log(`- grades: ${gradeCount}`);
+  console.log(`- submission grants: ${grantCount}`);
+  console.log(`- activity log entries: ${activityCount}`);
 };

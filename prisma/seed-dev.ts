@@ -21,6 +21,10 @@ import {
   studentData,
   taData,
 } from './seed-data';
+import { runDevelopmentExtras } from './seed-dev-extras';
+// Reproducible rather than random: a development database that differs per machine makes
+// "it happens on mine" meaningless. See `seed-random.ts`.
+import { seedRandom as random } from './seed-random';
 import {
   assignCourseRosters,
   getLifecycleDates,
@@ -60,7 +64,11 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     throw error;
   }
   if (existingUsers > 0) {
-    console.log(`[seed] development: ${existingUsers} users exist, skipping seed`);
+    // The base data is somebody's working database; leave it alone. The extras below still run,
+    // because each of those blocks skips itself when its own table has rows, so an existing
+    // database gains whatever the app grew since it was seeded instead of demanding a wipe.
+    console.log(`[seed] development: ${existingUsers} users exist, skipping the base seed`);
+    await runDevelopmentExtras(prisma);
     return;
   }
 
@@ -342,7 +350,11 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       console.log(`[seed] development: enrolled Oliver Green in ${targetCourses.length} course(s)`);
     }
   } catch (error) {
+    // Rethrown like every other step here. A seed that half-worked and said nothing is worse
+    // than one that stopped: the missing enrolment only shows up later as a demo account that
+    // cannot see its own course.
     console.error('[seed] development: error enrolling Oliver Green', error);
+    throw error;
   }
 
   console.log('[seed] development: creating problems for courses');
@@ -445,9 +457,9 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
         const courseDuration = new Date(course.endDate).getTime() - courseStart.getTime();
         const dueDateMs = courseStart.getTime() + courseDuration * assignmentSeed.dueFraction;
         const dueDate = new Date(dueDateMs);
-        const allowLateSubmissions = Math.random() < 0.5;
+        const allowLateSubmissions = random() < 0.5;
         const lateCutoff =
-          allowLateSubmissions && Math.random() < 0.5
+          allowLateSubmissions && random() < 0.5
             ? new Date(dueDate.getTime() + 4 * 24 * 60 * 60 * 1000)
             : null;
 
@@ -508,15 +520,15 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       // For each assignment, assign 2-3 problems from the course
       for (const assignment of courseAssignments) {
         // Randomly pick 2-3 problems for this assignment
-        const numProblemsToAssign = Math.floor(Math.random() * 2) + 2; // 2 or 3
+        const numProblemsToAssign = Math.floor(random() * 2) + 2; // 2 or 3
         const selectedProblems = courseProblems
-          .sort(() => Math.random() - 0.5) // Shuffle
+          .sort(() => random() - 0.5) // Shuffle
           .slice(0, Math.min(numProblemsToAssign, courseProblems.length));
 
         for (const problem of selectedProblems) {
-          const randomPoints = (Math.floor(Math.random() * 10) + 1) * 10;
-          const randomSubmissions = Math.random() < 0.5 ? -1 : Math.floor(Math.random() * 5) + 1;
-          const randomAutograderEnabled = Math.random() < 0.5;
+          const randomPoints = (Math.floor(random() * 10) + 1) * 10;
+          const randomSubmissions = random() < 0.5 ? -1 : Math.floor(random() * 5) + 1;
+          const randomAutograderEnabled = random() < 0.5;
           assignmentProblemsToCreate.push({
             assignmentId: assignment.id,
             problemId: problem.id,
@@ -677,6 +689,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     console.error('[seed] development: error seeding system settings', error);
     throw error;
   }
+
+  await runDevelopmentExtras(prisma);
 
   console.log('[seed] development: counting seeded records');
   // Report counts for quick verification in logs.

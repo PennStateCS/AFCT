@@ -143,6 +143,34 @@ nginx uses a self-signed certificate in development. The browser warning at `htt
 
 Use port 3000 for normal development with hot reload. Use the nginx ports when testing proxy headers, redirects, or HTTPS behavior.
 
+## What the seed gives you
+
+`npm run docker:dev:seed` fills an empty database with a term's worth of sample data: admins,
+faculty, TAs and students sharing one password, nine courses with rolling term dates, problems and
+assignments, and a few hundred submissions with real automaton files behind them.
+
+It also seeds the parts of AFCT that are only interesting with data in them, so you can open a
+feature and see it working rather than guessing whether it is broken or empty:
+
+- **Similarity.** Some students in each problem deliberately submit the same saved file, the same
+  machine with the states moved and renamed, and a copy with one transition changed, which are the
+  three things the report tells apart. The hashes are computed with the app's own code, so they
+  match on exactly the rules the detector uses.
+- **Groups**, with a group set, uneven teams, and an assignment attached to it.
+- **Grades**, including one entered by hand, since a grade's origin and whether it is held back are
+  different fields and look alike until you see both.
+- **Comments, an extra-submission grant, a targeted assignment with a date override**, and sixty
+  activity log entries spread across severities so the log viewer and its filters have something to
+  show.
+
+The data is reproducible: two people running the seed get the same database, which is what makes
+"it happens on my machine" worth saying. Set `AFCT_SEED` to any number for a different but equally
+reproducible one.
+
+Seeding an existing database only adds what is missing. The base data is left alone if users
+already exist, and each of the newer blocks skips itself when its own table has rows, so you can
+top up a database you have been working in instead of wiping it.
+
 ## Common commands
 
 ```bash
