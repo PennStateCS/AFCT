@@ -12,30 +12,36 @@
  * already has rows, so it can top up a database somebody has been working in rather than
  * demanding a wipe.
  *
- * Two rules worth keeping:
+ * Three rules worth keeping:
  *
  * - **Hashes come from the app's own code.** `submissionContentHash` and friends are imported
  *   rather than reimplemented, so seeded submissions match on exactly the rules the detector
  *   uses. A seed with its own copy of that logic would drift and quietly stop demonstrating the
  *   feature it exists to demonstrate.
+ * - **Seeded rows are rows the app could have written.** A submission carries a file of the
+ *   right type for its problem, a group submission names its group, a grade is worth what the
+ *   problem is worth, and a group set that has been submitted against is locked. Data the app
+ *   cannot produce teaches a developer the wrong thing about it.
  * - **Randomness is seeded.** Two developers running this get the same database, so "it happens
  *   on my machine" means something. Override with `AFCT_SEED=<number>` when you want a different
  *   shape.
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient, ProblemType, SubmissionStatus } from '@prisma/client';
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { submissionContentHash, submissionShapeHash } from '@/lib/similarity/content-hash';
 import { extractProvenanceFeatures } from '@/lib/similarity/provenance';
 
+import { assignmentData, courseData, groupSetData } from './seed-data';
 import { seedRandom as random } from './seed-random';
 
 const pick = <T>(items: T[]): T => items[Math.floor(random() * items.length)]!;
 const chance = (p: number) => random() < p;
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-const minutesAfter = (d: Date, m: number) => new Date(d.getTime() + m * 60 * 1000);
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 /** Where the app expects submitted files. Mirrors the path handling in `seed-dev.ts`. */
 async function uploadsDir(): Promise<string> {
@@ -68,25 +74,188 @@ async function storeFile(dir: string, content: string) {
   };
 }
 
+// ---------------------------------------------------------------------------------------------
+// Making a student's answer
+//
+// A submission used to be a randomly chosen sample file, so a regular-expression problem was
+// answered with a Turing machine. Nothing about that is wrong in the database, and everything
+// about it is wrong on screen: the type badge disagrees with the file, the evaluator would
+// reject every attempt, and the Similarity report compared machines nobody was asked to build.
+//
+// What follows builds an answer *to the problem set*, starting from the solution file the
+// problem was created with, which is what a correct submission actually looks like.
+// ---------------------------------------------------------------------------------------------
+
 /**
- * Variations on one automaton, which is what the three similarity checks are built to tell apart.
+ * The same machine, moved and renamed.
  *
- * `identical` is the same saved artifact; `redrawn` is the same machine with the states moved and
- * renamed, which only the shape hash catches; `edited` is a copy with a transition changed, which
- * only the provenance features catch. A developer can see all three kinds of match without
- * building any of it by hand.
+ * This is the ordinary case, not the suspicious one: two students who both solve "three
+ * consecutive 1s" correctly have built the same automaton and laid it out differently. It keeps
+ * the shape hash and changes the content hash, so it is also what a copied file looks like once
+ * somebody has dragged the states around, and the report tells the two apart by how rare the
+ * value is rather than by the match itself.
+ *
+ * A grammar has no layout, so its productions are reordered instead (the shape hash sorts them).
+ * A regular expression has neither, so it comes back unchanged, which is the honest answer: two
+ * students writing `[0-9]` really have sent the same file.
  */
-function variants(base: string) {
-  const redrawn = base
-    .replace(/<x>([\d.]+)<\/x>/g, (_, x) => `<x>${Number(x) + 37}</x>`)
-    .replace(/<y>([\d.]+)<\/y>/g, (_, y) => `<y>${Number(y) + 21}</y>`)
-    .replace(/<block id="(\d+)" name="([^"]*)">/g, '<block id="$1" name="s$1">');
-  // One transition's read symbol changed: still recognisably the same work, no longer the same
-  // machine.
-  const edited = base.replace(/<read>([^<]*)<\/read>/, (m, sym) =>
-    sym === '1' ? '<read>0</read>' : '<read>1</read>',
+function redraw(base: string, offset: number): string {
+  if (base.includes('<production>')) {
+    const productions = base.match(/\t*<production>[\s\S]*?<\/production>\n?/g) ?? [];
+    if (productions.length < 2) return base;
+    const reordered = [...productions.slice(1), productions[0]!].join('');
+    return base.replace(/\t*<production>[\s\S]*<\/production>\n?/, reordered);
+  }
+  return base
+    .replace(/<x>([\d.]+)<\/x>/g, (_, x) => `<x>${Number(x) + 13 * offset}</x>`)
+    .replace(/<y>([\d.]+)<\/y>/g, (_, y) => `<y>${Number(y) + 7 * offset}</y>`)
+    .replace(/<state id="(\d+)" name="[^"]*">/g, (_, id) => `<state id="${id}" name="s${id}">`);
+}
+
+/**
+ * A copy of somebody else's file with one thing changed.
+ *
+ * The layout, the state ids and the curve adjustments all stay exactly as they were, which is
+ * what `provenanceFeatures` describes and what neither hash can catch on its own. This is the
+ * case the third fingerprint exists for.
+ */
+function editOneTransition(base: string): string {
+  if (base.includes('<expression>')) {
+    return base.replace(/<expression>[\s\S]*?<\/expression>/, '<expression>[0-9]*</expression>');
+  }
+  if (base.includes('<production>')) {
+    return base.replace(/<right>([^<]*)<\/right>/, (_, right) => `<right>${right}b</right>`);
+  }
+  return base.replace(/<read>([^<]*)<\/read>/, (_, symbol) =>
+    symbol === '1' ? '<read>0</read>' : '<read>1</read>',
   );
-  return { redrawn, edited };
+}
+
+/**
+ * A different machine: somebody's own attempt, usually an earlier and wrong one.
+ *
+ * Deliberately not a redraw. If every student sent the same machine the whole cohort would be one
+ * match group and the report would have nothing to say, which is the opposite of the problem it
+ * solves. `variant` shifts what changes so two independent students do not accidentally agree.
+ */
+function ownAttempt(base: string, variant: number): string {
+  if (base.includes('<expression>')) {
+    // Plausible answers to "a single digit", right and wrong, the way a class actually varies.
+    const expressions = [
+      '[0-9]',
+      '(0|1|2|3|4|5|6|7|8|9)',
+      '[0123456789]',
+      '[0-9][0-9]*',
+      '[0-9]+',
+      '(0+1+2+3+4+5+6+7+8+9)',
+    ];
+    return base.replace(
+      /<expression>[\s\S]*?<\/expression>/,
+      `<expression>${expressions[variant % expressions.length]}</expression>`,
+    );
+  }
+  if (base.includes('<production>')) {
+    const rights = ['aSb', 'aS', 'Sb', 'ab', 'aAb', 'a'];
+    return base.replace(
+      /<right>([^<]*)<\/right>/,
+      `<right>${rights[variant % rights.length]}</right>`,
+    );
+  }
+
+  // Drop a transition and change a symbol: a machine that is recognisably an attempt at the same
+  // problem and is not the same machine.
+  const transitions = base.match(/\t*<transition>[\s\S]*?<\/transition>\n?/g) ?? [];
+  let mutated = base;
+  if (transitions.length > 2) {
+    mutated = mutated.replace(transitions[variant % transitions.length]!, '');
+  }
+  let seen = 0;
+  mutated = mutated.replace(/<read>([^<]*)<\/read>/g, (whole, symbol) => {
+    seen += 1;
+    if (seen !== 1 + (variant % 2)) return whole;
+    return symbol === '1' ? '<read>0</read>' : '<read>1</read>';
+  });
+
+  // Laid out this student's own way on top of that. There are only so many ways to break a
+  // four-state machine, so without this two people who happened to make the same mistake sent
+  // the identical file and turned up as an exact match, which is the one thing in the report
+  // that is supposed to be worth reading.
+  return redraw(mutated, variant + 3);
+}
+
+/** JFLAP's own type tag, mapped to the problem types AFCT stores. */
+const JFF_TYPES: Record<string, ProblemType> = {
+  fa: 'FA',
+  pda: 'PDA',
+  turing: 'TM',
+  grammar: 'CFG',
+  re: 'RE',
+};
+
+/**
+ * Every sample file, keyed by the problem type it answers.
+ *
+ * Read from the file rather than the filename: `collatzUnaryTM.jff` says it is a Turing machine
+ * in its own `<type>` tag, and a file renamed later should not change what it is.
+ */
+async function loadSamples(): Promise<Map<ProblemType, Map<string, string>>> {
+  const dir = path.join(process.cwd(), 'prisma', 'solution_files');
+  const names = (await fs.readdir(dir)).filter((name) => name.endsWith('.jff')).sort();
+  const byType = new Map<ProblemType, Map<string, string>>();
+
+  for (const name of names) {
+    const content = await fs.readFile(path.join(dir, name), 'utf8');
+    const tag = /<type>([^<]*)<\/type>/.exec(content)?.[1]?.trim().toLowerCase() ?? '';
+    const type = JFF_TYPES[tag];
+    if (!type) continue;
+    const forType = byType.get(type) ?? new Map<string, string>();
+    forType.set(name, content);
+    byType.set(type, forType);
+  }
+  return byType;
+}
+
+/**
+ * What each student does with this problem.
+ *
+ * The first four positions are the cases the Similarity report exists to tell apart, and the
+ * rest of the class is ordinary work: some of it converges on the posted answer, most of it does
+ * not. The mixture matters as much as the matches, because a match only means something when it
+ * is rare among the people answering the same question.
+ */
+type Behaviour = 'copied' | 'copied-redrawn' | 'copied-edited' | 'converged' | 'own';
+
+function behaviourFor(index: number, cohort: number): Behaviour {
+  // A group assignment has four submitters, not twenty. Seeding the same four copy behaviours
+  // there would make every group in the course a copy of every other, which is not a demonstration
+  // of anything: a match means something only when most of the cohort does not match.
+  if (cohort < 8) return index < 2 ? 'copied' : 'own';
+
+  if (index === 0 || index === 1) return 'copied';
+  if (index === 2) return 'copied-redrawn';
+  if (index === 3) return 'copied-edited';
+  return chance(0.35) ? 'converged' : 'own';
+}
+
+/**
+ * When a student sent this attempt.
+ *
+ * Anchored to the assignment's own due date rather than "some day in the last month", which used
+ * to put work on an archived course months after it ended and on a course that had not started.
+ * Most of the class submits in the last few days before the deadline; a few are late, which is
+ * the case the late-cutoff handling exists for.
+ */
+function submittedAtFor(dueDate: Date, courseStart: Date, late: boolean): Date {
+  const now = Date.now();
+  const due = dueDate.getTime();
+
+  // Only work that is already due can be late, and nothing can be submitted in the future.
+  if (late && due < now) return new Date(Math.min(now, due + (2 + random() * 60) * HOUR_MS));
+
+  const end = Math.min(now, due);
+  const start = Math.max(courseStart.getTime(), end - 14 * DAY_MS);
+  if (end <= start) return new Date(end);
+  return new Date(start + random() * (end - start));
 }
 
 /**
@@ -94,8 +263,9 @@ function variants(base: string) {
  *
  * Six submissions across nine courses left the submissions table, the autograder queue, the
  * statistics and the similarity report all looking broken rather than empty. This writes a few
- * hundred, with real files behind them, verdicts, several attempts per student, and deliberate
- * similarity between particular students so the report has something true to say.
+ * hundred: files of the right kind for the problem, several attempts each, group work recorded
+ * against its group, a queue that is not entirely finished, and deliberate similarity between
+ * particular students so the report has something true to say.
  */
 async function seedSubmissions(prisma: PrismaClient) {
   if ((await prisma.submission.count()) > 10) {
@@ -104,75 +274,253 @@ async function seedSubmissions(prisma: PrismaClient) {
   }
 
   const dir = await uploadsDir();
-  const sourceDir = path.join(process.cwd(), 'prisma', 'solution_files');
-  const files = (await fs.readdir(sourceDir)).filter((f) => f.endsWith('.jff'));
-  const samples = await Promise.all(
-    files.map(async (f) => fs.readFile(path.join(sourceDir, f), 'utf8')),
-  );
-  if (samples.length === 0) {
+  const samples = await loadSamples();
+  if (samples.size === 0) {
     console.warn('[seed] extras: no .jff samples to submit; skipping submissions');
     return;
   }
 
   const links = await prisma.assignmentProblem.findMany({
-    select: { assignmentId: true, problemId: true, assignment: { select: { courseId: true } } },
+    select: {
+      assignmentId: true,
+      problemId: true,
+      problem: { select: { type: true, originalFileName: true } },
+      assignment: {
+        select: {
+          courseId: true,
+          dueDate: true,
+          isPublished: true,
+          allowLateSubmissions: true,
+          groupSetId: true,
+          course: { select: { startDate: true } },
+        },
+      },
+    },
   });
-  let written = 0;
+
+  type Row = {
+    assignmentId: string;
+    problemId: string;
+    courseId: string;
+    studentId: string;
+    studentGroupId: string | null;
+    status: SubmissionStatus;
+    correct: boolean | null;
+    attempts: number;
+    submittedAt: Date;
+    feedback: string | null;
+    fileName: string;
+    originalFileName: string;
+    contentHash: string | null;
+    shapeHash: string | null;
+    provenanceFeatures: never;
+  };
+  const rows: Row[] = [];
 
   for (const link of links) {
-    const students = await prisma.roster.findMany({
-      where: { courseId: link.assignment.courseId, role: 'STUDENT' },
-      select: { userId: true },
-      take: 12,
-    });
-    if (students.length === 0) continue;
+    // An unpublished assignment is one no student can see, so work against it could not exist.
+    if (!link.assignment.isPublished) continue;
+    // Nor could work on a course that has not started.
+    if (link.assignment.course.startDate.getTime() > Date.now()) continue;
 
-    const base = pick(samples);
-    const { redrawn, edited } = variants(base);
-    // Everyone else answers with something of their own, so the matches below stand out the way
-    // they would in a real class rather than being lost in noise.
-    const perStudent = students.map((s, i) => {
-      if (i === 0 || i === 1) return base; // the same saved artifact
-      if (i === 2) return redrawn; // same machine, moved and renamed
-      if (i === 3) return edited; // a copy with one transition changed
-      return pick(samples);
-    });
+    // The answer this problem was set for. Falling back to any sample of the right type keeps a
+    // problem whose solution file went missing from being answered with the wrong kind of file.
+    const forType = samples.get(link.problem.type ?? 'FA');
+    if (!forType || forType.size === 0) continue;
+    const canonical =
+      (link.problem.originalFileName ? forType.get(link.problem.originalFileName) : undefined) ??
+      [...forType.values()][0]!;
 
-    for (const [i, student] of students.entries()) {
-      const attempts = 1 + (chance(0.35) ? 1 : 0) + (chance(0.15) ? 1 : 0);
-      const first = daysAgo(2 + Math.floor(random() * 25));
+    // Who submits: on a group assignment the group does, through one of its members, and one
+    // submission counts for everybody in it.
+    const groups = link.assignment.groupSetId
+      ? await prisma.studentGroup.findMany({
+          where: { groupSetId: link.assignment.groupSetId },
+          select: { id: true, memberships: { select: { userId: true } } },
+        })
+      : [];
+    const submitters = link.assignment.groupSetId
+      ? groups
+          .filter((group) => group.memberships.length > 0)
+          .map((group) => ({
+            userId: pick(group.memberships).userId,
+            studentGroupId: group.id as string | null,
+          }))
+      : (
+          await prisma.roster.findMany({
+            where: { courseId: link.assignment.courseId, role: 'STUDENT' },
+            select: { userId: true },
+            orderBy: { createdAt: 'asc' },
+          })
+        ).map((roster) => ({ userId: roster.userId, studentGroupId: null }));
+
+    for (const [index, submitter] of submitters.entries()) {
+      const behaviour = behaviourFor(index, submitters.length);
+      const attempts = 1 + (chance(0.4) ? 1 : 0) + (chance(0.15) ? 1 : 0);
+      const late = chance(0.08);
+      // Attempts are timed backwards from the last one, so a student's second try never predates
+      // their first. Ordering is the whole point of an attempt list.
+      const finalAt = submittedAtFor(
+        link.assignment.dueDate,
+        link.assignment.course.startDate,
+        late && link.assignment.allowLateSubmissions,
+      );
 
       for (let attempt = 1; attempt <= attempts; attempt++) {
-        const correct = attempt === attempts ? chance(0.7) : chance(0.2);
-        const stored = await storeFile(dir, perStudent[i]!);
-        await prisma.submission.create({
-          data: {
-            assignmentId: link.assignmentId,
-            problemId: link.problemId,
-            courseId: link.assignment.courseId,
-            studentId: student.userId,
-            status: 'COMPLETED',
-            correct,
-            attempts: attempt,
-            submittedAt: minutesAfter(first, (attempt - 1) * (20 + Math.floor(random() * 400))),
-            feedback: correct
-              ? 'Accepted every string in the test set.'
-              : 'Rejected 0110, which the language contains.',
-            ...stored,
-          },
+        const isFinal = attempt === attempts;
+        // A last attempt is usually right; the ones before it usually are not. That is what makes
+        // the attempt counts and the "best attempt" logic worth looking at.
+        const correct = isFinal ? chance(0.75) : chance(0.15);
+
+        // One number per student per attempt, so no two people's own working comes out as the
+        // same file by arithmetic rather than by copying.
+        const variant = index * 5 + attempt;
+
+        // Earlier attempts are the student's own working, whoever they turn out to be: somebody
+        // copying a file does it once, at the end, not three times.
+        let content: string;
+        if (!isFinal || behaviour === 'own') {
+          content = ownAttempt(canonical, variant);
+        } else if (behaviour === 'copied') {
+          content = canonical;
+        } else if (behaviour === 'copied-redrawn') {
+          content = redraw(canonical, 1);
+        } else if (behaviour === 'copied-edited') {
+          content = editOneTransition(canonical);
+        } else {
+          // Converged: the right answer, drawn their own way. Common, and the reason a match is
+          // read against how rare it is rather than on its own.
+          content = correct ? redraw(canonical, 2 + index) : ownAttempt(canonical, variant);
+        }
+
+        const submittedAt = new Date(
+          Math.max(
+            link.assignment.course.startDate.getTime(),
+            finalAt.getTime() - (attempts - attempt) * (30 + random() * 300) * 60 * 1000,
+          ),
+        );
+
+        // Everything here has already been through the grader. Work still waiting in the queue is
+        // seeded last, by `seedQueue`, for a reason worth knowing: the dev worker is running, so
+        // a PENDING row written now is claimed and graded within a second or two, and the grades
+        // and log entries it writes made the later steps think they had already run.
+        const status: SubmissionStatus = chance(0.03) ? 'FAILED' : 'COMPLETED';
+
+        const stored = await storeFile(dir, content);
+        rows.push({
+          assignmentId: link.assignmentId,
+          problemId: link.problemId,
+          courseId: link.assignment.courseId,
+          studentId: submitter.userId,
+          studentGroupId: submitter.studentGroupId,
+          status,
+          // A failed attempt never got a verdict.
+          correct: status === 'FAILED' ? null : correct,
+          // How many times the *worker* has claimed it, which is not the student's attempt
+          // number: one claim to grade it, and a failure is what a retried claim ends in.
+          attempts: status === 'FAILED' ? 3 : 1,
+          submittedAt,
+          feedback:
+            status === 'FAILED'
+              ? 'The grader did not return a verdict for this attempt.'
+              : correct
+                ? 'Accepted every string in the test set.'
+                : 'Rejected 0110, which the language contains.',
+          ...stored,
         });
-        written += 1;
       }
     }
   }
-  console.log(`[seed] extras: created ${written} submissions with similarity data`);
+
+  // In batches: a few hundred round trips is the difference between a seed a new developer waits
+  // through and one they assume has hung.
+  for (let i = 0; i < rows.length; i += 200) {
+    await prisma.submission.createMany({ data: rows.slice(i, i + 200) });
+  }
+  console.log(`[seed] extras: created ${rows.length} submissions with similarity data`);
+}
+
+/**
+ * Work that has been sent and not yet graded.
+ *
+ * Runs last, and everything it writes is deliberately fresh. Without it the Autograder page, the
+ * status filters and the queue depth on System Status are only ever reviewable against a table
+ * where every row already finished, which is the one state they are least likely to be wrong in.
+ *
+ * With `npm run docker:dev` up, the worker will claim these within seconds and grade them for
+ * real, against the same evaluator a submission from the browser goes through. That is the point
+ * of seeding a file of the right type for the problem: this work can actually be graded.
+ */
+async function seedQueue(prisma: PrismaClient) {
+  if (
+    (await prisma.submission.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } })) > 0
+  ) {
+    console.log('[seed] extras: work already waiting in the queue, skipping');
+    return;
+  }
+
+  const dir = await uploadsDir();
+  const samples = await loadSamples();
+  const links = await prisma.assignmentProblem.findMany({
+    where: {
+      autograderEnabled: true,
+      assignment: { isPublished: true, course: { startDate: { lte: new Date() } } },
+    },
+    select: {
+      assignmentId: true,
+      problemId: true,
+      problem: { select: { type: true, originalFileName: true } },
+      assignment: { select: { courseId: true, groupSetId: true } },
+    },
+    take: 6,
+  });
+
+  let queued = 0;
+  for (const link of links) {
+    // Individual work only: a group submission locks its set and counts for every member, which
+    // is a lot of consequence for a row that exists to make the queue non-empty.
+    if (link.assignment.groupSetId) continue;
+
+    const forType = samples.get(link.problem.type ?? 'FA');
+    const canonical =
+      (link.problem.originalFileName ? forType?.get(link.problem.originalFileName) : undefined) ??
+      (forType ? [...forType.values()][0] : undefined);
+    if (!canonical) continue;
+
+    const students = await prisma.roster.findMany({
+      where: { courseId: link.assignment.courseId, role: 'STUDENT' },
+      select: { userId: true },
+      take: 2,
+    });
+
+    for (const [index, student] of students.entries()) {
+      const stored = await storeFile(dir, ownAttempt(canonical, queued + 1));
+      await prisma.submission.create({
+        data: {
+          assignmentId: link.assignmentId,
+          problemId: link.problemId,
+          courseId: link.assignment.courseId,
+          studentId: student.userId,
+          // Nothing has judged it yet, and nothing has claimed a pending row.
+          status: index === 0 ? 'PENDING' : 'PROCESSING',
+          correct: null,
+          attempts: index === 0 ? 0 : 1,
+          submittedAt: new Date(Date.now() - (2 + queued * 3) * 60 * 1000),
+          feedback: null,
+          ...stored,
+        },
+      });
+      queued += 1;
+    }
+  }
+  console.log(`[seed] extras: left ${queued} submissions waiting in the autograder queue`);
 }
 
 /**
  * Groups, which group assignments and group grading are built on and which nothing seeded.
  *
- * One course gets a set of small groups covering its students. Sized deliberately unevenly,
- * because a set where every group has exactly three people hides the arithmetic mistakes.
+ * The sets come from `seed-data`, next to the assignments that use them, because which
+ * assignments are group work is a fact about the course rather than something to discover here.
  */
 async function seedGroups(prisma: PrismaClient) {
   if ((await prisma.groupSet.count()) > 0) {
@@ -180,77 +528,93 @@ async function seedGroups(prisma: PrismaClient) {
     return;
   }
 
-  const course = await prisma.course.findFirst({
-    where: { deletedAt: null, roster: { some: { role: 'STUDENT' } } },
-    select: { id: true, name: true },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (!course) return;
+  const setIdsByCourseAndName = new Map<string, string>();
+  let groupsCreated = 0;
 
-  const students = await prisma.roster.findMany({
-    where: { courseId: course.id, role: 'STUDENT' },
-    select: { id: true, userId: true },
-  });
-  if (students.length < 4) return;
+  for (const setSeed of groupSetData) {
+    const regCode = courseData[setSeed.courseIndex]?.regCode;
+    const course = regCode ? await prisma.course.findUnique({ where: { regCode } }) : null;
+    if (!course) continue;
 
-  const set = await prisma.groupSet.create({
-    data: { name: 'Project teams', courseId: course.id },
-    select: { id: true },
-  });
+    const students = await prisma.roster.findMany({
+      where: { courseId: course.id, role: 'STUDENT' },
+      select: { userId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (students.length < 4) continue;
 
-  // Uneven on purpose: a set where every group has the same size hides the arithmetic mistakes.
-  // Trimmed to what the roster can actually fill, so a small course still gets whole groups
-  // rather than an empty third one.
-  const sizes = [3, 2, 4].filter((_, i, all) => {
-    const needed = all.slice(0, i + 1).reduce((sum, n) => sum + n, 0);
-    return needed <= students.length;
-  });
-  let index = 0;
-  let created = 0;
-  for (const [n, size] of sizes.entries()) {
-    const members = students.slice(index, index + size);
-    index += size;
-    if (members.length === 0) break;
-
-    const group = await prisma.studentGroup.create({
-      data: { name: `Team ${n + 1}`, groupSetId: set.id },
+    const set = await prisma.groupSet.create({
+      data: { name: setSeed.name, courseId: course.id },
       select: { id: true },
     });
-    for (const member of members) {
-      await prisma.groupMembership.create({
-        data: {
+    setIdsByCourseAndName.set(`${course.id}:${setSeed.name}`, set.id);
+
+    let index = 0;
+    for (const [n, size] of setSeed.sizes.entries()) {
+      const members = students.slice(index, index + size);
+      index += size;
+      if (members.length === 0) break;
+
+      const group = await prisma.studentGroup.create({
+        data: { name: `Team ${n + 1}`, groupSetId: set.id },
+        select: { id: true },
+      });
+      await prisma.groupMembership.createMany({
+        data: members.map((member) => ({
           groupSetId: set.id,
           groupId: group.id,
           courseId: course.id,
           userId: member.userId,
-        },
+        })),
       });
+      groupsCreated += 1;
     }
-    created += 1;
   }
 
-  // An assignment that is actually a group assignment: the flag is the presence of a group set,
-  // so an assignment without one behaves individually however the UI is configured.
-  const assignment = await prisma.assignment.findFirst({
-    where: { courseId: course.id },
-    select: { id: true },
-    orderBy: { createdAt: 'asc' },
-  });
-  if (assignment) {
-    await prisma.assignment.update({
-      where: { id: assignment.id },
-      data: { groupSetId: set.id },
-    });
+  // Individual versus group is the single fact `groupSetId` carries, so this is what makes an
+  // assignment a group assignment. Most stay individual, which is the ordinary case.
+  let groupAssignments = 0;
+  for (const [courseIndex, courseSeed] of courseData.entries()) {
+    const course = await prisma.course.findUnique({ where: { regCode: courseSeed.regCode } });
+    if (!course) continue;
+
+    for (const assignmentSeed of assignmentData) {
+      if (assignmentSeed.courseIndex !== courseIndex || !assignmentSeed.groupSet) continue;
+      const groupSetId = setIdsByCourseAndName.get(`${course.id}:${assignmentSeed.groupSet}`);
+      if (!groupSetId) continue;
+
+      const assignment = await prisma.assignment.findFirst({
+        where: { courseId: course.id, title: assignmentSeed.title },
+        select: { id: true },
+      });
+      if (!assignment) continue;
+
+      await prisma.assignment.update({ where: { id: assignment.id }, data: { groupSetId } });
+      // A set that has been submitted against is locked against membership edits, and the seed
+      // is about to submit against it. Leaving it unlocked would be a state the app cannot
+      // reach, and the group editing screens would behave differently here than anywhere else.
+      await prisma.groupSet.updateMany({
+        where: { id: groupSetId, lockedAt: null },
+        data: { lockedAt: daysAgo(20) },
+      });
+      groupAssignments += 1;
+    }
   }
-  console.log(`[seed] extras: created a group set with ${created} groups in ${course.name}`);
+
+  console.log(
+    `[seed] extras: created ${groupsCreated} groups across ${setIdsByCourseAndName.size} sets, ` +
+      `used by ${groupAssignments} group assignments`,
+  );
 }
 
 /**
- * Grades, including a manually-changed one.
+ * Grades, written the way the grader writes them.
  *
- * The distinction that keeps being got wrong is that a grade's origin (autograder or a person)
- * and whether it is held back are two different things, so the seed contains one of each rather
- * than a uniform set that makes them look like the same field.
+ * Two distinctions get confused constantly and both are seeded rather than described. A grade's
+ * origin (the autograder or a person) and whether it is held back are different fields, so there
+ * is one grade of each kind. And a group's grade is one row per member carrying which group it
+ * came from, not a single row against the group, which is what the "adjusted from" marker on a
+ * member later changed by hand is read from.
  */
 async function seedGrades(prisma: PrismaClient) {
   if ((await prisma.assignmentProblemGrade.count()) > 0) {
@@ -258,30 +622,120 @@ async function seedGrades(prisma: PrismaClient) {
     return;
   }
 
+  // Only finished work is graded, and only where the autograder is meant to run: a problem set
+  // for hand grading gets the grades below instead.
   const graded = await prisma.submission.findMany({
-    where: { correct: { not: null } },
-    select: { assignmentId: true, problemId: true, studentId: true, correct: true },
-    distinct: ['assignmentId', 'problemId', 'studentId'],
-    take: 120,
+    where: { status: 'COMPLETED', correct: { not: null } },
+    select: {
+      assignmentId: true,
+      problemId: true,
+      studentId: true,
+      studentGroupId: true,
+      correct: true,
+      feedback: true,
+      assignmentProblem: { select: { maxPoints: true, autograderEnabled: true } },
+    },
+    orderBy: { submittedAt: 'asc' },
   });
 
-  let manual = 0;
-  for (const [i, s] of graded.entries()) {
-    const byHand = i % 17 === 0;
-    if (byHand) manual += 1;
-    await prisma.assignmentProblemGrade.create({
-      data: {
-        assignmentId: s.assignmentId,
-        problemId: s.problemId,
-        studentId: s.studentId,
-        grade: byHand ? 85 : s.correct ? 100 : 40,
-        gradedManually: byHand,
-        gradeSource: byHand ? 'MANUAL' : 'AUTOGRADER',
-        feedback: byHand ? 'Partial credit for the construction, marked by hand.' : null,
-      },
-    });
+  type GradeRow = {
+    assignmentId: string;
+    problemId: string;
+    studentId: string;
+    grade: number;
+    feedback: string | null;
+    gradedManually: boolean;
+    gradeSource: 'AUTOGRADER' | 'MANUAL';
+    groupGradeGroupId?: string | null;
+    groupGradeValue?: number | null;
+  };
+  // Newest wins, the same as re-grading: iterating oldest-first and overwriting leaves one row
+  // per student per problem holding their latest verdict.
+  const byTarget = new Map<string, GradeRow>();
+  const memberCache = new Map<string, string[]>();
+
+  for (const submission of graded) {
+    if (!submission.assignmentProblem.autograderEnabled) continue;
+    const earned = submission.correct ? submission.assignmentProblem.maxPoints : 0;
+
+    let targets = [submission.studentId];
+    if (submission.studentGroupId) {
+      const cached = memberCache.get(submission.studentGroupId);
+      targets =
+        cached ??
+        (
+          await prisma.groupMembership.findMany({
+            where: { groupId: submission.studentGroupId },
+            select: { userId: true },
+          })
+        ).map((membership) => membership.userId);
+      memberCache.set(submission.studentGroupId, targets);
+    }
+
+    for (const studentId of targets) {
+      byTarget.set(`${submission.assignmentId}:${submission.problemId}:${studentId}`, {
+        assignmentId: submission.assignmentId,
+        problemId: submission.problemId,
+        studentId,
+        grade: earned,
+        feedback: submission.feedback,
+        gradedManually: false,
+        gradeSource: 'AUTOGRADER',
+        groupGradeGroupId: submission.studentGroupId,
+        groupGradeValue: submission.studentGroupId ? earned : null,
+      });
+    }
   }
-  console.log(`[seed] extras: created ${graded.length} grades (${manual} entered by hand)`);
+
+  // A few grades a person set: partial credit the autograder cannot award, held against
+  // re-grading. One of them is a member of a group pulled off the group's grade, which is the
+  // case the "adjusted from" marker is for.
+  const rows = [...byTarget.values()];
+  let manual = 0;
+  for (const [index, row] of rows.entries()) {
+    if (index % 23 !== 0 || row.grade === 0) continue;
+    row.grade = Math.round(row.grade * 0.7);
+    row.gradedManually = true;
+    row.gradeSource = 'MANUAL';
+    row.feedback = 'Partial credit for the construction, marked by hand.';
+    manual += 1;
+  }
+
+  // Hand-graded work: a problem with the autograder off has no grade until somebody enters one,
+  // so this is the only way those rows exist at all.
+  const handGraded = await prisma.assignmentProblem.findMany({
+    where: { autograderEnabled: false },
+    select: {
+      assignmentId: true,
+      problemId: true,
+      maxPoints: true,
+      assignment: { select: { courseId: true } },
+    },
+  });
+  for (const link of handGraded) {
+    const students = await prisma.roster.findMany({
+      where: { courseId: link.assignment.courseId, role: 'STUDENT' },
+      select: { userId: true },
+      take: 6,
+    });
+    for (const student of students) {
+      rows.push({
+        assignmentId: link.assignmentId,
+        problemId: link.problemId,
+        studentId: student.userId,
+        grade: Math.round(link.maxPoints * (0.6 + random() * 0.4)),
+        feedback: 'Marked from the written reduction.',
+        gradedManually: true,
+        gradeSource: 'MANUAL',
+      });
+      manual += 1;
+    }
+  }
+
+  for (let i = 0; i < rows.length; i += 200) {
+    await prisma.assignmentProblemGrade.createMany({ data: rows.slice(i, i + 200) });
+  }
+  console.log(`[seed] extras: created ${rows.length} grades (${manual} entered by hand)`);
 }
 
 /** Feedback threads, so the comment surfaces are not blank. */
@@ -330,7 +784,9 @@ async function seedGrants(prisma: PrismaClient) {
     return;
   }
 
+  // Only a problem with a cap can be granted more attempts, so pick one that has one.
   const link = await prisma.assignmentProblem.findFirst({
+    where: { maxSubmissions: { gt: 0 } },
     select: { assignmentId: true, problemId: true, assignment: { select: { courseId: true } } },
   });
   if (!link) return;
@@ -397,7 +853,7 @@ async function seedAudienceAndOverrides(prisma: PrismaClient) {
       targetType: 'STUDENT',
       assignmentId: assignment.id,
       userId: students[0]!.userId,
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      dueDate: new Date(Date.now() + 7 * DAY_MS),
       allowLateSubmissions: true,
     },
   });
@@ -423,14 +879,44 @@ async function seedActivityLog(prisma: PrismaClient) {
   const course = await prisma.course.findFirst({ select: { id: true } });
   if (users.length === 0) return;
 
-  const kinds: Array<{ action: string; severity: 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY'; category: string; metadata?: object }> = [
+  const kinds: Array<{
+    action: string;
+    severity: 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
+    category: string;
+    metadata?: object;
+  }> = [
     { action: 'LOGIN', severity: 'INFO', category: 'USER' },
-    { action: 'LOGIN_FAILED', severity: 'SECURITY', category: 'USER', metadata: { reason: 'invalid password' } },
-    { action: 'SUBMISSION_CREATED', severity: 'INFO', category: 'SUBMISSION', metadata: { attempt: 2 } },
-    { action: 'GRADE_CHANGED', severity: 'INFO', category: 'SUBMISSION', metadata: { from: 40, to: 85, by: 'hand' } },
+    {
+      action: 'LOGIN_FAILED',
+      severity: 'SECURITY',
+      category: 'USER',
+      metadata: { reason: 'invalid password' },
+    },
+    {
+      action: 'SUBMISSION_CREATED',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      metadata: { attempt: 2 },
+    },
+    {
+      action: 'GRADE_CHANGED',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      metadata: { from: 40, to: 85, by: 'hand' },
+    },
     { action: 'COURSE_UPDATED', severity: 'INFO', category: 'COURSE' },
-    { action: 'BACKUP_FAILED', severity: 'ERROR', category: 'SYSTEM', metadata: { reason: 'no space left on device' } },
-    { action: 'ROSTER_IMPORTED', severity: 'WARNING', category: 'COURSE', metadata: { skipped: 3, reason: 'no matching email' } },
+    {
+      action: 'BACKUP_FAILED',
+      severity: 'ERROR',
+      category: 'SYSTEM',
+      metadata: { reason: 'no space left on device' },
+    },
+    {
+      action: 'ROSTER_IMPORTED',
+      severity: 'WARNING',
+      category: 'COURSE',
+      metadata: { skipped: 3, reason: 'no matching email' },
+    },
   ];
 
   for (let i = 0; i < 60; i++) {
@@ -452,8 +938,10 @@ async function seedActivityLog(prisma: PrismaClient) {
 }
 
 /**
- * Everything above, in dependency order: submissions before the grades and comments that refer to
- * work, groups before anything targeted at one.
+ * Everything above, in dependency order: groups before the submissions that belong to one,
+ * submissions before the grades and comments that refer to work, and the autograder queue last
+ * of all, because the dev worker starts on it immediately and writes grades and log entries of
+ * its own that would make the steps in between think they had already run.
  */
 export const runDevelopmentExtras = async (prisma: PrismaClient) => {
   console.log('[seed] extras: filling in the features seeded data was missing');
@@ -464,4 +952,5 @@ export const runDevelopmentExtras = async (prisma: PrismaClient) => {
   await seedGrants(prisma);
   await seedAudienceAndOverrides(prisma);
   await seedActivityLog(prisma);
+  await seedQueue(prisma);
 };

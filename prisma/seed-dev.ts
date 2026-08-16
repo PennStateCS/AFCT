@@ -394,9 +394,18 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       originalToStoredFileName.set(problemSeed.originalFileName, storedFileName);
     }
 
+    // One row per distinct problem per course. `problemData` lists the flip-flop problems twice,
+    // once for each CMPEN 271 section, but every course is given the whole catalogue, so seeding
+    // it verbatim gave every course two problems called "D Flip-Flop" and left an assignment
+    // naming a problem with no way to say which one it meant.
+    const distinctProblems = problemData.filter(
+      (problemSeed, index) =>
+        problemData.findIndex((other) => other.title === problemSeed.title) === index,
+    );
+
     // Prepare all problem data for batch insertion
     const problemsToCreate = courses.flatMap((course) =>
-      problemData.map((problemSeed) => ({
+      distinctProblems.map((problemSeed) => ({
         title: problemSeed.title,
         description: problemSeed.description,
         fileName:
@@ -509,7 +518,7 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
       autograderEnabled: boolean;
     }> = [];
 
-    for (const course of courses) {
+    for (const [courseIndex, course] of courses.entries()) {
       const courseProblems = createdProblems[course.id] || [];
       const courseAssignments = createdAssignments[course.id] || [];
 
@@ -517,24 +526,34 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
         continue;
       }
 
-      // For each assignment, assign 2-3 problems from the course
-      for (const assignment of courseAssignments) {
-        // Randomly pick 2-3 problems for this assignment
-        const numProblemsToAssign = Math.floor(random() * 2) + 2; // 2 or 3
-        const selectedProblems = courseProblems
-          .sort(() => random() - 0.5) // Shuffle
-          .slice(0, Math.min(numProblemsToAssign, courseProblems.length));
+      const problemsByTitle = new Map(courseProblems.map((problem) => [problem.title, problem]));
 
-        for (const problem of selectedProblems) {
-          const randomPoints = (Math.floor(random() * 10) + 1) * 10;
-          const randomSubmissions = random() < 0.5 ? -1 : Math.floor(random() * 5) + 1;
-          const randomAutograderEnabled = random() < 0.5;
+      for (const assignment of courseAssignments) {
+        // Each assignment names the problems it covers, so a seeded course reads as a sequence
+        // somebody set rather than a shuffle. Points, attempt limits and whether the autograder
+        // runs come from the same place: they used to be drawn at random, which produced a
+        // one-point problem next to a hundred-point one and turned the autograder off on half
+        // the work for no reason a person could see.
+        const seed = assignmentData.find(
+          (candidate) =>
+            candidate.courseIndex === courseIndex && candidate.title === assignment.title,
+        );
+        const titles = seed?.problemTitles ?? [];
+
+        for (const title of titles) {
+          const problem = problemsByTitle.get(title);
+          if (!problem) {
+            console.warn(
+              `[seed] development: ${assignment.title} names a problem that does not exist (${title})`,
+            );
+            continue;
+          }
           assignmentProblemsToCreate.push({
             assignmentId: assignment.id,
             problemId: problem.id,
-            maxPoints: randomPoints,
-            maxSubmissions: randomSubmissions,
-            autograderEnabled: randomAutograderEnabled,
+            maxPoints: seed?.pointsPerProblem ?? 20,
+            maxSubmissions: seed?.maxSubmissions ?? 5,
+            autograderEnabled: seed?.autograder ?? true,
           });
         }
       }
@@ -633,6 +652,11 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
               problemId: assignmentProblem.problemId,
               studentId: oliverId,
               submittedAt: submittedBase,
+              // Graded, not waiting: a row carrying a verdict and feedback but left in the
+              // queue's default PENDING state is one the app could never have written, and it
+              // made the seeded autograder queue look permanently backed up.
+              status: 'COMPLETED' as const,
+              attempts: 1,
               correct: false,
               feedback: `Initial attempt for ${assignmentProblem.problem.title} needs another revision.`,
               fileName: firstStoredSubmission.fileName,
@@ -644,6 +668,8 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
               problemId: assignmentProblem.problemId,
               studentId: oliverId,
               submittedAt: new Date(submittedBase.getTime() + 6 * 60 * 60 * 1000),
+              status: 'COMPLETED' as const,
+              attempts: 1,
               correct: true,
               feedback: `${assignmentProblem.problem.title} submission accepted after revision.`,
               fileName: revisedStoredSubmission.fileName,

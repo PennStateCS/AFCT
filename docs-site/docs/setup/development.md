@@ -146,22 +146,43 @@ Use port 3000 for normal development with hot reload. Use the nginx ports when t
 ## What the seed gives you
 
 `npm run docker:dev:seed` fills an empty database with a term's worth of sample data: admins,
-faculty, TAs and students sharing one password, nine courses with rolling term dates, problems and
-assignments, and a few hundred submissions with real automaton files behind them.
+faculty, TAs and students sharing one password, nine courses, classes of fifteen to twenty
+students, problems and assignments, and around five hundred submissions with real JFLAP files
+behind them.
+
+Assignments read like something a person set. Each one names the problems it covers, in the order
+a course would teach them, and the theory course (CMPSC 464) sets **every problem type AFCT
+grades**: finite automata, regular expressions, context-free grammars, pushdown automata and
+Turing machines. That matters because they do not behave alike. A grammar and a regular expression
+carry no layout, so both the similarity report and the evaluator treat them differently from an
+automaton, and a database of nothing but finite automata hides two of those paths.
+
+Some assignments are **group** work and most are individual, which is the only difference that
+exists between them: an assignment is a group assignment when it names a group set. Both are
+seeded, so group submission (one file, counting for the whole team) and the grade fan-out (one row
+per member, recording which group it came from) can be seen without building a course first.
 
 It also seeds the parts of AFCT that are only interesting with data in them, so you can open a
 feature and see it working rather than guessing whether it is broken or empty:
 
-- **Similarity.** Some students in each problem deliberately submit the same saved file, the same
-  machine with the states moved and renamed, and a copy with one transition changed, which are the
-  three things the report tells apart. The hashes are computed with the app's own code, so they
-  match on exactly the rules the detector uses.
-- **Groups**, with a group set, uneven teams, and an assignment attached to it.
-- **Grades**, including one entered by hand, since a grade's origin and whether it is held back are
-  different fields and look alike until you see both.
+- **Similarity.** In each problem two students deliberately submit the same saved file, one submits
+  the same machine with the states moved and renamed, and one submits a copy with a transition
+  changed, which are the three things the report tells apart. Everyone else does their own work,
+  some of it converging on the same answer, because a match only means something when it is rare
+  among the people answering the same question. The hashes are computed with the app's own code,
+  so they match on exactly the rules the detector uses.
+- **Groups**, with two sets, uneven teams, and the group assignments that use them.
+- **Grades**, worth what the problem is worth, including some entered by hand: a grade's origin and
+  whether it is held back are different fields and look alike until you see both.
+- **A queue that is not empty.** A few submissions are left waiting, and if the worker is running it
+  will grade them for real through the evaluator, the same way a submission from the browser goes.
 - **Comments, an extra-submission grant, a targeted assignment with a date override**, and sixty
   activity log entries spread across severities so the log viewer and its filters have something to
   show.
+
+Work is dated against the assignment it belongs to rather than scattered over the last month, so
+attempts run in order, a few land late, and nothing is submitted to a course that has not started
+or finished.
 
 The data is reproducible: two people running the seed get the same database, which is what makes
 "it happens on my machine" worth saying. Set `AFCT_SEED` to any number for a different but equally
