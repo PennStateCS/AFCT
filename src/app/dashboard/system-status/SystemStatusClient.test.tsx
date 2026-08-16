@@ -31,10 +31,51 @@ const server = {
   software: { nodeVersion: 'v20.11.0', nextVersion: '15.0.0' },
 };
 const filesPayload = {
+  storage: {
+    categories: [
+      {
+        category: 'submissions',
+        label: 'Student submissions',
+        inUseCount: 412,
+        inUseBytes: 8_400_000,
+        abandonedCount: 0,
+        abandonedBytes: 0,
+        missingCount: 2,
+        missingSamples: ['gone.jff', 'also-gone.jff'],
+      },
+      {
+        category: 'solutions',
+        label: 'Reference solutions',
+        inUseCount: 13,
+        inUseBytes: 26_000,
+        abandonedCount: 1,
+        abandonedBytes: 2048,
+        missingCount: 0,
+        missingSamples: [],
+      },
+    ],
+    inUseCount: 425,
+    inUseBytes: 8_426_000,
+    missingCount: 2,
+    volume: { totalBytes: 40_000_000_000, freeBytes: 12_000_000_000 },
+  },
   abandonedFiles: {
     total: 1,
-    byCategory: { solutions: 1, submissions: 0, pfps: 0, problems: 0 },
-    samples: [{ category: 'solutions', fileName: 'orphan.jff', path: '/uploads/orphan.jff' }],
+    totalSizeBytes: 2048,
+    listLimit: 500,
+    categories: [
+      { category: 'solutions', label: 'Reference solutions', count: 1, sizeBytes: 2048 },
+      { category: 'submissions', label: 'Student submissions', count: 0, sizeBytes: 0 },
+    ],
+    files: [
+      {
+        category: 'solutions',
+        fileName: 'orphan.jff',
+        path: '/private/uploads/solutions/orphan.jff',
+        sizeBytes: 2048,
+        modifiedAt: '2026-08-01T12:00:00.000Z',
+      },
+    ],
   },
 };
 
@@ -132,8 +173,10 @@ describe('SystemStatusClient', () => {
     localStorage.setItem('afct.systemStatusTab', 'files');
     renderWithClient(<SystemStatusClient />);
 
+    // The accessible name says what kind of file it is: a bare UUID read aloud tells the
+    // person operating this nothing about what they are about to remove.
     const deleteBtn = await screen.findByRole('button', {
-      name: 'Delete abandoned file orphan.jff',
+      name: 'Delete Reference solutions file orphan.jff',
     });
     fireEvent.click(deleteBtn);
 
@@ -148,6 +191,27 @@ describe('SystemStatusClient', () => {
       );
       expect(deleted).toBe(true);
     });
+  });
+
+  it('shows what the uploads volume holds before what can be reclaimed', async () => {
+    localStorage.setItem('afct.systemStatusTab', 'files');
+    renderWithClient(<SystemStatusClient />);
+
+    // The working set, named for the person operating this rather than by folder.
+    expect(await screen.findByText('Student submissions')).toBeInTheDocument();
+    expect(await screen.findByText('412')).toBeInTheDocument();
+    // Sizes only mean something against what is left on the disk.
+    expect(await screen.findByText(/free of/)).toBeInTheDocument();
+  });
+
+  it('raises a file AFCT records but cannot find as its own alert', async () => {
+    // Everything else on this page is housekeeping; this is work the system believes it has
+    // and cannot produce, which for a submission means it cannot be downloaded or re-graded.
+    localStorage.setItem('afct.systemStatusTab', 'files');
+    renderWithClient(<SystemStatusClient />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('2 files are recorded but not on the server');
   });
 
   it('does not fetch the Files endpoint while another tab is open', async () => {

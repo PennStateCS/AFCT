@@ -6,13 +6,19 @@ import { statusGet } from '@/lib/api/status-route';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { readJson } from '@/lib/api/request';
-import { collectAbandonedFiles, deleteAbandonedFile } from '@/lib/status/files';
+import {
+  collectAbandonedFiles,
+  deleteAbandonedFile,
+  deleteAbandonedFilesInCategory,
+} from '@/lib/status/files';
 
-// Light shape check; deleteAbandonedFile does the authoritative category/filename/
-// path validation and returns its own status codes.
+// Light shape check; the two delete helpers do the authoritative category/filename/
+// path validation and return their own status codes.
 const DeleteAbandonedFileBody = z.object({
   category: z.string().optional(),
   fileName: z.string().optional(),
+  /** Delete every abandoned file in the category rather than one named file. */
+  all: z.boolean().optional(),
 });
 
 export const runtime = 'nodejs';
@@ -31,9 +37,9 @@ export const dynamic = 'force-dynamic';
 export const GET = statusGet(collectAbandonedFiles);
 
 /**
- * Deletes a single orphaned upload. Guards on every axis (known category,
- * separator-free name, still unreferenced, path stays inside the category
- * folder). System administrators only.
+ * Deletes one orphaned upload, or every orphaned upload in a category when `all` is
+ * set. Guards on every axis (known category, separator-free name, still unreferenced,
+ * path stays inside the category folder). System administrators only.
  * @openapi
  * summary: Delete an orphaned upload
  * requestBody:
@@ -42,12 +48,13 @@ export const GET = statusGet(collectAbandonedFiles);
  *     application/json:
  *       schema:
  *         type: object
- *         required: [category, fileName]
+ *         required: [category]
  *         properties:
- *           category: { type: string, enum: [solutions, submissions, pfps, problems] }
+ *           category: { type: string, enum: [solutions, submissions, pfps, problems, trials] }
  *           fileName: { type: string, description: "Bare filename, no path separators" }
+ *           all: { type: boolean, description: "Delete every abandoned file in the category" }
  * responses:
- *   200: { description: File deleted. }
+ *   200: { description: "File deleted, or the number deleted when clearing a category." }
  *   400: { description: "Unknown category, unsafe filename, or path outside the folder." }
  *   401: { description: Not signed in. }
  *   403: { description: Not a system administrator. }
@@ -61,7 +68,36 @@ export const DELETE = withAdminAuth(
     try {
       const parsed = await readJson(req, DeleteAbandonedFileBody);
       if (!parsed.ok) return parsed.response;
-      const { category, fileName } = parsed.data;
+      const { category, fileName, all } = parsed.data;
+
+      if (all) {
+        const result = await deleteAbandonedFilesInCategory(category);
+        if (!result.ok) {
+          return NextResponse.json({ error: result.error }, { status: result.status });
+        }
+
+        // Logged at WARNING, unlike a single delete: this removes an unbounded number of
+        // files in one action and cannot be undone, so it should stand out in the log rather
+        // than sit among routine entries.
+        await createEnhancedActivityLog(prisma, req, {
+          userId: actorId,
+          action: 'ABANDONED_FILES_PURGED',
+          severity: 'WARNING',
+          category: 'SYSTEM',
+          metadata: {
+            userId: actorId,
+            category,
+            deleted: result.deleted,
+            freedBytes: result.freedBytes,
+          },
+        });
+
+        return NextResponse.json({
+          ok: true,
+          deleted: result.deleted,
+          freedBytes: result.freedBytes,
+        });
+      }
 
       const result = await deleteAbandonedFile(category, fileName);
       if (!result.ok) {

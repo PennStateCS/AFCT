@@ -177,15 +177,80 @@ export type SessionsStatusResponse = {
 };
 
 /* ---------------- Files ---------------- */
-export type AbandonedFileCategory = 'solutions' | 'submissions' | 'pfps' | 'problems';
+
+/** One uploaded file that no database row points at. */
+export type AbandonedFile = {
+  category: string;
+  fileName: string;
+  path: string;
+  sizeBytes: number;
+  /** When the file was last written, ISO 8601. */
+  modifiedAt: string;
+};
+
+/** One upload directory's worth of the report. */
+export type AbandonedFileCategory = {
+  category: string;
+  /** Plain-language name for the screen, not the folder name. */
+  label: string;
+  count: number;
+  sizeBytes: number;
+  /** Set when the folder could not be read, in which case the count is not a fact. */
+  error?: string;
+};
 
 export type AbandonedFilesSummary = {
   total: number;
-  byCategory: Record<string, number>;
-  samples: Array<{ category: string; fileName: string; path: string }>;
+  totalSizeBytes: number;
+  categories: AbandonedFileCategory[];
+  /** The files themselves, capped at `listLimit`. Counts above are always complete. */
+  files: AbandonedFile[];
+  listLimit: number;
+  /**
+   * Set when the report could not be produced at all. Callers must not read the zeroes above
+   * as "nothing to clean up" while this is present: a failed check and a clean volume are
+   * different answers and used to be indistinguishable.
+   */
+  error?: string;
 };
 
-export type FilesStatusResponse = { abandonedFiles: AbandonedFilesSummary };
+/** One upload directory: what it holds, in use and otherwise. */
+export type UploadCategoryUsage = {
+  category: string;
+  label: string;
+  /** Files on disk that a database row still points at. The working set. */
+  inUseCount: number;
+  inUseBytes: number;
+  /** Files on disk that nothing points at. Reclaimable. */
+  abandonedCount: number;
+  abandonedBytes: number;
+  /**
+   * Rows that name a file which is not on disk.
+   *
+   * The opposite of an abandoned file and much worse: a submission whose file has gone cannot
+   * be downloaded, re-graded or appealed. Nothing else in AFCT reports it.
+   */
+  missingCount: number;
+  /** A few of the missing filenames, as a starting point for finding out why. */
+  missingSamples: string[];
+  /** Set when the folder could not be read, in which case the numbers are not facts. */
+  error?: string;
+};
+
+/** What the uploads volume holds, before asking what is reclaimable. */
+export type StorageUsage = {
+  categories: UploadCategoryUsage[];
+  inUseCount: number;
+  inUseBytes: number;
+  missingCount: number;
+  /** The filesystem holding the uploads, when it could be read. */
+  volume?: { totalBytes: number; freeBytes: number };
+};
+
+export type FilesStatusResponse = {
+  storage: StorageUsage;
+  abandonedFiles: AbandonedFilesSummary;
+};
 
 /* ---------------- Rate limits ---------------- */
 /**

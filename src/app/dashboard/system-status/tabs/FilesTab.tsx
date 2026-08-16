@@ -1,16 +1,27 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { FileWarning, FolderCheck, HardDrive, TriangleAlert } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/data-table';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { fetchJson } from '@/lib/query-fetch';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { showToast } from '@/lib/toast';
-import type { FilesStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, Section, useStatusQuery } from '../status-ui';
+import type { AbandonedFile, FilesStatusResponse } from '@/lib/status/types';
+import { formatBytes } from '../status-format';
+import { abandonedFileColumns } from '../abandoned-file-columns';
+import { uploadUsageColumns } from '../upload-usage-columns';
+import { Loading, Section, useStatusQuery } from '../status-ui';
+
+/** What a delete is waiting on: one named file, or a whole category. */
+type Pending =
+  | { kind: 'file'; file: AbandonedFile }
+  | { kind: 'category'; category: string; label: string; count: number; sizeBytes: number };
 
 export default function FilesTab({
   active,
@@ -20,6 +31,7 @@ export default function FilesTab({
   autoRefresh: boolean;
 }) {
   const queryClient = useQueryClient();
+  const { timezone } = useEffectiveTimezone();
   const { data, isLoading } = useStatusQuery<FilesStatusResponse>({
     queryKey: queryKeys.admin.statusFiles(),
     path: apiPaths.admin.statusFiles(),
@@ -27,129 +39,312 @@ export default function FilesTab({
     autoRefresh,
   });
 
-  const [pendingFile, setPendingFile] = useState<{ category: string; fileName: string } | null>(
-    null,
-  );
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [status, setStatus] = useState('');
 
   const {
-    mutateAsync: deleteFileAsync,
+    mutateAsync: remove,
     isPending,
     variables,
   } = useMutation({
-    mutationFn: (vars: { category: string; fileName: string }) =>
-      fetchJson(apiPaths.admin.statusFiles(), {
+    mutationFn: (vars: { category: string; fileName?: string; all?: boolean }) =>
+      fetchJson<{ ok: true; deleted?: number; freedBytes?: number }>(apiPaths.admin.statusFiles(), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(vars),
       }),
-    onSuccess: (_data, vars) => {
+    onSuccess: (result, vars) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.statusFiles() });
-      showToast.deleted('File', { name: vars.fileName });
+      if (vars.all) {
+        const freed = formatBytes(result?.freedBytes ?? 0);
+        const message = `Deleted ${result?.deleted ?? 0} files, freeing ${freed}.`;
+        setStatus(message);
+        showToast.success(message);
+      } else {
+        setStatus(`Deleted ${vars.fileName}.`);
+        showToast.deleted('File', { name: vars.fileName });
+      }
     },
     onError: (err) => {
       console.error('Delete abandoned file error:', err);
-      showToast.error(
+      const message =
         err instanceof Error
           ? err.message
-          : 'Could not delete the file. Check your connection and try again.',
-      );
+          : 'Could not delete the file. Check your connection and try again.';
+      setStatus(message);
+      showToast.error(message);
     },
   });
 
-  const onDelete = useCallback(
-    (category: string, fileName: string) => {
+  const onDeleteFile = useCallback(
+    (file: AbandonedFile) => {
       if (isPending) return;
-      setPendingFile({ category, fileName });
+      setPending({ kind: 'file', file });
     },
     [isPending],
   );
 
-  if (isLoading || !data) {
+  const files = data?.abandonedFiles;
+  const storage = data?.storage;
+  const usageColumns = useMemo(() => uploadUsageColumns(), []);
+  const labels = useMemo(
+    () => Object.fromEntries((files?.categories ?? []).map((c) => [c.category, c.label])),
+    [files?.categories],
+  );
+  // Which row shows "Deleting..."; a fresh object each render would rebuild the columns every
+  // time, so it is derived inside the memo from the two values it actually depends on.
+  const deletingCategory = isPending ? variables?.category : undefined;
+  const deletingFileName = isPending ? variables?.fileName : undefined;
+
+  const columns = useMemo(
+    () =>
+      abandonedFileColumns({
+        labels,
+        timeZone: timezone,
+        onDelete: onDeleteFile,
+        deleting:
+          deletingCategory && deletingFileName
+            ? { category: deletingCategory, fileName: deletingFileName }
+            : null,
+      }),
+    [labels, timezone, onDeleteFile, deletingCategory, deletingFileName],
+  );
+
+  if (isLoading || !data || !files) {
     return <Loading />;
   }
 
-  const files = data.abandonedFiles;
+  // A failed check is not a clean volume. This used to answer any error with zeroes, which read
+  // as "nothing to clean up", so a database that could not be reached looked like good news.
+  if (files.error) {
+    return (
+      <Section title="Abandoned files">
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/5 max-w-3xl space-y-2 rounded border p-4"
+        >
+          <div className="flex items-center gap-2 font-medium">
+            <TriangleAlert className="size-4" aria-hidden />
+            AFCT could not check for abandoned files
+          </div>
+          <p className="text-muted-foreground text-sm">{files.error}</p>
+          <p className="text-muted-foreground text-sm">
+            Nothing has been deleted. This is not the same as having nothing to clean up: until the
+            check runs, how much is on disk is unknown. Try again, and if it keeps failing look at
+            the Database tab, since the check has to read the database to know which files are still
+            in use.
+          </p>
+        </div>
+      </Section>
+    );
+  }
+
+  // A category with nothing in it and nothing wrong with it is noise, so it stays hidden until
+  // it has something to say.
+  const shown = files.categories.filter((c) => c.count > 0 || c.error);
+  const truncated = files.total > files.files.length;
+
+  const volume = storage?.volume;
+  const usedPct =
+    volume && volume.totalBytes > 0
+      ? Math.round(((volume.totalBytes - volume.freeBytes) / volume.totalBytes) * 100)
+      : null;
 
   return (
     <>
       <Section
         title={
           <>
-            Abandoned Files
-            <Badge variant="neutral">Total: {files.total}</Badge>
+            <HardDrive className="size-4" aria-hidden />
+            Uploaded files
+            <Badge variant="neutral">
+              {storage?.inUseCount.toLocaleString() ?? 0} in use,{' '}
+              {formatBytes(storage?.inUseBytes ?? 0)}
+            </Badge>
           </>
         }
       >
-        <div className="max-w-xl space-y-4">
-          <div className="space-y-2">
-            {Object.entries(files.byCategory).map(([k, v]) => (
-              <Stat key={k} label={k} value={v} />
-            ))}
+        <div className="space-y-4">
+          <p className="text-muted-foreground max-w-3xl text-sm">
+            Everything students and staff have uploaded: submitted work, reference solutions,
+            profile photos and evaluator trials. &ldquo;In use&rdquo; is what AFCT still needs. The
+            other two columns are the ones to act on, and they are opposites: abandoned files can be
+            deleted to free space, while a missing file is one AFCT expects and cannot find.
+          </p>
+
+          {volume && (
+            <div className="max-w-3xl rounded border px-3 py-2 text-sm">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium">Disk holding the uploads</span>
+                <span className="tabular-nums">
+                  {formatBytes(volume.freeBytes)} free of {formatBytes(volume.totalBytes)}
+                  {usedPct !== null && (
+                    <span className="text-muted-foreground"> ({usedPct}% used)</span>
+                  )}
+                </span>
+              </div>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Uploads are only part of what is on this disk; the application images and the
+                database are on it too.
+              </p>
+            </div>
+          )}
+
+          {(storage?.missingCount ?? 0) > 0 && (
+            // Worth an alert of its own. Everything else on this page is housekeeping; this is
+            // work AFCT believes it has and cannot produce, which for a submission means a
+            // student's file cannot be downloaded, re-graded or appealed.
+            <div
+              role="alert"
+              className="border-destructive/40 bg-destructive/5 max-w-3xl space-y-1 rounded border p-3"
+            >
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <FileWarning className="size-4" aria-hidden />
+                {storage?.missingCount} file{storage?.missingCount === 1 ? ' is' : 's are'} recorded
+                but not on the server
+              </div>
+              <p className="text-muted-foreground text-sm">
+                Something in AFCT points at {storage?.missingCount === 1 ? 'a file' : 'files'} that
+                cannot be found on disk, so {storage?.missingCount === 1 ? 'it' : 'they'} cannot be
+                downloaded or re-graded. This is not something deleting anything will fix: it
+                usually means files were restored from a backup without the uploads, or removed from
+                the server by hand. The affected kinds are marked below.
+              </p>
+            </div>
+          )}
+
+          <DataTable
+            columns={usageColumns}
+            data={storage?.categories ?? []}
+            storageKey="system-status-upload-usage"
+            tableLabel="Uploaded files by kind"
+            emptyTitle="Nothing has been uploaded yet"
+            emptyDescription="Submitted work, solutions and profile photos will be counted here."
+            // A five-row summary: nothing to search, filter or export.
+            showToolbar={false}
+          />
+        </div>
+      </Section>
+
+      <Section
+        title={
+          <>
+            Abandoned files
+            <Badge variant="neutral">
+              {files.total} file{files.total === 1 ? '' : 's'}, {formatBytes(files.totalSizeBytes)}
+            </Badge>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-muted-foreground max-w-3xl text-sm">
+            Files still on the server that nothing in AFCT points at any more, usually left behind
+            when the record that used them was deleted. They are safe to remove: nothing in the app
+            can reach them, and a file is only listed here after AFCT has checked that no course,
+            problem, submission or account still uses it. Deleting one cannot be undone.
+          </p>
+
+          <div aria-live="polite" className="sr-only">
+            {status}
           </div>
 
-          {files.samples.length ? (
-            <div className="rounded border">
-              <div className="text-muted-foreground border-b px-3 py-2 text-xs font-semibold">
-                Sample files (max 50)
-              </div>
-              <ul className="max-h-72 overflow-auto px-3 py-2 text-xs">
-                {files.samples.map((f, i) => {
-                  const deleting =
-                    isPending &&
-                    variables?.category === f.category &&
-                    variables?.fileName === f.fileName;
-                  return (
-                    <li
-                      key={`${f.category}-${f.fileName}-${i}`}
-                      className="mb-1 flex items-start justify-between gap-2 last:mb-0"
+          {shown.length > 0 && (
+            <ul className="max-w-3xl space-y-2">
+              {shown.map((c) => (
+                <li
+                  key={c.category}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded border px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{c.label}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {c.error ? (
+                        <span className="text-destructive">{c.error}</span>
+                      ) : (
+                        <>
+                          {c.count} file{c.count === 1 ? '' : 's'} &middot;{' '}
+                          {formatBytes(c.sizeBytes)}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {c.count > 0 && (
+                    // The whole reason this exists: the volume this page finds holds thousands
+                    // of files, and deleting them one dialog at a time is not something anybody
+                    // will finish.
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isPending}
+                      onClick={() =>
+                        setPending({
+                          kind: 'category',
+                          category: c.category,
+                          label: c.label,
+                          count: c.count,
+                          sizeBytes: c.sizeBytes,
+                        })
+                      }
+                      aria-label={`Delete all ${c.count} abandoned ${c.label} files`}
                     >
-                      <div className="min-w-0">
-                        <span className="bg-muted mr-2 rounded px-1.5 py-0.5 text-xs uppercase">
-                          {f.category}
-                        </span>
-                        <span className="break-all">{f.path}</span>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={deleting}
-                        onClick={() => onDelete(f.category, f.fileName)}
-                        aria-label={`Delete abandoned file ${f.fileName}`}
-                      >
-                        {deleting ? 'Deleting…' : 'Delete'}
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : (
-            <div className="text-sm">No abandoned files found.</div>
+                      Delete all {c.count}
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
+
+          {truncated && (
+            <p className="text-muted-foreground text-sm">
+              Showing the {files.files.length} largest of {files.total} files. The totals above
+              cover all of them, and so does <strong>Delete all</strong>.
+            </p>
+          )}
+
+          <DataTable
+            columns={columns}
+            data={files.files}
+            storageKey="system-status-abandoned-files"
+            tableLabel="Abandoned files"
+            emptyIcon={FolderCheck}
+            emptyTitle="No abandoned files"
+            emptyDescription="Every uploaded file on the server is still in use by something in AFCT."
+            defaultSorting={[{ id: 'sizeBytes', desc: true }]}
+          />
         </div>
       </Section>
 
       <ConfirmDialog
-        open={!!pendingFile}
+        open={!!pending}
         variant="destructive"
         busy={isPending}
-        title="Delete abandoned file?"
+        title={pending?.kind === 'category' ? 'Delete all of these files?' : 'Delete this file?'}
         description={
-          pendingFile
-            ? `This permanently removes "${pendingFile.fileName}" from disk and cannot be undone.`
-            : undefined
+          pending?.kind === 'category'
+            ? `This permanently removes ${pending.count} ${pending.label.toLowerCase()} ` +
+              `file${pending.count === 1 ? '' : 's'} from the server, freeing ${formatBytes(pending.sizeBytes)}. ` +
+              'Each one is checked again as it goes, so anything that has come back into use is left alone. ' +
+              'This cannot be undone.'
+            : pending?.kind === 'file'
+              ? `This permanently removes "${pending.file.fileName}" (${formatBytes(pending.file.sizeBytes)}) from the server and cannot be undone.`
+              : undefined
         }
-        confirmText="Delete file"
+        confirmText={pending?.kind === 'category' ? 'Delete all' : 'Delete file'}
         onConfirm={async () => {
-          if (!pendingFile) return;
+          if (!pending) return;
           try {
-            await deleteFileAsync(pendingFile);
+            await remove(
+              pending.kind === 'category'
+                ? { category: pending.category, all: true }
+                : { category: pending.file.category, fileName: pending.file.fileName },
+            );
           } catch {
             // The mutation's onError surfaces the failure; keep the flow going.
           }
-          setPendingFile(null);
+          setPending(null);
         }}
-        onCancel={() => setPendingFile(null)}
+        onCancel={() => setPending(null)}
       />
     </>
   );

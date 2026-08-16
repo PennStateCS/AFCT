@@ -430,7 +430,7 @@ export interface paths {
         post?: never;
         /**
          * Delete an orphaned upload
-         * @description Deletes a single orphaned upload. Guards on every axis (known category,  separator-free name, still unreferenced, path stays inside the category  folder). System administrators only.
+         * @description Deletes one orphaned upload, or every orphaned upload in a category when `all` is  set. Guards on every axis (known category, separator-free name, still unreferenced,  path stays inside the category folder). System administrators only.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/files/route.ts)
          */
@@ -4337,14 +4337,16 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    category: "solutions" | "submissions" | "pfps" | "problems";
+                    category: "solutions" | "submissions" | "pfps" | "problems" | "trials";
                     /** @description Bare filename, no path separators */
-                    fileName: string;
+                    fileName?: string;
+                    /** @description Delete every abandoned file in the category */
+                    all?: boolean;
                 };
             };
         };
         responses: {
-            /** @description File deleted. */
+            /** @description File deleted, or the number deleted when clearing a category. */
             200: {
                 headers: {
                     [name: string]: unknown;
