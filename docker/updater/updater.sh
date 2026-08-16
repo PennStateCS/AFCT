@@ -438,6 +438,37 @@ append_env_key() {
   return 0
 }
 
+# Make sure a secret-encryption key exists before the new images come up.
+#
+# This is the key AFCT encrypts stored settings with: the SMTP password, an OIDC client secret,
+# the LTI signing key. Here as well as in the host installer for the same reason as the backup
+# key below, and with a sharper symptom: an install that predates the key comes up looking
+# perfectly healthy and then refuses the first thing an administrator tries to save, telling
+# them to restore a value they were never given. That happened to a real deployment.
+#
+# Never replaces an existing key, since that would make every already-encrypted secret
+# unreadable, which is the one unrecoverable mistake available here. Unlike backups there is no
+# opt-out, because nobody deliberately chooses to have no key.
+ensure_secret_key() {
+  [ -f "$ENV_FILE" ] || return 0
+  grep -qE '^AFCT_SECRET_KEY=.' "$ENV_FILE" 2>/dev/null && return 0
+
+  _key=$(head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n' | cut -c1-48)
+  if [ -z "$_key" ]; then
+    progress_note "could not generate a secret-encryption key; stored settings such as mail and sign-in credentials cannot be saved until one is set"
+    return 1
+  fi
+
+  if append_env_key AFCT_SECRET_KEY "$_key"; then
+    progress_note "generated a secret-encryption key; it protects stored settings such as mail and sign-in credentials. Keep .env.production with your backups."
+  else
+    progress_note "could not write a secret-encryption key to the environment file; stored settings cannot be saved until one is set"
+    return 1
+  fi
+  return 0
+}
+
+
 # Make sure a backup-encryption key exists before the new images come up.
 #
 # This has to happen here as well as in the host installer, because an in-app upgrade never runs
@@ -1214,8 +1245,10 @@ process_request() {
   _TXN_ENV_CHANGED=true
   txn_save
 
-  # Before the new images come up: the backup sidecar moves with the app, and from this release
-  # it refuses to write an archive without a key.
+  # Before the new images come up. The backup sidecar refuses to write an archive without its
+  # key, and the app cannot store an encrypted setting without the secret key; an upgrade is
+  # the moment an older install acquires the need for both.
+  ensure_secret_key || true
   ensure_backup_key || true
 
   # If this release changed the stack layout, pull its compose in before recreating,
