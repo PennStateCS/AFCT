@@ -872,6 +872,33 @@ supending() { printf '%s' "$1" > "$TESTDIR/triggers/.self-update-pending.json"; 
 # From the release that added it, the backup service refuses to write an archive without a key
 # rather than writing one in the clear; an upgrade that did not top it up would stop backups
 # silently, which is the worst shape a backup failure can take.
+# The key AFCT encrypts stored settings with. An install predating it comes up healthy and then
+# refuses the first thing an administrator saves, which is how a real deployment found out.
+@test "an upgrade generates a secret-encryption key when there is none" {
+  run grep -q 'AFCT_SECRET_KEY' "$TESTDIR/.env.production"; [ "$status" -ne 0 ]
+
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"skey","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+
+  run grep -Eq '^AFCT_SECRET_KEY=.{32,}$' "$TESTDIR/.env.production"; [ "$status" -eq 0 ]
+  # Everything else in the file survives the rewrite.
+  run grep -q '^NEXTAUTH_SECRET=keepme$' "$TESTDIR/.env.production"; [ "$status" -eq 0 ]
+}
+
+# Replacing one makes every secret already stored with it unreadable, which is the single
+# unrecoverable mistake available on this path.
+@test "an upgrade never replaces an existing secret-encryption key" {
+  printf 'AFCT_SECRET_KEY=originalsecretkeyvaluethatmustsurvive\n' >> "$TESTDIR/.env.production"
+
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"skey2","backupFirst":false}'
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+
+  run grep -q '^AFCT_SECRET_KEY=originalsecretkeyvaluethatmustsurvive$' "$TESTDIR/.env.production"
+  [ "$status" -eq 0 ]
+}
+
 @test "an upgrade generates a backup-encryption key when there is none" {
   run grep -q 'BACKUP_ENCRYPTION_KEY' "$TESTDIR/.env.production"; [ "$status" -ne 0 ]
 
