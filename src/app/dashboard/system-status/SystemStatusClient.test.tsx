@@ -33,8 +33,21 @@ const server = {
 const filesPayload = {
   abandonedFiles: {
     total: 1,
-    byCategory: { solutions: 1, submissions: 0, pfps: 0, problems: 0 },
-    samples: [{ category: 'solutions', fileName: 'orphan.jff', path: '/uploads/orphan.jff' }],
+    totalSizeBytes: 2048,
+    listLimit: 500,
+    categories: [
+      { category: 'solutions', label: 'Reference solutions', count: 1, sizeBytes: 2048 },
+      { category: 'submissions', label: 'Student submissions', count: 0, sizeBytes: 0 },
+    ],
+    files: [
+      {
+        category: 'solutions',
+        fileName: 'orphan.jff',
+        path: '/private/uploads/solutions/orphan.jff',
+        sizeBytes: 2048,
+        modifiedAt: '2026-08-01T12:00:00.000Z',
+      },
+    ],
   },
 };
 
@@ -132,8 +145,10 @@ describe('SystemStatusClient', () => {
     localStorage.setItem('afct.systemStatusTab', 'files');
     renderWithClient(<SystemStatusClient />);
 
+    // The accessible name says what kind of file it is: a bare UUID read aloud tells the
+    // person operating this nothing about what they are about to remove.
     const deleteBtn = await screen.findByRole('button', {
-      name: 'Delete abandoned file orphan.jff',
+      name: 'Delete Reference solutions file orphan.jff',
     });
     fireEvent.click(deleteBtn);
 

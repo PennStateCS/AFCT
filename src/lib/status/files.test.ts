@@ -22,16 +22,34 @@ const prismaMock = vi.hoisted(() => ({
 }));
 const readdir = vi.hoisted(() => vi.fn());
 const unlink = vi.hoisted(() => vi.fn());
+const stat = vi.hoisted(() => vi.fn());
 const existsSync = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('fs', () => ({
-  default: { promises: { readdir, unlink }, existsSync },
-  promises: { readdir, unlink },
+  default: { promises: { readdir, unlink, stat }, existsSync },
+  promises: { readdir, unlink, stat },
   existsSync,
 }));
 
-import { collectAbandonedFiles, deleteAbandonedFile } from './files';
+import {
+  collectAbandonedFiles,
+  deleteAbandonedFile,
+  deleteAbandonedFilesInCategory,
+} from './files';
+
+/** Category counts keyed by name, the shape most assertions here want. */
+const counts = (summary: { categories: Array<{ category: string; count: number }> }) =>
+  Object.fromEntries(summary.categories.map((c) => [c.category, c.count]));
+
+const labelFor = (category: string) => LABELS[category];
+const LABELS: Record<string, string> = {
+  submissions: 'Student submissions',
+  solutions: 'Reference solutions',
+  pfps: 'Profile photos',
+  trials: 'Evaluator trials',
+  problems: 'Problem files',
+};
 
 /** `readdir` is called with `withFileTypes`, so entries have to look like Dirents. */
 const dirent = (name: string) => ({ name, isFile: () => true });
@@ -44,9 +62,13 @@ const onDisk = (dirs: Record<string, string[]>) => {
   });
 };
 
+/** Every file is 1 KB unless a test says otherwise. */
+const sized = (bytes = 1024) => stat.mockResolvedValue({ size: bytes, mtimeMs: 1_700_000_000_000 });
+
 beforeEach(() => {
   vi.clearAllMocks();
   onDisk({});
+  sized();
   prismaMock.problem.findMany.mockResolvedValue([]);
   prismaMock.submission.findMany.mockResolvedValue([]);
   prismaMock.user.findMany.mockResolvedValue([]);
@@ -70,7 +92,7 @@ describe('collectAbandonedFiles', () => {
 
     const { abandonedFiles } = await collectAbandonedFiles();
 
-    expect(abandonedFiles.byCategory).toEqual({
+    expect(counts(abandonedFiles)).toEqual({
       solutions: 1,
       submissions: 1,
       pfps: 1,
@@ -80,6 +102,40 @@ describe('collectAbandonedFiles', () => {
     expect(abandonedFiles.total).toBe(5);
   });
 
+  it('gives every category a name a person would use, not the folder name', () => {
+    // The operators here are professors, not the developer who named the directories.
+    expect(labelFor('pfps')).toBe('Profile photos');
+    expect(labelFor('trials')).toBe('Evaluator trials');
+    expect(labelFor('submissions')).toBe('Student submissions');
+  });
+
+  it('reports how much space each category would free', async () => {
+    // File count is not the question an admin has; disk is. VM 201 fills after about seven
+    // upgrades, so bytes are what decides whether this page is worth acting on.
+    onDisk({ submissions: ['a.jff', 'b.jff'] });
+    sized(1_500);
+
+    const { abandonedFiles } = await collectAbandonedFiles();
+
+    expect(abandonedFiles.totalSizeBytes).toBe(3_000);
+    expect(abandonedFiles.categories.find((c) => c.category === 'submissions')?.sizeBytes).toBe(
+      3_000,
+    );
+    expect(abandonedFiles.files[0]).toMatchObject({ sizeBytes: 1_500 });
+  });
+
+  it('lists the biggest files first', async () => {
+    onDisk({ submissions: ['small.jff', 'big.jff'] });
+    stat.mockImplementation(async (p: string) => ({
+      size: String(p).includes('big') ? 9_000 : 10,
+      mtimeMs: 1_700_000_000_000,
+    }));
+
+    const { abandonedFiles } = await collectAbandonedFiles();
+
+    expect(abandonedFiles.files.map((f) => f.fileName)).toEqual(['big.jff', 'small.jff']);
+  });
+
   it('leaves a file alone while its row still names it', async () => {
     onDisk({ submissions: ['kept.jff', 'orphan.jff'], pfps: ['kept.png'] });
     prismaMock.submission.findMany.mockResolvedValue([{ fileName: 'kept.jff' }]);
@@ -87,9 +143,9 @@ describe('collectAbandonedFiles', () => {
 
     const { abandonedFiles } = await collectAbandonedFiles();
 
-    expect(abandonedFiles.byCategory.submissions).toBe(1);
-    expect(abandonedFiles.byCategory.pfps).toBe(0);
-    expect(abandonedFiles.samples.map((s) => s.fileName)).toEqual(['orphan.jff']);
+    expect(counts(abandonedFiles).submissions).toBe(1);
+    expect(counts(abandonedFiles).pfps).toBe(0);
+    expect(abandonedFiles.files.map((f) => f.fileName)).toEqual(['orphan.jff']);
   });
 
   it('counts a trial upload as live whichever of its two columns holds it', async () => {
@@ -104,29 +160,91 @@ describe('collectAbandonedFiles', () => {
 
     const { abandonedFiles } = await collectAbandonedFiles();
 
-    expect(abandonedFiles.byCategory.trials).toBe(1);
-    expect(abandonedFiles.samples.map((s) => s.fileName)).toEqual(['left-behind.jff']);
+    expect(counts(abandonedFiles).trials).toBe(1);
+    expect(abandonedFiles.files.map((f) => f.fileName)).toEqual(['left-behind.jff']);
   });
 
-  it('caps the samples it returns without capping the count', async () => {
-    // The number is what an admin acts on; the list is only there to show what they are.
-    onDisk({ submissions: Array.from({ length: 120 }, (_, i) => `f${i}.jff`) });
+  it('caps the list it returns without capping the count or the total size', async () => {
+    // The numbers are what an admin acts on; the list is only there to show what they are, and
+    // "Delete all" works from the server's own scan rather than from this list.
+    onDisk({ submissions: Array.from({ length: 600 }, (_, i) => `f${i}.jff`) });
 
     const { abandonedFiles } = await collectAbandonedFiles();
 
-    expect(abandonedFiles.total).toBe(120);
-    expect(abandonedFiles.samples).toHaveLength(50);
+    expect(abandonedFiles.total).toBe(600);
+    expect(abandonedFiles.totalSizeBytes).toBe(600 * 1024);
+    expect(abandonedFiles.files).toHaveLength(abandonedFiles.listLimit);
   });
 
-  it('says zero rather than throwing when the database is unreachable', async () => {
+  it('reports a failure as a failure, not as a clean volume', async () => {
+    // The whole point. Answering an error with zeroes rendered as "No abandoned files found",
+    // so a database that could not be reached looked like good news, and that is exactly how a
+    // missing category went unnoticed for as long as it did.
     onDisk({ submissions: ['u.jff'] });
     prismaMock.submission.findMany.mockRejectedValue(new Error('no connection'));
 
     const { abandonedFiles } = await collectAbandonedFiles();
 
-    // Worth knowing when reading the page: a failure and a clean volume look the same here.
+    expect(abandonedFiles.error).toContain('could not be completed');
+  });
+
+  it('says which folder could not be read instead of counting it as empty', async () => {
+    readdir.mockImplementation(async (dir: string) => {
+      if (String(dir).endsWith('trials'))
+        throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      return [];
+    });
+
+    const { abandonedFiles } = await collectAbandonedFiles();
+
+    expect(abandonedFiles.error).toBeUndefined();
+    expect(abandonedFiles.categories.find((c) => c.category === 'trials')?.error).toBeTruthy();
+  });
+
+  it('treats a folder that does not exist yet as empty, not as broken', async () => {
+    // Nothing has been uploaded on a fresh install, and that is not a fault to report.
+    readdir.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }));
+
+    const { abandonedFiles } = await collectAbandonedFiles();
+
     expect(abandonedFiles.total).toBe(0);
-    expect(abandonedFiles.byCategory.trials).toBe(0);
+    expect(abandonedFiles.categories.every((c) => !c.error)).toBe(true);
+  });
+});
+
+describe('deleteAbandonedFilesInCategory', () => {
+  it('deletes every abandoned file in the category and reports what it freed', async () => {
+    onDisk({ submissions: ['a.jff', 'b.jff', 'c.jff'] });
+    sized(2_000);
+
+    const result = await deleteAbandonedFilesInCategory('submissions');
+
+    expect(result).toEqual({ ok: true, deleted: 3, freedBytes: 6_000 });
+    expect(unlink).toHaveBeenCalledTimes(3);
+  });
+
+  it('leaves files that are still in use, even while clearing the rest', async () => {
+    onDisk({ submissions: ['kept.jff', 'orphan.jff'] });
+    prismaMock.submission.findMany.mockResolvedValue([{ fileName: 'kept.jff' }]);
+
+    const result = await deleteAbandonedFilesInCategory('submissions');
+
+    expect(result).toMatchObject({ ok: true, deleted: 1 });
+    expect(unlink).toHaveBeenCalledTimes(1);
+    expect(unlink).toHaveBeenCalledWith('/private/uploads/submissions/orphan.jff');
+  });
+
+  it('keeps going when one file cannot be removed', async () => {
+    // A partial clean-up is still a clean-up, and the count returned says what really happened.
+    onDisk({ submissions: ['a.jff', 'b.jff'] });
+    unlink.mockRejectedValueOnce(new Error('busy'));
+
+    expect(await deleteAbandonedFilesInCategory('submissions')).toMatchObject({ deleted: 1 });
+  });
+
+  it('refuses a category it does not know', async () => {
+    expect(await deleteAbandonedFilesInCategory('backups')).toMatchObject({ status: 400 });
+    expect(unlink).not.toHaveBeenCalled();
   });
 });
 
@@ -137,7 +255,11 @@ describe('deleteAbandonedFile', () => {
   });
 
   it('refuses to delete a trial file a row still names', async () => {
-    prismaMock.evaluatorTrial.findFirst.mockResolvedValue({ id: 't1' });
+    // Asked of the same source the report uses, so "still referenced" cannot mean one thing
+    // when listing files and another when deleting one.
+    prismaMock.evaluatorTrial.findMany.mockResolvedValue([
+      { answerFileName: 'answer.jff', submissionFileName: null },
+    ]);
 
     const result = await deleteAbandonedFile('trials', 'answer.jff');
 

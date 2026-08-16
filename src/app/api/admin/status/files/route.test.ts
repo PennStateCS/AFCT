@@ -17,11 +17,12 @@ vi.mock('fs', async (importOriginal) => {
   const readdir = vi.fn().mockResolvedValue([]);
   const existsSync = vi.fn().mockReturnValue(true);
   const unlink = vi.fn().mockResolvedValue(undefined);
+  const stat = vi.fn().mockResolvedValue({ size: 1024, mtimeMs: 1_700_000_000_000 });
   return {
     ...actual,
     existsSync,
-    promises: { ...actual.promises, readdir, unlink },
-    default: { ...actual, existsSync, promises: { ...actual.promises, readdir, unlink } },
+    promises: { ...actual.promises, readdir, unlink, stat },
+    default: { ...actual, existsSync, promises: { ...actual.promises, readdir, unlink, stat } },
   };
 });
 
@@ -57,7 +58,7 @@ describe('GET /api/admin/status/files', () => {
     expect((await GET(getReq(), routeCtx())).status).toBe(403);
   });
 
-  it('classifies orphaned uploads by category and caps samples at 50', async () => {
+  it('classifies orphaned uploads by category and caps the list it returns', async () => {
     vi.mocked(fs.promises.readdir).mockImplementation(async (dir: unknown) => {
       const d = String(dir);
       const ent = (name: string) => ({ isFile: () => true, name });
@@ -71,30 +72,69 @@ describe('GET /api/admin/status/files', () => {
     const res = await GET(getReq(), routeCtx());
     expect(res.status).toBe(200);
     const { abandonedFiles } = await res.json();
-    expect(abandonedFiles.byCategory.solutions).toBe(60);
-    expect(abandonedFiles.byCategory.submissions).toBe(1);
-    expect(abandonedFiles.samples.length).toBe(50);
+    const count = (name: string) =>
+      abandonedFiles.categories.find((c: { category: string }) => c.category === name)?.count;
+    expect(count('solutions')).toBe(60);
+    expect(count('submissions')).toBe(1);
+    expect(abandonedFiles.total).toBe(61);
+    expect(abandonedFiles.files.length).toBeLessThanOrEqual(abandonedFiles.listLimit);
   });
 });
 
 describe('DELETE /api/admin/status/files', () => {
   it('400 for an unknown category or unsafe name', async () => {
-    expect((await DELETE(delReq({ category: 'bogus', fileName: 'x' }), routeCtx())).status).toBe(400);
-    expect((await DELETE(delReq({ category: 'pfps', fileName: '../escape' }), routeCtx())).status).toBe(
+    expect((await DELETE(delReq({ category: 'bogus', fileName: 'x' }), routeCtx())).status).toBe(
       400,
+    );
+    expect(
+      (await DELETE(delReq({ category: 'pfps', fileName: '../escape' }), routeCtx())).status,
+    ).toBe(400);
+  });
+
+  it('clears a whole category and says how much it freed', async () => {
+    // Deleting thousands of files one confirmation at a time is not something anybody
+    // finishes, which is the state this page actually finds a volume in.
+    vi.mocked(fs.promises.readdir).mockResolvedValue(
+      Array.from({ length: 3 }, (_, i) => ({
+        isFile: () => true,
+        name: `orphan-${i}.jff`,
+      })) as never,
+    );
+
+    const res = await DELETE(delReq({ category: 'submissions', all: true }), routeCtx());
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, deleted: 3 });
+  });
+
+  it('logs a category purge at WARNING, unlike a single delete', async () => {
+    // It removes an unbounded number of files in one irreversible action, so it should stand
+    // out in the log rather than sit among routine entries.
+    vi.mocked(fs.promises.readdir).mockResolvedValue([
+      { isFile: () => true, name: 'orphan.jff' },
+    ] as never);
+
+    await DELETE(delReq({ category: 'submissions', all: true }), routeCtx());
+
+    expect(activityLogMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ action: 'ABANDONED_FILES_PURGED', severity: 'WARNING' }),
     );
   });
 
   it('409 when a DB row still references the file', async () => {
-    prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' });
-    expect((await DELETE(delReq({ category: 'submissions', fileName: 'f.txt' }), routeCtx())).status).toBe(
-      409,
-    );
+    prismaMock.submission.findMany.mockResolvedValue([{ fileName: 'f.txt' }]);
+    expect(
+      (await DELETE(delReq({ category: 'submissions', fileName: 'f.txt' }), routeCtx())).status,
+    ).toBe(409);
   });
 
   it('404 when the file is not on disk', async () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
-    expect((await DELETE(delReq({ category: 'pfps', fileName: 'a.png' }), routeCtx())).status).toBe(404);
+    expect((await DELETE(delReq({ category: 'pfps', fileName: 'a.png' }), routeCtx())).status).toBe(
+      404,
+    );
   });
 
   it('deletes an unreferenced file and audits it', async () => {

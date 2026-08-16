@@ -177,12 +177,41 @@ export type SessionsStatusResponse = {
 };
 
 /* ---------------- Files ---------------- */
-export type AbandonedFileCategory = 'solutions' | 'submissions' | 'pfps' | 'problems';
+
+/** One uploaded file that no database row points at. */
+export type AbandonedFile = {
+  category: string;
+  fileName: string;
+  path: string;
+  sizeBytes: number;
+  /** When the file was last written, ISO 8601. */
+  modifiedAt: string;
+};
+
+/** One upload directory's worth of the report. */
+export type AbandonedFileCategory = {
+  category: string;
+  /** Plain-language name for the screen, not the folder name. */
+  label: string;
+  count: number;
+  sizeBytes: number;
+  /** Set when the folder could not be read, in which case the count is not a fact. */
+  error?: string;
+};
 
 export type AbandonedFilesSummary = {
   total: number;
-  byCategory: Record<string, number>;
-  samples: Array<{ category: string; fileName: string; path: string }>;
+  totalSizeBytes: number;
+  categories: AbandonedFileCategory[];
+  /** The files themselves, capped at `listLimit`. Counts above are always complete. */
+  files: AbandonedFile[];
+  listLimit: number;
+  /**
+   * Set when the report could not be produced at all. Callers must not read the zeroes above
+   * as "nothing to clean up" while this is present: a failed check and a clean volume are
+   * different answers and used to be indistinguishable.
+   */
+  error?: string;
 };
 
 export type FilesStatusResponse = { abandonedFiles: AbandonedFilesSummary };
