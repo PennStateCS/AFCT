@@ -11,10 +11,29 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 // Create a Prisma client with query logging enabled
+/**
+ * How many database connections this process may hold.
+ *
+ * Stated rather than inherited. The driver's own default is 10, which is fine until you count
+ * the processes: the app, the submission worker, the backup sidecar, a database test run, and
+ * anything an administrator has open all hold a pool of their own, busy or idle. Multiply that
+ * by a default nobody chose and the ceiling arrives without warning, at which point the app
+ * cannot run its startup migration and the failure looks like anything but a resource limit.
+ *
+ * It is per process and unrelated to how many people are using AFCT: a course of three hundred
+ * costs the same as an empty one. Raise it for a deployment that genuinely runs out of pool
+ * under load, and keep `processes * this` comfortably under the server's `max_connections`
+ * (200 in deploy/docker-compose.yml).
+ */
+const POOL_MAX = Number(process.env.DATABASE_POOL_MAX ?? 10);
+
 const createPrismaClient = () => {
   // Prisma 7 uses driver adapters (no bundled query engine); the connection URL
   // now comes from the adapter rather than the schema's datasource block.
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+    max: Number.isFinite(POOL_MAX) && POOL_MAX > 0 ? POOL_MAX : 10,
+  });
   const client = new PrismaClient({
     adapter,
     log: [

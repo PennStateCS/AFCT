@@ -115,7 +115,25 @@ export default function DatabaseTab({
                 {pg.cache_hit_ratio != null && (
                   <Stat label="Cache Hit Ratio" value={`${pg.cache_hit_ratio}%`} />
                 )}
-                {pg.num_backends != null && <Stat label="Connections" value={pg.num_backends} />}
+                {/* Against the ceiling, not on its own. A bare "7" says nothing; "7 / 200" is
+                    the difference between a healthy database and one about to refuse the app's
+                    next start, and running out is not a slow decline, it is a wall. */}
+                {pg.num_backends != null && (
+                  <Stat
+                    label="Connections"
+                    value={
+                      pg.max_connections != null
+                        ? `${pg.num_backends} / ${pg.max_connections}`
+                        : pg.num_backends
+                    }
+                  />
+                )}
+                {/* Only when there are any. A connection left open inside a transaction holds
+                    locks as well as a slot, so it is the first thing to look at when something
+                    is stuck, and noise when it is zero. */}
+                {pg.connections_idle_in_xact != null && pg.connections_idle_in_xact > 0 && (
+                  <Stat label="Idle in transaction" value={pg.connections_idle_in_xact} />
+                )}
                 {pg.seq_scans != null && <Stat label="Sequential Scans" value={pg.seq_scans} />}
                 {pg.idx_scans != null && <Stat label="Index Scans" value={pg.idx_scans} />}
                 {pg.transactions_per_sec != null && (

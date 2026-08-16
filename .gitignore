@@ -1,5 +1,7 @@
 # Node.js
-node_modules/
+# No trailing slash on purpose. `node_modules/` matches a directory, and a *symlink* named
+# node_modules is not one, so it slipped past this and was committed once.
+node_modules
 
 # Environment files (ignore actual secrets, keep templates only)
 .env

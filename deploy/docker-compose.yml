@@ -229,6 +229,12 @@ services:
 
     command:
       - postgres
+      # Stated rather than inherited from the image's default of 100, so the ceiling is a
+      # decision. Capacity here is arithmetic, not load: every process holds a pool whether it
+      # is busy or idle, so what consumes connections is app + worker + backup + anything an
+      # administrator runs against the same database, never the number of students.
+      - -c
+      - max_connections=200
       - -c
       - log_min_duration_statement=500
       - -c
