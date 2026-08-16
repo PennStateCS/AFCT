@@ -89,3 +89,15 @@ describe('nginx framing headers', () => {
     expect(uploads).toMatch(/add_header\s+X-Frame-Options\s+"SAMEORIGIN"/i);
   });
 });
+
+describe('the app, which owns the policy', () => {
+  const NEXT_CONFIG = readFileSync(path.join(process.cwd(), 'next.config.ts'), 'utf8');
+
+  it('sends no X-Frame-Options of its own', () => {
+    // It cannot express "allow this LMS", so setting it alongside the CSP means the cruder
+    // header decides and deep linking breaks however carefully frame-ancestors is built.
+    const directive = NEXT_CONFIG.split('\n').filter((line) => !line.trim().startsWith('//'));
+
+    expect(directive.join('\n')).not.toMatch(/'X-Frame-Options'/);
+  });
+});
