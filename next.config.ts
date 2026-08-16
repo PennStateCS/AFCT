@@ -50,7 +50,11 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          // No X-Frame-Options. `frame-ancestors` in the per-request CSP (src/proxy.ts) says
+          // the same thing and says it better: X-Frame-Options can only express SAMEORIGIN or
+          // DENY, so it cannot allow the LMS platforms an administrator has registered, and
+          // sending both means the cruder header decides. Every page gets a CSP with
+          // frame-ancestors, defaulting to 'self', so nothing is framed that was not before.
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-DNS-Prefetch-Control', value: 'off' },
           // Nothing in a private course tool should be indexed. src/app/robots.ts
