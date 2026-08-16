@@ -102,36 +102,34 @@ export default async function DeepLinkPage({
       <form method="POST" action="/api/lti/deep-link" className="space-y-4">
         <input type="hidden" name="pendingId" value={pending.id} />
 
-        <fieldset className="space-y-2">
-          <legend className="sr-only">Assignments in {link.course.name}</legend>
-          {assignments.map((assignment, index) => {
-            const points = assignment.problems.reduce(
-              (sum, p) => sum + Number(p.maxPoints ?? 0),
-              0,
-            );
-            return (
-              <label
-                key={assignment.id}
-                className="hover:bg-muted flex cursor-pointer items-start gap-3 rounded-md border p-3"
-              >
-                <input
-                  type="radio"
-                  name="assignmentId"
-                  value={assignment.id}
-                  defaultChecked={index === 0}
-                  className="mt-1"
-                  required
-                />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{assignment.title}</span>
-                  <span className="text-muted-foreground block text-xs">
-                    {points > 0 ? `${points} points` : 'Not graded'}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
+        {/* A select rather than a list of radios. A term's worth of assignments is easily
+            thirty, which no longer fits the modal an LMS draws this in, and a native select
+            stays keyboard and screen-reader friendly at any length while still working with
+            no JavaScript, which the rest of this flow depends on. */}
+        <div className="space-y-2">
+          <label htmlFor="assignmentId" className="block text-sm font-medium">
+            Assignment
+          </label>
+          <select
+            id="assignmentId"
+            name="assignmentId"
+            required
+            defaultValue={assignments[0]?.id}
+            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+          >
+            {assignments.map((assignment) => {
+              const points = assignment.problems.reduce(
+                (sum, p) => sum + Number(p.maxPoints ?? 0),
+                0,
+              );
+              return (
+                <option key={assignment.id} value={assignment.id}>
+                  {assignment.title} {'\u2014'} {points > 0 ? `${points} points` : 'not graded'}
+                </option>
+              );
+            })}
+          </select>
+        </div>
 
         <button
           type="submit"
@@ -144,10 +142,22 @@ export default async function DeepLinkPage({
   );
 }
 
+/**
+ * The frame around whatever this page has to say.
+ *
+ * This page is almost always seen inside an LMS: Canvas draws it in a modal a few hundred
+ * pixels tall, with its own heading above and its own chrome around. So it is centred in
+ * whatever space it is given rather than positioned as if it owned a browser window, and it
+ * carries no fixed top margin, which in a short frame simply pushed the card off the bottom.
+ *
+ * `dvh` rather than `vh` because the unit is measured against the frame, and the card scrolls
+ * inside itself rather than the frame scrolling: centred content taller than its container is
+ * the classic way to make the top of a list unreachable.
+ */
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen w-full items-start justify-center p-6">
-      <div className="bg-card mt-12 w-full max-w-lg rounded-lg border p-6">
+    <main className="flex min-h-dvh w-full items-center justify-center p-4">
+      <div className="bg-card max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-lg border p-6">
         <h1 className="mb-3 text-xl font-semibold">{title}</h1>
         {children}
       </div>

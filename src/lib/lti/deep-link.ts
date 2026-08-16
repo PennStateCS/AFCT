@@ -89,6 +89,16 @@ export async function buildDeepLinkResponse(opts: {
     ...(item.scoreMaximum && opts.acceptLineItem === true
       ? { lineItem: { scoreMaximum: item.scoreMaximum, label: item.title } }
       : {}),
+    /**
+     * Open in a new tab, decided here rather than left to whoever adds the link.
+     *
+     * AFCT is a whole application: a student works through an automaton, submits, and reads
+     * feedback. Inside the panel an LMS gives a tool that is cramped, and the browser back
+     * button belongs to the LMS page rather than to their work. DL 2.0 lets the tool state
+     * this, and Canvas honours it by ticking "Load this tool in a new tab" on the assignment
+     * it creates, so the person adding the link no longer has to know to do it.
+     */
+    window: { targetName: '_blank' },
   }));
 
   const jwt = await new SignJWT({
