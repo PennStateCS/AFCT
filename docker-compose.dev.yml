@@ -199,6 +199,18 @@ services:
       - postgres
       - -c
       - max_connections=300
+      # Notice a client that vanished without saying goodbye. Stopping a container tears down
+      # its network namespace, so no FIN or RST ever reaches Postgres and the backend sits
+      # there holding a slot; the default wait is the OS keepalive, two hours. Restarting the
+      # dev server a dozen times in an afternoon is enough to strand the whole ceiling that
+      # way, and the symptom is an app that cannot start with no clue why. This finds them in
+      # about two minutes instead.
+      - -c
+      - tcp_keepalives_idle=60
+      - -c
+      - tcp_keepalives_interval=10
+      - -c
+      - tcp_keepalives_count=6
       - -c
       - log_connections=on
       - -c

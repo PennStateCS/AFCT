@@ -3,6 +3,17 @@ name: CI
 # Every pre-merge check in one place: lint, tests, and the API-docs/spec sync.
 # The three jobs run in parallel. The image-publish workflow (publish-ghcr.yml)
 # waits on this workflow succeeding on main before it builds a release image.
+# A pull request runs everything. The run on `main` after a merge is narrower on purpose:
+# it exists to catch what only a merge can break, which is two branches that each passed
+# alone and conflict once combined. Nothing about the merge commit can change whether the
+# tree lints, whether a Dockerfile is well formed, or whether the API docs are in sync, so
+# those jobs are skipped there. `e2e` is skipped for the same reason plus a practical one:
+# it is eight of the nine minutes, and a merge interaction that only a browser can see is
+# not what it is good at finding. It still runs on every pull request.
+#
+# The secret scan is the exception and runs on both. Its value does not depend on the merge
+# commit being content-identical to the branch, and it costs under a minute; "we stopped
+# scanning main" is not a sentence worth saving that minute for.
 on:
   push:
     branches: ['main']
@@ -14,6 +25,9 @@ on:
       - 'docs/**'
       - '**.md'
   pull_request:
+  # So the release gate has an answer when CI never ran on a commit: run it on that ref by
+  # hand rather than tagging something untested, or loosening the gate.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -64,6 +78,7 @@ jobs:
           ./gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
 
   lint:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -92,6 +107,7 @@ jobs:
   # ShellCheck over every RUN block, which nothing else here does. See .hadolint.yaml for
   # which rules are off and why.
   dockerfiles:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -118,6 +134,7 @@ jobs:
   # convention (shadcn primitives kept whole, types exported for symmetry) and would make
   # the gate noise rather than signal. Run `npx knip` locally to see the full picture.
   deadcode:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -213,6 +230,7 @@ jobs:
         run: npm run test:db
 
   docs-check:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -344,6 +362,7 @@ jobs:
   # started by playwright itself (see the note in playwright.config.ts on why it is `next
   # dev` and not a production build).
   e2e:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

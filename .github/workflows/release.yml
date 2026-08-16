@@ -33,8 +33,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Nothing is published from a commit CI has not passed.
+  #
+  # A tag can point anywhere. The release convention is to tag the last commit that is not
+  # `[skip ci]`, and that commit is usually one CI has already checked on main, but nothing
+  # made it so: a docs-only commit is skipped by CI's paths filter, the pipeline's own
+  # image-pin commits carry `[skip ci]`, and a tag can be pushed at any commit at all. Without
+  # this, the first thing anybody knows about it is four published images and a GitHub release
+  # built from code that was never tested.
+  #
+  # Checks the tagged commit itself rather than "something recent on main", because that is the
+  # code being shipped. If CI genuinely has not run on it, run CI on that ref by hand
+  # (Actions > CI > Run workflow) and push the tag again.
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require a successful CI run for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          count=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${SHA}&status=success" \
+            --jq '.total_count')
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::No successful CI run for ${SHA}, so this tag is not releasable."
+            echo "Tag a commit CI has passed, or run CI on this ref (Actions > CI > Run workflow) and re-tag."
+            exit 1
+          fi
+          echo "CI passed for ${SHA} (${count} successful run(s))."
+
   # Phase 1: build and push the images, add the version to the manifest, open the release.
   release:
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -244,6 +277,7 @@ jobs:
   # Phase 2a: build + VERIFY the Linux bundle, then stage its assets as an artifact. Nothing
   # is uploaded to the release here.
   bundle-linux:
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -305,6 +339,7 @@ jobs:
   # Phase 2b: build + VERIFY the macOS bundle on a real macOS runner (BSD tools), then stage
   # its assets as an artifact.
   bundle-macos:
+    needs: verify
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
@@ -367,6 +402,7 @@ jobs:
   # Phase 2c: build + VERIFY the Windows bundle with pwsh (deterministic .NET ZIP + Get-
   # FileHash, so the bytes match a Windows build), then stage its assets as an artifact.
   bundle-windows:
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
