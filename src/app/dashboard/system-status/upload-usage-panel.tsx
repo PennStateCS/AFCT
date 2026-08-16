@@ -16,13 +16,21 @@ import type { StorageUsage } from '@/lib/status/types';
  * any of it matters, which is how much room is left.
  */
 
-/** The five theme-aware chart colours, cycled so a kind keeps its colour across renders. */
+/**
+ * The five theme-aware chart colours.
+ *
+ * Both class names are written out. Deriving the swatch from the stroke with a `replace` looked
+ * tidier and produced no colour at all: Tailwind only generates a utility it can see as a
+ * literal string in the source, and `bg-chart-1` appears nowhere, so every legend dot rendered
+ * transparent while the arcs were fine. The one link between a legend row and its slice is that
+ * colour, so the legend simply stopped meaning anything.
+ */
 const SLICE_COLOURS = [
-  'stroke-chart-1',
-  'stroke-chart-2',
-  'stroke-chart-3',
-  'stroke-chart-4',
-  'stroke-chart-5',
+  { stroke: 'stroke-chart-1', swatch: 'bg-chart-1' },
+  { stroke: 'stroke-chart-2', swatch: 'bg-chart-2' },
+  { stroke: 'stroke-chart-3', swatch: 'bg-chart-3' },
+  { stroke: 'stroke-chart-4', swatch: 'bg-chart-4' },
+  { stroke: 'stroke-chart-5', swatch: 'bg-chart-5' },
 ];
 
 /** One headline number, with its unit spelled out underneath rather than in the number. */
@@ -54,17 +62,26 @@ export function UploadUsagePanel({ storage }: { storage: StorageUsage }) {
   const reclaimableCount = storage.categories.reduce((sum, c) => sum + c.abandonedCount, 0);
   const uploadsTotal = storage.inUseBytes + reclaimable;
 
-  // Largest first: the reason to read this is to find out what is taking the space.
+  // A colour per kind, fixed by the order the server lists them rather than by size. Taken from
+  // the sorted list, a kind's colour changed whenever two kinds swapped places on a refresh.
+  const colourOf = (category: string) => {
+    const index = storage.categories.findIndex((c) => c.category === category);
+    return SLICE_COLOURS[(index < 0 ? 0 : index) % SLICE_COLOURS.length]!;
+  };
+
+  // Largest first: the reason to read this is to find out what is taking the space. A kind whose
+  // files have all gone missing holds nothing and is still very much worth listing, which is the
+  // whole point of the alert above it.
   const held = [...storage.categories]
-    .filter((c) => c.inUseCount > 0 || c.abandonedCount > 0 || c.error)
+    .filter((c) => c.inUseCount > 0 || c.abandonedCount > 0 || c.missingCount > 0 || c.error)
     .sort((a, b) => b.inUseBytes - a.inUseBytes);
   const emptyKinds = storage.categories.filter((c) => !held.includes(c));
 
-  const kindSlices: Array<DonutSlice & { detail?: React.ReactNode }> = held.map((c, i) => ({
+  const kindSlices: Array<DonutSlice & { detail?: React.ReactNode }> = held.map((c) => ({
     key: c.category,
     label: c.label,
     bytes: c.inUseBytes,
-    stroke: SLICE_COLOURS[i % SLICE_COLOURS.length]!,
+    ...colourOf(c.category),
     detail: `${formatBytes(c.inUseBytes)} · ${c.inUseCount.toLocaleString()} file${c.inUseCount === 1 ? '' : 's'}`,
   }));
   if (reclaimable > 0) {
@@ -73,6 +90,7 @@ export function UploadUsagePanel({ storage }: { storage: StorageUsage }) {
       label: 'Abandoned',
       bytes: reclaimable,
       stroke: 'stroke-destructive',
+      swatch: 'bg-destructive',
       detail: `${formatBytes(reclaimable)} · ${reclaimableCount.toLocaleString()} file${reclaimableCount === 1 ? '' : 's'}`,
     });
   }
@@ -88,6 +106,7 @@ export function UploadUsagePanel({ storage }: { storage: StorageUsage }) {
           label: 'Uploads',
           bytes: uploadsTotal,
           stroke: 'stroke-chart-1',
+          swatch: 'bg-chart-1',
           detail: formatBytes(uploadsTotal),
         },
         {
@@ -95,6 +114,7 @@ export function UploadUsagePanel({ storage }: { storage: StorageUsage }) {
           label: 'Everything else',
           bytes: otherBytes,
           stroke: 'stroke-chart-3',
+          swatch: 'bg-chart-3',
           detail: formatBytes(otherBytes),
         },
         {
@@ -102,6 +122,7 @@ export function UploadUsagePanel({ storage }: { storage: StorageUsage }) {
           label: 'Free',
           bytes: volume.freeBytes,
           stroke: 'stroke-chart-2',
+          swatch: 'bg-chart-2',
           detail: formatBytes(volume.freeBytes),
         },
       ]
@@ -192,6 +213,14 @@ export function UploadUsagePanel({ storage }: { storage: StorageUsage }) {
                   <span className="text-destructive inline-flex items-center gap-1">
                     <FileWarning className="size-3" aria-hidden />
                     {c.missingCount.toLocaleString()} recorded but missing
+                  </span>
+                )}
+                {/* The names are the only lead anybody gets for finding out what happened, and
+                    they were being collected and then never shown. */}
+                {c.missingSamples.length > 0 && (
+                  <span className="font-mono">
+                    {c.missingSamples.join(', ')}
+                    {c.missingCount > c.missingSamples.length ? ', …' : ''}
                   </span>
                 )}
                 {c.error && <span className="text-destructive">{c.error}</span>}

@@ -20,6 +20,10 @@ export type DonutSlice = {
   bytes: number;
   /** A Tailwind stroke class, so slices follow the theme in both light and dark. */
   stroke: string;
+  /** The matching background class for the legend swatch. Written out by the caller rather
+   *  than derived from `stroke`: Tailwind only generates classes it can see literally, and a
+   *  name built at runtime produces no colour at all. */
+  swatch: string;
 };
 
 /** Percentage of the whole, kept above zero for anything non-empty so a sliver still draws. */
@@ -44,13 +48,19 @@ export function StorageDonut({
   // Each slice starts where the ones before it end. Summed per slice rather than carried in a
   // variable, because a handful of slices makes the cost irrelevant and nothing is reassigned
   // while rendering.
-  const present = slices.filter((s) => s.bytes > 0);
+  // Anything present gets at least a hairline: a slice rounded to nothing looks like a category
+  // that is not there at all, which is a different fact.
+  const present = slices
+    .filter((s) => s.bytes > 0)
+    .map((s) => ({ ...s, length: Math.max(shareOf(s.bytes, total), 0.4) }));
+
+  // Offsets accumulate the lengths actually drawn, not the true shares. Summing the shares put
+  // the next slice's start *inside* a slice that had been widened to the minimum, and because
+  // the circles are painted in order it covered it again: the hairline the floor exists to
+  // guarantee was drawn and then hidden, which is the failure it was meant to prevent.
   const drawn = present.map((s, i) => ({
     ...s,
-    // Anything present gets at least a hairline: a slice rounded to nothing looks like a
-    // category that is not there at all, which is a different fact.
-    length: Math.max(shareOf(s.bytes, total), 0.4),
-    offset: present.slice(0, i).reduce((sum, prev) => sum + shareOf(prev.bytes, total), 0),
+    offset: present.slice(0, i).reduce((sum, prev) => sum + prev.length, 0),
   }));
 
   return (
@@ -99,27 +109,29 @@ export function DonutLegend({
   return (
     <div className="min-w-0 flex-1 space-y-2">
       <ul className="space-y-2">
-        {slices.map((s) => {
-          const pct = shareOf(s.bytes, total);
-          return (
-            <li key={s.key} className="flex items-start gap-2 text-sm">
-              <span
-                className={`${s.stroke.replace('stroke-', 'bg-')} mt-1.5 size-2 shrink-0 rounded-sm`}
-                aria-hidden
-              />
-              <span className="min-w-0">
-                <span className="block leading-tight">{s.label}</span>
-                <span className="text-muted-foreground block text-xs tabular-nums">
-                  {s.detail}
-                  {s.detail ? ' · ' : ''}
-                  {/* Round to nothing and a real slice reads as absent, so anything present that
-                      rounds below a percent says so instead of saying zero. */}
-                  {pct > 0 && pct < 1 ? '<1' : Math.round(pct)}%
+        {/* Only what the chart draws. A zero-byte row carried a colour swatch matching no arc
+            anywhere and read "0 B · 0%", which says "nothing here" when the truth is usually
+            that the folder could not be read. Those kinds are named under the chart instead. */}
+        {slices
+          .filter((s) => s.bytes > 0)
+          .map((s) => {
+            const pct = shareOf(s.bytes, total);
+            return (
+              <li key={s.key} className="flex items-start gap-2 text-sm">
+                <span className={`${s.swatch} mt-1.5 size-2 shrink-0 rounded-sm`} aria-hidden />
+                <span className="min-w-0">
+                  <span className="block leading-tight">{s.label}</span>
+                  <span className="text-muted-foreground block text-xs tabular-nums">
+                    {s.detail}
+                    {s.detail ? ' · ' : ''}
+                    {/* Round to nothing and a real slice reads as absent, so anything present
+                        that rounds below a percent says so instead of saying zero. */}
+                    {pct > 0 && pct < 1 ? '<1' : Math.round(pct)}%
+                  </span>
                 </span>
-              </span>
-            </li>
-          );
-        })}
+              </li>
+            );
+          })}
       </ul>
       {note && <p className="text-muted-foreground text-xs">{note}</p>}
     </div>
