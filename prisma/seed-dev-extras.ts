@@ -870,11 +870,16 @@ async function seedActivityLog(prisma: PrismaClient) {
  * them, because dropping the schema does not touch the disk.
  *
  * A file is deleted only when its own table no longer names it, so anything a developer uploaded
- * through the app survives as long as its row does. Files written in the last minute are left
- * alone as well: `createSubmission` writes the file before it writes the row, and a real upload
- * landing at the same moment as a seed run would otherwise look like an orphan for a moment.
+ * through the app survives as long as its row does. Files written after this run began are left
+ * alone as well, because `createSubmission` writes the file before it writes the row and a real
+ * upload landing mid-run would otherwise look like an orphan for a moment.
+ *
+ * `startedAt` is the moment the seed began, deliberately, and not "a minute ago": with a
+ * wall-clock window, re-seeding twice inside that window protected the previous run's garbage,
+ * so the directory doubled instead of being cleaned. Anything written before this run started is
+ * either referenced or left over, and neither case needs protecting.
  */
-async function pruneOrphanedUploads(prisma: PrismaClient) {
+async function pruneOrphanedUploads(prisma: PrismaClient, startedAt: number) {
   const kinds = [
     {
       kind: 'submissions' as const,
@@ -902,7 +907,7 @@ async function pruneOrphanedUploads(prisma: PrismaClient) {
       if (keep.has(name)) continue;
       const full = path.join(dir, name);
       const stat = await fs.stat(full);
-      if (!stat.isFile() || Date.now() - stat.mtimeMs < 60_000) continue;
+      if (!stat.isFile() || stat.mtimeMs >= startedAt) continue;
       await fs.unlink(full);
       removed += 1;
     }
@@ -919,6 +924,7 @@ async function pruneOrphanedUploads(prisma: PrismaClient) {
  */
 export const runDevelopmentExtras = async (prisma: PrismaClient) => {
   console.log('[seed] extras: filling in the features seeded data was missing');
+  const startedAt = Date.now();
   await seedGroups(prisma);
   // Before the submissions, so work is only ever seeded for students the assignment is set for.
   await seedAudienceAndOverrides(prisma);
@@ -928,5 +934,5 @@ export const runDevelopmentExtras = async (prisma: PrismaClient) => {
   await seedGrants(prisma);
   await seedActivityLog(prisma);
   await seedQueue(prisma);
-  await pruneOrphanedUploads(prisma);
+  await pruneOrphanedUploads(prisma, startedAt);
 };
