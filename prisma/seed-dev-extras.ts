@@ -98,12 +98,25 @@ async function storeFile(dir: string, content: string) {
  * A grammar has no layout, so its productions are reordered instead (the shape hash sorts them).
  * A regular expression has neither, so it comes back unchanged, which is the honest answer: two
  * students writing `[0-9]` really have sent the same file.
+ *
+ * That last case is worth knowing when reading the seeded Similarity report. In a regular
+ * expression problem the planted pair is **not** distinguishable from the students who simply
+ * wrote the same right answer, because in a file with no layout there is nothing to tell them
+ * apart, and most of the class ends up in one large match group. That is not a fault in the seed
+ * or in the detector: it is why a match is read against how rare it is, and why the report marks
+ * a group that large as common rather than as evidence. The planted pair is legible in the
+ * automaton problems, where a file carries layout.
  */
 function redraw(base: string, offset: number): string {
   if (base.includes('<production>')) {
     const productions = base.match(/\t*<production>[\s\S]*?<\/production>\n?/g) ?? [];
     if (productions.length < 2) return base;
-    const reordered = [...productions.slice(1), productions[0]!].join('');
+    // Never the identity rotation, which would hand back the posted grammar itself and put a
+    // student who reordered nothing into the copied pair's match group. A two-production
+    // grammar only has one other ordering to offer, so they all share that one, which is what
+    // convergence on a small grammar honestly looks like.
+    const shift = (offset % (productions.length - 1)) + 1;
+    const reordered = [...productions.slice(shift), ...productions.slice(0, shift)].join('');
     return base.replace(/\t*<production>[\s\S]*<\/production>\n?/, reordered);
   }
   return base
@@ -132,6 +145,22 @@ function editOneTransition(base: string): string {
 }
 
 /**
+ * Pick from a list by variant number, spreading consecutive variants apart.
+ *
+ * `items[variant % items.length]` looks equivalent and is not. The variant numbers advance by a
+ * fixed stride per student, so whenever that stride and the list length share a factor the
+ * remainder stops depending on the student at all: with five regular expressions and a stride of
+ * five, every student's first attempt was the same expression and fourteen of eighteen landed in
+ * one match group. Mixing the bits first makes the choice independent of both lengths.
+ */
+function choose<T>(items: T[], variant: number): T {
+  let h = Math.imul(variant + 1, 2654435761) >>> 0;
+  h ^= h >>> 13;
+  h = Math.imul(h, 1274126177) >>> 0;
+  return items[h % items.length]!;
+}
+
+/**
  * A different machine: somebody's own attempt, usually an earlier and wrong one.
  *
  * Deliberately not a redraw. If every student sent the same machine the whole cohort would be one
@@ -141,8 +170,13 @@ function editOneTransition(base: string): string {
 function ownAttempt(base: string, variant: number): string {
   if (base.includes('<expression>')) {
     // Plausible answers to "a single digit", right and wrong, the way a class actually varies.
+    //
+    // None of them may be the posted answer itself. `[0-9]` was in this list, so one student in
+    // six sent a file byte-identical to the solution and joined the copied pair's exact-match
+    // group without having copied anything, which made the planted case impossible to pick out
+    // from the ordinary work around it. Students converging on the identical answer is real and
+    // is worth seeing; it belongs to the `converged` behaviour, where it is deliberate.
     const expressions = [
-      '[0-9]',
       '(0|1|2|3|4|5|6|7|8|9)',
       '[0123456789]',
       '[0-9][0-9]*',
@@ -151,15 +185,13 @@ function ownAttempt(base: string, variant: number): string {
     ];
     return base.replace(
       /<expression>[\s\S]*?<\/expression>/,
-      `<expression>${expressions[variant % expressions.length]}</expression>`,
+      `<expression>${choose(expressions, variant)}</expression>`,
     );
   }
   if (base.includes('<production>')) {
-    const rights = ['aSb', 'aS', 'Sb', 'ab', 'aAb', 'a'];
-    return base.replace(
-      /<right>([^<]*)<\/right>/,
-      `<right>${rights[variant % rights.length]}</right>`,
-    );
+    // `a` is the posted grammar's own first production, so it is left out for the reason above.
+    const rights = ['aSb', 'aS', 'Sb', 'ab', 'aAb', 'aSbb'];
+    return base.replace(/<right>([^<]*)<\/right>/, `<right>${choose(rights, variant)}</right>`);
   }
 
   // Drop a transition and change a symbol: a machine that is recognisably an attempt at the same
@@ -167,7 +199,7 @@ function ownAttempt(base: string, variant: number): string {
   const transitions = base.match(/\t*<transition>[\s\S]*?<\/transition>\n?/g) ?? [];
   let mutated = base;
   if (transitions.length > 2) {
-    mutated = mutated.replace(transitions[variant % transitions.length]!, '');
+    mutated = mutated.replace(choose(transitions, variant), '');
   }
   let seen = 0;
   mutated = mutated.replace(/<read>([^<]*)<\/read>/g, (whole, symbol) => {
@@ -293,9 +325,15 @@ async function seedSubmissions(prisma: PrismaClient) {
           allowLateSubmissions: true,
           groupSetId: true,
           course: { select: { startDate: true } },
+          // Who the assignment is set for. Empty means the whole class, which is the usual case.
+          assignees: { select: { userId: true, targetType: true } },
         },
       },
     },
+    // Every query the seed walks is ordered, because the order rows come back in decides which
+    // random number each one draws. Without this the seed is only reproducible for as long as
+    // Postgres happens to return rows in insertion order, which it does not promise.
+    orderBy: [{ assignmentId: 'asc' }, { problemId: 'asc' }],
   });
 
   type Row = {
@@ -336,9 +374,22 @@ async function seedSubmissions(prisma: PrismaClient) {
     const groups = link.assignment.groupSetId
       ? await prisma.studentGroup.findMany({
           where: { groupSetId: link.assignment.groupSetId },
-          select: { id: true, memberships: { select: { userId: true } } },
+          select: {
+            id: true,
+            memberships: { select: { userId: true }, orderBy: { userId: 'asc' } },
+          },
+          orderBy: { name: 'asc' },
         })
       : [];
+
+    // Only the students the assignment is actually set for. Anybody else has no route to
+    // submitting to it, so seeding their work would be seeding something impossible.
+    const audience = new Set(
+      link.assignment.assignees
+        .filter((assignee) => assignee.targetType === 'STUDENT' && assignee.userId)
+        .map((assignee) => assignee.userId as string),
+    );
+
     const submitters = link.assignment.groupSetId
       ? groups
           .filter((group) => group.memberships.length > 0)
@@ -350,9 +401,11 @@ async function seedSubmissions(prisma: PrismaClient) {
           await prisma.roster.findMany({
             where: { courseId: link.assignment.courseId, role: 'STUDENT' },
             select: { userId: true },
-            orderBy: { createdAt: 'asc' },
+            orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
           })
-        ).map((roster) => ({ userId: roster.userId, studentGroupId: null }));
+        )
+          .filter((roster) => audience.size === 0 || audience.has(roster.userId))
+          .map((roster) => ({ userId: roster.userId, studentGroupId: null }));
 
     for (const [index, submitter] of submitters.entries()) {
       const behaviour = behaviourFor(index, submitters.length);
@@ -472,6 +525,7 @@ async function seedQueue(prisma: PrismaClient) {
       problem: { select: { type: true, originalFileName: true } },
       assignment: { select: { courseId: true, groupSetId: true } },
     },
+    orderBy: [{ assignmentId: 'asc' }, { problemId: 'asc' }],
     take: 6,
   });
 
@@ -490,6 +544,7 @@ async function seedQueue(prisma: PrismaClient) {
     const students = await prisma.roster.findMany({
       where: { courseId: link.assignment.courseId, role: 'STUDENT' },
       select: { userId: true },
+      orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
       take: 2,
     });
 
@@ -539,7 +594,7 @@ async function seedGroups(prisma: PrismaClient) {
     const students = await prisma.roster.findMany({
       where: { courseId: course.id, role: 'STUDENT' },
       select: { userId: true },
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
     });
     if (students.length < 4) continue;
 
@@ -635,7 +690,7 @@ async function seedGrades(prisma: PrismaClient) {
       feedback: true,
       assignmentProblem: { select: { maxPoints: true, autograderEnabled: true } },
     },
-    orderBy: { submittedAt: 'asc' },
+    orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
   });
 
   type GradeRow = {
@@ -667,6 +722,7 @@ async function seedGrades(prisma: PrismaClient) {
           await prisma.groupMembership.findMany({
             where: { groupId: submission.studentGroupId },
             select: { userId: true },
+            orderBy: { userId: 'asc' },
           })
         ).map((membership) => membership.userId);
       memberCache.set(submission.studentGroupId, targets);
@@ -704,18 +760,22 @@ async function seedGrades(prisma: PrismaClient) {
   // Hand-graded work: a problem with the autograder off has no grade until somebody enters one,
   // so this is the only way those rows exist at all.
   const handGraded = await prisma.assignmentProblem.findMany({
-    where: { autograderEnabled: false },
+    // Published only. A draft is one no student can see, so a grade against it is a grade for
+    // work nobody could have done.
+    where: { autograderEnabled: false, assignment: { isPublished: true } },
     select: {
       assignmentId: true,
       problemId: true,
       maxPoints: true,
       assignment: { select: { courseId: true } },
     },
+    orderBy: [{ assignmentId: 'asc' }, { problemId: 'asc' }],
   });
   for (const link of handGraded) {
     const students = await prisma.roster.findMany({
       where: { courseId: link.assignment.courseId, role: 'STUDENT' },
       select: { userId: true },
+      orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
       take: 6,
     });
     for (const student of students) {
@@ -747,6 +807,7 @@ async function seedComments(prisma: PrismaClient) {
 
   const links = await prisma.assignmentProblem.findMany({
     select: { assignmentId: true, problemId: true, assignment: { select: { courseId: true } } },
+    orderBy: [{ assignmentId: 'asc' }, { problemId: 'asc' }],
     take: 6,
   });
 
@@ -755,10 +816,12 @@ async function seedComments(prisma: PrismaClient) {
     const staff = await prisma.roster.findFirst({
       where: { courseId: link.assignment.courseId, role: { in: ['FACULTY', 'TA'] } },
       select: { userId: true, id: true },
+      orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
     });
     const student = await prisma.roster.findFirst({
       where: { courseId: link.assignment.courseId, role: 'STUDENT' },
       select: { userId: true },
+      orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
     });
     if (!staff || !student) continue;
 
@@ -788,16 +851,19 @@ async function seedGrants(prisma: PrismaClient) {
   const link = await prisma.assignmentProblem.findFirst({
     where: { maxSubmissions: { gt: 0 } },
     select: { assignmentId: true, problemId: true, assignment: { select: { courseId: true } } },
+    orderBy: [{ assignmentId: 'asc' }, { problemId: 'asc' }],
   });
   if (!link) return;
 
   const student = await prisma.roster.findFirst({
     where: { courseId: link.assignment.courseId, role: 'STUDENT' },
     select: { userId: true },
+    orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
   });
   const staff = await prisma.roster.findFirst({
     where: { courseId: link.assignment.courseId, role: 'FACULTY' },
     select: { userId: true },
+    orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
   });
   if (!student) return;
 
@@ -821,6 +887,12 @@ async function seedGrants(prisma: PrismaClient) {
  * Audience and dates are separate concepts and are confused constantly: an assignment is
  * targeted through AssignmentAssignee, while AssignmentOverride only ever changes dates. Seeding
  * one of each keeps that visible.
+ *
+ * Runs *before* the submissions step, and the assignment it narrows is one declared for the
+ * purpose in `seed-data`. Both matter. Narrowing whichever assignment happened to come back
+ * first left forty-five submissions in the database from students the assignment was not
+ * assigned to, which the app has no route to produce and which makes the audience rules look
+ * like they do not apply.
  */
 async function seedAudienceAndOverrides(prisma: PrismaClient) {
   if ((await prisma.assignmentAssignee.count()) > 0) {
@@ -828,37 +900,51 @@ async function seedAudienceAndOverrides(prisma: PrismaClient) {
     return;
   }
 
-  const assignment = await prisma.assignment.findFirst({
-    where: { groupSetId: null },
-    select: { id: true, courseId: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (!assignment) return;
+  let targeted = 0;
+  for (const [courseIndex, courseSeed] of courseData.entries()) {
+    for (const assignmentSeed of assignmentData) {
+      if (assignmentSeed.courseIndex !== courseIndex || !assignmentSeed.targetedStudents) continue;
 
-  const students = await prisma.roster.findMany({
-    where: { courseId: assignment.courseId, role: 'STUDENT' },
-    select: { userId: true },
-    take: 3,
-  });
-  if (students.length === 0) return;
+      const course = await prisma.course.findUnique({ where: { regCode: courseSeed.regCode } });
+      if (!course) continue;
+      const assignment = await prisma.assignment.findFirst({
+        where: { courseId: course.id, title: assignmentSeed.title },
+        select: { id: true },
+      });
+      if (!assignment) continue;
 
-  for (const student of students) {
-    await prisma.assignmentAssignee.create({
-      data: { targetType: 'STUDENT', assignmentId: assignment.id, userId: student.userId },
-    });
+      const students = await prisma.roster.findMany({
+        where: { courseId: course.id, role: 'STUDENT' },
+        select: { userId: true },
+        orderBy: [{ createdAt: 'asc' }, { userId: 'asc' }],
+        take: assignmentSeed.targetedStudents,
+      });
+      if (students.length === 0) continue;
+
+      await prisma.assignmentAssignee.createMany({
+        data: students.map((student) => ({
+          targetType: 'STUDENT' as const,
+          assignmentId: assignment.id,
+          userId: student.userId,
+        })),
+      });
+
+      // A date change, not an audience change: the two are different rows for a reason.
+      await prisma.assignmentOverride.create({
+        data: {
+          targetType: 'STUDENT',
+          assignmentId: assignment.id,
+          userId: students[0]!.userId,
+          dueDate: new Date(Date.now() + 7 * DAY_MS),
+          allowLateSubmissions: true,
+        },
+      });
+      targeted += students.length;
+    }
   }
 
-  await prisma.assignmentOverride.create({
-    data: {
-      targetType: 'STUDENT',
-      assignmentId: assignment.id,
-      userId: students[0]!.userId,
-      dueDate: new Date(Date.now() + 7 * DAY_MS),
-      allowLateSubmissions: true,
-    },
-  });
   console.log(
-    `[seed] extras: targeted one assignment at ${students.length} students, with 1 date override`,
+    `[seed] extras: targeted one assignment at ${targeted} students, with 1 date override`,
   );
 }
 
@@ -875,8 +961,15 @@ async function seedActivityLog(prisma: PrismaClient) {
     return;
   }
 
-  const users = await prisma.user.findMany({ select: { id: true }, take: 8 });
-  const course = await prisma.course.findFirst({ select: { id: true } });
+  const users = await prisma.user.findMany({
+    select: { id: true },
+    orderBy: { email: 'asc' },
+    take: 8,
+  });
+  const course = await prisma.course.findFirst({
+    select: { id: true },
+    orderBy: { regCode: 'asc' },
+  });
   if (users.length === 0) return;
 
   const kinds: Array<{
@@ -946,11 +1039,12 @@ async function seedActivityLog(prisma: PrismaClient) {
 export const runDevelopmentExtras = async (prisma: PrismaClient) => {
   console.log('[seed] extras: filling in the features seeded data was missing');
   await seedGroups(prisma);
+  // Before the submissions, so work is only ever seeded for students the assignment is set for.
+  await seedAudienceAndOverrides(prisma);
   await seedSubmissions(prisma);
   await seedGrades(prisma);
   await seedComments(prisma);
   await seedGrants(prisma);
-  await seedAudienceAndOverrides(prisma);
   await seedActivityLog(prisma);
   await seedQueue(prisma);
 };

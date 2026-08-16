@@ -69,6 +69,16 @@ type AssignmentSeed = {
   maxSubmissions?: number;
   /** Whether the autograder runs. Defaults to true. */
   autograder?: boolean;
+  /**
+   * Assigned to only this many students instead of the whole class.
+   *
+   * Audience and dates are different things and get confused constantly, so one assignment is
+   * narrowed this way (through AssignmentAssignee) and given a date override on top. The seed
+   * needs a *separate* assignment for it: narrowing one the class had already submitted to left
+   * work in the database from students the assignment was not assigned to, which nothing in the
+   * app could have produced.
+   */
+  targetedStudents?: number;
 };
 
 export const facultyData: PersonSeed[] = [
@@ -438,6 +448,19 @@ export const assignmentData: AssignmentSeed[] = [
     maxSubmissions: 3,
   },
   {
+    title: 'Sequential Circuits',
+    description:
+      'Build the state machine for a two-bit counter, and show the output for the first eight clock ticks.',
+    dueFraction: 0.9,
+    // Still a draft, which no student can see. The course view, the gradebook and the student
+    // side all treat an unpublished assignment differently, and nothing seeded one. It carries no
+    // submissions and no grades for the same reason: there is nothing for a student to submit to.
+    isPublished: false,
+    courseIndex: 0,
+    problemTitles: ['Three Consecutive 1s'],
+    pointsPerProblem: 20,
+  },
+  {
     title: 'Flip Flops',
     description:
       'For this assignment, you will be creating finite automation machines for varying types of flip-flops.',
@@ -549,14 +572,26 @@ export const assignmentData: AssignmentSeed[] = [
     description:
       'Reduce the halting problem to each of the questions below, then exhibit a machine that does not halt.',
     dueFraction: 0.95,
-    // Left as a draft on purpose: the course view, the gradebook and the student side all treat
-    // an unpublished assignment differently, and nothing seeded one.
-    isPublished: false,
+    isPublished: true,
     courseIndex: 4,
     problemTitles: ['Infinite Loop TM'],
     pointsPerProblem: 20,
-    // Hand-graded: a reduction is an argument, not something the evaluator can check.
+    // Hand-graded: a reduction is an argument, not something the evaluator can check. Students
+    // still submit and the grader still records a verdict; what it does not do is set a grade.
     autograder: false,
+  },
+  {
+    title: 'Makeup: Finite Automata',
+    description:
+      'A second chance at the finite automata assignment, for students who arranged one.',
+    dueFraction: 0.5,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['Three Consecutive 1s'],
+    pointsPerProblem: 20,
+    maxSubmissions: 3,
+    // The one assignment that is not set for the whole class.
+    targetedStudents: 3,
   },
 
   // Lifecycle courses (indices 5-8): a little content so each state isn't empty.
