@@ -2662,6 +2662,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lti/confirm-identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm an administrator's password and attach their LMS account
+         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/confirm-identity/route.ts)
+         */
+        post: operations["postLtiConfirmIdentity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lti/deep-link": {
         parameters: {
             query?: never;
@@ -12056,6 +12076,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Error"];
                 };
+            };
+        };
+    };
+    postLtiConfirmIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signed in and sent on, or back to the form when the password was refused. */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

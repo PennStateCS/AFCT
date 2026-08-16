@@ -26,6 +26,14 @@ const TICKET_TTL_MS = 60 * 1000;
 /** Long enough for somebody to read the picker and choose. */
 const PENDING_LINK_TTL_MS = 30 * 60 * 1000;
 
+/**
+ * How long an administrator has to type their password before the launch has to be repeated.
+ *
+ * Short, because it stands for a verified launch that has not been signed in yet, and long
+ * enough to fetch a password manager.
+ */
+const ADMIN_CONFIRM_TTL_MS = 10 * 60 * 1000;
+
 function refuse(message: string, status: number) {
   // Plain text: a person is reading this inside an LMS frame, not code.
   return new NextResponse(message, {
@@ -102,6 +110,34 @@ export async function POST(request: Request) {
       category: 'USER',
       metadata: { reason: signIn.reason, issuer: verified.identity.issuer },
     });
+
+    /**
+     * An administrator is the one refusal with a way through.
+     *
+     * The rule stands: an email an LMS asserts must never attach a sign-in to an account that
+     * can read every student record in the system. But refusing outright told them to connect
+     * from a page that cannot connect an LMS, which is not an instruction, it is a wall. So the
+     * launch pauses instead, and asks for the AFCT password. That is the one thing an LMS
+     * cannot assert, so supplying it makes the link deliberate rather than automatic.
+     */
+    if (signIn.reason === 'admin-requires-deliberate-link' && signIn.userId) {
+      const pending = await prisma.ltiPendingIdentityLink.create({
+        data: {
+          issuer: verified.identity.issuer,
+          subject: verified.identity.subject,
+          userId: signIn.userId,
+          expiresAt: new Date(Date.now() + ADMIN_CONFIRM_TTL_MS),
+        },
+        select: { id: true },
+      });
+
+      const confirm = new URL(publicUrl('/lti/confirm', request));
+      confirm.searchParams.set('pending', pending.id);
+      const response = NextResponse.redirect(confirm, 303);
+      response.cookies.delete(cookieName);
+      return response;
+    }
+
     return refuse(launchSignInRefusalMessage(signIn.reason), 403);
   }
 

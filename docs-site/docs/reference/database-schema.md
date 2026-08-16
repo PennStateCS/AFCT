@@ -156,6 +156,15 @@ erDiagram
   String ltiUserId
   DateTime seenAt
 }
+"LtiPendingIdentityLink" {
+  String id PK
+  String issuer
+  String subject
+  String userId FK
+  String next "nullable"
+  DateTime expiresAt
+  DateTime createdAt
+}
 "Course" {
   String id PK
   String name
@@ -210,6 +219,7 @@ erDiagram
 "LtiLaunchTransaction" }o--|| "LtiPlatform" : platform
 "LtiContextMember" }o--|| "LtiContextLink" : contextLink
 "LtiContextMember" }o--|| "User" : user
+"LtiPendingIdentityLink" }o--|| "User" : user
 "Assignment" }o--|| "Course" : course
 ```
 
@@ -561,6 +571,33 @@ Properties as follows:
 - `userId`: The AFCT account.
 - `ltiUserId`: The LMS's own id for this person in this context, which is what a score is posted against.
 - `seenAt`: When AFCT last saw evidence they belong here, from a launch or a roster read.
+
+### `LtiPendingIdentityLink`
+
+A launch that matched an AFCT administrator, waiting for them to prove it is them.
+
+An administrator account is never attached to an LMS identity automatically, because the
+match rests on an email the LMS asserts, and AFCT cannot see how carefully that address was
+verified. For a student that would expose one person's work; for an administrator it would
+hand over every student record in the system.
+
+Refusing outright left them nowhere to go, so the launch pauses here instead: they type
+their AFCT password, which is the one thing an LMS cannot assert, and the link is then a
+deliberate act rather than an automatic one. Short-lived, single use, and useless to
+anybody who cannot also sign in as that account.
+
+Properties as follows:
+
+- `id`: Unique identifier, and what the browser is handed to name this pending confirmation.
+- `issuer`
+  > The platform's issuer and its own id for the person, exactly as the launch signed them.
+  > Stored rather than re-derived: the confirmation must attach the identity that launched,
+  > not whatever a later request claims.
+- `subject`:
+- `userId`: The administrator account the launch matched by email.
+- `next`: Where the launch was headed, so confirming lands them where they were going.
+- `expiresAt`: When this stops being usable.
+- `createdAt`: When this record was created.
 
 ## Courses
 
