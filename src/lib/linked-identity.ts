@@ -84,8 +84,12 @@ export async function linkIdentity(opts: {
   /**
    * Who performed the link. Required rather than defaulted to `userId`, so an admin attaching
    * an identity to somebody else's account is logged as the actor. See the activity-log rules.
+   *
+   * Null when AFCT itself did it with nobody asking, which today means a grade fell due for a
+   * student who had never launched and the LMS roster was consulted to find them. Recording a
+   * person there would name somebody who did not do it.
    */
-  actorUserId: string;
+  actorUserId: string | null;
   context: AuditContext;
   tx?: Prisma.TransactionClient;
 }): Promise<LinkResult> {
