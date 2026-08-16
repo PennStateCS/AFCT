@@ -188,3 +188,67 @@ describe('getCoursesListForUser — roster shaping by the viewer’s per-course 
     );
   });
 });
+
+describe('getCoursesListForUser — which LMS opens a course', () => {
+  const course = (ltiLinks: { platform: { name: string } }[]) => ({
+    id: 'c1',
+    name: 'Theory of Computation',
+    code: 'CS301',
+    regCode: 'abc',
+    semester: 'Fall 2026',
+    credits: 3,
+    startDate: new Date('2026-08-01'),
+    endDate: new Date('2026-12-01'),
+    registrationOpenAt: null,
+    registrationCloseAt: null,
+    isPublished: true,
+    isArchived: false,
+    deletedAt: null,
+    timezone: 'America/New_York',
+    emptyStringNotation: 'LAMBDA',
+    createdAt: new Date('2026-08-01'),
+    updatedAt: new Date('2026-08-01'),
+    roster: [],
+    ltiLinks,
+  });
+
+  /**
+   * The course table has an LMS column reading `lmsNames`. It was only ever built by
+   * `/api/courses`, which that table does not call, so a connected course still read
+   * "Not connected" and no amount of connecting it again helped.
+   */
+  it('names the platforms that open the course', async () => {
+    prismaMock.course.findMany.mockResolvedValue([course([{ platform: { name: 'Canvas' } }])]);
+
+    const [listed] = await getCoursesListForUser('admin-1', 'ADMIN');
+
+    expect(listed?.lmsNames).toEqual(['Canvas']);
+  });
+
+  it('says nothing rather than undefined when no LMS opens it', async () => {
+    prismaMock.course.findMany.mockResolvedValue([course([])]);
+
+    const [listed] = await getCoursesListForUser('admin-1', 'ADMIN');
+
+    // The column renders "Not connected" from an empty list; undefined did the same thing
+    // for the wrong reason, which is what hid the bug.
+    expect(listed?.lmsNames).toEqual([]);
+  });
+
+  it('names a platform once even when it opens the course from several LMS courses', async () => {
+    prismaMock.course.findMany.mockResolvedValue([
+      course([{ platform: { name: 'Canvas' } }, { platform: { name: 'Canvas' } }]),
+    ]);
+
+    const [listed] = await getCoursesListForUser('admin-1', 'ADMIN');
+
+    expect(listed?.lmsNames).toEqual(['Canvas']);
+  });
+
+  it('asks the database for the links rather than the whole integration', async () => {
+    await getCoursesListForUser('admin-1', 'ADMIN');
+
+    const select = prismaMock.course.findMany.mock.calls[0][0].select;
+    expect(select.ltiLinks).toEqual({ select: { platform: { select: { name: true } } } });
+  });
+});

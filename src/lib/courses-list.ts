@@ -31,6 +31,14 @@ export type CourseListItem = {
     courseRole?: string;
     hasSubmissions?: boolean;
   }>;
+  /**
+   * Which LMS platforms open this course, by name. Empty when none do.
+   *
+   * The course table has an LMS column that reads this. It lived only on `/api/courses`, which
+   * that table does not call, so every course read as "Not connected" however many times
+   * somebody had connected it.
+   */
+  lmsNames: string[];
 };
 
 export async function getCoursesListForUser(
@@ -100,6 +108,9 @@ export async function getCoursesListForUser(
           },
         },
       },
+      // Only whether an LMS opens this course, and which. The list needs the fact, not the
+      // endpoints, so nothing about the integration's plumbing reaches a table.
+      ltiLinks: { select: { platform: { select: { name: true } } } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -138,6 +149,11 @@ export async function getCoursesListForUser(
       // Staff see the full roster (names + emails); a student gets staff names only,
       // with classmates collapsed to count-only placeholders and no emails.
       enrolled: isStaffHere ? enrolledMembers : toStudentSafeEnrolled(enrolledMembers),
+      // Deduplicated: one platform can open the same AFCT course from several LMS courses,
+      // and naming it twice reads as a fault rather than as detail. Tolerant of a caller that
+      // selected a narrower shape, the way `/api/courses` is; the select itself is pinned by a
+      // test, so a narrowed query is caught there rather than by an exception here.
+      lmsNames: [...new Set((course.ltiLinks ?? []).map((link) => link.platform.name))],
     };
   });
 }
