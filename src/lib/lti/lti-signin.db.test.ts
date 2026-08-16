@@ -103,7 +103,10 @@ describe('what trust does not relax', () => {
   it('still refuses to attach an administrator account automatically', async () => {
     const result = await resolve({ email: ADMIN_EMAIL, subject: 'lms-admin' });
 
-    expect(result).toEqual({ ok: false, reason: 'admin-requires-deliberate-link' });
+    // The account comes back with the refusal, and only for this one reason: the launch
+    // route uses it to offer a password confirmation instead of a dead end.
+    expect(result).toMatchObject({ ok: false, reason: 'admin-requires-deliberate-link' });
+    expect(result.ok === false && result.userId).toBeTruthy();
     expect(await prisma.linkedIdentity.count({ where: { userId: ids.admin } })).toBe(0);
   });
 

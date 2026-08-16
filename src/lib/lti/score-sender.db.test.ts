@@ -148,12 +148,14 @@ describe('a grade that can be sent', () => {
  * their LMS than they awarded, with nothing to explain it, is the failure worth designing out.
  */
 describe('a grade that cannot be sent', () => {
-  it('says so when the student has never opened AFCT from the LMS', async () => {
+  it('says so when the LMS does not list the student in the course', async () => {
+    // Never launching is no longer the end of it: the roster is consulted first, so the
+    // message names what is actually wrong rather than what the student has not done.
     await seed({ withIdentity: false });
     workingPlatform();
 
     expect(await sendOneScore()).toMatchObject({ status: 'failed', reason: 'no-lms-identity' });
-    expect((await row()).lastError).toContain('has not opened AFCT');
+    expect((await row()).lastError).toContain('does not list this student');
   });
 
   it('says so when the LMS granted no grade scopes', async () => {
