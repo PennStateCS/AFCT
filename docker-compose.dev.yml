@@ -189,6 +189,21 @@ services:
     ports:
       - '5432:5432'
 
+    # Stated rather than inherited. The stock ceiling is 100, and it is reached by ordinary
+    # local work: the app, the worker, the backup sidecar, Prisma Studio and a database test
+    # run each hold a pool. When it is hit, the app crash-loops on its startup migration and
+    # the database suite fails in ways that read like a code regression, which is exactly what
+    # happened once. `log_connections` is on for the same reason prod has it: so the next time
+    # something eats connections, the log names it instead of leaving us guessing.
+    command:
+      - postgres
+      - -c
+      - max_connections=300
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
 
