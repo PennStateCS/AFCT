@@ -199,9 +199,18 @@ describe('SystemStatusClient', () => {
 
     // The working set, named for the person operating this rather than by folder.
     expect(await screen.findByText('Student submissions')).toBeInTheDocument();
-    expect(await screen.findByText('412')).toBeInTheDocument();
-    // Sizes only mean something against what is left on the disk.
-    expect(await screen.findByText(/free of/)).toBeInTheDocument();
+    // The count is still there beside the size: a kind can be most of the space and a handful
+    // of the files, and both halves of that are worth knowing.
+    expect(await screen.findByText(/412 files/)).toBeInTheDocument();
+    // A name is never shortened to fit; "Profile ph" is not a label.
+    expect(screen.queryByText(/\u2026$/)).not.toBeInTheDocument();
+    // Free space is part of the picture, not a separate note: the sizes above only mean
+    // something against how much room is left.
+    expect(await screen.findByText('Free')).toBeInTheDocument();
+    expect((await screen.findAllByText(/free/)).length).toBeGreaterThan(0);
+    // The disk holds more than uploads, and saying so is what stops somebody reading the
+    // uploads figure as the reason a disk is full.
+    expect(await screen.findByText('Everything else')).toBeInTheDocument();
   });
 
   it('raises a file AFCT records but cannot find as its own alert', async () => {
