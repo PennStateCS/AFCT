@@ -123,7 +123,9 @@ describe('matching an existing account by email', () => {
   it('never attaches automatically to an administrator', async () => {
     const result = await resolve({ email: ADMIN_EMAIL, subject: 'sub-admin' });
 
-    expect(result).toEqual({ ok: false, reason: 'admin-requires-deliberate-link' });
+    // The refusal names the account so an LTI launch can offer that person a way through:
+    // typing their AFCT password. Nothing about OIDC changes here, and nothing is linked.
+    expect(result).toMatchObject({ ok: false, reason: 'admin-requires-deliberate-link' });
     expect(await prisma.linkedIdentity.count({ where: { userId: ids.admin } })).toBe(0);
   });
 

@@ -349,7 +349,7 @@ describe('a launch that does not verify', () => {
 });
 
 describe('a launch that verifies but cannot be signed in', () => {
-  it('tells an administrator to connect their account deliberately', async () => {
+  it('tells an administrator what to do when no account came back with the refusal', async () => {
     resolveLaunchSignIn.mockResolvedValue({
       ok: false,
       reason: 'admin-requires-deliberate-link',
@@ -358,7 +358,40 @@ describe('a launch that verifies but cannot be signed in', () => {
     const res = await post(await goodLaunch());
 
     expect(res.status).toBe(403);
-    expect(await res.text()).toContain('account page');
+    // Whatever it says has to be doable: the account page cannot attach an LMS identity.
+    expect(await res.text()).toContain('open AFCT from your LMS again');
+    expect(await prisma.singleUseToken.count({ where: { purpose: 'LTI_SESSION_TICKET' } })).toBe(0);
+  });
+
+  /**
+   * The way through for an administrator. The rule that refuses an automatic link stands,
+   * because the match rests on an email the LMS asserts; asking for the AFCT password, which
+   * an LMS cannot assert, turns it into a deliberate act instead of a wall.
+   */
+  it('sends an administrator to confirm with their password, and signs nobody in yet', async () => {
+    const admin = await prisma.user.create({
+      data: { email: 'admin-launch@example.edu', isAdmin: true, firstName: 'A', lastName: 'D' },
+      select: { id: true },
+    });
+    resolveLaunchSignIn.mockResolvedValue({
+      ok: false,
+      reason: 'admin-requires-deliberate-link',
+      userId: admin.id,
+    });
+
+    const res = await post(await goodLaunch());
+
+    expect(res.status).toBe(303);
+    expect(new URL(res.headers.get('location') ?? '', 'https://x').pathname).toBe('/lti/confirm');
+
+    const pending = await prisma.ltiPendingIdentityLink.findFirst({
+      where: { userId: admin.id },
+      select: { subject: true, issuer: true },
+    });
+    // The identity to attach is taken from the launch, not from whatever the browser sends back.
+    expect(pending?.subject).toBeTruthy();
+    expect(pending?.issuer).toBeTruthy();
+    // Nothing is signed in until the password is given.
     expect(await prisma.singleUseToken.count({ where: { purpose: 'LTI_SESSION_TICKET' } })).toBe(0);
   });
 });
