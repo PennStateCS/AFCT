@@ -25,6 +25,9 @@ on:
       - 'docs/**'
       - '**.md'
   pull_request:
+  # So the release gate has an answer when CI never ran on a commit: run it on that ref by
+  # hand rather than tagging something untested, or loosening the gate.
+  workflow_dispatch:
 
 permissions:
   contents: read
