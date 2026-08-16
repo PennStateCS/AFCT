@@ -6,6 +6,7 @@ const prismaMock = vi.hoisted(() => ({
   problem: { findMany: vi.fn(), findFirst: vi.fn() },
   submission: { findMany: vi.fn(), findFirst: vi.fn() },
   user: { findMany: vi.fn(), findFirst: vi.fn() },
+  evaluatorTrial: { findMany: vi.fn(), findFirst: vi.fn() },
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -37,6 +38,8 @@ beforeEach(() => {
   prismaMock.problem.findFirst.mockResolvedValue(null);
   prismaMock.submission.findFirst.mockResolvedValue(null);
   prismaMock.user.findFirst.mockResolvedValue(null);
+  prismaMock.evaluatorTrial.findMany.mockResolvedValue([]);
+  prismaMock.evaluatorTrial.findFirst.mockResolvedValue(null);
 });
 
 const getReq = () => new Request('http://localhost/api/admin/status/files');

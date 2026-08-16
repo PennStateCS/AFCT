@@ -10,6 +10,12 @@ const CATEGORY_FOLDERS: Record<string, string> = {
   submissions: 'submissions',
   pfps: 'pfps',
   problems: 'problems',
+  // Evaluator trials. This directory was missing from the report, which mattered more than the
+  // others: a trial upload is usually a real student's submission, re-run to look into a grading
+  // complaint, and it is deleted after an hour precisely so it does not become a lasting second
+  // copy of that work outside the access controls around the original. A trial file left behind
+  // is therefore exactly what an admin needs told about, and nothing told them.
+  trials: 'trials',
 };
 
 const readFiles = async (dir: string): Promise<string[]> => {
@@ -29,21 +35,27 @@ const readFiles = async (dir: string): Promise<string[]> => {
 export async function collectAbandonedFiles(): Promise<FilesStatusResponse> {
   const empty: AbandonedFilesSummary = {
     total: 0,
-    byCategory: { solutions: 0, submissions: 0, pfps: 0, problems: 0 },
+    byCategory: { solutions: 0, submissions: 0, pfps: 0, problems: 0, trials: 0 },
     samples: [],
   };
   try {
-    const [solutionFiles, submissionFiles, pfpFiles, problemFiles] = await Promise.all([
+    const [solutionFiles, submissionFiles, pfpFiles, problemFiles, trialFiles] = await Promise.all([
       readFiles(path.join(UPLOADS_ROOT, 'solutions')),
       readFiles(path.join(UPLOADS_ROOT, 'submissions')),
       readFiles(path.join(UPLOADS_ROOT, 'pfps')),
       readFiles(path.join(UPLOADS_ROOT, 'problems')),
+      readFiles(path.join(UPLOADS_ROOT, 'trials')),
     ]);
 
-    const [problemRows, submissionRows, userRows] = await Promise.all([
+    const [problemRows, submissionRows, userRows, trialRows] = await Promise.all([
       prisma.problem.findMany({ select: { fileName: true } }),
       prisma.submission.findMany({ select: { fileName: true } }),
       prisma.user.findMany({ select: { avatar: true } }),
+      // A trial holds two uploads, the answer and the submission, and either may be cleared on
+      // its own, so both columns have to be read or a live file is called abandoned.
+      prisma.evaluatorTrial.findMany({
+        select: { answerFileName: true, submissionFileName: true },
+      }),
     ]);
 
     const problemNames = new Set(
@@ -53,11 +65,17 @@ export async function collectAbandonedFiles(): Promise<FilesStatusResponse> {
       submissionRows.map((r) => r.fileName).filter((n): n is string => !!n),
     );
     const avatarNames = new Set(userRows.map((r) => r.avatar).filter((n): n is string => !!n));
+    const trialNames = new Set(
+      trialRows
+        .flatMap((r) => [r.answerFileName, r.submissionFileName])
+        .filter((n): n is string => !!n),
+    );
 
     const missingSolutions = solutionFiles.filter((f) => !problemNames.has(f));
     const missingSubmissions = submissionFiles.filter((f) => !submissionNames.has(f));
     const missingPfps = pfpFiles.filter((f) => !avatarNames.has(f));
     const missingProblems = problemFiles.filter((f) => !problemNames.has(f));
+    const missingTrials = trialFiles.filter((f) => !trialNames.has(f));
 
     const samples: AbandonedFilesSummary['samples'] = [];
     const pushSamples = (category: string, files: string[], folder: string) => {
@@ -70,6 +88,7 @@ export async function collectAbandonedFiles(): Promise<FilesStatusResponse> {
     pushSamples('submissions', missingSubmissions, '/private/uploads/submissions');
     pushSamples('pfps', missingPfps, '/private/uploads/pfps');
     pushSamples('problems', missingProblems, '/private/uploads/problems');
+    pushSamples('trials', missingTrials, '/private/uploads/trials');
 
     return {
       abandonedFiles: {
@@ -77,12 +96,14 @@ export async function collectAbandonedFiles(): Promise<FilesStatusResponse> {
           missingSolutions.length +
           missingSubmissions.length +
           missingPfps.length +
-          missingProblems.length,
+          missingProblems.length +
+          missingTrials.length,
         byCategory: {
           solutions: missingSolutions.length,
           submissions: missingSubmissions.length,
           pfps: missingPfps.length,
           problems: missingProblems.length,
+          trials: missingTrials.length,
         },
         samples,
       },
@@ -122,6 +143,13 @@ export async function deleteAbandonedFile(
       return { ok: false, status: 409, error: 'File is still referenced' };
   } else if (category === 'pfps') {
     if (await prisma.user.findFirst({ where: { avatar: fileName } }))
+      return { ok: false, status: 409, error: 'File is still referenced' };
+  } else if (category === 'trials') {
+    if (
+      await prisma.evaluatorTrial.findFirst({
+        where: { OR: [{ answerFileName: fileName }, { submissionFileName: fileName }] },
+      })
+    )
       return { ok: false, status: 409, error: 'File is still referenced' };
   }
 
