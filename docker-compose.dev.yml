@@ -28,21 +28,16 @@ services:
       # Docker has ~16 GB here, so 6 GB leaves plenty of headroom.
       NODE_OPTIONS: '--max-old-space-size=6144'
       # Grading runs in the dedicated `worker` service below; the app never starts one.
-      # (Under `next dev --webpack` instrumentation is skipped anyway, but set it
-      # explicitly so a Turbopack/native run wouldn't spawn an in-app worker either.)
+      # Load-bearing under Turbopack: it runs `instrumentation.ts`, which webpack skipped, so
+      # without this the app would start a second worker of its own.
       RUN_SUBMISSION_WORKER: 'false'
-      # No polling. The watcher used to poll every second because the checkout lived on
-      # the Windows filesystem and file events did not survive the 9p transport into the
-      # container. The checkout is on ext4 inside WSL now, so inotify works and polling
-      # only costs memory: walking the tree once a second is what kept pushing the dev
-      # server into Next's "approaching the used memory threshold, restarting" recycle.
-      # Put CHOKIDAR_USEPOLLING/WATCHPACK_POLLING back if the source ever moves back to a
-      # /mnt/c path (or someone runs this from Docker Desktop on Windows directly), since
-      # hot reload will not fire there without it.
+      # No polling. Development happens with the checkout on ext4 inside WSL, so inotify
+      # works and polling only costs memory: walking the tree once a second is what kept
+      # pushing the dev server into Next's "approaching the used memory threshold,
+      # restarting" recycle.
       #
       # Node serves every filesystem call from libuv's thread pool, which defaults to four
-      # threads. That was the ceiling on file I/O when each call was a round trip to the
-      # Windows host; it is cheap to keep, and idle threads cost nothing.
+      # threads. Cheap to raise, and idle threads cost nothing.
       UV_THREADPOOL_SIZE: '32'
       DATABASE_URL: postgres://afct_user:afct_pass@postgres:5432/afct
       DB_HOST: postgres
@@ -53,10 +48,12 @@ services:
       MIGRATE_ON_START: 'true'
       SEED_ON_START: 'true'
 
-    # Webpack (not Turbopack) inside Docker. This was originally about the polling above,
-    # which is gone; it stays for now because nobody has retested Turbopack's watcher in
-    # this container. Native (non-Docker) `npm run dev` keeps Turbopack.
-    command: ['npm', 'run', 'dev', '--', '--webpack']
+    # Turbopack, which is Next 16's default, so no flag is needed. This ran on webpack for as
+    # long as the checkout lived on the Windows filesystem, because file events did not survive
+    # the 9p transport and Turbopack's watcher never fired. On ext4 inside WSL it does: measured
+    # on 2026-08-16, an edit and its revert were both picked up, and the first compile of /login
+    # went from 22.5s to 3.9s.
+    command: ['npm', 'run', 'dev']
 
     depends_on:
       postgres:

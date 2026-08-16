@@ -20,14 +20,13 @@ The development stack runs PostgreSQL, nginx, the Next.js development server, th
 
 ### Windows
 
-**Follow [Windows: keep the checkout inside WSL](./development-windows.md) instead of this page.**
-It covers everything below with the Windows specifics filled in, and it is the setup the team
-actually uses.
+**Follow [Windows: develop inside WSL](./development-windows.md) instead of this page.** It covers
+everything below with the Windows specifics filled in.
 
-This is not a preference. A checkout on `C:` is read by the container across the Windows
-filesystem boundary, and the first page load was measured at **105 seconds from `C:` against
-1.4 seconds from WSL** on the same commit. Turbopack's file watcher also never fires over
-that boundary, so changes do not reload.
+Development on Windows happens inside WSL 2, with the repository in your WSL home directory. A
+checkout on `C:` is read across the Windows filesystem boundary, where the first page load was
+measured at **105 seconds against 1.4 seconds from WSL** on the same commit, and where the dev
+server's file watcher never fires, so saved changes do not reload at all.
 
 You still install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
 with the WSL 2 backend; the difference is where the repository lives. Verify in PowerShell:

@@ -1,10 +1,10 @@
-# Windows: keep the checkout inside WSL
+# Windows: develop inside WSL
 
-On Windows, put the AFCT repository inside the WSL 2 filesystem rather than on `C:`. This is optional, but it is the difference between a first page load that takes a minute and a half and one that takes a second.
+On Windows, the AFCT repository lives inside the WSL 2 filesystem. This is the supported setup, and the only one the development stack is configured for.
 
 ## Why
 
-The development stack runs in Docker, and Docker Desktop runs on WSL 2. When the repository sits on `C:`, the container reads every source file across the boundary between Linux and Windows. File change events do not cross that boundary either, so webpack has to poll for changes instead of being told about them.
+The development stack runs in Docker, and Docker Desktop runs on WSL 2. With the repository on `C:`, the container reads every source file across the boundary between Linux and Windows, and file change events do not cross that boundary at all. The dev server runs Turbopack, whose watcher relies on those events, so a checkout on `C:` does not merely compile slowly: **saved changes never reload.**
 
 Measured on one developer's machine, on the same commit and the same hardware:
 
@@ -193,21 +193,11 @@ The repository ships its own extension list and editor settings, so there is not
 - Run every command, including Git and npm, from the built in terminal or an Ubuntu window. Running them from PowerShell against `\\wsl$\` works but is slower.
 - To reach the files from Windows applications, use `\\wsl$\Ubuntu\home\yourname\afct` in File Explorer.
 
-## If you already have a checkout on C:
-
-You can keep both. They do not interfere as long as you never run the stack from both at the same time.
-
-Both folders are named `afct`, so Docker Compose gives them the same project name and they share the same containers, volumes, and database. Starting the stack in one while the other is running causes both to fight over the same resources. Stop one before starting the other.
-
-Because they share the database volume, your existing development data appears in the new checkout with no migration needed.
-
-Once you are confident in the new setup, delete the old folder so you do not open it out of habit.
-
 ## Troubleshooting
 
 **`cd ~/afct` fails with "Cannot find path".** You are still in PowerShell. Run `wsl -d Ubuntu` first. The prompt changes from `PS C:\...>` to `yourname@machine:~$`.
 
-**Compiles are still slow.** Check the bottom left of VS Code for `WSL: Ubuntu`, and run `pwd` in the terminal. If it prints something starting with `/mnt/c`, you are working on the Windows copy.
+**Compiles are slow, or saved changes do not reload.** Check the bottom left of VS Code for `WSL: Ubuntu`, and run `pwd` in the terminal. If it prints something starting with `/mnt/c`, you are working through the Windows filesystem rather than inside WSL, and the file watcher cannot see your edits. Clone into your WSL home directory instead.
 
 **`sudo` asks for a password you do not have.** Set one from PowerShell, which runs as root and does not ask for the old password:
 
