@@ -338,6 +338,15 @@ describe('naming a registration', () => {
     expect(registrationName(configuration() as never)).toBe('Canvas (lms.example.test)');
   });
 
+  it('names the host the platform answers at, not the issuer it reports', () => {
+    // Canvas reports `https://canvas.instructure.com` however it is hosted, so the issuer would
+    // give every institution's Canvas the same name. Seen for real: a registration came back
+    // called "Canvas (canvas.instructure.com)" from a self-hosted install.
+    const config = configuration({ issuer: 'https://canvas.instructure.com' }) as never;
+
+    expect(registrationName(config)).toBe('Canvas (lms.example.test)');
+  });
+
   it('falls back to the host when the platform does not say what it is', () => {
     const config = configuration({ [PLATFORM_CONFIGURATION_CLAIM]: undefined }) as never;
     expect(registrationName(config)).toBe('lms.example.test');

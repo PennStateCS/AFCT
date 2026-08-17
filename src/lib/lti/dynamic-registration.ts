@@ -279,8 +279,16 @@ export function registrationName(config: PlatformConfiguration): string {
     blackboard: 'Blackboard',
     sakai: 'Sakai',
   };
+  /**
+   * Where the platform answers, in preference to what it calls itself.
+   *
+   * Canvas reports the issuer `https://canvas.instructure.com` however it is hosted, so naming a
+   * registration from the issuer calls every institution's Canvas the same thing. The token
+   * endpoint is the address the LMS really lives at, which is what distinguishes one from
+   * another in a list. The same reasoning decides the frame-ancestors list in `proxy.ts`.
+   */
   const host = (() => {
-    for (const candidate of [config.issuer, config.token_endpoint]) {
+    for (const candidate of [config.token_endpoint, config.issuer]) {
       try {
         // An empty host, not a throw, is what a non-http identifier gives: `new URL` accepts
         // `urn:lms:example` happily and reports no host at all.
