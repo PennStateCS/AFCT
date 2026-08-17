@@ -73,6 +73,10 @@ async function destroyFixtures() {
     where: { purpose: 'LTI_SESSION_TICKET' },
   });
   await prisma.user.deleteMany({ where: { id: USER_ID } });
+  // The administrators these tests create, and the confirmations waiting on them. Left behind,
+  // they collided with their own unique email the next time the suite ran.
+  await prisma.ltiPendingIdentityLink.deleteMany({});
+  await prisma.user.deleteMany({ where: { email: { endsWith: '@example.edu' } } });
 }
 
 /**
@@ -103,36 +107,36 @@ afterAll(async () => {
  * Where a verified launch sends the person. Decided in the endpoint, because it is the last
  * point that still holds the verified launch: everything after is a browser following a link.
  */
+const COURSE = 'c-launch-dest';
+const PLATFORM_ID = 'ltip-1';
+
+const withCourse = async () => {
+  await prisma.ltiPlatform.create({
+    data: {
+      id: PLATFORM_ID,
+      name: 'Test Canvas',
+      issuer: 'https://canvas.example.test',
+      clientId: 'c1',
+      deploymentId: 'd1',
+      authLoginUrl: 'https://canvas.example.test/auth',
+      tokenUrl: 'https://canvas.example.test/token',
+      keysetUrl: 'https://canvas.example.test/jwks',
+    },
+  });
+  await prisma.course.create({
+    data: {
+      id: COURSE,
+      name: 'Theory of Computation',
+      code: 'CMPSC 464',
+      semester: 'Fall 2026',
+      credits: 3,
+      startDate: new Date('2026-08-24T00:00:00Z'),
+      endDate: new Date('2026-12-18T00:00:00Z'),
+    },
+  });
+};
+
 describe('where a launch lands', () => {
-  const COURSE = 'c-launch-dest';
-  const PLATFORM_ID = 'ltip-1';
-
-  const withCourse = async () => {
-    await prisma.ltiPlatform.create({
-      data: {
-        id: PLATFORM_ID,
-        name: 'Test Canvas',
-        issuer: 'https://canvas.example.test',
-        clientId: 'c1',
-        deploymentId: 'd1',
-        authLoginUrl: 'https://canvas.example.test/auth',
-        tokenUrl: 'https://canvas.example.test/token',
-        keysetUrl: 'https://canvas.example.test/jwks',
-      },
-    });
-    await prisma.course.create({
-      data: {
-        id: COURSE,
-        name: 'Theory of Computation',
-        code: 'CMPSC 464',
-        semester: 'Fall 2026',
-        credits: 3,
-        startDate: new Date('2026-08-24T00:00:00Z'),
-        endDate: new Date('2026-12-18T00:00:00Z'),
-      },
-    });
-  };
-
   const nextOf = (res: Response) => new URL(res.headers.get('location')!).searchParams.get('next');
 
   it('goes to the course when the LMS course is linked', async () => {
@@ -393,5 +397,72 @@ describe('a launch that verifies but cannot be signed in', () => {
     expect(pending?.issuer).toBeTruthy();
     // Nothing is signed in until the password is given.
     expect(await prisma.singleUseToken.count({ where: { purpose: 'LTI_SESSION_TICKET' } })).toBe(0);
+  });
+
+  /**
+   * The pause has to remember what the launch was for.
+   *
+   * Staff launching from a course that is not connected yet came to connect it. The
+   * confirmation cannot work that out for itself: the launch token is single use and spent by
+   * then, so unless the destination is written down here, giving the password lands them on the
+   * dashboard with no mention of the course, which reads as the link having failed.
+   */
+  it('remembers that the launch was going to the course picker', async () => {
+    // Staff launching from a course that is not connected yet came to connect it.
+    await withCourse();
+    const admin = await prisma.user.create({
+      data: { email: 'admin-picker@example.edu', isAdmin: true, firstName: 'A', lastName: 'D' },
+      select: { id: true },
+    });
+    validateLaunch.mockResolvedValue({
+      ok: true,
+      identity: {
+        ...identity,
+        roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor'],
+      },
+    });
+    resolveLaunchSignIn.mockResolvedValue({
+      ok: false,
+      reason: 'admin-requires-deliberate-link',
+      userId: admin.id,
+    });
+
+    await post(await goodLaunch());
+
+    const pending = await prisma.ltiPendingIdentityLink.findFirst({
+      where: { userId: admin.id },
+      select: { next: true },
+    });
+    // Without this the password is asked for and then answered with the dashboard, which reads
+    // as the link having failed.
+    expect(pending?.next).toMatch(/^\/lti\/link\?pending=/);
+
+    // And the picker it points at exists by the time they arrive.
+    const id = pending?.next?.split('=')[1] ?? '';
+    expect(
+      await prisma.ltiPendingLink.findUnique({ where: { id }, select: { id: true } }),
+    ).toBeTruthy();
+  });
+
+  it('does not enrol an unconfirmed administrator on a course that is already linked', async () => {
+    // The whole reason for the pause: an LMS asserting an administrator's email is the claim
+    // being doubted, so nothing may act on it until the password proves it.
+    await withCourse();
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+    const admin = await prisma.user.create({
+      data: { email: 'admin-linked@example.edu', isAdmin: true, firstName: 'A', lastName: 'D' },
+      select: { id: true },
+    });
+    resolveLaunchSignIn.mockResolvedValue({
+      ok: false,
+      reason: 'admin-requires-deliberate-link',
+      userId: admin.id,
+    });
+
+    await post(await goodLaunch());
+
+    expect(await prisma.roster.count({ where: { userId: admin.id } })).toBe(0);
   });
 });
