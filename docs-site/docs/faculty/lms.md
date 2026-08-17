@@ -33,21 +33,20 @@ When other students on the same assignment are waiting or have failed, the secti
 
 A few things worth knowing:
 
-- **A grade that fails to send is retried**, several times with a growing gap. **Send grades now** also retries anything that failed, so it is the right button when your LMS was down.
+- **A grade that fails to send is retried**, several times with a growing gap. Both buttons also retry a grade that had given up, so they are what to use once the cause is fixed.
 - **Regrading replaces a queued grade** rather than sending two. The LMS sees the final figure.
 - **A student who has never opened AFCT from the LMS still gets their grade**, as long as their LMS identity is known. Running a roster sync is what connects the rest.
 - **Grades are clamped to the assignment's points.** If you change what an assignment is worth after linking it, AFCT updates the LMS column to match.
 
-If **Send grades automatically** is off, nothing goes to your LMS for that assignment until you select **Send grades now**.
+If **Send grades automatically** is off, nothing goes to your LMS for that assignment until you send it yourself.
 
 ## Bring your roster in line
 
 A roster sync asks your LMS who is in the course and shows you what would change before anything happens.
 
-1. Go to the course **Settings** tab and find the **Course status** card beside the settings form.
-2. Select **Sync roster from your LMS**.
-3. Read the preview. It lists who **will be added**, who **will be marked dropped**, and who is **kept as they are**.
-4. Select **Apply these changes**.
+1. Select **Sync roster** on the course **Roster** tab. (It is also on the **Settings** tab, in the **Course status** card beside the settings form.) The button only appears once your course is connected to an LMS.
+2. Read the preview. It lists who **will be added**, who **will be marked dropped**, and who is **kept as they are**.
+3. Select **Apply these changes**.
 
 Two rules protect you here:
 

@@ -428,12 +428,16 @@ export const userColumns = (
         const r = row.original as RosterUser;
         // Status only applies to students; staff show a dash.
         if (r.role !== 'STUDENT') return <span className="text-muted-foreground">—</span>;
+        // Both standings are pills, and deliberately the same shape: one of them rendered as
+        // plain text read as an absence of status rather than as the opposite of Dropped.
         return r.enrollmentStatus === 'DROPPED' ? (
           <span className="bg-status-warning-bg text-status-warning inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
             Dropped
           </span>
         ) : (
-          <span className="text-muted-foreground text-sm">Enrolled</span>
+          <span className="bg-status-success-bg text-status-success inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
+            Enrolled
+          </span>
         );
       },
     },
