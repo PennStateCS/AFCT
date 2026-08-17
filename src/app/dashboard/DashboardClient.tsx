@@ -93,7 +93,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                     <div className="flex w-full flex-col px-4 py-4 sm:p-5">
                       {/* Top Row: Title and Badge */}
                       <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                        <div className="text-md truncate font-semibold">
+                        <div className="truncate text-base font-semibold">
                           {course.name}
                           <div className="text-muted-foreground mb-2 text-sm">
                             {course.code} • {course.semester} • {course.credits} credits

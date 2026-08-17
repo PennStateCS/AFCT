@@ -12,7 +12,7 @@ export default async function ArchivedCoursesPage() {
 
   if (!session?.user) {
     return (
-      <div className="bg-destructive text-destructive-foreground rounded p-4 text-lg">
+      <div className="bg-destructive rounded p-4 text-lg text-white">
         You are not signed in.
       </div>
     );
