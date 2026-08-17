@@ -7,6 +7,11 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import {
+  authorisedFetch,
+  authorisedFetchFailureDetail,
+  preferPlatformScheme,
+} from '@/lib/lti/authorised-fetch';
 import { getAccessToken } from '@/lib/lti/access-token';
 
 /** Content types AGS defines for its two endpoints. */
@@ -23,6 +28,14 @@ export type AgsFailure =
   | 'rejected'
   /** The platform could not be reached. */
   | 'unreachable'
+  /**
+   * The platform redirected the call somewhere else, which drops the credentials.
+   *
+   * Kept apart from `unreachable` because it is the opposite kind of problem: nothing is down
+   * and retrying will never help, since the platform will redirect the next attempt too. It is
+   * a setting on the LMS, and saying so is the whole point of noticing it.
+   */
+  | 'redirected'
   /** This person has never launched, so the LMS user id is unknown. */
   | 'no-lms-identity'
   /**
@@ -67,7 +80,7 @@ async function call(
 ): Promise<AgsResult<Response>> {
   let response: Response;
   try {
-    response = await fetch(url, {
+    const attempt = await authorisedFetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -75,6 +88,14 @@ async function call(
       },
       body: JSON.stringify(body),
     });
+    if (!attempt.ok) {
+      return {
+        ok: false,
+        reason: attempt.failure.kind === 'redirected' ? 'redirected' : 'unreachable',
+        detail: authorisedFetchFailureDetail(attempt.failure),
+      };
+    }
+    response = attempt.response;
   } catch (error) {
     return {
       ok: false,
@@ -178,17 +199,13 @@ async function findLineItem(
     }
     seen.add(next);
 
-    let response: Response;
-    try {
-      response = await fetch(next, {
-        headers: { Authorization: `Bearer ${token}`, Accept: LINE_ITEM_CONTAINER_TYPE },
-      });
-    } catch (error) {
-      return {
-        status: 'error',
-        detail: error instanceof Error ? error.message : 'network error',
-      };
+    const attempt = await authorisedFetch(next, {
+      headers: { Authorization: `Bearer ${token}`, Accept: LINE_ITEM_CONTAINER_TYPE },
+    });
+    if (!attempt.ok) {
+      return { status: 'error', detail: authorisedFetchFailureDetail(attempt.failure) };
     }
+    const response = attempt.response;
 
     if (!response.ok) {
       return {
@@ -274,11 +291,15 @@ export async function ensureLineItem(opts: {
   }
 
   if (!opts.lineItemsUrl) return { ok: false, reason: 'no-line-items-endpoint' };
+  // The platform's own token endpoint is the evidence that it speaks TLS on this host, so an
+  // http service address beside it is a misconfiguration to repair rather than a decision to
+  // respect. Anything else is left exactly as the platform signed it.
+  const lineItemsUrl = preferPlatformScheme(opts.lineItemsUrl, opts.platform.tokenUrl);
 
   const token = await authorised(opts.platform);
   if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
-  const already = await findLineItem(opts.lineItemsUrl, token.token, opts.assignmentId);
+  const already = await findLineItem(lineItemsUrl, token.token, opts.assignmentId);
   if (already.status === 'found') {
     return remember(opts.contextLinkId, opts.assignmentId, already.url, {
       label: opts.label,
@@ -289,7 +310,7 @@ export async function ensureLineItem(opts: {
   // put a second column in somebody's gradebook, and that is harder to undo than a late grade.
   if (already.status !== 'not-found') return lookupFailure(already);
 
-  const created = await call(opts.lineItemsUrl, token.token, LINE_ITEM_TYPE, {
+  const created = await call(lineItemsUrl, token.token, LINE_ITEM_TYPE, {
     scoreMaximum: opts.scoreMaximum,
     label: opts.label,
     // Ties the column to the AFCT assignment, so a second attempt finds the platform's own
@@ -308,7 +329,7 @@ export async function ensureLineItem(opts: {
     // The same explicit handling as above. The column now exists, so a lookup that cannot say
     // where it is must not be reported as though the platform refused the whole thing: the
     // grade needs to retry and find it, not create another.
-    const rediscovered = await findLineItem(opts.lineItemsUrl, token.token, opts.assignmentId);
+    const rediscovered = await findLineItem(lineItemsUrl, token.token, opts.assignmentId);
     if (rediscovered.status === 'found') {
       url = rediscovered.url;
     } else if (rediscovered.status === 'not-found') {
@@ -380,7 +401,7 @@ async function updateLineItem(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    const attempt = await authorisedFetch(url, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token.token}`, 'Content-Type': LINE_ITEM_TYPE },
       body: JSON.stringify({
@@ -392,6 +413,14 @@ async function updateLineItem(
         resourceId: opts.assignmentId,
       }),
     });
+    if (!attempt.ok) {
+      return {
+        ok: false,
+        reason: attempt.failure.kind === 'redirected' ? 'redirected' : 'unreachable',
+        detail: authorisedFetchFailureDetail(attempt.failure),
+      };
+    }
+    response = attempt.response;
   } catch (error) {
     return {
       ok: false,
@@ -434,9 +463,17 @@ async function readLineItem(
 ): Promise<AgsResult<Record<string, unknown>>> {
   let response: Response;
   try {
-    response = await fetch(url, {
+    const attempt = await authorisedFetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: LINE_ITEM_TYPE },
     });
+    if (!attempt.ok) {
+      return {
+        ok: false,
+        reason: attempt.failure.kind === 'redirected' ? 'redirected' : 'unreachable',
+        detail: authorisedFetchFailureDetail(attempt.failure),
+      };
+    }
+    response = attempt.response;
   } catch (error) {
     return {
       ok: false,
@@ -577,6 +614,11 @@ export function agsFailureMessage(reason: AgsFailure): string {
       return 'AFCT could not authenticate with your LMS. Check the LTI registration in System Settings.';
     case 'unreachable':
       return 'AFCT could not reach your LMS. Grades will be sent again when it is available.';
+    case 'redirected':
+      // Deliberately names the cause rather than the symptom. Left as a bare 401 this looked
+      // like a permissions problem and sent an administrator through LMS permission screens
+      // that were already correct.
+      return 'Your LMS gave AFCT a plain http address for its grade service and then redirected it to https, which drops the credentials AFCT sends and makes the request look unauthorised. Set your LMS to advertise https for its own address.';
     case 'ambiguous-context':
       return 'This AFCT course is connected to more than one LMS course, and AFCT cannot tell which one this student is in, so it has not sent the grade anywhere. Sync the roster from the LMS course this student belongs to.';
     case 'line-item-lookup-incomplete':
