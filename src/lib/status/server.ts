@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { probeFailed } from './probe';
 import path from 'path';
 import { execSync } from 'child_process';
 import { cached, STATUS_TTL } from '@/lib/status/cache';
@@ -26,7 +27,9 @@ const readDiskStatsSample = async (): Promise<DiskIoSample | null> => {
       .find((l) => l && l.split(' ')[1] === '/');
     const dev = rootLine?.split(' ')[0] ?? null;
     if (dev && dev.startsWith('/dev/')) rootDev = normalizeBlockDevice(dev);
-  } catch {}
+  } catch (err) {
+    probeFailed('server: root dev', err);
+  }
 
   try {
     const raw = await fs.promises.readFile('/proc/diskstats', 'utf8');
@@ -206,7 +209,9 @@ export async function collectSoftware(): Promise<SoftwareBlock> {
       devDependencies?: Record<string, string>;
     };
     nextVersion = pkg.dependencies?.next ?? pkg.devDependencies?.next;
-  } catch {}
+  } catch (err) {
+    probeFailed('server: next version', err);
+  }
 
   return {
     nodeVersion: process.version,

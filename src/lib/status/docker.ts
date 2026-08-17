@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { probeFailed } from './probe';
 import os from 'os';
 import type { DockerStatusResponse } from '@/lib/status/types';
 import { currentVersion } from '@/lib/updates';
@@ -17,7 +18,9 @@ function detectCgroupVersion(): 'v1' | 'v2' | undefined {
   try {
     if (fs.existsSync('/sys/fs/cgroup/cgroup.controllers')) return 'v2';
     if (fs.existsSync('/sys/fs/cgroup/memory/memory.limit_in_bytes')) return 'v1';
-  } catch {}
+  } catch (err) {
+    probeFailed('docker: cgroup version detection', err);
+  }
   return undefined;
 }
 
@@ -74,7 +77,9 @@ export async function collectDocker(): Promise<DockerStatusResponse> {
 
   try {
     if (fs.existsSync('/.dockerenv')) indicators.push('/.dockerenv');
-  } catch {}
+  } catch (err) {
+    probeFailed('docker: cgroup version detection', err);
+  }
 
   try {
     const raw = await fs.promises.readFile('/proc/1/cgroup', 'utf8');
@@ -85,7 +90,9 @@ export async function collectDocker(): Promise<DockerStatusResponse> {
     if (/docker|containerd|kubepods/i.test(raw)) indicators.push('/proc/1/cgroup');
     const m = raw.match(/([0-9a-f]{64})/);
     if (m) containerId = m[1];
-  } catch {}
+  } catch (err) {
+    probeFailed('docker: container id', err);
+  }
 
   if (process.env.DOCKER_CONTAINER === '1' || process.env.CONTAINER === '1') {
     indicators.push('CONTAINER env');

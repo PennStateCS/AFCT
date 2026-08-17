@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { probeFailed } from './probe';
 import type { DatabaseDetails, DatabaseStats, DatabaseStatusResponse } from '@/lib/status/types';
 
 function getNum(obj: Record<string, unknown>, k: string): number | undefined {
@@ -18,7 +19,9 @@ export function detectProvider(url: string): 'sqlite' | 'postgres' | 'unknown' {
     if (url.startsWith('file:') || url.includes('sqlite')) return 'sqlite';
     const u = new URL(url);
     if (u.protocol.startsWith('postgres')) return 'postgres';
-  } catch {}
+  } catch (err) {
+    probeFailed('database: provider detection from DATABASE_URL', err);
+  }
   return 'unknown';
 }
 
@@ -47,17 +50,23 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
           v?: string;
         }>;
         if (ver?.[0]?.v) dbDetails.version = String(ver[0].v);
-      } catch {}
+      } catch (err) {
+        probeFailed('database: version', err);
+      }
       try {
         const cur = (await prisma.$queryRaw`SELECT current_database() as name`) as Array<{
           name?: string;
         }>;
         if (cur?.[0]?.name) dbDetails.current_database = String(cur[0].name);
-      } catch {}
+      } catch (err) {
+        probeFailed('database: current_database', err);
+      }
       try {
         const now = (await prisma.$queryRaw`SELECT NOW() as now`) as Array<{ now?: Date }>;
         if (now?.[0]?.now) dbDetails.current_time_iso = new Date(now[0].now).toISOString();
-      } catch {}
+      } catch (err) {
+        probeFailed('database: current_time_iso', err);
+      }
 
       try {
         const sp = (await prisma.$queryRawUnsafe(`SHOW search_path`)) as Array<
@@ -65,14 +74,18 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
         >;
         const val = sp?.[0] ? Object.values(sp[0])[0] : undefined;
         if (typeof val === 'string') dbDetails.search_path = val;
-      } catch {}
+      } catch (err) {
+        probeFailed('database: search_path', err);
+      }
       let visibleSchemas: string[] = [];
       try {
         const rs = (await prisma.$queryRaw`SELECT unnest(current_schemas(true)) AS nsp`) as Array<{
           nsp?: string;
         }>;
         visibleSchemas = rs.map((r) => r.nsp).filter((s): s is string => !!s);
-      } catch {}
+      } catch (err) {
+        probeFailed('database: visible schemas', err);
+      }
       const SYSTEM_SCHEMAS = new Set(['pg_catalog', 'information_schema', 'pg_toast']);
       const userVisible = visibleSchemas.filter((s) => !SYSTEM_SCHEMAS.has(s));
       if (userVisible.length) dbDetails.visible_schemas = userVisible;
@@ -91,7 +104,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
       let tableCountVisible: number | null = null;
       try {
         if (userVisible.length) tableCountVisible = await countTablesInSchemas(userVisible);
-      } catch {}
+      } catch (err) {
+        probeFailed('database: table count visible', err);
+      }
 
       let tableCountAll: number | null = null;
       try {
@@ -103,7 +118,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
             AND n.nspname NOT IN ('pg_catalog','information_schema','pg_toast')
         `) as Array<{ cnt?: number }>;
         tableCountAll = getNum(res?.[0] ?? {}, 'cnt') ?? 0;
-      } catch {}
+      } catch (err) {
+        probeFailed('database: table count all', err);
+      }
 
       dbDetails.table_count_visible = tableCountVisible;
       dbDetails.table_count_all = tableCountAll;
@@ -128,7 +145,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
               SELECT setting::int as max_connections FROM pg_settings WHERE name='max_connections'
             `) as Array<{ max_connections?: number }>;
             pg.max_connections = getNum(mc?.[0] ?? {}, 'max_connections') ?? null;
-          } catch {}
+          } catch (err) {
+            probeFailed('database: pg.max_connections', err);
+          }
         })(),
         (async () => {
           try {
@@ -139,9 +158,10 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
             pg.num_backends = getNum(nb?.[0] ?? {}, 'num_backends') ?? null;
             const dbsize = getNum(nb?.[0] ?? {}, 'dbsize');
             dbDetails.pg_database_size_bytes = dbsize ?? null;
-            pg.db_size_mb =
-              typeof dbsize === 'number' ? Math.round(dbsize / 1024 / 1024) : null;
-          } catch {}
+            pg.db_size_mb = typeof dbsize === 'number' ? Math.round(dbsize / 1024 / 1024) : null;
+          } catch (err) {
+            probeFailed('database: pg.db_size_mb', err);
+          }
         })(),
         (async () => {
           try {
@@ -153,7 +173,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
             const ratio = hit?.[0]?.ratio;
             pg.cache_hit_ratio =
               typeof ratio === 'number' && Number.isFinite(ratio) ? Number(ratio.toFixed(1)) : null;
-          } catch {}
+          } catch (err) {
+            probeFailed('database: pg.cache_hit_ratio', err);
+          }
         })(),
         (async () => {
           try {
@@ -164,7 +186,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
             `) as Array<{ seq_scans?: number; idx_scans?: number }>;
             pg.seq_scans = getNum(scans?.[0] ?? {}, 'seq_scans') ?? null;
             pg.idx_scans = getNum(scans?.[0] ?? {}, 'idx_scans') ?? null;
-          } catch {}
+          } catch (err) {
+            probeFailed('database: pg.idx_scans', err);
+          }
         })(),
         (async () => {
           try {
@@ -175,9 +199,10 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
               FROM pg_stat_database WHERE datname = current_database()
             `) as Array<{ tps?: number | null }>;
             const val = tps?.[0]?.tps;
-            pg.transactions_per_sec =
-              typeof val === 'number' && Number.isFinite(val) ? val : null;
-          } catch {}
+            pg.transactions_per_sec = typeof val === 'number' && Number.isFinite(val) ? val : null;
+          } catch (err) {
+            probeFailed('database: pg.transactions_per_sec', err);
+          }
         })(),
         (async () => {
           try {
@@ -186,7 +211,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
               WHERE state = 'active' AND now() - query_start > interval '5 seconds'
             `) as Array<{ cnt?: number }>;
             pg.slow_query_count = getNum(slow?.[0] ?? {}, 'cnt') ?? null;
-          } catch {}
+          } catch (err) {
+            probeFailed('database: pg.slow_query_count', err);
+          }
         })(),
         (async () => {
           try {
@@ -197,7 +224,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
             pg.connections_by_state = Object.fromEntries(
               cs.map((r) => [r.state ?? 'unknown', r.cnt ?? 0]),
             );
-          } catch {}
+          } catch (err) {
+            probeFailed('database: pg.connections_by_state', err);
+          }
         })(),
         (async () => {
           try {
@@ -205,7 +234,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
               SELECT count(*)::int AS cnt FROM pg_stat_activity WHERE state='idle in transaction'
             `) as Array<{ cnt?: number }>;
             pg.connections_idle_in_xact = getNum(idleX?.[0] ?? {}, 'cnt') ?? null;
-          } catch {}
+          } catch (err) {
+            probeFailed('database: pg.connections_idle_in_xact', err);
+          }
         })(),
       ]);
     }
@@ -217,7 +248,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
           v?: string;
         }>;
         if (sq?.[0]?.v) dbDetails.sqlite_version = String(sq[0].v);
-      } catch {}
+      } catch (err) {
+        probeFailed('database: sqlite_version', err);
+      }
       try {
         const now2 = (await prisma.$queryRawUnsafe(`SELECT datetime('now') as now`)) as Array<{
           now?: string;
@@ -226,7 +259,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
           const s = String(now2[0].now).replace(' ', 'T') + 'Z';
           dbDetails.current_time_iso = new Date(s).toISOString();
         }
-      } catch {}
+      } catch (err) {
+        probeFailed('database: current_time_iso', err);
+      }
 
       dbDetails.table_names = [];
       try {
@@ -250,7 +285,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
             `SELECT count(*) as count FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'`,
           )) as Array<{ count?: number }>;
           dbDetails.table_count = getNum(t1?.[0] ?? {}, 'count') ?? 0;
-        } catch {}
+        } catch (err) {
+          probeFailed('database: table_count', err);
+        }
       }
 
       dbStats.sqlite = {};
@@ -259,10 +296,11 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
           Record<string, unknown>
         >;
         const val = Object.values(jm?.[0] ?? {}).find((v) => typeof v === 'string') as
-          | string
-          | undefined;
+          string | undefined;
         dbStats.sqlite.journal_mode = val ?? null;
-      } catch {}
+      } catch (err) {
+        probeFailed('database: sqlite journal mode', err);
+      }
       try {
         const wc = (await prisma.$queryRawUnsafe(`PRAGMA wal_checkpoint(FULL)`)) as Array<
           Record<string, unknown>
@@ -275,7 +313,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
               checkpointed: getNum(row, 'checkpointed') ?? null,
             }
           : null;
-      } catch {}
+      } catch (err) {
+        probeFailed('database: sqlite wal checkpoint', err);
+      }
       try {
         const pc = (await prisma.$queryRawUnsafe(`PRAGMA page_count`)) as Array<{
           page_count?: number;
@@ -290,21 +330,29 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
           dbDetails.sqlite_page_size = pageSize;
           dbDetails.sqlite_approx_file_bytes = pageCount * pageSize;
         }
-      } catch {}
+      } catch (err) {
+        probeFailed('database: sqlite_approx_file_bytes', err);
+      }
       try {
         let p = dbUrl;
         if (p && (p.startsWith('file:') || p.includes('sqlite'))) {
           p = (p.startsWith('file:') ? p.replace('file:', '') : p).split('?')[0] ?? '';
           const pathMod = await import('path');
           const fsMod = await import('fs');
-          const resolved = pathMod.isAbsolute(p) ? p : pathMod.resolve(/* turbopackIgnore: true */ process.cwd(), p);
+          const resolved = pathMod.isAbsolute(p)
+            ? p
+            : pathMod.resolve(/* turbopackIgnore: true */ process.cwd(), p);
           try {
             const st = await fsMod.promises.stat(resolved);
             dbDetails.sqlite_file_path = resolved;
             dbDetails.sqlite_file_bytes = Number(st.size);
-          } catch {}
+          } catch (err) {
+            probeFailed('database: sqlite_file_bytes', err);
+          }
         }
-      } catch {}
+      } catch (err) {
+        probeFailed('database: sqlite_file_bytes', err);
+      }
     }
 
     // ---------- Prisma migrate info ----------
@@ -318,7 +366,9 @@ export async function collectDatabase(): Promise<DatabaseStatusResponse> {
         const fa = row.finished_at ? new Date(row.finished_at) : null;
         dbDetails.last_migration_finished_at = fa ? fa.toISOString() : null;
       }
-    } catch {}
+    } catch (err) {
+      probeFailed('database: last_migration_finished_at', err);
+    }
 
     return {
       ok: true,

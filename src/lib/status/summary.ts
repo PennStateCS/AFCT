@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { probeFailed } from './probe';
 import { collectSystem } from '@/lib/status/server';
 import { detectProvider } from '@/lib/status/database';
 import type { SummaryStatus } from '@/lib/status/types';
@@ -34,7 +35,9 @@ async function dbSummary(): Promise<{
       `) as Array<{ cnt?: number }>;
       const cnt = res?.[0]?.cnt;
       if (typeof cnt === 'number' && cnt > 0) tables = cnt;
-    } catch {}
+    } catch (err) {
+      probeFailed('summary: tables', err);
+    }
     try {
       const res = (await prisma.$queryRaw`
         SELECT pg_database_size(current_database())::bigint AS size
@@ -42,7 +45,9 @@ async function dbSummary(): Promise<{
       const size = res?.[0]?.size;
       if (typeof size === 'bigint') sizeBytes = Number(size);
       else if (typeof size === 'number') sizeBytes = size;
-    } catch {}
+    } catch (err) {
+      probeFailed('summary: size bytes', err);
+    }
   }
 
   if ((provider === 'sqlite' || provider === 'unknown') && tables == null) {
@@ -52,7 +57,9 @@ async function dbSummary(): Promise<{
       )) as Array<{ count?: number }>;
       const cnt = t?.[0]?.count;
       if (typeof cnt === 'number' && cnt > 0) tables = cnt;
-    } catch {}
+    } catch (err) {
+      probeFailed('summary: tables', err);
+    }
     if (sizeBytes == null) {
       try {
         const pc = (await prisma.$queryRawUnsafe(`PRAGMA page_count`)) as Array<{
@@ -64,7 +71,9 @@ async function dbSummary(): Promise<{
         const count = pc?.[0]?.page_count ?? 0;
         const size = ps?.[0]?.page_size ?? 0;
         if (count && size) sizeBytes = count * size;
-      } catch {}
+      } catch (err) {
+        probeFailed('summary: size bytes', err);
+      }
     }
   }
 
