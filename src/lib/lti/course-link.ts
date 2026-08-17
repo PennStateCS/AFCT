@@ -6,6 +6,7 @@
  * launch becomes a way to attach a course you do not own and read its grades.
  */
 
+import { errMessage } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 import type { CourseRole, Prisma } from '@prisma/client';
 import type { LaunchIdentity } from '@/lib/lti/launch';
@@ -97,10 +98,78 @@ export async function resolveLaunchTarget(opts: {
       ltiUserId: identity.subject,
     });
 
+    await rememberNamedLineItem({
+      contextLinkId: link.id,
+      courseId: link.courseId,
+      assignmentId: identity.assignmentId,
+      lineItemUrl: identity.lineItemUrl,
+    });
+
     return { status: 'linked', courseId: link.courseId };
   }
 
   return (await canLinkCourses(userId)) ? { status: 'needs-link' } : { status: 'not-set-up' };
+}
+
+/**
+ * Record the gradebook column the platform named for this link.
+ *
+ * AGS sends `lineitem` on a resource link launch once the platform has bound a column to that
+ * link, and it is the platform's own answer to "which column is this assignment's". Taking it
+ * here means sending a grade needs no search at all: no dependence on the platform supporting a
+ * `resource_id` filter, and no way to adopt the wrong column, which is how a grade once landed on
+ * a second assignment of the same name.
+ *
+ * Best effort, like the membership write beside it. A launch that works must not fail because
+ * this did; the cost of it failing is a search later, which is the behaviour without it.
+ */
+async function rememberNamedLineItem(opts: {
+  contextLinkId: string;
+  courseId: string;
+  assignmentId: string | null;
+  lineItemUrl: string | null;
+}): Promise<void> {
+  if (!opts.assignmentId || !opts.lineItemUrl) return;
+
+  try {
+    /**
+     * The assignment has to be in the course this link opens.
+     *
+     * The id arrives in a custom claim, which travels through the platform and could name an
+     * assignment anywhere. Writing a column against another course's assignment would send that
+     * course's grades into this LMS course, so it is checked rather than trusted, exactly as the
+     * launch destination checks it.
+     */
+    const assignment = await prisma.assignment.findFirst({
+      where: { id: opts.assignmentId, courseId: opts.courseId },
+      select: { id: true },
+    });
+    if (!assignment) return;
+
+    /**
+     * `label` and `scoreMaximum` are deliberately left alone.
+     *
+     * They record what the column was last *told* it is called and worth, which is how a renamed
+     * or re-pointed assignment is noticed and corrected. The platform naming a URL says nothing
+     * about either, so writing them here would claim a sync that never happened.
+     */
+    await prisma.ltiLineItem.upsert({
+      where: {
+        contextLinkId_assignmentId: {
+          contextLinkId: opts.contextLinkId,
+          assignmentId: opts.assignmentId,
+        },
+      },
+      create: {
+        contextLinkId: opts.contextLinkId,
+        assignmentId: opts.assignmentId,
+        url: opts.lineItemUrl,
+      },
+      update: { url: opts.lineItemUrl },
+    });
+  } catch (error) {
+    console.warn('[lti] could not record the column the launch named', errMessage(error));
+  }
 }
 
 /**

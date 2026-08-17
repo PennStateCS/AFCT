@@ -61,6 +61,7 @@ function post(opts: { state?: string; cookieState?: string; idToken?: string }) 
 
 async function destroyFixtures() {
   await prisma.activityLog.deleteMany({ where: { action: 'LTI_LAUNCH_DENIED' } });
+  await prisma.ltiLineItem.deleteMany({});
   await prisma.ltiPendingLink.deleteMany({});
   await prisma.ltiContextLink.deleteMany({});
   await prisma.roster.deleteMany({ where: { courseId: 'c-launch-dest' } });
@@ -234,6 +235,91 @@ describe('where a launch lands', () => {
 
     expect(nextOf(res)).toBe('/lti/link?notReady=1');
     expect(await prisma.ltiPendingLink.count()).toBe(0);
+  });
+
+  /**
+   * The column the platform names for itself.
+   *
+   * AGS sends `lineitem` beside `lineitems` on a resource link launch once the platform has bound
+   * a column to that link. Taking it means sending a grade needs no search: no dependence on the
+   * platform honouring a `resource_id` filter, and no way to adopt the wrong column, which is how
+   * a grade once landed on a second assignment of the same name.
+   */
+  describe('the gradebook column a launch names', () => {
+    const NAMED_URL = 'https://canvas.example.test/api/lti/courses/1/line_items/7';
+
+    const linked = async () => {
+      await withCourse();
+      await prisma.ltiContextLink.create({
+        data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+      });
+    };
+
+    it('is recorded against the assignment the link opens', async () => {
+      await linked();
+      const assignment = await prisma.assignment.create({
+        data: { id: 'a-named', courseId: COURSE, title: 'Named', dueDate: new Date() },
+        select: { id: true },
+      });
+      validateLaunch.mockResolvedValue({
+        ok: true,
+        identity: { ...identity, assignmentId: assignment.id, lineItemUrl: NAMED_URL },
+      });
+
+      await post(await goodLaunch());
+
+      const stored = await prisma.ltiLineItem.findFirst({
+        where: { assignmentId: assignment.id },
+        select: { url: true, label: true, scoreMaximum: true },
+      });
+      expect(stored?.url).toBe(NAMED_URL);
+      // Left unset on purpose: those record what the column was last *told* it is called and
+      // worth, and naming a URL says nothing about either.
+      expect(stored?.label).toBeNull();
+      expect(stored?.scoreMaximum).toBeNull();
+    });
+
+    it('ignores an assignment that is not in the course the link opens', async () => {
+      // The id arrives in a custom claim, which travels through the platform and could name an
+      // assignment anywhere. Writing it would point this LMS course at another course's grades.
+      await linked();
+      await prisma.course.create({
+        data: {
+          id: 'c-elsewhere',
+          name: 'Elsewhere',
+          code: 'X 1',
+          semester: 'Fall 2026',
+          credits: 3,
+          startDate: new Date('2026-08-24T00:00:00Z'),
+          endDate: new Date('2026-12-18T00:00:00Z'),
+        },
+      });
+      await prisma.assignment.create({
+        data: {
+          id: 'a-elsewhere-2',
+          courseId: 'c-elsewhere',
+          title: 'Elsewhere',
+          dueDate: new Date(),
+        },
+      });
+      validateLaunch.mockResolvedValue({
+        ok: true,
+        identity: { ...identity, assignmentId: 'a-elsewhere-2', lineItemUrl: NAMED_URL },
+      });
+
+      await post(await goodLaunch());
+
+      expect(await prisma.ltiLineItem.count()).toBe(0);
+    });
+
+    it('records nothing when the platform named no column', async () => {
+      // A course-level launch with no resource link, and every platform that does not send it.
+      await linked();
+
+      await post(await goodLaunch());
+
+      expect(await prisma.ltiLineItem.count()).toBe(0);
+    });
   });
 });
 

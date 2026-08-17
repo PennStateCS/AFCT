@@ -45,9 +45,10 @@ const identity = (over: Partial<LaunchIdentity> = {}): LaunchIdentity => ({
   resourceLinkId: 'rl-1',
   targetLinkUri: null,
   lineItemsUrl: null,
+  lineItemUrl: null,
   membershipsUrl: null,
-      deepLink: null,
-      assignmentId: null,
+  deepLink: null,
+  assignmentId: null,
   ...over,
 });
 

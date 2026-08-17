@@ -198,7 +198,7 @@ describe('the gradebook column', () => {
       vi.fn(async (url: string, init: RequestInit) => {
         if (url.endsWith('/token')) return json({ access_token: 'tok', expires_in: 3600 });
         if (init?.method === 'POST') return new Response('<html>created</html>', { status: 200 });
-        return json([{ resourceid: ASSIGNMENT, id: `${LINE_ITEMS_URL}/55020` }]);
+        return json([{ resourceId: ASSIGNMENT, id: `${LINE_ITEMS_URL}/55020` }]);
       }),
     );
 
@@ -219,7 +219,7 @@ describe('the gradebook column', () => {
           posts.push(url);
           return json({ id: `${LINE_ITEMS_URL}/new` });
         }
-        return json([{ resourceid: ASSIGNMENT, id: `${LINE_ITEMS_URL}/existing` }]);
+        return json([{ resourceId: ASSIGNMENT, id: `${LINE_ITEMS_URL}/existing` }]);
       }),
     );
 
@@ -403,6 +403,57 @@ describe('finding the LMS id for a person', () => {
  */
 describe('looking for an existing column', () => {
   /** A platform whose container answers however a test says, with pages if it wants. */
+  /**
+   * Believing the filter was the wrong-column bug waiting to happen.
+   *
+   * The request asks for `resource_id=<assignment>` and AGS says a platform should honour it.
+   * Canvas does. A platform that does not answers with every column in the course, and taking
+   * the first would send every grade for this assignment to another assignment's column: wrong
+   * rather than untidy, and silent.
+   */
+  it('ignores columns the platform returned that are not this assignment’s', async () => {
+    const created = pagingPlatform([
+      {
+        body: [
+          // What a platform that ignores the filter sends back.
+          { id: `${LINE_ITEMS_URL}/99`, resourceId: 'another-assignment' },
+          { id: `${LINE_ITEMS_URL}/7`, resourceId: ASSIGNMENT },
+        ],
+      },
+    ]);
+
+    const result = await ensure();
+
+    expect(result).toEqual({ ok: true, value: `${LINE_ITEMS_URL}/7` });
+    // Found the right one, so nothing was created.
+    expect(created).toHaveLength(0);
+  });
+
+  it('does not adopt a column with no resource id', async () => {
+    // These exist: a deep link that sent no `resourceId` leaves the platform holding a column it
+    // cannot recognise later, and guessing at it is the same failure from the other direction.
+    const created = pagingPlatform([{ body: [{ id: `${LINE_ITEMS_URL}/99` }] }]);
+
+    const result = await ensure();
+
+    // Its own column instead, which is the honest outcome.
+    expect(created).toHaveLength(1);
+    expect(result.ok).toBe(true);
+  });
+
+  it('keeps paging to find this assignment’s column', async () => {
+    const created = pagingPlatform([
+      {
+        body: [{ id: `${LINE_ITEMS_URL}/1`, resourceId: 'other' }],
+        next: `${LINE_ITEMS_URL}?page=2`,
+      },
+      { body: [{ id: `${LINE_ITEMS_URL}/2`, resourceId: ASSIGNMENT }] },
+    ]);
+
+    expect(await ensure()).toEqual({ ok: true, value: `${LINE_ITEMS_URL}/2` });
+    expect(created).toHaveLength(0);
+  });
+
   function pagingPlatform(pages: Array<{ body: unknown; next?: string; status?: number }>) {
     const created: string[] = [];
     let page = 0;
@@ -431,7 +482,13 @@ describe('looking for an existing column', () => {
     return created;
   }
 
-  const column = (id: string) => ({ id, label: 'Problem set 1', scoreMaximum: 100 });
+  /** A column of this assignment's, which is what makes it the one to adopt. */
+  const column = (id: string) => ({
+    id,
+    resourceId: ASSIGNMENT,
+    label: 'Problem set 1',
+    scoreMaximum: 100,
+  });
 
   it('finds one on the first page', async () => {
     const created = pagingPlatform([{ body: [column(LINE_ITEM_URL)] }]);
@@ -461,7 +518,9 @@ describe('looking for an existing column', () => {
   });
 
   it('creates nothing when the pages repeat', async () => {
-    const created = pagingPlatform([{ body: [], next: `${LINE_ITEMS_URL}?resource_id=${ASSIGNMENT}` }]);
+    const created = pagingPlatform([
+      { body: [], next: `${LINE_ITEMS_URL}?resource_id=${ASSIGNMENT}` },
+    ]);
 
     expect(await ensure()).toMatchObject({ ok: false, reason: 'line-item-lookup-incomplete' });
     expect(created).toHaveLength(0);
@@ -526,7 +585,9 @@ describe('looking for an existing column', () => {
    * next page on another host would hand that token to whoever the header named.
    */
   it('will not follow a page onto another server', async () => {
-    const created = pagingPlatform([{ body: [], next: 'https://elsewhere.test/line_items?page=2' }]);
+    const created = pagingPlatform([
+      { body: [], next: 'https://elsewhere.test/line_items?page=2' },
+    ]);
 
     expect(await ensure()).toMatchObject({ ok: false, reason: 'line-item-lookup-failed' });
     expect(created).toHaveLength(0);
