@@ -32,6 +32,7 @@ function paramsFrom(source: URLSearchParams | FormData): LoginInitParams {
     lti_message_hint: get('lti_message_hint'),
     client_id: get('client_id'),
     lti_deployment_id: get('lti_deployment_id'),
+    lti_storage_target: get('lti_storage_target'),
   };
 }
 
@@ -69,7 +70,26 @@ async function handle(request: Request, params: LoginInitParams) {
     });
   }
 
-  const response = NextResponse.redirect(result.redirectUrl, 302);
+  /**
+   * Where the browser goes next.
+   *
+   * Straight to the platform when it offered no storage, which is one hop and the behaviour
+   * every launch had before. When it did offer storage, through a page of AFCT's own first, so
+   * the launch's state is put somewhere a browser that blocks third-party cookies will still
+   * keep. The cookie below is set either way and stays the check that actually proves things;
+   * the stored copy is only consulted when the cookie does not arrive.
+   */
+  const destination = result.storageTarget
+    ? (() => {
+        const url = new URL(publicUrl('/lti/store-state', request));
+        url.searchParams.set('state', result.state);
+        url.searchParams.set('authorize', result.redirectUrl);
+        url.searchParams.set('target', result.storageTarget);
+        return url.toString();
+      })()
+    : result.redirectUrl;
+
+  const response = NextResponse.redirect(destination, 302);
 
   /**
    * The state cookie, which is what ties the returning launch to this browser.
@@ -79,9 +99,10 @@ async function handle(request: Request, params: LoginInitParams) {
    * third-party cookie, so it is also `Partitioned` (CHIPS), which is what keeps browsers that
    * block third-party cookies from dropping it.
    *
-   * Partitioned is not sufficient everywhere, and this is the known gap: a browser that blocks
-   * it outright needs LTI's own postMessage storage, or a break-out to a top-level window. That
-   * is deliberately not built yet, and it is the piece to test in Safari first.
+   * Partitioned is not sufficient everywhere: a browser that blocks third-party cookies outright
+   * drops this regardless. That is what the platform-storage hop above is for. This cookie stays
+   * the primary check, because the browser sends it by itself and no other site can read it or
+   * plant it, which is a stronger statement than anything a page can make.
    */
   response.cookies.set(stateCookieName(result.state), result.state, {
     httpOnly: true,

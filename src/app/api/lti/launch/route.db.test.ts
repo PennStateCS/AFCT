@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { stateCookieName } from '@/lib/lti/login-init';
+import { startLaunch } from '@/lib/lti/launch-transaction';
 
 /**
  * Receiving a launch, against a real Postgres.
@@ -464,5 +465,66 @@ describe('a launch that verifies but cannot be signed in', () => {
     await post(await goodLaunch());
 
     expect(await prisma.roster.count({ where: { userId: admin.id } })).toBe(0);
+  });
+});
+
+/**
+ * The cookie-less path, for browsers that refuse a third-party cookie.
+ *
+ * Safari drops the state cookie outright, so the launch used to fail its state check with a
+ * message about cookies and no way forward. The platform can hold the state instead, but only a
+ * page can read it back, so the launch has to pause rather than be refused.
+ */
+describe('a launch that arrives without its cookie', () => {
+  const noCookiePost = (state: string) =>
+    POST(
+      new Request('https://afct.test/api/lti/launch', {
+        method: 'POST',
+        body: new URLSearchParams({ id_token: 'a-token', state }),
+      }),
+    );
+
+  it('pauses for the platform storage, holding the token, when the platform offered storage', async () => {
+    await withCourse();
+    const { state } = await startLaunch({
+      platformId: PLATFORM_ID,
+      // What `lti_storage_target` at login recorded: this platform can keep a value for us.
+      storageTarget: 'post_message_forwarding',
+    });
+
+    const res = await noCookiePost(state);
+
+    // Paused, not refused: on to the page that can read what the platform kept.
+    expect(res.status).toBe(303);
+    const location = new URL(res.headers.get('location') ?? '', 'https://afct.test');
+    expect(location.pathname).toBe('/lti/state-check');
+    expect(location.searchParams.get('target')).toBe('post_message_forwarding');
+
+    // The token waits on its own launch row rather than being handed back through the browser.
+    const row = await prisma.ltiLaunchTransaction.findFirst({
+      where: { storageTarget: 'post_message_forwarding' },
+      select: { idToken: true, usedAt: true },
+    });
+    expect(row?.idToken).toBe('a-token');
+    // And the launch is not spent yet, so the state still has to be answered for.
+    expect(row?.usedAt).toBeNull();
+  });
+
+  it('refuses outright when the platform offered no storage', async () => {
+    // Nothing to ask, so nothing to wait for: the behaviour every launch had before.
+    await withCourse();
+    const { state } = await startLaunch({ platformId: PLATFORM_ID });
+
+    const res = await noCookiePost(state);
+
+    expect(res.status).toBe(400);
+    expect(await res.text()).toMatch(/third-party cookies/);
+  });
+
+  it('refuses a state it never issued, storage or not', async () => {
+    // The pause must not become a way to complete an arbitrary launch.
+    const res = await noCookiePost('never-issued');
+
+    expect(res.status).toBe(400);
   });
 });
