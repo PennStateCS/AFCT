@@ -101,6 +101,16 @@ const RegistrationResponseSchema = z
     // Numeric client IDs exist in the wild, so this is widened rather than assumed.
     client_id: z.union([z.string().trim().min(1), z.number()]).transform(String),
     scope: z.string().optional(),
+    /**
+     * Where Canvas puts the deployment it has just created.
+     *
+     * The spec says a platform combining registration with deployment "may also include the
+     * deployment_id in the LTI Tool Configuration section", and Canvas puts it at the top level
+     * instead (`dynamic_registration_controller.rb`, `render_registration`). Reading only the
+     * spec's location made every Canvas registration fail on a value Canvas had already sent,
+     * so both are read and neither is assumed.
+     */
+    deployment_id: z.union([z.string().trim().min(1), z.number()]).optional(),
     [TOOL_CONFIGURATION_CLAIM]: z
       .object({ deployment_id: z.union([z.string().trim().min(1), z.number()]).optional() })
       .loose()
@@ -342,7 +352,8 @@ export async function requestRegistration(opts: {
   }
 
   const clientId = parsed.data.client_id;
-  const deploymentId = parsed.data[TOOL_CONFIGURATION_CLAIM]?.deployment_id;
+  const deploymentId =
+    parsed.data.deployment_id ?? parsed.data[TOOL_CONFIGURATION_CLAIM]?.deployment_id;
   if (deploymentId === undefined || String(deploymentId).trim() === '') {
     // The spec allows this, and no LMS anyone has tested does it. Refusing is better than saving
     // a registration no launch could ever match, and the client ID is quoted so the manual form
