@@ -75,7 +75,6 @@ function describeChanges(metadata: Metadata): string | null {
 // covered without adding a case for it.
 const FAILURE = /_(ERROR|DENIED|FAILED|REJECTED|INVALID|UNAUTHORIZED|CONFLICT)$/;
 
-
 /** "3 of 5" style counts, dropping the parts that are zero so nothing reads as a row of noughts. */
 function tally(pairs: Array<[number, string]>): string | null {
   const parts = pairs.filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`);
@@ -181,8 +180,15 @@ export function describeActivity(action: string, metadata: Metadata): string | n
     case 'LTI_PLATFORM_REMOVED': {
       const issuer = str(metadata, 'issuer');
       const client = str(metadata, 'clientId');
-      return issuer ? `${issuer}${client ? `, client ${client}` : ''}` : null;
+      // Whether the LMS registered itself or somebody typed it in, because the two are
+      // investigated differently when a registration has to be explained later.
+      const automatic = str(metadata, 'via') === 'dynamic-registration' ? ', automatic' : '';
+      return issuer ? `${issuer}${client ? `, client ${client}` : ''}${automatic}` : null;
     }
+
+    case 'LTI_DYNAMIC_REGISTRATION_FAILED':
+      // Why it stopped. Every value is one of the fixed reasons the registration code returns.
+      return str(metadata, 'reason');
 
     case 'LTI_COURSE_LINKED':
     case 'LTI_COURSE_UNLINKED': {
@@ -309,8 +315,7 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       const extra = firstNum(metadata, 'extraSubmissions');
       const total = firstNum(metadata, 'totalExtraSubmissions');
       const who = str(metadata, 'targetType') === 'GROUP' ? 'a group' : 'one student';
-      const change =
-        action === 'GRANT_EXTRA_SUBMISSIONS' ? `+${extra}` : `-${extra}`;
+      const change = action === 'GRANT_EXTRA_SUBMISSIONS' ? `+${extra}` : `-${extra}`;
       const reason = str(metadata, 'reason');
       const head = `${change} ${extra === 1 ? 'attempt' : 'attempts'} for ${who}${
         total > 0 ? ` (${total} in total)` : ''
@@ -426,7 +431,9 @@ export function describeActivity(action: string, metadata: Metadata): string | n
         [firstNum(metadata, 'problemCount'), 'problems'],
         [firstNum(metadata, 'studentCount'), 'students'],
       ]);
-      return [courseNamed(metadata), took ? `with ${took}` : null].filter(Boolean).join(', ') || null;
+      return (
+        [courseNamed(metadata), took ? `with ${took}` : null].filter(Boolean).join(', ') || null
+      );
     }
 
     case 'COURSE_DUPLICATED': {
@@ -502,9 +509,7 @@ export function describeActivity(action: string, metadata: Metadata): string | n
     case 'CREATE_GROUP_SET': {
       const name = str(metadata, 'name');
       const groups = firstNum(metadata, 'initialGroupCount');
-      return (
-        [name, groups > 0 ? plural(groups, 'group') : null].filter(Boolean).join(', ') || null
-      );
+      return [name, groups > 0 ? plural(groups, 'group') : null].filter(Boolean).join(', ') || null;
     }
 
     case 'DELETE_GROUP_SET':

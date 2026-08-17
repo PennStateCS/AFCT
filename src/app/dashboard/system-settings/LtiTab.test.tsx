@@ -66,8 +66,8 @@ describe('what AFCT hands over', () => {
   it('builds its URLs from the site address', async () => {
     show([], 'https://afct.example.edu');
 
-    await screen.findByRole('heading', { name: 'Give these to your LMS' });
-    const give = section('Give these to your LMS');
+    await screen.findByRole('heading', { name: 'Or give these to your LMS by hand' });
+    const give = section('Or give these to your LMS by hand');
     expect(give.getByLabelText(/Target link URI/)).toHaveValue(
       'https://afct.example.edu/api/lti/launch',
     );
@@ -83,10 +83,79 @@ describe('what AFCT hands over', () => {
   it('does not double the slash when the site URL ends in one', async () => {
     show([], 'https://afct.test/');
 
-    await screen.findByRole('heading', { name: 'Give these to your LMS' });
-    expect(section('Give these to your LMS').getByLabelText(/Target link URI/)).toHaveValue(
-      'https://afct.test/api/lti/launch',
+    await screen.findByRole('heading', { name: 'Or give these to your LMS by hand' });
+    expect(
+      section('Or give these to your LMS by hand').getByLabelText(/Target link URI/),
+    ).toHaveValue('https://afct.test/api/lti/launch');
+  });
+});
+
+/**
+ * The automatic path. An administrator creates a link here and pastes it into their LMS, so the
+ * only thing this screen can get wrong is showing them the wrong link, or losing it.
+ */
+describe('creating a registration link', () => {
+  const showAndClick = async (
+    user: ReturnType<typeof userEvent.setup>,
+    response: Partial<Response> & { json: () => Promise<unknown> },
+  ) => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url === '/api/admin/lti/registration-token'
+        ? (response as Response)
+        : ((await ok({ platforms: [] })) as Response),
     );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<LtiTab siteUrl="https://afct.test" />);
+    await user.click(await screen.findByRole('button', { name: /Create a registration link/ }));
+    return fetchMock;
+  };
+
+  it('shows the link the server minted, and nothing it guessed itself', async () => {
+    const user = userEvent.setup();
+    await showAndClick(user, {
+      ok: true,
+      status: 201,
+      json: async () => ({
+        url: 'https://afct.test/lti/register?rt=secret-token',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+    });
+
+    const field = await screen.findByLabelText(/Registration link/);
+    expect(field).toHaveValue('https://afct.test/lti/register?rt=secret-token');
+  });
+
+  it('says what went wrong rather than showing an empty field', async () => {
+    const user = userEvent.setup();
+    await showAndClick(user, {
+      ok: false,
+      status: 403,
+      json: async () => ({ error: 'Only administrators can do that.' }),
+    });
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith('Only administrators can do that.'),
+    );
+    expect(screen.queryByLabelText(/Registration link/)).not.toBeInTheDocument();
+  });
+
+  it('copies the link, and says so where a screen reader will hear it', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    await showAndClick(user, {
+      ok: true,
+      status: 201,
+      json: async () => ({
+        url: 'https://afct.test/lti/register?rt=secret-token',
+        expiresAt: new Date().toISOString(),
+      }),
+    });
+
+    await user.click(await screen.findByRole('button', { name: /Copy link/ }));
+
+    expect(writeText).toHaveBeenCalledWith('https://afct.test/lti/register?rt=secret-token');
+    expect(await screen.findByRole('status')).toHaveTextContent(/copied/i);
   });
 });
 

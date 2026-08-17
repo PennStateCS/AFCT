@@ -112,6 +112,10 @@ enum SingleUseTokenPurpose {
   /// Handed to the browser once a launch is verified, and spent immediately to create the
   /// session. Exists because sessions are minted by NextAuth, not by the launch endpoint.
   LTI_SESSION_TICKET
+  /// Minted by an administrator, pasted into an LMS's automatic-registration field, and spent
+  /// when that LMS calls back to register itself. It is what stands in for a session on that
+  /// callback: the LMS frames AFCT from another site, so no cookie of ours arrives with it.
+  LTI_DYNAMIC_REGISTRATION
 }
 
 // What kind of system vouched for an identity. Descriptive rather than structural: a single

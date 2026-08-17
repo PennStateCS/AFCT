@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "SingleUseTokenPurpose" ADD VALUE 'LTI_DYNAMIC_REGISTRATION';
