@@ -16,6 +16,7 @@ type Platform = {
   deploymentId: string;
   authLoginUrl: string;
   tokenUrl: string;
+  tokenAudience: string;
   keysetUrl: string;
 };
 
@@ -26,6 +27,7 @@ const EMPTY = {
   deploymentId: '',
   authLoginUrl: '',
   tokenUrl: '',
+  tokenAudience: '',
   keysetUrl: '',
 };
 
@@ -248,6 +250,15 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
             name="lti-keyset-url"
             value={draft.keysetUrl}
             setValue={set('keysetUrl')}
+          />
+          {/* Last, and described rather than labelled tersely, because almost nobody needs it and
+              the one place it is needed is not guessable from the name. */}
+          <InputGroup
+            label="Token audience (optional)"
+            name="lti-token-audience"
+            value={draft.tokenAudience}
+            setValue={set('tokenAudience')}
+            description="Only D2L Brightspace needs this: use the Brightspace OAuth2 Audience from its registration. Leave it empty for Canvas, Moodle and Blackboard, which expect the token URL."
           />
 
           <div className="flex gap-2">

@@ -32,6 +32,14 @@ export const LtiPlatformSchema = z.object({
   deploymentId: z.string().trim().min(1, 'The deployment ID is required.'),
   authLoginUrl: httpsUrl('The authorization URL'),
   tokenUrl: httpsUrl('The token URL'),
+  /**
+   * Only D2L Brightspace needs this. Left empty, the assertion is addressed to the token URL,
+   * which is what Canvas, Moodle and Blackboard expect.
+   */
+  tokenAudience: z
+    .union([httpsUrl('The token audience'), z.literal('')])
+    .optional()
+    .transform((value) => (value ? value : null)),
   keysetUrl: httpsUrl('The public keyset URL'),
 });
 

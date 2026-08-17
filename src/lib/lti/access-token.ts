@@ -55,10 +55,16 @@ const cache = new Map<string, CacheEntry>();
  * `aud` is the platform's token endpoint, which is what stops an assertion captured by one
  * platform being replayed against another. `iss` and `sub` are both AFCT's client id, which is
  * what the spec asks for and reads oddly until you know that.
+ *
+ * A platform may name an audience of its own instead, and one does: D2L Brightspace issues a
+ * `BrightspaceAudience` separately from its access token URL and refuses an assertion addressed to
+ * the endpoint. Canvas, Moodle and Blackboard all want the endpoint, the last confirmed from
+ * Blackboard's own sample tool, so the endpoint stays the default and this is the exception.
  */
 async function buildAssertion(opts: {
   clientId: string;
   tokenUrl: string;
+  tokenAudience?: string | null;
   kid: string;
   privateKey: string;
   deploymentId?: string;
@@ -77,7 +83,7 @@ async function buildAssertion(opts: {
       .setProtectedHeader({ alg: LTI_SIGNING_ALG, kid: opts.kid })
       .setIssuer(opts.clientId)
       .setSubject(opts.clientId)
-      .setAudience(opts.tokenUrl)
+      .setAudience(opts.tokenAudience || opts.tokenUrl)
       .setIssuedAt()
       .setExpirationTime(`${ASSERTION_TTL_S}s`)
       // Unique per request: platforms reject a repeated jti, which is the point of it.
@@ -113,19 +119,18 @@ export async function getAccessToken(opts: {
   if (!signing) return { ok: false, reason: 'no-signing-key' };
 
   // Read here rather than threaded through every caller: this runs only on a cache miss, and
-  // the alternative is widening the platform shape passed around by AGS and NRPS.
-  const deploymentId =
-    opts.deploymentId ??
-    (
-      await prisma.ltiPlatform.findUnique({
-        where: { id: opts.platformId },
-        select: { deploymentId: true },
-      })
-    )?.deploymentId;
+  // the alternative is widening the platform shape passed around by AGS and NRPS. The audience
+  // joins it for the same reason, and is null for every platform except D2L.
+  const registration = await prisma.ltiPlatform.findUnique({
+    where: { id: opts.platformId },
+    select: { deploymentId: true, tokenAudience: true },
+  });
+  const deploymentId = opts.deploymentId ?? registration?.deploymentId;
 
   const assertion = await buildAssertion({
     clientId: opts.clientId,
     tokenUrl: opts.tokenUrl,
+    tokenAudience: registration?.tokenAudience,
     kid: signing.kid,
     privateKey: signing.privateKey,
     deploymentId,
