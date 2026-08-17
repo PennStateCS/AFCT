@@ -15,6 +15,12 @@ const renderWithClient = (ui: React.ReactElement) => {
 
 // The Filters control is a Radix popover, which needs pointer capture jsdom lacks. Render
 // its content inline so the role/status checkboxes are queryable.
+// Stubbed: it makes a fetch of its own to find out whether the course has an LMS, which would
+// be counted by the call assertions below. It is tested next to itself.
+vi.mock('@/components/course/RosterSyncButton', () => ({
+  RosterSyncButton: () => null,
+}));
+
 vi.mock('@/components/ui/popover', () => {
   const Pass = ({ children }: { children: React.ReactNode }) => <>{children}</>;
   return {

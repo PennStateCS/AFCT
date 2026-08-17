@@ -16,6 +16,7 @@ const UNLINKED_COURSE = 'c-sync-unlinked';
 const ASSIGNMENT = 'a-sync';
 const PROBLEM = 'p-sync';
 const STUDENT = 'u-sync';
+const OTHER = 'u-sync-other';
 
 async function destroyFixtures() {
   await prisma.ltiScoreQueue.deleteMany({});
@@ -26,7 +27,7 @@ async function destroyFixtures() {
   await prisma.problem.deleteMany({ where: { id: PROBLEM } });
   await prisma.ltiPlatform.deleteMany({ where: { id: PLATFORM } });
   await prisma.course.deleteMany({ where: { id: { in: [COURSE, UNLINKED_COURSE] } } });
-  await prisma.user.deleteMany({ where: { id: STUDENT } });
+  await prisma.user.deleteMany({ where: { id: { in: [STUDENT, OTHER] } } });
 }
 
 const courseFields = {
@@ -39,7 +40,12 @@ const courseFields = {
 
 beforeEach(async () => {
   await destroyFixtures();
-  await prisma.user.create({ data: { id: STUDENT, email: 'sync@example.test', password: null } });
+  await prisma.user.createMany({
+    data: [
+      { id: STUDENT, email: 'sync@example.test', password: null },
+      { id: OTHER, email: 'sync-other@example.test', password: null },
+    ],
+  });
   await prisma.course.createMany({
     data: [
       { id: COURSE, name: 'Theory', ...courseFields },
@@ -217,5 +223,84 @@ describe('what faculty are shown', () => {
 
     expect(await assignmentSyncState(ASSIGNMENT)).toMatchObject({ linked: false });
     expect(await courseIsLinked(UNLINKED_COURSE)).toBe(false);
+  });
+});
+
+/**
+ * Sending one student's grade.
+ *
+ * The panel beside a student's work sends the grade it is showing. Everything else in the
+ * assignment has to be left where it is, or pressing a button next to one person's mark
+ * delivers marks the person grading had not finished checking.
+ */
+describe('queueing one student', () => {
+  const gradeOther = (value: number) =>
+    prisma.assignmentProblemGrade.upsert({
+      where: {
+        assignmentId_problemId_studentId: {
+          assignmentId: ASSIGNMENT,
+          problemId: PROBLEM,
+          studentId: OTHER,
+        },
+      },
+      create: { studentId: OTHER, assignmentId: ASSIGNMENT, problemId: PROBLEM, grade: value },
+      update: { grade: value },
+    });
+
+  it('queues that student and leaves the rest of the class alone', async () => {
+    await grade(88);
+    await gradeOther(42);
+
+    expect(await queueChangedGrades(ASSIGNMENT, { userId: STUDENT })).toBe(1);
+
+    const rows = await prisma.ltiScoreQueue.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ userId: STUDENT, scoreGiven: 88 });
+  });
+
+  it('still sends everybody when no student is named', async () => {
+    await grade(88);
+    await gradeOther(42);
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(2);
+  });
+
+  it("retries that student's failure without retrying anybody else's", async () => {
+    await grade(88);
+    await gradeOther(42);
+    await queueChangedGrades(ASSIGNMENT);
+    await prisma.ltiScoreQueue.updateMany({ data: { state: 'FAILED', lastError: 'nope' } });
+
+    expect(await queueChangedGrades(ASSIGNMENT, { userId: STUDENT, retryFailed: true })).toBe(1);
+
+    const rows = await prisma.ltiScoreQueue.findMany({ orderBy: { userId: 'asc' } });
+    expect(rows.find((row) => row.userId === STUDENT)?.state).toBe('PENDING');
+    expect(rows.find((row) => row.userId === OTHER)?.state).toBe('FAILED');
+  });
+
+  it("reports that student's own state beside the assignment's totals", async () => {
+    await grade(88);
+    await gradeOther(42);
+    await queueChangedGrades(ASSIGNMENT);
+    await prisma.ltiScoreQueue.updateMany({
+      where: { userId: OTHER },
+      data: { state: 'FAILED', lastError: 'Your LMS does not list this student.' },
+    });
+
+    const state = await assignmentSyncState(ASSIGNMENT, STUDENT);
+
+    // This student is fine; the assignment is not. Both are true and the panel shows both.
+    expect(state).toMatchObject({ pending: 1, failed: 1 });
+    expect(state?.student).toMatchObject({ state: 'PENDING' });
+
+    const otherState = await assignmentSyncState(ASSIGNMENT, OTHER);
+    expect(otherState?.student).toMatchObject({
+      state: 'FAILED',
+      lastError: 'Your LMS does not list this student.',
+    });
+  });
+
+  it('reports no row at all for a student who has never been graded', async () => {
+    expect((await assignmentSyncState(ASSIGNMENT, STUDENT))?.student).toBeNull();
   });
 });

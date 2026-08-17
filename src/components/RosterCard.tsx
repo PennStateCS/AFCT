@@ -10,6 +10,7 @@ import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
 import { Plus, Users, GraduationCap } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { RosterSyncButton } from '@/components/course/RosterSyncButton';
 import type { RosterMemberRow } from '@/lib/course-roster-list';
 
 interface RosterCardProps {
@@ -138,6 +139,12 @@ export function RosterCard({
             <Users className="mr-1" />
             Bulk Enroll
           </Button>
+          {/* Renders nothing unless the course is connected to an LMS. Here as well as on the
+              Settings tab because this is the page somebody is on when they notice the roster
+              is out of date. */}
+          {!courseIsArchived && (
+            <RosterSyncButton courseId={courseId} onSynced={() => void refetch()} />
+          )}
         </div>
       </div>
 

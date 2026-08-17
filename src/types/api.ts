@@ -741,7 +741,9 @@ export interface paths {
         };
         /**
          * How this assignment's grades are syncing to the LMS
-         * @description **Auth:** required
+         * @description `userId` asks for one student's own grade alongside the assignment's totals. Nothing is  disclosed by it that the caller cannot already see: they manage the course, and the answer  only ever concerns this assignment.
+         *
+         *     **Auth:** required
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/assignments/[id]/lti-sync/route.ts)
          */
@@ -749,7 +751,7 @@ export interface paths {
         put?: never;
         /**
          * Send this assignment's grades to the LMS
-         * @description Queue every grade that has changed since it was last sent.   Queues rather than sends: the sender delivers them, so a slow LMS cannot make this request  hang or fail.
+         * @description Queue every grade that has changed since it was last sent, or one student's.   Queues rather than sends: the sender delivers them, so a slow LMS cannot make this request  hang or fail.   `userId` is what the panel beside one student's work sends. Without it every outstanding  grade for the assignment goes, which is the retry-everything button faculty need after an  LMS outage.
          *
          *     **Auth:** required
          *
@@ -5165,11 +5167,12 @@ export interface operations {
     };
     getAssignmentsByIdLtiSync: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
+            query?: {
+                /** @description Also report this student's own grade. */
+                userId?: string;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -5209,6 +5212,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The body was malformed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description You do not manage this course. */
             403: {

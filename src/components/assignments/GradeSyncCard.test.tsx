@@ -24,6 +24,11 @@ const linked = {
   sent: 0,
   failed: 0,
   lastSentAt: null as string | null,
+  student: null as {
+    state: 'PENDING' | 'SENT' | 'FAILED';
+    sentAt: string | null;
+    lastError: string | null;
+  } | null,
 };
 
 const ok = (body: unknown) =>
@@ -169,7 +174,9 @@ describe('sending grades now', () => {
     await user.click(await screen.findByRole('button', { name: /Send grades now/ }));
 
     await waitFor(() =>
-      expect(toastMock.success).toHaveBeenCalledWith('Every grade is already up to date in your LMS.'),
+      expect(toastMock.success).toHaveBeenCalledWith(
+        'Every grade is already up to date in your LMS.',
+      ),
     );
   });
 
@@ -207,6 +214,112 @@ describe('the inline placement', () => {
 
     expect(screen.queryByRole('button', { name: /Send grades now/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Expand LMS sync/ }));
+    expect(screen.getByRole('button', { name: /Send grades now/ })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The panel beside one student's work.
+ *
+ * Its button sits next to that student's grade, so it must send that grade and nothing else.
+ * Sending the class from here would deliver marks somebody had not finished checking.
+ */
+describe('the panel beside one student', () => {
+  const showFor = (state: Partial<typeof linked>) => {
+    const fetchMock = vi.fn().mockReturnValue(ok({ ...linked, ...state }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<GradeSyncCard assignmentId="a-1" variant="inline" studentId="u-7" />);
+    return fetchMock;
+  };
+
+  it('asks about that student, not the assignment alone', async () => {
+    const fetchMock = showFor({ student: { state: 'SENT', sentAt: null, lastError: null } });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/assignments/a-1/lti-sync?userId=u-7'),
+    );
+  });
+
+  it('sends only that student, and says so on the button', async () => {
+    const fetchMock = vi.fn().mockReturnValue(ok(linked));
+    fetchMock
+      .mockReturnValueOnce(
+        ok({ ...linked, student: { state: 'PENDING', sentAt: null, lastError: null } }),
+      )
+      .mockReturnValueOnce(ok({ queued: 1 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<GradeSyncCard assignmentId="a-1" variant="inline" studentId="u-7" />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: /Send this grade now/ }));
+
+    // The id in the body is the whole guard: without it the route sends the assignment.
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/assignments/a-1/lti-sync',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ userId: 'u-7' }) }),
+      ),
+    );
+    expect(toastMock.success).toHaveBeenCalledWith('This grade is on its way to your LMS.');
+  });
+
+  it("quotes why this student's grade failed, which is the part somebody can act on", async () => {
+    showFor({
+      failed: 1,
+      student: {
+        state: 'FAILED',
+        sentAt: null,
+        lastError: 'Your LMS does not list this student in this course.',
+      },
+    });
+
+    expect(await screen.findByText(/does not list this student/)).toBeInTheDocument();
+  });
+
+  it("does not report the rest of the class as this student's state", async () => {
+    showFor({ failed: 2, student: { state: 'SENT', sentAt: null, lastError: null } });
+
+    expect(await screen.findByText('This grade has been sent to your LMS.')).toBeInTheDocument();
+    expect(screen.queryByText(/2 grades could not be sent/)).not.toBeInTheDocument();
+  });
+
+  it('still offers to send the rest, so a failure elsewhere is not hidden', async () => {
+    const fetchMock = vi.fn().mockReturnValue(ok(linked));
+    fetchMock
+      .mockReturnValueOnce(
+        ok({ ...linked, failed: 3, student: { state: 'SENT', sentAt: null, lastError: null } }),
+      )
+      .mockReturnValueOnce(ok({ queued: 3 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<GradeSyncCard assignmentId="a-1" variant="inline" studentId="u-7" />);
+    const user = userEvent.setup();
+
+    expect(await screen.findByText(/3 other grades/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Send all outstanding grades/ }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/assignments/a-1/lti-sync',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({}) }),
+      ),
+    );
+  });
+
+  it('offers nothing extra when this student is the only one outstanding', async () => {
+    showFor({ failed: 1, student: { state: 'FAILED', sentAt: null, lastError: null } });
+
+    await screen.findByRole('button', { name: /Send this grade now/ });
+    expect(
+      screen.queryByRole('button', { name: /Send all outstanding grades/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('falls back to the assignment when no student is open', async () => {
+    const fetchMock = vi.fn().mockReturnValue(ok({ ...linked, failed: 2 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<GradeSyncCard assignmentId="a-1" variant="inline" />);
+
+    expect(await screen.findByText(/2 grades could not be sent/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send grades now/ })).toBeInTheDocument();
   });
 });

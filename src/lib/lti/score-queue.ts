@@ -262,3 +262,19 @@ export async function scoreQueueSummary(assignmentId: string) {
     lastSentAt: lastSent?.sentAt ?? null,
   };
 }
+
+/**
+ * Where one student's grade for one assignment has got to.
+ *
+ * Separate from the summary above because the two answer different questions. The summary is
+ * "how is this assignment doing"; this is "did *this* grade arrive", which is what somebody
+ * looking at one student's work is actually asking, and it can carry the reason it did not.
+ */
+export async function studentScoreState(assignmentId: string, userId: string) {
+  const row = await prisma.ltiScoreQueue.findUnique({
+    where: { assignmentId_userId: { assignmentId, userId } },
+    select: { state: true, sentAt: true, lastError: true },
+  });
+  if (!row) return null;
+  return { state: row.state, sentAt: row.sentAt, lastError: row.lastError };
+}
