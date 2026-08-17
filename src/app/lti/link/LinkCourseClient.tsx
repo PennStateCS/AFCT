@@ -17,11 +17,18 @@ export default function LinkCourseClient({
   pendingId,
   contextTitle,
   courses = [],
+  otherCourses = [],
   notReady = false,
 }: {
   pendingId?: string;
   contextTitle?: string | null;
   courses?: CourseChoice[];
+  /**
+   * Courses this person may link but does not run, which only an administrator ever has.
+   * Kept behind a deliberate click: see the note in `page.tsx` for why the default matters
+   * more than the rule here.
+   */
+  otherCourses?: CourseChoice[];
   notReady?: boolean;
 }) {
   /**
@@ -31,6 +38,8 @@ export default function LinkCourseClient({
   const [selected, setSelected] = useState<string>(
     courses.length === 1 ? (courses[0]?.id ?? '') : '',
   );
+  const [showAll, setShowAll] = useState(false);
+  const listed = showAll ? [...courses, ...otherCourses] : courses;
   const [saving, setSaving] = useState(false);
 
   const link = async () => {
@@ -93,30 +102,47 @@ export default function LinkCourseClient({
                 You are only asked once.
               </p>
 
-              <fieldset className="space-y-2">
-                <legend className="sr-only">AFCT courses you teach</legend>
-                {courses.map((course) => (
-                  <label
-                    key={course.id}
-                    className="hover:bg-muted flex cursor-pointer items-start gap-3 rounded-md border p-3"
-                  >
-                    <input
-                      type="radio"
-                      name="course"
-                      value={course.id}
-                      checked={selected === course.id}
-                      onChange={() => setSelected(course.id)}
-                      className="mt-1"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{course.name}</span>
-                      <span className="text-muted-foreground block text-xs">
-                        {course.code}, {course.semester}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
+              {/* A select rather than radios, matching the assignment picker for the same
+                  reason: a deployment has far more courses than fit the modal an LMS draws
+                  this in, and an administrator listing every course has more still. A native
+                  select stays usable at any length, on a keyboard and in a screen reader. */}
+              <div className="space-y-2">
+                <label htmlFor="courseId" className="block text-sm font-medium">
+                  AFCT course
+                </label>
+                <select
+                  id="courseId"
+                  name="courseId"
+                  value={selected}
+                  onChange={(event) => setSelected(event.target.value)}
+                  className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                >
+                  {/* No preselection when there is a choice to make: a course chosen by
+                      arriving at the page is one nobody decided on, and this decision sends
+                      students and grades somewhere. */}
+                  {listed.length !== 1 && <option value="">Choose a course…</option>}
+                  {listed.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.name} {'\u2014'} {course.code}, {course.semester}
+                      {otherCourses.some((other) => other.id === course.id)
+                        ? ' \u2014 you do not teach this'
+                        : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {otherCourses.length > 0 && (
+                <label className="text-muted-foreground flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={showAll}
+                    onChange={(event) => setShowAll(event.target.checked)}
+                  />
+                  Show all {courses.length + otherCourses.length} courses, including ones I do not
+                  teach
+                </label>
+              )}
 
               {/*
                * Left enabled with nothing chosen, deliberately. A disabled button that does
