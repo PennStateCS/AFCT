@@ -47,8 +47,15 @@ export async function POST(request: Request) {
       platformId: pending.platformId,
       contextId: pending.contextId,
       contextTitle: pending.contextTitle,
-      // The rest is unused by linking, and deliberately not carried around: this is a
-      // configuration act, not a sign-in.
+      // Where grades and the roster live for this course, as the launch reported them. These
+      // are emphatically NOT unused by linking: they are stored on the link and are the only
+      // route to the gradebook afterwards. Passing null here recorded a course that looked
+      // connected and could never be graded, and the failure then blamed the LMS for a
+      // permission it had already given.
+      lineItemsUrl: pending.lineItemsUrl,
+      membershipsUrl: pending.membershipsUrl,
+      // The rest is genuinely unused by linking, and deliberately not carried around: this is
+      // a configuration act, not a sign-in.
       issuer: pending.platform.issuer,
       subject: '',
       email: '',
@@ -56,8 +63,6 @@ export async function POST(request: Request) {
       lastName: null,
       roles: [],
       resourceLinkId: null,
-      lineItemsUrl: null,
-      membershipsUrl: null,
       deepLink: null,
       assignmentId: null,
       targetLinkUri: null,

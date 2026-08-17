@@ -7,6 +7,10 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+
+/** No request behind a queue drain, so the log records the system as the actor. */
+const WORKER_CONTEXT = { ipAddress: 'system', userAgent: 'lti-score-queue' } as const;
 import type { LtiScoreState } from '@prisma/client';
 
 /** Give up after this many tries and leave it for somebody to look at. */
@@ -129,14 +133,49 @@ export async function markFailed(opts: {
 
   const minutes = BACKOFF_MINUTES[Math.min(opts.attempts - 1, BACKOFF_MINUTES.length - 1)] ?? 1;
 
-  await prisma.ltiScoreQueue.update({
+  const row = await prisma.ltiScoreQueue.update({
     where: { id: opts.id },
     data: {
       state: giveUp ? 'FAILED' : 'PENDING',
       lastError: opts.error.slice(0, 500),
       nextAttemptAt: new Date(now.getTime() + minutes * 60_000),
     },
+    // The course comes from the assignment: the queue row does not carry one, and an entry
+    // that cannot be filtered by course is one faculty cannot find.
+    select: { assignmentId: true, userId: true, assignment: { select: { courseId: true } } },
   });
+
+  /**
+   * A grade that will never reach the LMS is worth an entry in the log.
+   *
+   * Until now the reason lived only on the queue row, which no screen reads and no
+   * administrator can reach without database access. A grade silently not arriving in the LMS
+   * gradebook is among the worst things this system can do quietly, and working out why it
+   * happened meant somebody with a psql prompt.
+   *
+   * Only the terminal failure is logged, not each retry: a transient error that the next
+   * attempt fixes is noise, and noise in this log is what stops people reading it.
+   */
+  if (giveUp) {
+    try {
+      await createEnhancedActivityLog(prisma, WORKER_CONTEXT, {
+        userId: row.userId,
+        action: 'LTI_SCORE_SEND_FAILED',
+        severity: 'ERROR',
+        category: 'SUBMISSION',
+        courseId: row.assignment?.courseId ?? null,
+        assignmentId: row.assignmentId,
+        metadata: {
+          reason: opts.error.slice(0, 500),
+          attempts: opts.attempts,
+          retryable: opts.retryable,
+        },
+      });
+    } catch (err) {
+      // Logging must not be able to lose the queue update that has already happened.
+      console.error('[lti] could not log a failed score send', err);
+    }
+  }
 
   return { state: giveUp ? 'FAILED' : 'PENDING' };
 }
