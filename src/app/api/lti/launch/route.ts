@@ -6,6 +6,7 @@ import { stateCookieName } from '@/lib/lti/login-init';
 import { issueSingleUseToken } from '@/lib/single-use-token';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { resolveLaunchTarget, enrolFromLaunch } from '@/lib/lti/course-link';
+import { errMessage } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 import { publicUrl } from '@/lib/lti/public-url';
 
@@ -121,11 +122,53 @@ export async function POST(request: Request) {
      * cannot assert, so supplying it makes the link deliberate rather than automatic.
      */
     if (signIn.reason === 'admin-requires-deliberate-link' && signIn.userId) {
+      /**
+       * Where they were going, worked out here because this is the last moment it can be.
+       * The launch token is single use and already spent, so the confirmation that follows
+       * has nothing left to derive a destination from, and a confirmed administrator was
+       * landing on the dashboard having been asked for a password and then told nothing.
+       * For staff launching from a course that is not connected yet, the thing they came to
+       * do is connect it, and being dropped on the dashboard reads as the link having failed.
+       *
+       * Only the destination that costs nothing to prepare is worked out now. Enrolling on an
+       * already-linked course deliberately is not: an LMS asserting an administrator's email
+       * is the exact claim this pause exists to doubt, so nothing may act on it until the
+       * password proves it. Those launches still land on the dashboard, signed in, which is
+       * true if unhelpful.
+       */
+      let next: string | null = null;
+      try {
+        const target = await resolveLaunchTarget({
+          identity: verified.identity,
+          userId: signIn.userId,
+        });
+        if (target.status === 'needs-link' && verified.identity.contextId) {
+          const pendingLink = await prisma.ltiPendingLink.create({
+            data: {
+              platformId: verified.identity.platformId,
+              contextId: verified.identity.contextId,
+              contextTitle: verified.identity.contextTitle,
+              userId: signIn.userId,
+              expiresAt: new Date(Date.now() + PENDING_LINK_TTL_MS),
+            },
+            select: { id: true },
+          });
+          next = `/lti/link?pending=${pendingLink.id}`;
+        }
+      } catch (err) {
+        // Working out a nicer landing is a convenience, and it must never cost the launch. If
+        // it fails, the confirmation still happens and they arrive at the dashboard, which is
+        // where they arrived before any of this existed; throwing here would replace the
+        // password prompt with an error page and leave them no way in at all.
+        console.warn(`[lti] could not prepare an administrator's destination: ${errMessage(err)}`);
+      }
+
       const pending = await prisma.ltiPendingIdentityLink.create({
         data: {
           issuer: verified.identity.issuer,
           subject: verified.identity.subject,
           userId: signIn.userId,
+          next,
           expiresAt: new Date(Date.now() + ADMIN_CONFIRM_TTL_MS),
         },
         select: { id: true },
