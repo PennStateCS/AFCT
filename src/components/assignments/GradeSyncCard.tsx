@@ -15,6 +15,12 @@ type SyncState = {
   sent: number;
   failed: number;
   lastSentAt: string | null;
+  /** The open student's own grade, when one was asked about. */
+  student: {
+    state: 'PENDING' | 'SENT' | 'FAILED';
+    sentAt: string | null;
+    lastError: string | null;
+  } | null;
 };
 
 /**
@@ -27,30 +33,41 @@ type SyncState = {
 export function GradeSyncCard({
   assignmentId,
   variant,
+  studentId,
 }: {
   assignmentId: string;
   variant: 'settings' | 'status' | 'inline';
+  /**
+   * Whose work is on screen. The inline panel reports and sends this student's grade alone,
+   * because a button sitting beside one person's grade must not deliver the whole class's.
+   */
+  studentId?: string | null;
 }) {
   const { timezone, hour12 } = useEffectiveTimezone();
   const [state, setState] = useState<SyncState | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'student' | 'all' | null>(null);
   const [open, setOpen] = useState(true);
+
+  const scoped = variant === 'inline' && !!studentId;
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/assignments/${assignmentId}/lti-sync`);
+      const url = new URL(`/api/assignments/${assignmentId}/lti-sync`, window.location.origin);
+      if (variant === 'inline' && studentId) url.searchParams.set('userId', studentId);
+      const res = await fetch(url.pathname + url.search);
       if (!res.ok) throw new Error();
       setState((await res.json()) as SyncState);
     } catch {
       setState(null);
     }
-  }, [assignmentId]);
+  }, [assignmentId, studentId, variant]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const statusText = !state?.linked
+  /** What the panel says about the assignment as a whole. */
+  const assignmentText = !state?.linked
     ? ''
     : state.failed > 0
       ? `${state.failed} ${state.failed === 1 ? 'grade' : 'grades'} could not be sent to your LMS.`
@@ -59,6 +76,32 @@ export function GradeSyncCard({
         : state.sent > 0
           ? 'All grades for this assignment have been sent to your LMS.'
           : 'No grades have been sent to your LMS yet.';
+
+  /**
+   * What it says about the student on screen.
+   *
+   * A failure quotes the reason rather than a count, because the reason is the whole of what a
+   * person can act on: "your LMS does not list this student" and "your LMS refused the grade"
+   * need completely different things done about them.
+   */
+  const studentText = !state?.linked
+    ? ''
+    : !state.student
+      ? 'This grade has not been sent to your LMS.'
+      : state.student.state === 'FAILED'
+        ? (state.student.lastError ?? 'This grade could not be sent to your LMS.')
+        : state.student.state === 'PENDING'
+          ? 'This grade is waiting to be sent to your LMS.'
+          : 'This grade has been sent to your LMS.';
+
+  /** Everyone else's grades that still need attention, so a failure elsewhere is not hidden. */
+  const othersOutstanding =
+    state && scoped
+      ? Math.max(
+          0,
+          state.pending + state.failed - (state.student && state.student.state !== 'SENT' ? 1 : 0),
+        )
+      : 0;
 
   if (!state?.linked) {
     // The Settings tab is a real destination, so it explains itself rather than being blank.
@@ -87,22 +130,36 @@ export function GradeSyncCard({
     }
   };
 
-  const sendNow = async () => {
-    setBusy(true);
+  /**
+   * Send one student's grade, or every outstanding one.
+   *
+   * `only` is the whole difference: the route sends the assignment's grades unless it is given a
+   * student, so passing the wrong thing here quietly delivers the class.
+   */
+  const sendNow = async (only: string | null) => {
+    setBusy(only ? 'student' : 'all');
     try {
-      const res = await fetch(`/api/assignments/${assignmentId}/lti-sync`, { method: 'POST' });
+      const res = await fetch(`/api/assignments/${assignmentId}/lti-sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(only ? { userId: only } : {}),
+      });
       if (!res.ok) throw new Error();
       const { queued } = (await res.json()) as { queued: number };
       showToast.success(
-        queued === 0
-          ? 'Every grade is already up to date in your LMS.'
-          : `${queued} ${queued === 1 ? 'grade is' : 'grades are'} on their way to your LMS.`,
+        only
+          ? queued === 0
+            ? 'This grade is already up to date in your LMS.'
+            : 'This grade is on its way to your LMS.'
+          : queued === 0
+            ? 'Every grade is already up to date in your LMS.'
+            : `${queued} ${queued === 1 ? 'grade is' : 'grades are'} on their way to your LMS.`,
       );
       await load();
     } catch {
       showToast.error('Could not send those grades. Check your connection and try again.');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
@@ -132,24 +189,55 @@ export function GradeSyncCard({
         </div>
         {open && (
           <div id="lms-sync" className="flex flex-col gap-2">
+            {/* One live region for this panel, so a send is announced once. */}
             <p className="text-muted-foreground text-xs" role="status">
-              {statusText}
+              {scoped ? studentText : assignmentText}
             </p>
-            {state.lastSentAt && (
+            {(scoped ? state.student?.sentAt : state.lastSentAt) && (
               <p className="text-muted-foreground text-xs">
-                Last sent {formatDateTimeInTimeZone(state.lastSentAt, timezone, hour12)}
+                Last sent{' '}
+                {formatDateTimeInTimeZone(
+                  (scoped ? state.student?.sentAt : state.lastSentAt) as string,
+                  timezone,
+                  hour12,
+                )}
               </p>
             )}
             <Button
               variant="outline"
               size="sm"
               className="w-fit"
-              onClick={() => void sendNow()}
-              disabled={busy}
+              onClick={() => void sendNow(scoped ? (studentId as string) : null)}
+              disabled={busy !== null}
             >
               <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-              {busy ? 'Sending...' : 'Send grades now'}
+              {busy === 'student' || (busy === 'all' && !scoped)
+                ? 'Sending...'
+                : scoped
+                  ? 'Send this grade now'
+                  : 'Send grades now'}
             </Button>
+
+            {/* The rest of the class, which the button above deliberately leaves alone. Shown
+                only when there is something to do, so the usual case stays one line and one
+                button. */}
+            {othersOutstanding > 0 && (
+              <div className="mt-1 flex flex-col gap-2 border-t pt-2">
+                <p className="text-muted-foreground text-xs">
+                  {othersOutstanding} other {othersOutstanding === 1 ? 'grade' : 'grades'} on this
+                  assignment {othersOutstanding === 1 ? 'is' : 'are'} waiting or failed.
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-fit"
+                  onClick={() => void sendNow(null)}
+                  disabled={busy !== null}
+                >
+                  {busy === 'all' ? 'Sending...' : 'Send all outstanding grades'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -192,7 +280,12 @@ export function GradeSyncCard({
         )}
       </div>
 
-      <Button variant="outline" size="sm" onClick={() => void sendNow()} disabled={busy}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => void sendNow(null)}
+        disabled={busy !== null}
+      >
         <Send className="mr-2 h-4 w-4" aria-hidden="true" />
         {busy ? 'Sending...' : 'Send grades now'}
       </Button>

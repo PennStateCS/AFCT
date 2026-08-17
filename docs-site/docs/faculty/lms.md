@@ -27,7 +27,9 @@ Grade sync is set per assignment, so you can autograde practice work in AFCT wit
 
 To turn it on, open the assignment, go to the **Settings** tab, and switch on **Send grades automatically**. Grades then go to your LMS as you award and change them, including grades from the autograder.
 
-To check whether they arrived, look at **Grades in your LMS** on the assignment's **Submissions** tab, and in the **LMS Sync** section beside the grade you are giving. Either one tells you what is waiting, what has been sent, and what failed, and both have a **Send grades now** button that pushes everything outstanding for that assignment immediately.
+To check whether they arrived, look at the **LMS Sync** section beside the grade you are giving. It reports on the student whose work is open: whether their grade has been sent, is waiting, or could not be sent, and why. **Send this grade now** sends that student's grade and nobody else's.
+
+When other students on the same assignment are waiting or have failed, the section says so and offers **Send all outstanding grades**, which is the button to use after your LMS has been down.
 
 A few things worth knowing:
 

@@ -101,6 +101,8 @@ export type ProblemWorkspaceProps = {
   isPrivilegedUser: boolean;
   /** Set by the staff view only. Enables the LMS grade entry below the grade form. */
   assignmentId?: string;
+  /** Whose work is open, so the LMS panel reports and sends this student's grade alone. */
+  studentId?: string | null;
   submissionsLoading?: boolean;
   commentsLoading?: boolean;
 };
@@ -161,6 +163,7 @@ export default function ProblemWorkspace({
   isLoadingGrade = false,
   isPrivilegedUser,
   assignmentId,
+  studentId,
   submissionsLoading = false,
   commentsLoading = false,
 }: ProblemWorkspaceProps) {
@@ -469,7 +472,9 @@ export default function ProblemWorkspace({
               groupGradeValue={groupGradeValue}
             />
             {/* Renders nothing unless the course is linked to an LMS. */}
-            {assignmentId ? <GradeSyncCard assignmentId={assignmentId} variant="inline" /> : null}
+            {assignmentId ? (
+              <GradeSyncCard assignmentId={assignmentId} variant="inline" studentId={studentId} />
+            ) : null}
             {/* Under the grade rather than beside the heading: it needs a sentence to
                     mean anything, and the sentence is the part the old switch was missing. */}
             {onManualHoldChange ? (

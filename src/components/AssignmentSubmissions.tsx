@@ -526,6 +526,8 @@ export default function AssignmentSubmissions({
                 const workspace = (
                   <ProblemWorkspace
                     assignmentId={assignmentId}
+                    // Who the LMS panel below the grade reports on, and sends for.
+                    studentId={selectedStudentId}
                     // The header shows the cap the SELECTED student is working against
                     // (base plus any grants), not just the shared base value.
                     problem={

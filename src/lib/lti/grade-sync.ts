@@ -8,7 +8,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { queueScore, scoreQueueSummary } from '@/lib/lti/score-queue';
+import { queueScore, scoreQueueSummary, studentScoreState } from '@/lib/lti/score-queue';
 
 /** Whether this course opens from any LMS. Nothing here does anything if it does not. */
 export async function courseIsLinked(courseId: string): Promise<boolean> {
@@ -22,7 +22,7 @@ export async function courseIsLinked(courseId: string): Promise<boolean> {
  */
 export async function queueChangedGrades(
   assignmentId: string,
-  opts: { retryFailed?: boolean } = {},
+  opts: { retryFailed?: boolean; userId?: string } = {},
 ): Promise<number> {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
@@ -38,16 +38,25 @@ export async function queueChangedGrades(
   // Nothing to score against, so a percentage would be meaningless and the LMS would refuse it.
   if (scoreMaximum <= 0) return 0;
 
+  /**
+   * One student, when the caller named one.
+   *
+   * The per-student panel sends the grade it is showing and nothing else, so that pressing it
+   * beside one student's work cannot quietly deliver somebody else's grade as well. The
+   * assignment-wide path passes no id and still sends everything outstanding.
+   */
+  const forOne = opts.userId ? { studentId: opts.userId } : {};
+
   // The same sum the gradebook shows. Two ways of totalling a grade is how a student ends up
   // with different marks in two places.
   const totals = await prisma.assignmentProblemGrade.groupBy({
     by: ['studentId'],
-    where: { assignmentId },
+    where: { assignmentId, ...forOne },
     _sum: { grade: true },
   });
 
   const queued = await prisma.ltiScoreQueue.findMany({
-    where: { assignmentId },
+    where: { assignmentId, ...(opts.userId ? { userId: opts.userId } : {}) },
     select: { userId: true, scoreGiven: true, scoreMaximum: true, state: true },
   });
   const known = new Map(queued.map((row) => [row.userId, row]));
@@ -87,8 +96,14 @@ export async function queueChangedGrades(
   return count;
 }
 
-/** What faculty are shown for one assignment. */
-export async function assignmentSyncState(assignmentId: string) {
+/**
+ * What faculty are shown for one assignment, plus one student's own grade when asked.
+ *
+ * Both, rather than one or the other: the panel beside a student's work reports on that
+ * student, and still has to say whether anybody else's grade is outstanding, or the only way
+ * to notice a failure elsewhere would be to open all thirty students in turn.
+ */
+export async function assignmentSyncState(assignmentId: string, userId?: string) {
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
     select: { courseId: true, ltiAutoSync: true },
@@ -97,8 +112,9 @@ export async function assignmentSyncState(assignmentId: string) {
 
   const linked = await courseIsLinked(assignment.courseId);
   const summary = await scoreQueueSummary(assignmentId);
+  const student = userId ? await studentScoreState(assignmentId, userId) : null;
 
-  return { linked, autoSync: assignment.ltiAutoSync, ...summary };
+  return { linked, autoSync: assignment.ltiAutoSync, ...summary, student };
 }
 
 /** Queue changed grades for every assignment set to sync automatically. */
