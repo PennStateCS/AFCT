@@ -25,7 +25,10 @@ export const formatBytes = (b?: number | null) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (bytes < 1024 * 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  // Stopping at GB meant a terabyte volume read as "1006.85 GB", which is a number nobody
+  // converts in their head. The Files tab reports disk sizes now, so this range is reachable.
+  return `${(bytes / 1024 / 1024 / 1024 / 1024).toFixed(2)} TB`;
 };
 
 export const formatDbSize = formatBytes;
