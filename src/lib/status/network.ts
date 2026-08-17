@@ -1,4 +1,5 @@
 import type { PeerCertificate } from 'tls';
+import { probeFailed } from './probe';
 import { prisma } from '@/lib/prisma';
 import { boundedCache, STATUS_TTL } from '@/lib/status/cache';
 import { detectProvider } from '@/lib/status/database';
@@ -118,9 +119,13 @@ export async function collectNetwork(origin: string): Promise<NetworkStatusRespo
         `) as Array<{ num_backends?: number }>;
         const n = nb?.[0]?.num_backends;
         dbConnections = typeof n === 'number' ? n : null;
-      } catch {}
+      } catch (err) {
+        probeFailed('network: db connections', err);
+      }
     }
-  } catch {}
+  } catch (err) {
+    probeFailed('network: db connections', err);
+  }
 
   const [dbResolved, authResolved, authLatencyMs, authCertExpiry] = await Promise.all([
     dnsCache.get(`${dbHost}`, () => resolveHost(dbHost)),
