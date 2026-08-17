@@ -230,6 +230,29 @@ describe("the platform's answer", () => {
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 
+  it('finds the deployment where Canvas puts it, at the top level', async () => {
+    // Canvas's own response shape (`dynamic_registration_controller.rb`, render_registration):
+    // the deployment it has just created is a top-level member, not part of the tool
+    // configuration claim the spec describes. Reading only the spec's location made every real
+    // Canvas registration fail on a value Canvas had already sent.
+    vi.stubGlobal(
+      'fetch',
+      answering(200, {
+        client_id: '10000000000003',
+        scope: `${REQUESTED_SCOPES.join(' ')} openid`,
+        [TOOL_CONFIGURATION_CLAIM]: { version: '1.3.0', domain: 'afct.example.test' },
+        registration_client_uri: 'https://lms.example.test/api/lti/registrations/1',
+        deployment_id: '3:8865aa05b4b79b64a91a86042e43af5ea8ae79eb',
+      }),
+    );
+
+    const result = await send();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.platform.deploymentId).toBe('3:8865aa05b4b79b64a91a86042e43af5ea8ae79eb');
+  });
+
   it('accepts a numeric client id, which some platforms send', async () => {
     vi.stubGlobal(
       'fetch',
