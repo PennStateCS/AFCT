@@ -118,6 +118,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/lti/registration-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a one-time link for registering an LMS automatically
+         * @description A link an administrator pastes into their LMS to register AFCT automatically.   The link is the whole of the authorisation for the registration that follows. It has to be,  because the LMS opens AFCT from another site and no AFCT cookie travels with that request, so  there is no session on the other end to check. Hence: minted only by an administrator, spent  exactly once, valid for an hour, and stored as a hash like every other single-use token.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/lti/registration-token/route.ts)
+         */
+        post: operations["postAdminLtiRegistrationToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/reset-password": {
         parameters: {
             query?: never;
@@ -2816,6 +2838,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lti/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete an automatic LMS registration
+         * @description Register AFCT with an LMS, on the LMS's own instruction.   Unauthenticated by necessity: the request comes from a page the LMS framed, and no AFCT  cookie survives that. The one-time token stands in for the session, and **it is spent before  anything else happens**. That ordering is the security of this route, not a detail: until the  token is proven good, AFCT makes no outbound request at all, so a stranger who guesses this  URL cannot use it to make the server fetch an address of their choosing.   Spending first also means a failed registration burns the link. That is deliberate. The  alternative, spending it on success, would let one link register two different platforms,  and a registration grants an LMS the ability to assert who somebody is. Minting another link  costs an administrator one click.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/register/route.ts)
+         */
+        post: operations["postLtiRegister"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/assignments": {
         parameters: {
             query?: never;
@@ -3502,6 +3546,33 @@ export interface operations {
             };
             /** @description That issuer, client ID and deployment ID are already registered. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminLtiRegistrationToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The link, and when it expires. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not an administrator. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12354,6 +12425,42 @@ export interface operations {
             };
             /** @description No registration matches, or more than one does. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postLtiRegister: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered. Returns what was saved, and anything worth knowing. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The link was expired, already used, or the LMS could not be registered. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description That LMS is already registered. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

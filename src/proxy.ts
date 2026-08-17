@@ -49,6 +49,10 @@ const PUBLIC_API_PREFIXES = [
   // matched. Necessarily unauthenticated, since it exists to establish who they are, and it
   // proves that itself through the same credential check the login form uses.
   '/api/lti/confirm-identity',
+  // Automatic registration, called from a page the LMS framed, where no AFCT cookie arrives.
+  // Authorised instead by a one-time token an administrator minted, which the route spends
+  // before it does anything else.
+  '/api/lti/register',
 ] as const;
 
 /**
@@ -100,7 +104,6 @@ function buildCsp(nonce: string, frameAncestors: string): string {
 const CSP_ENFORCE =
   process.env.CSP_ENFORCE === 'true' ||
   (process.env.NODE_ENV === 'production' && process.env.CSP_ENFORCE !== 'false');
-
 
 /**
  * Which origins may put AFCT in an iframe.
@@ -158,13 +161,42 @@ export function resetFrameAncestorCache(): void {
   frameAncestorCache = null;
 }
 
+/**
+ * The one LMS that may frame AFCT without being registered yet.
+ *
+ * Automatic registration is the case the list above cannot cover: the platform frames the
+ * registration page precisely because it is *not* registered, so deriving frame-ancestors from
+ * the registrations leaves it blocked and the flow impossible.
+ *
+ * Trusting the query parameter is safe here because the page it unblocks holds nothing worth
+ * framing for. It reads no cookie and performs no action; registering needs a one-time token
+ * that only an AFCT administrator can mint, and anybody holding one can register directly
+ * without going near a browser. Every other path keeps the registered-platforms list.
+ */
+function pendingRegistrationOrigin(req: NextRequest, pathname: string): string | null {
+  if (pathname !== '/lti/register') return null;
+  const raw = req.nextUrl.searchParams.get('openid_configuration');
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 // Generate a nonce, return the request headers Next reads it from plus a helper that
 // stamps the browser-facing (enforced or report-only) header onto a response.
 async function prepareCsp(req: NextRequest, pathname: string) {
   const nonce = btoa(crypto.randomUUID());
   // Only the LTI routes pay for the lookup; everything else keeps the strict default and
   // never touches the database.
-  const csp = buildCsp(nonce, isLtiPath(pathname) ? await ltiFrameAncestors() : "'self'");
+  let frameAncestors = isLtiPath(pathname) ? await ltiFrameAncestors() : "'self'";
+  const pending = pendingRegistrationOrigin(req, pathname);
+  if (pending && !frameAncestors.split(' ').includes(pending)) {
+    frameAncestors = `${frameAncestors} ${pending}`;
+  }
+  const csp = buildCsp(nonce, frameAncestors);
   const requestHeaders = new Headers(req.headers);
   // A request header is invisible to the browser (so it doesn't enforce anything);
   // Next uses it only to discover the nonce and apply it to its script tags.

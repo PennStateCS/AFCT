@@ -309,6 +309,40 @@ describe('proxy', () => {
 
       expect(findManyMock).toHaveBeenCalledTimes(1);
     });
-  });
 
+    /**
+     * Automatic registration is the case the registered-platforms list cannot cover: the LMS
+     * frames the registration page precisely because it is not registered yet.
+     */
+    describe('an LMS registering itself', () => {
+      it('may frame the registration page it was sent to', async () => {
+        findManyMock.mockResolvedValue([]);
+
+        const res = await proxy(
+          req('/lti/register?rt=abc&openid_configuration=https://new-lms.school.edu/.well-known/x'),
+        );
+
+        expect(frameAncestors(res)).toBe("frame-ancestors 'self' https://new-lms.school.edu");
+      });
+
+      it('gets no such licence on any other page', async () => {
+        findManyMock.mockResolvedValue([]);
+
+        const res = await proxy(
+          req('/lti/launch?openid_configuration=https://new-lms.school.edu/.well-known/x'),
+        );
+
+        expect(frameAncestors(res)).toBe("frame-ancestors 'self'");
+      });
+
+      it('ignores an origin that is not https, or is not a URL at all', async () => {
+        findManyMock.mockResolvedValue([]);
+
+        for (const value of ['http://new-lms.school.edu/x', 'not a url']) {
+          const res = await proxy(req(`/lti/register?openid_configuration=${value}`));
+          expect(frameAncestors(res)).toBe("frame-ancestors 'self'");
+        }
+      });
+    });
+  });
 });
