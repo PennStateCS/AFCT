@@ -170,11 +170,18 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
     if (!allowed) {
       // Read the caller's standing now, not when somebody reads the log: roles and enrolment
       // change. One extra query, on the denial path only.
-      let membership: { role?: CourseRole | null; status?: string | null } | null = null;
+      let membership: {
+        role?: CourseRole | null;
+        status?: string | null;
+        course?: { isPublished: boolean } | null;
+      } | null = null;
       try {
         membership = await prisma.roster.findFirst({
           where: { courseId, userId: session.user.id },
-          select: { role: true, status: true },
+          // The course's own state comes too: a student enrolled in an unpublished course is
+          // refused for a reason that has nothing to do with their enrolment, and reporting it
+          // as "needs enrolled" sends whoever reads the log looking in the wrong place.
+          select: { role: true, status: true, course: { select: { isPublished: true } } },
         });
       } catch {
         // A failed lookup must not turn the 403 into a 500; log the refusal without the role.
@@ -184,13 +191,28 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
       // Defensive: this path is already failing, so an unexpected shape must not throw.
       const role = membership?.role ?? null;
       const status = membership?.status ?? null;
-      const reason = !membership
-        ? 'not enrolled in this course'
-        : status && status !== 'ENROLLED'
-          ? `${status.toLowerCase()} from this course`
-          : role
-            ? `${role.toLowerCase()}, needs ${required.toLowerCase()}`
-            : `needs ${required.toLowerCase()}`;
+      /**
+       * Enrolled, not dropped, and still refused: the course is not open to students yet.
+       *
+       * Worth separating because it is the only denial here that the person can do nothing
+       * about and their instructor can fix in one click, and because it is common. A course
+       * starts unpublished, so every student who follows an LMS link before the instructor
+       * publishes lands on this.
+       */
+      const unpublished =
+        opts.access === 'read' &&
+        role === 'STUDENT' &&
+        status === 'ENROLLED' &&
+        membership?.course?.isPublished === false;
+      const reason = unpublished
+        ? 'course not published'
+        : !membership
+          ? 'not enrolled in this course'
+          : status && status !== 'ENROLLED'
+            ? `${status.toLowerCase()} from this course`
+            : role
+              ? `${role.toLowerCase()}, needs ${required.toLowerCase()}`
+              : `needs ${required.toLowerCase()}`;
 
       await createEnhancedActivityLog(prisma, req, {
         userId: session.user.id,
@@ -201,7 +223,12 @@ export function withCourseAuth<Ctx extends CourseParams, R extends Response = Re
         courseId,
         metadata: { reason, required, role, status },
       });
-      return apiError(403, 'Forbidden');
+      // The only denial that says more than "Forbidden". Nothing is disclosed by it: they are
+      // enrolled, so they already know the course exists, and the screen is otherwise left
+      // telling them to refresh a page that will never load.
+      return unpublished
+        ? apiError(403, 'This course has not been published yet, so it is not open to students.')
+        : apiError(403, 'Forbidden');
     }
 
     // Archive freeze: an archived course is read-only for everyone (admins too). This

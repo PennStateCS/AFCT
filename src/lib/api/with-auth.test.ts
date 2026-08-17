@@ -237,6 +237,72 @@ describe('withCourseAuth', () => {
     expect(createLogMock.mock.calls[0][2].metadata.reason).toBe('not enrolled in this course');
   });
 
+  /**
+   * A course starts unpublished, so this is what every student sees who follows an LMS link
+   * before their instructor publishes. It is the one denial the person cannot act on and the
+   * instructor can fix in a click, so it says so instead of "Forbidden".
+   */
+  describe('a student in a course that is not published yet', () => {
+    const read = { access: 'read' as const, deniedAction: 'C_READ_DENIED' };
+    const enrolledButUnpublished = () => {
+      authMock.mockResolvedValue({ user: { id: 'u1' } });
+      canAccessMock.mockResolvedValue(false);
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        status: 'ENROLLED',
+        course: { isPublished: false },
+      });
+    };
+
+    it('tells them why, rather than refusing without a reason', async () => {
+      enrolledButUnpublished();
+
+      const res = await withCourseAuth(vi.fn(), read)(new Request('http://localhost/x'), ctx());
+
+      expect(res.status).toBe(403);
+      expect(await (res as Response).json()).toEqual({
+        error: 'This course has not been published yet, so it is not open to students.',
+      });
+    });
+
+    it('records the real reason, not a role that has nothing to do with it', async () => {
+      enrolledButUnpublished();
+
+      await withCourseAuth(vi.fn(), read)(new Request('http://localhost/x'), ctx());
+
+      expect(createLogMock.mock.calls[0][2].metadata.reason).toBe('course not published');
+    });
+
+    it('keeps saying only Forbidden once the course is published', async () => {
+      authMock.mockResolvedValue({ user: { id: 'u1' } });
+      canAccessMock.mockResolvedValue(false);
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        status: 'ENROLLED',
+        course: { isPublished: true },
+      });
+
+      const res = await withCourseAuth(vi.fn(), read)(new Request('http://localhost/x'), ctx());
+
+      expect(await (res as Response).json()).toEqual({ error: 'Forbidden' });
+    });
+
+    it('does not explain a staff refusal that way', async () => {
+      // Manage access is a different question, and an unpublished course does not block staff.
+      authMock.mockResolvedValue({ user: { id: 'u1' } });
+      canManageMock.mockResolvedValue(false);
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        status: 'ENROLLED',
+        course: { isPublished: false },
+      });
+
+      const res = await withCourseAuth(vi.fn(), manage)(new Request('http://localhost/x'), ctx());
+
+      expect(await (res as Response).json()).toEqual({ error: 'Forbidden' });
+    });
+  });
+
   it('uses canAccessCourse for read access', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1' } });
     canAccessMock.mockResolvedValue(true);

@@ -17,7 +17,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDeadlineDual } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
-import { fetchJson } from '@/lib/query-fetch';
+import { fetchJson, HttpError } from '@/lib/query-fetch';
 import { RichDescription } from '@/components/rich-description/RichDescription';
 import type {
   AssignmentWithDetails,
@@ -57,15 +57,10 @@ export default function StudentAssignmentPage({
   // refetch on mount when the server already sent it, and back-navigation is warm.
   const assignmentQuery = useQuery({
     queryKey: queryKeys.assignment.shell(params.id, assignmentId),
-    queryFn: async () => {
-      const res = await fetch(apiPaths.assignment(params.id, assignmentId, { view: 'problems' }));
-      if (!res.ok) {
-        const err = new Error('Failed to fetch assignment') as Error & { status?: number };
-        err.status = res.status;
-        throw err;
-      }
-      return (await res.json()) as AssignmentWithDetails;
-    },
+    queryFn: () =>
+      fetchJson<AssignmentWithDetails>(
+        apiPaths.assignment(params.id, assignmentId, { view: 'problems' }),
+      ),
     initialData: initialAssignment ?? undefined,
     enabled: !!assignmentId && !!session,
     retry: false,
@@ -180,28 +175,50 @@ export default function StudentAssignmentPage({
     [refreshContext],
   );
 
-  // A 404 means the assignment is missing or forbidden; bounce to the dashboard;
-  // any other failure just surfaces a toast.
-  useEffect(() => {
-    const err = assignmentQuery.error as (Error & { status?: number }) | null;
-    if (!err) return;
-    if (err.status === 404) {
-      showToast.error(
-        'This assignment is not available. It may have been removed, or you may not have access to it.',
-      );
-      router.push('/dashboard');
-    } else {
-      console.error('Error fetching assignment:', err);
+  /**
+   * Say what actually happened, and only offer a refresh when one might help.
+   *
+   * A 404 is gone-or-forbidden and a 403 is a door that is shut for a reason the server can
+   * name (an unpublished course, most often, which is what every student sees who follows an
+   * LMS link before their instructor publishes). Both leave nothing on this page worth
+   * standing on, so they go back to the dashboard with the reason. Telling somebody to refresh
+   * a page that will never load was the old behaviour and it wasted their time.
+   */
+  const reportLoadFailure = useCallback(
+    (error: unknown, context: string) => {
+      const status = error instanceof HttpError ? error.status : undefined;
+      if (status === 404) {
+        showToast.error(
+          'This assignment is not available. It may have been removed, or you may not have access to it.',
+        );
+        router.push('/dashboard');
+        return;
+      }
+      if (status === 403) {
+        showToast.error(
+          error instanceof HttpError && error.message && error.message !== 'Forbidden'
+            ? error.message
+            : 'You do not have access to this assignment.',
+        );
+        router.push('/dashboard');
+        return;
+      }
+      console.error(context, error);
       showToast.error('Could not load the assignment. Refresh the page to try again.');
-    }
-  }, [assignmentQuery.error, router]);
+    },
+    [router],
+  );
+
+  useEffect(() => {
+    if (assignmentQuery.error)
+      reportLoadFailure(assignmentQuery.error, 'Error fetching assignment:');
+  }, [assignmentQuery.error, reportLoadFailure]);
 
   useEffect(() => {
     if (contextQuery.isError) {
-      console.error('Error fetching assignment context:', contextQuery.error);
-      showToast.error('Could not load the assignment. Refresh the page to try again.');
+      reportLoadFailure(contextQuery.error, 'Error fetching assignment context:');
     }
-  }, [contextQuery.isError, contextQuery.error]);
+  }, [contextQuery.isError, contextQuery.error, reportLoadFailure]);
 
   useEffect(() => {
     if (!assignment || assignment.problems.length === 0) {

@@ -26,9 +26,10 @@ vi.mock('next-auth/react', () => ({
   }),
 }));
 
+const pushMock = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'c1', aid: 'a1' }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock }),
   useSearchParams: () => ({ get: () => null }),
 }));
 
@@ -118,7 +119,7 @@ const emptyContext = {
 };
 
 // Simple URL router over fetch so tests only care about the endpoint hit.
-type FetchResult = { ok: boolean; json: () => Promise<unknown> };
+type FetchResult = { ok: boolean; status?: number; json: () => Promise<unknown> };
 const routeFetch = (routes: Record<string, () => FetchResult>) =>
   vi.fn((url: string) => {
     const key = Object.keys(routes).find((r) => url.includes(r));
@@ -201,6 +202,56 @@ describe('StudentAssignmentPage', () => {
     // Invalidation refetches student-context (a second call).
     await waitFor(() => expect(contextCalls).toBe(2));
     expect(toastMock.created).toHaveBeenCalledWith('Comment');
+  });
+
+  /**
+   * A refused page is not a broken one. The old behaviour told everybody to refresh, which for
+   * the commonest case (an unpublished course) is advice that can never work.
+   */
+  describe('when the server refuses', () => {
+    const refuse = (status: number, error: string) =>
+      routeFetch({
+        'student-context': () => ({ ok: false, status, json: async () => ({ error }) }),
+      });
+
+    it('passes on the reason the server gave, and gets off the page', async () => {
+      vi.stubGlobal(
+        'fetch',
+        refuse(403, 'This course has not been published yet, so it is not open to students.'),
+      );
+
+      renderWithClient(<StudentAssignmentPage initialAssignment={buildAssignment()} />);
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith(
+          'This course has not been published yet, so it is not open to students.',
+        ),
+      );
+      expect(pushMock).toHaveBeenCalledWith('/dashboard');
+    });
+
+    it('falls back to plain words when the server only says Forbidden', async () => {
+      vi.stubGlobal('fetch', refuse(403, 'Forbidden'));
+
+      renderWithClient(<StudentAssignmentPage initialAssignment={buildAssignment()} />);
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith('You do not have access to this assignment.'),
+      );
+    });
+
+    it('still offers a refresh for a failure that might actually be transient', async () => {
+      vi.stubGlobal('fetch', refuse(500, 'Internal error'));
+
+      renderWithClient(<StudentAssignmentPage initialAssignment={buildAssignment()} />);
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith(
+          'Could not load the assignment. Refresh the page to try again.',
+        ),
+      );
+      expect(pushMock).not.toHaveBeenCalled();
+    });
   });
 
   it('surfaces a toast when the student-context fetch fails', async () => {
