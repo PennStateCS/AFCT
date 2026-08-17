@@ -84,6 +84,10 @@ beforeEach(async () => {
       platformId: PLATFORM,
       contextId: 'ctx-signed-by-the-platform',
       contextTitle: 'Theory of Computation',
+      // What the launch was told about this course. Carried on the pending row because only a
+      // launch is given them, and the browser that comes back to choose brings nothing.
+      lineItemsUrl: 'https://canvas.example.test/api/lti/courses/1/line_items',
+      membershipsUrl: 'https://canvas.example.test/api/lti/courses/1/names_and_roles',
       userId: ids.faculty,
       expiresAt: new Date(Date.now() + 60_000),
     },
@@ -186,5 +190,28 @@ describe('what it refuses', () => {
     const res = await post({ pendingId: PENDING, courseId: COURSE });
 
     expect(res.status).toBe(409);
+  });
+
+  /**
+   * The connected course has to be reachable afterwards.
+   *
+   * Linking through the picker used to store the course with no gradebook or roster endpoint,
+   * because the route built an identity with both set to null and a comment saying they were
+   * unused here. They are not unused: they are the only route to the LMS gradebook, and
+   * without them every grade failed with a message blaming the LMS for a permission it had
+   * already granted. That sends an administrator to change a setting that was already correct.
+   */
+  it('keeps the gradebook and roster endpoints the launch reported', async () => {
+    const res = await post({ pendingId: PENDING, courseId: COURSE });
+    expect(res.status).toBe(200);
+
+    const link = await prisma.ltiContextLink.findFirst({
+      where: { contextId: 'ctx-signed-by-the-platform' },
+      select: { lineItemsUrl: true, membershipsUrl: true },
+    });
+    expect(link?.lineItemsUrl).toBe('https://canvas.example.test/api/lti/courses/1/line_items');
+    expect(link?.membershipsUrl).toBe(
+      'https://canvas.example.test/api/lti/courses/1/names_and_roles',
+    );
   });
 });

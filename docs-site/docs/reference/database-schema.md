@@ -98,6 +98,8 @@ erDiagram
   String platformId FK
   String contextId
   String contextTitle "nullable"
+  String lineItemsUrl "nullable"
+  String membershipsUrl "nullable"
   String userId FK
   DateTime expiresAt
   DateTime createdAt
@@ -444,6 +446,15 @@ Properties as follows:
 - `platformId`: Which registration the launch came through.
 - `contextId`: The LMS's own identifier for its course, exactly as the platform signed it.
 - `contextTitle`: What the LMS calls it, shown on the picker so faculty know what they are linking.
+- `lineItemsUrl`
+  > Where grades and the roster are read and written for this course, carried from the launch
+  > that offered the link.
+  >
+  > They have to travel with the pending row because only a launch is given them: they arrive
+  > as claims in the signed token, and the browser that comes back to choose a course a minute
+  > later brings nothing. Without them the link was stored with both set to null, and grades
+  > then failed against a message blaming the LMS for permissions it had already granted.
+- `membershipsUrl`:
 - `userId`: Who the launch signed in. Only they can act on it.
 - `expiresAt`: When this stops being usable.
 - `createdAt`: When this record was created.

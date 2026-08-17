@@ -23,6 +23,8 @@ const OTHER_ASSIGNMENT = 'a-queue-2';
 const USERS = ['u-queue-1', 'u-queue-2'];
 
 async function destroyFixtures() {
+  // The failure log these tests now write, or a count from the previous test carries over.
+  await prisma.activityLog.deleteMany({ where: { action: 'LTI_SCORE_SEND_FAILED' } });
   await prisma.ltiScoreQueue.deleteMany({});
   await prisma.assignment.deleteMany({ where: { id: { in: [ASSIGNMENT, OTHER_ASSIGNMENT] } } });
   await prisma.course.deleteMany({ where: { id: COURSE } });
@@ -262,6 +264,51 @@ describe('after an attempt', () => {
 });
 
 /** What faculty see. A failure nobody can find is the same as a grade that never went. */
+describe('what somebody troubleshooting can see', () => {
+  /**
+   * A grade that will never reach the LMS gradebook is one of the worst things this system can
+   * do quietly. The reason used to live only on the queue row, which no screen reads, so
+   * finding out why grades were not arriving needed a database prompt.
+   */
+  it('logs a grade it has given up on, with the reason', async () => {
+    await queue();
+    const claimed = await claimNextScore();
+
+    await markFailed({
+      id: claimed!.id,
+      attempts: claimed!.attempts,
+      error: 'Your LMS did not give AFCT permission to write grades for this course.',
+      retryable: false,
+    });
+
+    const entry = await prisma.activityLog.findFirst({
+      where: { action: 'LTI_SCORE_SEND_FAILED' },
+      select: { severity: true, courseId: true, assignmentId: true, metadata: true },
+    });
+    expect(entry?.severity).toBe('ERROR');
+    // Filterable by course and assignment, or faculty cannot find their own.
+    expect(entry?.courseId).toBeTruthy();
+    expect(entry?.assignmentId).toBeTruthy();
+    expect(JSON.stringify(entry?.metadata)).toContain('permission to write grades');
+  });
+
+  it('stays quiet about an attempt it is going to retry', async () => {
+    // A transient error the next attempt fixes is noise, and noise is what stops this log
+    // being read at all.
+    await queue();
+    const claimed = await claimNextScore();
+
+    await markFailed({
+      id: claimed!.id,
+      attempts: claimed!.attempts,
+      error: 'ECONNREFUSED',
+      retryable: true,
+    });
+
+    expect(await prisma.activityLog.count({ where: { action: 'LTI_SCORE_SEND_FAILED' } })).toBe(0);
+  });
+});
+
 describe('the summary for an assignment', () => {
   it('counts what is waiting, sent and failed', async () => {
     await queue(USERS[0]);

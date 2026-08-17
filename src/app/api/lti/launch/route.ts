@@ -225,6 +225,11 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
         platformId: identity.platformId,
         contextId: identity.contextId!,
         contextTitle: identity.contextTitle,
+        // Carried from the launch, because nothing else ever sees them. They arrive as claims
+        // in the signed token; the browser that comes back to choose a course brings none of
+        // it, so a link made through the picker was stored with no way to reach the gradebook.
+        lineItemsUrl: identity.lineItemsUrl,
+        membershipsUrl: identity.membershipsUrl,
         userId,
         expiresAt: new Date(Date.now() + PENDING_LINK_TTL_MS),
       },
