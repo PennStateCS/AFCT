@@ -223,9 +223,24 @@ async function findLineItem(
       return { status: 'error', detail: 'the platform did not answer with a line item list' };
     }
 
+    /**
+     * Check what came back, rather than trusting the filter.
+     *
+     * The request asks for `resource_id=<assignment>`, and AGS says a platform should honour it.
+     * A platform that ignores it answers with *every* column in the course, and taking the first
+     * one would send every grade for this assignment to somebody else's column. That is worse
+     * than creating a duplicate, because it is wrong rather than merely untidy, and it is silent.
+     *
+     * A column with no `resourceId` is not a match either. Those exist: a deep link that did not
+     * send one leaves the platform storing a column it cannot recognise later, and adopting it
+     * here on a guess is the same wrong-column failure from the other direction.
+     */
     for (const item of body) {
-      const id = (item as { id?: unknown })?.id;
-      if (typeof id === 'string' && id.length > 0) return { status: 'found', url: id };
+      const row = item as { id?: unknown; resourceId?: unknown };
+      const id = row?.id;
+      if (typeof id !== 'string' || id.length === 0) continue;
+      if (row?.resourceId !== resourceId) continue;
+      return { status: 'found', url: id };
     }
 
     const advertised = nextPage(response);

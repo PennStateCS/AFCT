@@ -54,6 +54,9 @@ export async function POST(request: Request) {
       // permission it had already given.
       lineItemsUrl: pending.lineItemsUrl,
       membershipsUrl: pending.membershipsUrl,
+      // Connecting a course is not a launch through a link, so there is no per-link column to
+      // name. One appears on the first launch that opens an assignment.
+      lineItemUrl: null,
       // The rest is genuinely unused by linking, and deliberately not carried around: this is
       // a configuration act, not a sign-in.
       issuer: pending.platform.issuer,

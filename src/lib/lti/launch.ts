@@ -134,6 +134,16 @@ export type LaunchIdentity = {
   targetLinkUri: string | null;
   /** Where to create gradebook columns. Absent when the platform granted no grade scopes. */
   lineItemsUrl: string | null;
+  /**
+   * The column this particular link already has, when the platform names it.
+   *
+   * AGS puts `lineitem` beside `lineitems` on a resource link launch that the platform has
+   * already bound a column to. It is worth more than the container: it is the platform saying
+   * *this* is the column for *this* link, so a grade needs no search, cannot pick the wrong one,
+   * and does not depend on the platform supporting a `resource_id` filter. Absent on a launch
+   * with no resource link, and on platforms that do not send it.
+   */
+  lineItemUrl: string | null;
   /** Where to read the course roster. Absent when the platform granted no roster scope. */
   membershipsUrl: string | null;
   /** Set when the platform is asking staff to choose content, rather than opening it. */
@@ -555,6 +565,10 @@ export async function validateLaunch(opts: {
       lineItemsUrl: (() => {
         const ags = claimObject(payload, 'endpoint', 'lti-ags');
         return ags ? claimString(ags.lineitems) : null;
+      })(),
+      lineItemUrl: (() => {
+        const ags = claimObject(payload, 'endpoint', 'lti-ags');
+        return ags ? claimString(ags.lineitem) : null;
       })(),
       membershipsUrl: (() => {
         const nrps = claimObject(payload, 'namesroleservice', 'lti-nrps');
