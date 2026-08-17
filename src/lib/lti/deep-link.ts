@@ -87,7 +87,24 @@ export async function buildDeepLinkResponse(opts: {
      * column; a missing column is visible and fixable, a refused response is neither.
      */
     ...(item.scoreMaximum && opts.acceptLineItem === true
-      ? { lineItem: { scoreMaximum: item.scoreMaximum, label: item.title } }
+      ? {
+          lineItem: {
+            scoreMaximum: item.scoreMaximum,
+            label: item.title,
+            /**
+             * The name AFCT will look this column up by later, and the reason there is only
+             * one column.
+             *
+             * Sending a grade starts by asking the platform for the line item whose
+             * `resource_id` is this assignment. Without it the platform stores the column with
+             * no resource id, that search finds nothing, and AFCT creates a second column: the
+             * LMS then shows two assignments with the same name, one that students open and an
+             * empty one collecting the grades. The spec provides this field for exactly this,
+             * and says the platform must not alter it.
+             */
+            resourceId: item.assignmentId,
+          },
+        }
       : {}),
     /**
      * Open in a new tab, decided here rather than left to whoever adds the link.
