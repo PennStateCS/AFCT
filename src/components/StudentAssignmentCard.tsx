@@ -55,7 +55,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                     <div className="flex w-full flex-col px-4 py-4 sm:p-5">
                       <div className="mb-2 min-w-0">
                         <CardTitle
-                          className="text-md truncate font-semibold"
+                          className="truncate text-base font-semibold"
                           title={assignment.title}
                         >
                           {assignment.title}

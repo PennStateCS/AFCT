@@ -126,7 +126,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                       {/* Real link so keyboard users can open the assignment. */}
                       <Link
                         href={`/dashboard/courses/${courseId}/${assignment.id}`}
-                        className="hover:text-primary focus-visible:ring-primary-300 min-w-0 flex-1 rounded-sm focus-visible:ring-2 focus-visible:outline-none"
+                        className="hover:text-primary focus-visible:ring-ring min-w-0 flex-1 rounded-sm focus-visible:ring-2 focus-visible:outline-none"
                       >
                         <div className="flex flex-col gap-1">
                           <CardTitle className="text-sm leading-none">{assignment.title}</CardTitle>
