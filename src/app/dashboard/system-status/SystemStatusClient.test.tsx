@@ -220,7 +220,8 @@ describe('SystemStatusClient', () => {
     // repeat the same number and a page-wide query would pass on either one.
     const disk = (await screen.findByRole('heading', { name: 'The disk' })).closest('section')!;
     expect(within(disk).getByText('Free')).toBeInTheDocument();
-    expect(within(disk).getAllByText(/11\.18 GB/).length).toBeGreaterThan(0);
+    // 12 GB free of the 40 GB fixture, at the one decimal place every size now uses.
+    expect(within(disk).getAllByText(/11\.2 GB/).length).toBeGreaterThan(0);
     // The disk holds more than uploads, and saying so is what stops somebody reading the
     // uploads figure as the reason a disk is full.
     expect(within(disk).getByText('Everything else')).toBeInTheDocument();
