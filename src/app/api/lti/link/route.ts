@@ -79,7 +79,7 @@ export async function POST(request: Request) {
         'That LMS course is already linked to a different AFCT course. Ask an administrator if it needs changing.',
       );
     }
-    return apiError(403, 'You can only link a course you teach.');
+    return apiError(403, 'You can only connect a course you teach.');
   }
 
   // Deliberately no enrolment here. Faculty who linked it are on the course already, and an
