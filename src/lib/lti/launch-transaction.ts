@@ -27,6 +27,8 @@ export type StartedLaunch = { state: string; nonce: string };
 export async function startLaunch(opts: {
   platformId: string;
   targetLinkUri?: string | null;
+  /** The frame the platform named for browser storage, when it offered one. */
+  storageTarget?: string | null;
   ttlMs?: number;
 }): Promise<StartedLaunch> {
   const state = secret();
@@ -38,6 +40,7 @@ export async function startLaunch(opts: {
       nonceHash: hash(nonce),
       platformId: opts.platformId,
       targetLinkUri: opts.targetLinkUri?.trim() || null,
+      storageTarget: opts.storageTarget?.trim() || null,
       expiresAt: new Date(Date.now() + (opts.ttlMs ?? LAUNCH_TTL_MS)),
     },
   });
@@ -50,6 +53,8 @@ export type LaunchTransaction = {
   platformId: string;
   nonceHash: string;
   targetLinkUri: string | null;
+  storageTarget: string | null;
+  idToken: string | null;
 };
 
 /**
@@ -63,8 +68,7 @@ export type LaunchTransaction = {
 export type LaunchLookupFailure = 'unknown' | 'spent' | 'timed-out';
 
 export type FoundLaunch =
-  | { ok: true; launch: LaunchTransaction }
-  | { ok: false; reason: LaunchLookupFailure };
+  { ok: true; launch: LaunchTransaction } | { ok: false; reason: LaunchLookupFailure };
 
 /**
  * The launch this state belongs to, if it is one AFCT started and has not finished.
@@ -80,6 +84,8 @@ export async function findLaunch(state: string): Promise<FoundLaunch> {
       platformId: true,
       nonceHash: true,
       targetLinkUri: true,
+      storageTarget: true,
+      idToken: true,
       usedAt: true,
       expiresAt: true,
     },
@@ -94,8 +100,25 @@ export async function findLaunch(state: string): Promise<FoundLaunch> {
       platformId: row.platformId,
       nonceHash: row.nonceHash,
       targetLinkUri: row.targetLinkUri,
+      storageTarget: row.storageTarget,
+      idToken: row.idToken,
     },
   };
+}
+
+/**
+ * Hold the signed token while the browser is asked for the launch's state.
+ *
+ * Only reached when the state cookie did not arrive and the platform offered browser storage.
+ * Written once and only onto a launch that is still open, so a second attempt cannot overwrite
+ * a token already waiting, and cleared as soon as the launch is spent.
+ */
+export async function parkIdToken(id: string, idToken: string): Promise<boolean> {
+  const { count } = await prisma.ltiLaunchTransaction.updateMany({
+    where: { id, usedAt: null, idToken: null },
+    data: { idToken },
+  });
+  return count === 1;
 }
 
 /** Whether this nonce is the one issued for this launch. */
@@ -118,7 +141,9 @@ export function nonceMatches(transaction: LaunchTransaction, nonce: string): boo
 export async function consumeLaunch(id: string): Promise<boolean> {
   const { count } = await prisma.ltiLaunchTransaction.updateMany({
     where: { id, usedAt: null },
-    data: { usedAt: new Date() },
+    // The parked token goes with it. A signed token must not outlive the launch it belongs to,
+    // and after this it can never be used again anyway.
+    data: { usedAt: new Date(), idToken: null },
   });
   return count === 1;
 }

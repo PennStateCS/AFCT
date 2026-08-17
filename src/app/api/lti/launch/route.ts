@@ -3,6 +3,7 @@ import { validateLaunch, launchRefusalMessage } from '@/lib/lti/launch';
 import type { LaunchIdentity } from '@/lib/lti/launch';
 import { resolveLaunchSignIn, launchSignInRefusalMessage } from '@/lib/lti/lti-signin';
 import { stateCookieName } from '@/lib/lti/login-init';
+import { findLaunch, parkIdToken } from '@/lib/lti/launch-transaction';
 import { issueSingleUseToken } from '@/lib/single-use-token';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { resolveLaunchTarget, enrolFromLaunch } from '@/lib/lti/course-link';
@@ -80,6 +81,26 @@ export async function POST(request: Request) {
     ?.slice(cookieName.length + 1);
 
   if (!cookieState || cookieState !== state) {
+    /**
+     * No cookie. Before refusing, ask the platform whether it is holding the state for us.
+     *
+     * This is the browser that blocks third-party cookies, where the cookie was never going to
+     * arrive and the launch would otherwise fail for a reason the person cannot act on. It only
+     * applies when the platform offered storage at login, and the answer has to come from a page,
+     * so the token waits on its own launch row for the seconds that takes rather than being
+     * handed back through the browser to be posted again.
+     */
+    const launch = await findLaunch(state);
+    if (launch.ok && launch.launch.storageTarget) {
+      const parked = await parkIdToken(launch.launch.id, idToken);
+      if (parked) {
+        const check = new URL(publicUrl('/lti/state-check', request));
+        check.searchParams.set('state', state);
+        check.searchParams.set('target', launch.launch.storageTarget);
+        return NextResponse.redirect(check, 303);
+      }
+    }
+
     return refuse(
       'This launch could not be matched to your browser. If your browser blocks third-party cookies, open AFCT in a new tab and try again.',
       400,
@@ -88,6 +109,22 @@ export async function POST(request: Request) {
 
   // The launch itself is spent inside validateLaunch, once the token has proved out, so a
   // launch that fails for another reason can be retried rather than burned.
+  return completeLaunch(request, idToken, state);
+}
+
+/**
+ * Everything after the state check: verify the token, sign the person in, decide where they land.
+ *
+ * Shared by the two ways a launch can reach this point. The ordinary one is the platform's POST
+ * with its state cookie. The other is a browser that had no cookie to send, coming back through
+ * `/api/lti/launch/state` once the platform's own storage has answered for the state. Both have
+ * to prove the same things about the token, and they must not drift apart, so there is one copy
+ * of it here rather than one per entry point.
+ */
+export async function completeLaunch(request: Request, idToken: string, state: string) {
+  // Cleared on every exit, so a state cannot be presented twice even though the token behind it
+  // is already spent. Harmless on the storage path, where there was no cookie to begin with.
+  const cookieName = stateCookieName(state);
   const verified = await validateLaunch({ idToken, state });
   if (!verified.ok) {
     await createEnhancedActivityLog(prisma, request, {
