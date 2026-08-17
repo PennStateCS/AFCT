@@ -220,6 +220,7 @@ model User {
   submissionGrants    SubmissionGrant[]        @relation("SubmissionGrantTarget") // extra-submission grants targeting this student
   grantsCreated       SubmissionGrant[]        @relation("SubmissionGrantCreatedBy") // grants this user created
   ltiLinksCreated     LtiContextLink[] // LMS course links this user decided
+  ltiDeepLinksCreated LtiDeepLink[] // assignment links this user added to an LMS course
   ltiPendingLinks     LtiPendingLink[] // launches waiting for this user to pick a course
   ltiPendingDeepLinks LtiPendingDeepLink[] // deep-linking requests waiting on this user
   ltiContextMembers   LtiContextMember[] // the LMS courses this person has been seen in
@@ -618,6 +619,7 @@ model Assignment {
   /// effect when the course is linked to an LMS.
   ltiAutoSync  Boolean         @default(true)
   ltiLineItems LtiLineItem[] // gradebook columns in linked LMS courses
+  ltiDeepLinks LtiDeepLink[] // LMS links that open this assignment
   ltiScores    LtiScoreQueue[] // grades queued for an LMS gradebook
 
   @@index([courseId])
@@ -1433,6 +1435,9 @@ model LtiContextLink {
   /// Gradebook columns created in this LMS course.
   lineItems LtiLineItem[]
 
+  /// Assignments already added to this LMS course as a link.
+  deepLinks LtiDeepLink[]
+
   /// One AFCT course per LMS course. Not the other way round: see the note above.
   @@unique([platformId, contextId])
   @@index([courseId])
@@ -1904,4 +1909,37 @@ model LtiPendingIdentityLink {
 
   /// The expiry sweep.
   @@index([expiresAt])
+}
+
+/// An AFCT assignment somebody added to an LMS course as a link.
+///
+/// Written when the deep linking response is returned, because that is the only moment AFCT
+/// knows: from then on the link lives in the LMS and is never reported back. Without it the
+/// picker cannot tell what it has already offered, and the same assignment can be added twice
+/// under two names, which then disagree about which gradebook column is theirs.
+///
+/// @namespace lti
+model LtiDeepLink {
+  /// Unique identifier.
+  id String @id @default(cuid())
+
+  contextLink   LtiContextLink @relation(fields: [contextLinkId], references: [id], onDelete: Cascade)
+  /// The LMS course the link was added to.
+  contextLinkId String
+
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  /// The AFCT assignment it opens.
+  assignmentId String
+
+  createdBy       User?   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  /// Who added it. Null once that account is gone; the link outlives the person.
+  createdByUserId String?
+
+  /// When this record was created.
+  createdAt DateTime @default(now())
+
+  /// One link per assignment per LMS course. This is the constraint, not a check in the route:
+  /// two submissions of the same form would otherwise both pass.
+  @@unique([contextLinkId, assignmentId])
+  @@index([assignmentId])
 }

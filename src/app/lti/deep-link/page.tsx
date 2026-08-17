@@ -3,16 +3,19 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { canManageCourse } from '@/lib/permissions';
+import { resolveCourseTimezone } from '@/lib/course-timezone';
+import { toISODate } from '@/lib/date-format';
 
 export const metadata: Metadata = {
-  title: 'Choose an assignment',
+  title: 'Add an AFCT assignment',
 };
 
 /**
- * Choosing which AFCT assignment an LMS link should open.
+ * Choosing what an LMS link should open: an assignment that already exists, or a new one.
  *
  * A plain form that posts to AFCT, which answers with the page that returns to the LMS. No
- * client JavaScript: the whole flow is two POSTs, and it works if a script is blocked.
+ * client JavaScript: the whole flow is server-rendered steps, and it works if a script is
+ * blocked, which matters because an LMS draws this inside its own modal.
  *
  * Read here rather than fetched so the list is right on first paint and can never include an
  * assignment from a course this person does not run.
@@ -20,12 +23,12 @@ export const metadata: Metadata = {
 export default async function DeepLinkPage({
   searchParams,
 }: {
-  searchParams: Promise<{ pending?: string }>;
+  searchParams: Promise<{ pending?: string; mode?: string; error?: string }>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect('/login');
 
-  const { pending: pendingId } = await searchParams;
+  const { pending: pendingId, mode, error } = await searchParams;
 
   const pending = pendingId
     ? await prisma.ltiPendingDeepLink.findFirst({
@@ -50,7 +53,7 @@ export default async function DeepLinkPage({
         where: {
           platformId_contextId: { platformId: pending.platformId, contextId: pending.contextId },
         },
-        select: { courseId: true, course: { select: { name: true } } },
+        select: { id: true, courseId: true, course: { select: { name: true } } },
       })
     : null;
 
@@ -77,68 +80,291 @@ export default async function DeepLinkPage({
     );
   }
 
-  const assignments = await prisma.assignment.findMany({
-    where: { courseId: link.courseId },
-    select: { id: true, title: true, problems: { select: { maxPoints: true } } },
-    orderBy: { dueDate: 'asc' },
-  });
+  /**
+   * Assignments not already opened by a link in this LMS course.
+   *
+   * Adding the same assignment twice gives the LMS two links and two gradebook columns for one
+   * piece of work, and the grades then disagree. The links already added are counted rather
+   * than listed, because naming them would not help: they are visible in the LMS itself.
+   */
+  const [assignments, linkedCount] = await Promise.all([
+    prisma.assignment.findMany({
+      where: { courseId: link.courseId, ltiDeepLinks: { none: { contextLinkId: link.id } } },
+      select: { id: true, title: true, problems: { select: { maxPoints: true } } },
+      orderBy: { dueDate: 'asc' },
+    }),
+    prisma.ltiDeepLink.count({ where: { contextLinkId: link.id } }),
+  ]);
 
-  if (assignments.length === 0) {
+  const failure = error ? MESSAGES[error] : null;
+
+  if (mode === 'create') {
+    // Dated in the course's own timezone, which is what the assignment routes store against.
+    const timezone = await resolveCourseTimezone(link.courseId);
+    const today = toISODate(new Date(new Date().toLocaleString('en-US', { timeZone: timezone })));
+
     return (
-      <Shell title="No assignments yet">
-        <p className="text-muted-foreground text-sm">
-          {link.course.name} has no assignments to link. Create one in AFCT first.
+      <Shell title="New assignment">
+        <p className="text-muted-foreground mb-4 text-sm">
+          This creates the assignment in {link.course.name} and adds a link to it. You can add
+          problems and change anything else in AFCT afterwards.
         </p>
+        {failure}
+
+        <form method="POST" action="/api/lti/deep-link" className="space-y-4">
+          <input type="hidden" name="pendingId" value={pending.id} />
+          <input type="hidden" name="mode" value="create" />
+
+          <Field label="Title" htmlFor="title">
+            <input
+              id="title"
+              name="title"
+              required
+              maxLength={200}
+              autoFocus
+              placeholder="Problem set 1"
+              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            />
+          </Field>
+
+          <Field label="Due date" htmlFor="dueDate">
+            <input
+              id="dueDate"
+              name="dueDate"
+              type="date"
+              required
+              defaultValue={today}
+              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            />
+          </Field>
+
+          <Field
+            label="Available from (optional)"
+            htmlFor="unlockAt"
+            hint="Leave empty to make it available straight away."
+          >
+            <input
+              id="unlockAt"
+              name="unlockAt"
+              type="date"
+              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            />
+          </Field>
+
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="isPublished"
+              value="on"
+              defaultChecked
+              className="mt-0.5"
+            />
+            <span>
+              Publish it now
+              <span className="text-muted-foreground block text-xs">
+                An unpublished assignment is not visible to students, so the link would open nothing
+                for them.
+              </span>
+            </span>
+          </label>
+
+          <div className="flex items-center gap-3">
+            <Submit>Create and add it</Submit>
+            <a
+              href={`/lti/deep-link?pending=${pending.id}`}
+              className="text-muted-foreground text-sm underline"
+            >
+              Back
+            </a>
+          </div>
+        </form>
+      </Shell>
+    );
+  }
+
+  if (mode === 'connect') {
+    if (assignments.length === 0) {
+      return (
+        <Shell title="Nothing left to add">
+          <p className="text-muted-foreground mb-4 text-sm">
+            {linkedCount > 0
+              ? `Every assignment in ${link.course.name} has already been added to this course in your LMS.`
+              : `${link.course.name} has no assignments yet.`}
+          </p>
+          <a
+            href={`/lti/deep-link?pending=${pending.id}&mode=create`}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center rounded-md px-4 text-sm font-medium"
+          >
+            Create a new assignment
+          </a>
+        </Shell>
+      );
+    }
+
+    return (
+      <Shell title="Which assignment?">
+        <p className="text-muted-foreground mb-4 text-sm">
+          Choose the {link.course.name} assignment this link should open.
+          {linkedCount > 0
+            ? ` ${linkedCount} already added to this course ${linkedCount === 1 ? 'is' : 'are'} not listed.`
+            : ''}
+        </p>
+        {failure}
+
+        <form method="POST" action="/api/lti/deep-link" className="space-y-4">
+          <input type="hidden" name="pendingId" value={pending.id} />
+          <input type="hidden" name="mode" value="connect" />
+
+          {/* A select rather than a list of radios. A term's worth of assignments is easily
+              thirty, which no longer fits the modal an LMS draws this in, and a native select
+              stays keyboard and screen-reader friendly at any length while still working with
+              no JavaScript, which the rest of this flow depends on. */}
+          <Field label="Assignment" htmlFor="assignmentId">
+            <select
+              id="assignmentId"
+              name="assignmentId"
+              required
+              defaultValue={assignments[0]?.id}
+              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            >
+              {assignments.map((assignment) => {
+                const points = assignment.problems.reduce(
+                  (sum, p) => sum + Number(p.maxPoints ?? 0),
+                  0,
+                );
+                return (
+                  <option key={assignment.id} value={assignment.id}>
+                    {assignment.title} {'—'} {points > 0 ? `${points} points` : 'not graded'}
+                  </option>
+                );
+              })}
+            </select>
+          </Field>
+
+          <div className="flex items-center gap-3">
+            <Submit>Use this assignment</Submit>
+            <a
+              href={`/lti/deep-link?pending=${pending.id}`}
+              className="text-muted-foreground text-sm underline"
+            >
+              Back
+            </a>
+          </div>
+        </form>
       </Shell>
     );
   }
 
   return (
-    <Shell title="Which assignment?">
+    <Shell title="Add an AFCT assignment">
       <p className="text-muted-foreground mb-4 text-sm">
-        Choose the {link.course.name} assignment this link should open.
+        This link will open an assignment in {link.course.name}.
       </p>
+      {failure}
 
-      <form method="POST" action="/api/lti/deep-link" className="space-y-4">
-        <input type="hidden" name="pendingId" value={pending.id} />
-
-        {/* A select rather than a list of radios. A term's worth of assignments is easily
-            thirty, which no longer fits the modal an LMS draws this in, and a native select
-            stays keyboard and screen-reader friendly at any length while still working with
-            no JavaScript, which the rest of this flow depends on. */}
-        <div className="space-y-2">
-          <label htmlFor="assignmentId" className="block text-sm font-medium">
-            Assignment
-          </label>
-          <select
-            id="assignmentId"
-            name="assignmentId"
-            required
-            defaultValue={assignments[0]?.id}
-            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-          >
-            {assignments.map((assignment) => {
-              const points = assignment.problems.reduce(
-                (sum, p) => sum + Number(p.maxPoints ?? 0),
-                0,
-              );
-              return (
-                <option key={assignment.id} value={assignment.id}>
-                  {assignment.title} {'\u2014'} {points > 0 ? `${points} points` : 'not graded'}
-                </option>
-              );
-            })}
-          </select>
-        </div>
-
-        <button
-          type="submit"
-          className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center rounded-md px-4 text-sm font-medium"
-        >
-          Add to your LMS
-        </button>
-      </form>
+      <div className="space-y-3">
+        <Choice
+          href={`/lti/deep-link?pending=${pending.id}&mode=connect`}
+          title="Use an assignment that already exists"
+          detail={
+            assignments.length > 0
+              ? `${assignments.length} to choose from`
+              : linkedCount > 0
+                ? 'All of them have already been added'
+                : 'There are none yet'
+          }
+          disabled={assignments.length === 0}
+        />
+        <Choice
+          href={`/lti/deep-link?pending=${pending.id}&mode=create`}
+          title="Create a new assignment"
+          detail="Give it a title and a due date; everything else can wait"
+        />
+      </div>
     </Shell>
+  );
+}
+
+/** What went wrong last time, when the route sent them back here to fix it. */
+const MESSAGES: Record<string, React.ReactNode> = {
+  'already-linked': (
+    <Notice>
+      That assignment is already opened by a link in this LMS course, so it was not added again.
+    </Notice>
+  ),
+  'missing-title': <Notice>Give the assignment a title and a due date.</Notice>,
+  'bad-dates': <Notice>The available-from date has to be on or before the due date.</Notice>,
+};
+
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      role="alert"
+      className="border-status-danger-border bg-status-danger-bg text-status-danger mb-4 rounded-md border px-3 py-2 text-sm"
+    >
+      {children}
+    </p>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  hint,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <label htmlFor={htmlFor} className="block text-sm font-medium">
+        {label}
+      </label>
+      {children}
+      {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
+    </div>
+  );
+}
+
+function Submit({ children }: { children: React.ReactNode }) {
+  return (
+    <button
+      type="submit"
+      className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center rounded-md px-4 text-sm font-medium"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** One of the two ways in. A link rather than a button, so the flow needs no JavaScript. */
+function Choice({
+  href,
+  title,
+  detail,
+  disabled,
+}: {
+  href: string;
+  title: string;
+  detail: string;
+  disabled?: boolean;
+}) {
+  if (disabled) {
+    return (
+      <div className="text-muted-foreground w-full rounded-md border border-dashed p-3 text-left">
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs">{detail}</p>
+      </div>
+    );
+  }
+  return (
+    <a href={href} className="hover:bg-accent block w-full rounded-md border p-3 text-left">
+      <p className="text-sm font-medium">{title}</p>
+      <p className="text-muted-foreground text-xs">{detail}</p>
+    </a>
   );
 }
 

@@ -46,6 +46,8 @@ const courseFields = {
 
 async function destroyFixtures() {
   await prisma.activityLog.deleteMany({ where: { courseId: { in: [COURSE, OTHER_COURSE] } } });
+  await prisma.ltiDeepLink.deleteMany({ where: { contextLink: { platformId: PLATFORM } } });
+  await prisma.ltiContextLink.deleteMany({ where: { platformId: PLATFORM } });
   await prisma.ltiPendingDeepLink.deleteMany({ where: { platformId: PLATFORM } });
   await prisma.assignment.deleteMany({ where: { courseId: { in: [COURSE, OTHER_COURSE] } } });
   await prisma.roster.deleteMany({ where: { courseId: { in: [COURSE, OTHER_COURSE] } } });
@@ -88,6 +90,9 @@ beforeEach(async () => {
       tokenUrl: 'https://x.test/token',
       keysetUrl: 'https://x.test/jwks',
     },
+  });
+  await prisma.ltiContextLink.create({
+    data: { id: 'cl-dl', platformId: PLATFORM, contextId: 'ctx-1', courseId: COURSE },
   });
   await prisma.ltiPendingDeepLink.create({
     data: {
@@ -198,5 +203,113 @@ describe('what it refuses', () => {
     session.current = null;
 
     expect((await post({ pendingId: 'pdl-1', assignmentId: 'a-dl' })).status).toBe(401);
+  });
+});
+
+/**
+ * Creating the assignment from inside the LMS.
+ *
+ * Faculty adding a link are usually building the assignment at that moment, and sending them
+ * back to AFCT to make one first is where the old flow stopped being useful.
+ */
+describe('creating an assignment from the picker', () => {
+  const create = (fields: Record<string, string> = {}) =>
+    post({
+      pendingId: 'pdl-1',
+      mode: 'create',
+      title: 'Pumping lemma',
+      dueDate: '2026-09-30',
+      isPublished: 'on',
+      ...fields,
+    });
+
+  it('creates it in the course the LMS course opens, and links it', async () => {
+    const res = await create();
+
+    expect(res.status).toBe(200);
+    const created = await prisma.assignment.findFirstOrThrow({
+      where: { courseId: COURSE, title: 'Pumping lemma' },
+    });
+    expect(created.isPublished).toBe(true);
+    // The link is what stops it being offered again.
+    expect(
+      await prisma.ltiDeepLink.count({
+        where: { assignmentId: created.id, contextLinkId: 'cl-dl' },
+      }),
+    ).toBe(1);
+  });
+
+  it('leaves it unpublished when the box is cleared', async () => {
+    await create({ isPublished: '' });
+
+    const created = await prisma.assignment.findFirstOrThrow({ where: { title: 'Pumping lemma' } });
+    expect(created.isPublished).toBe(false);
+  });
+
+  it('records it as an assignment anybody made, with how it happened', async () => {
+    await create();
+
+    const entry = await prisma.activityLog.findFirstOrThrow({
+      where: { action: 'CREATE_ASSIGNMENT', courseId: COURSE },
+    });
+    expect(entry.metadata).toMatchObject({ title: 'Pumping lemma', via: 'lti-deep-link' });
+  });
+
+  it('sends them back to the form when the title is missing, rather than to a dead end', async () => {
+    const res = await create({ title: '' });
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toContain('mode=create&error=missing-title');
+    // Nothing half-made is left behind.
+    expect(await prisma.assignment.count({ where: { courseId: COURSE, title: '' } })).toBe(0);
+    expect(await prisma.ltiPendingDeepLink.count({ where: { id: 'pdl-1' } })).toBe(1);
+  });
+
+  it('refuses an available-from date after the due date', async () => {
+    const res = await create({ unlockAt: '2026-10-30' });
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toContain('error=bad-dates');
+  });
+});
+
+/**
+ * One link per assignment per LMS course. Two links to the same work means two gradebook
+ * columns for it, and the grades then disagree about which is real.
+ */
+describe('adding the same assignment twice', () => {
+  const secondRequest = () =>
+    prisma.ltiPendingDeepLink.create({
+      data: {
+        id: 'pdl-2',
+        platformId: PLATFORM,
+        contextId: 'ctx-1',
+        returnUrl: RETURN_URL,
+        data: 'platform-state',
+        acceptTypes: ['ltiResourceLink'],
+        acceptPresentationDocumentTargets: ['iframe', 'window'],
+        acceptLineItem: true,
+        userId: ids.faculty,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+  it('is refused, and says so on the picker rather than failing', async () => {
+    await post({ pendingId: 'pdl-1', assignmentId: 'a-dl' });
+    await secondRequest();
+
+    const res = await post({ pendingId: 'pdl-2', assignmentId: 'a-dl' });
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toContain('error=already-linked');
+    expect(await prisma.ltiDeepLink.count({ where: { assignmentId: 'a-dl' } })).toBe(1);
+  });
+
+  it('records the link on the first pass, so the picker can leave it out', async () => {
+    await post({ pendingId: 'pdl-1', assignmentId: 'a-dl' });
+
+    const row = await prisma.ltiDeepLink.findFirstOrThrow({ where: { assignmentId: 'a-dl' } });
+    expect(row.contextLinkId).toBe('cl-dl');
+    expect(row.createdByUserId).toBe(ids.faculty);
   });
 });
