@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Copy, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -44,6 +44,9 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState<Platform | null>(null);
+  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -108,18 +111,98 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
     }
   };
 
+  const createLink = async () => {
+    setCreatingLink(true);
+    setCopied(false);
+    try {
+      const res = await fetch('/api/admin/lti/registration-token', { method: 'POST' });
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        expiresAt?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.url || !data.expiresAt) {
+        showToast.error(data.error ?? 'Could not create a registration link. Try again.');
+        return;
+      }
+      setLink({ url: data.url, expiresAt: data.expiresAt });
+    } catch {
+      showToast.error('Could not create a registration link. Check your connection and try again.');
+    } finally {
+      setCreatingLink(false);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link.url);
+      setCopied(true);
+    } catch {
+      // Copying can be refused. The link is on screen and selectable, so say that rather than
+      // pretending it worked.
+      showToast.error('Could not copy. Select the link and copy it manually.');
+    }
+  };
+
   const set = (key: keyof typeof EMPTY) => (value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   return (
     <>
       <p className="text-muted-foreground mb-4 text-sm">
-        Let people open AFCT from your LMS. Registration goes both ways: paste the values below into
-        your LMS, then paste what it gives back into the form here.
+        Let people open AFCT from your LMS. There are two ways to set this up. If your LMS offers
+        automatic registration, use it: AFCT and your LMS then exchange everything they need between
+        themselves. Otherwise copy the values across by hand.
       </p>
 
       <div className="mb-6 space-y-2">
-        <h2 className="text-sm font-medium">Give these to your LMS</h2>
+        <h2 className="text-sm font-medium">Register automatically</h2>
+        <div className="max-w-2xl space-y-3 rounded-md border p-3">
+          <p className="text-muted-foreground text-sm">
+            Create a link, then paste it into your LMS where it asks for a registration or tool URL.
+            Canvas, Moodle and Brightspace all call this something slightly different; look for
+            dynamic registration. The link works once and expires after an hour.
+          </p>
+          {link ? (
+            <>
+              <InputGroup
+                label="Registration link"
+                name="ltiRegistrationLink"
+                value={link.url}
+                setValue={() => {}}
+                readOnly
+                description={`Works once, and expires at ${new Date(link.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Anyone holding it can register an LMS, so treat it like a password.`}
+              />
+              <div className="flex items-center gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={() => void copyLink()}>
+                  <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Copy link
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setLink(null)}>
+                  Done
+                </Button>
+              </div>
+              {/* One live region for this area, so the copy result is announced once. */}
+              <p role="status" aria-live="polite" className="text-sm">
+                {copied ? 'Registration link copied to the clipboard.' : ''}
+              </p>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void createLink()}
+              disabled={creatingLink}
+            >
+              {creatingLink ? 'Creating...' : 'Create a registration link'}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-6 space-y-2">
+        <h2 className="text-sm font-medium">Or give these to your LMS by hand</h2>
         <div className="max-w-2xl space-y-3 rounded-md border p-3">
           <InputGroup
             label="Target link URI"

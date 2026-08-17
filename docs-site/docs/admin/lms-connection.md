@@ -13,12 +13,33 @@ You need:
 - **Administrator access to AFCT**, and access to your LMS with permission to create a developer key or LTI registration. At most institutions the second one belongs to central IT rather than to you, so expect to send them the values in the next section and wait.
 - **AFCT reachable over HTTPS at its real address.** The LMS calls AFCT directly, so `localhost` or a self-signed certificate will not work. Check that **Configured URL** on [System Settings](system-settings.md) is the address people actually use.
 
-## Register the LMS
+## Register the LMS automatically
+
+Most current LMSs can register a tool by themselves, which saves copying ten values between two screens and getting one of them wrong. Canvas, Moodle and Brightspace all support it; the wording varies, and it is usually called **dynamic registration**.
+
+1. In AFCT, go to **System Settings**, open the **LTI** tab, and select **Create a registration link**.
+2. Copy the link. It works **once** and expires after an hour, and anyone holding it can register an LMS, so treat it like a password.
+3. In your LMS, find where it asks for a registration or tool URL and paste the link in. In Canvas this is **Developer Keys**, then **+ LTI Registration**; in Moodle it is **Manage tools**, in the **Tool URL** box.
+4. Your LMS opens AFCT in a panel. Check that the address shown is your LMS, then select **Register**.
+5. AFCT reports what was registered and the panel closes.
+
+If your LMS is one that issues a deployment separately from the registration, finish that step in the LMS afterwards, exactly as you would for any other tool.
+
+Two things automatic registration cannot do, both rare:
+
+- **Brightspace** hands out an OAuth2 Audience of its own, which is not part of the exchange. If grades fail to send, register the LMS by hand as well and fill that field in.
+- If your LMS does not send a **deployment ID** back, AFCT will say so and quote the client ID it was given. Register by hand using the steps below, which is the only case that still needs them.
+
+Then set AFCT to open in a new tab, below.
+
+## Register the LMS by hand
+
+Use this if your LMS does not offer automatic registration, or if it did and something above sent you here.
 
 Registration is mutual: your LMS needs four values from AFCT, and AFCT needs six back. Doing it means going back and forth between two screens, so collect one set before starting the other.
 
 1. In AFCT, go to **System Settings** and open the **LTI** tab.
-2. Copy the four values under **Give these to your LMS**:
+2. Copy the four values under **Or give these to your LMS by hand**:
 
    | Value | What your LMS calls it |
    | --- | --- |
@@ -79,6 +100,8 @@ If a launch fails, open [System Logs](system-logs.md) and filter for `LTI_LAUNCH
 | `malformed` or `wrong-message-type` | The request was not a launch AFCT understands. Check that the link points at the target link URI above. |
 
 If the link shows an empty box or a message about the page refusing to connect, **and nothing appears in the log at all**, the launch is not reaching AFCT: the link is opening it inside the LMS page. Set it to open in a new tab, as above.
+
+An automatic registration that failed is logged as `LTI_DYNAMIC_REGISTRATION_FAILED`, with the reason. `configuration-unreachable` means AFCT's server could not reach your LMS, which is a network or firewall question rather than an LTI one. `registration-refused` means the LMS turned the registration down, usually because the link it gave AFCT had already expired: start again from the LMS. Registration links themselves are logged as `LTI_REGISTRATION_LINK_CREATED`, so you can see who created one and when.
 
 ## What faculty can do once it is connected
 
