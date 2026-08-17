@@ -73,7 +73,13 @@ export function DataTableCards<TData>({
                   <dt className="text-muted-foreground font-medium">
                     {getColumnLabel(cell.column)}
                   </dt>
-                  <dd className="min-w-0 text-right break-words">
+                  {/* Cells keep `whitespace-nowrap` so a date or an ID is not broken across
+                      lines *in the table*, where there is sideways room. In a card there is
+                      none, and a nowrap value simply runs out past the border: min-w-0 lets the
+                      box shrink but cannot make text that refuses to wrap wrap. So the card
+                      overrides it for everything inside, which is safe because the whole point
+                      of this view is that a value gets as many lines as it needs. */}
+                  <dd className="min-w-0 text-right break-words [&_*]:whitespace-normal">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </dd>
                 </div>

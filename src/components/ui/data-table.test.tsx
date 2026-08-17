@@ -373,6 +373,37 @@ describe('DataTable', () => {
     expect(screen.getAllByText('Role').length).toBeGreaterThan(1);
   });
 
+  it('lets a value that refuses to wrap wrap once it is in a card', async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+
+    // A cell that pins itself to one line, which is right in a table and impossible in a card.
+    const nowrapColumns: ColumnDef<RowData>[] = [
+      {
+        accessorKey: 'name',
+        header: 'Backup taken',
+        cell: () => <span className="whitespace-nowrap">Aug 17, 2026 at 1:13:51 AM EDT</span>,
+        meta: { priority: 1 },
+      },
+    ];
+    render(<DataTable columns={nowrapColumns} data={[data[0]!]} />);
+
+    const value = await screen.findByText('Aug 17, 2026 at 1:13:51 AM EDT');
+    // jsdom does no layout, so this asserts the wiring only: the card's value box carries the
+    // override that beats the cell's own nowrap. That it actually stops the overflow was
+    // measured in a real browser at 390px, where the value ran 13px past the card's border
+    // without it and sat inside on two lines with it.
+    expect(value.closest('dd')).toHaveClass('[&_*]:whitespace-normal');
+  });
+
   /*
    * Server-driven ("manual") mode, used by the Users, System Logs and Autograder pages.
    * The table holds one page and the parent owns pagination, sorting and filtering, so the
