@@ -274,7 +274,19 @@ export function GradeBreakdownDialog({
             />
           );
         },
-        meta: { priority: 3 },
+        /**
+         * No priority, so it is never dropped.
+         *
+         * The responsive priorities hide a column below a breakpoint, and they measure the
+         * *viewport*, not the box the table is actually in. This table lives in a dialog a few
+         * hundred pixels wide, so the width it is judged by has nothing to do with the width it
+         * has. At `priority: 3` this column was hidden on any window under 1024px, which is an
+         * ordinary laptop window: the dialog opened, said "edit individual problem scores", and
+         * showed nothing to edit and a Save button that could never enable, because nothing
+         * could be made dirty.
+         *
+         * Whatever else goes, the field being edited stays.
+         */
       },
     ],
     [handleGradeChange],
