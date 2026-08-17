@@ -331,6 +331,15 @@ model LtiPlatform {
   authLoginUrl String
   /// Where AFCT asks for access tokens, for grade passback and roster sync.
   tokenUrl     String
+
+  /// The audience to name in the client-assertion JWT, when the platform wants one of its own.
+  ///
+  /// Almost every platform expects the token endpoint itself, which is what AFCT uses when this is
+  /// empty: Canvas, Moodle and Blackboard all do, the last confirmed from Blackboard's own sample
+  /// tool. D2L Brightspace is the exception. Its registration hands out a `BrightspaceAudience`
+  /// separately from the access token URL, and an assertion addressed to the endpoint instead is
+  /// refused, so nothing AFCT sends to a Brightspace course would ever arrive.
+  tokenAudience String?
   /// Where AFCT fetches the platform's public keys, to verify that a launch really came from it.
   keysetUrl    String
 

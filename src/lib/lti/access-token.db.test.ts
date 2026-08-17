@@ -35,6 +35,9 @@ function postedBody(fetchMock: ReturnType<typeof vi.fn>) {
 
 beforeEach(async () => {
   await prisma.ltiKeyPair.deleteMany({});
+  // The registrations these tests create. Left behind, they collide with their own ids on the
+  // next run, since the counter that names them restarts and the rows do not.
+  await prisma.ltiPlatform.deleteMany({ where: { id: { startsWith: 'ltip-token-' } } });
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => okResponse({ access_token: 'platform-token', expires_in: 3600 })),
@@ -69,6 +72,71 @@ describe('the assertion AFCT signs', () => {
       audience: TOKEN_URL,
     });
     expect(payload.sub).toBe(CLIENT_ID);
+  });
+
+  /**
+   * The one platform that wants an audience of its own.
+   *
+   * D2L Brightspace issues a `BrightspaceAudience` separately from its access token URL and
+   * refuses an assertion addressed to the endpoint, so without this nothing AFCT sends to a
+   * Brightspace course would ever arrive. Canvas, Moodle and Blackboard all want the endpoint,
+   * which is why it stays the default.
+   */
+  it('addresses the assertion to a platform’s own audience when it has one', async () => {
+    await createKeyPair();
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const platformId = nextPlatform();
+    const audience = 'https://api.brightspace.example/auth/token';
+    await prisma.ltiPlatform.create({
+      data: {
+        id: platformId,
+        name: 'Brightspace',
+        issuer: `https://brightspace.example/${platformId}`,
+        clientId: CLIENT_ID,
+        deploymentId: 'd-1',
+        authLoginUrl: 'https://brightspace.example/auth',
+        tokenUrl: TOKEN_URL,
+        tokenAudience: audience,
+        keysetUrl: 'https://brightspace.example/jwks',
+      },
+    });
+
+    await getAccessToken({ platformId, clientId: CLIENT_ID, tokenUrl: TOKEN_URL });
+
+    const assertion = postedBody(fetchMock).get('client_assertion')!;
+    const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
+    // Verifying against the audience is the assertion: a mismatch throws here.
+    const { payload } = await jwtVerify(assertion, keyset, { issuer: CLIENT_ID, audience });
+    expect(payload.aud).toBe(audience);
+  });
+
+  it('falls back to the token endpoint when the platform named no audience', async () => {
+    // Which is every platform but one, so this is the path that must not change.
+    await createKeyPair();
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const platformId = nextPlatform();
+    await prisma.ltiPlatform.create({
+      data: {
+        id: platformId,
+        name: 'Canvas',
+        issuer: `https://canvas.example/${platformId}`,
+        clientId: CLIENT_ID,
+        deploymentId: 'd-1',
+        authLoginUrl: 'https://canvas.example/auth',
+        tokenUrl: TOKEN_URL,
+        keysetUrl: 'https://canvas.example/jwks',
+      },
+    });
+
+    await getAccessToken({ platformId, clientId: CLIENT_ID, tokenUrl: TOKEN_URL });
+
+    const assertion = postedBody(fetchMock).get('client_assertion')!;
+    const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
+    const { payload } = await jwtVerify(assertion, keyset, {
+      issuer: CLIENT_ID,
+      audience: TOKEN_URL,
+    });
+    expect(payload.aud).toBe(TOKEN_URL);
   });
 
   it('names the key it was signed with, so the platform knows which to check', async () => {
