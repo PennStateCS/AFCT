@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import SystemStatusClient from './SystemStatusClient';
@@ -79,6 +79,9 @@ const filesPayload = {
   },
 };
 
+/** Set by a test that needs a different Files payload; cleared between tests. */
+let filesOverride: unknown = null;
+
 const NOW = 1_700_000_000_000;
 const rateLimits = {
   generatedAt: NOW,
@@ -127,7 +130,7 @@ const routeFetch = () =>
       if (u.includes('/status/summary')) return json(summary);
       if (u.includes('/status/server')) return json(server);
       if (u.includes('/status/files') && init?.method === 'DELETE') return json({ ok: true });
-      if (u.includes('/status/files')) return json(filesPayload);
+      if (u.includes('/status/files')) return json(filesOverride ?? filesPayload);
       if (u.includes('/status/database'))
         return json({ ok: true, message: 'reachable', provider: 'postgres' });
       return json({});
@@ -138,6 +141,7 @@ describe('SystemStatusClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    filesOverride = null;
     vi.stubGlobal('fetch', vi.fn());
     routeFetch();
   });
@@ -199,9 +203,27 @@ describe('SystemStatusClient', () => {
 
     // The working set, named for the person operating this rather than by folder.
     expect(await screen.findByText('Student submissions')).toBeInTheDocument();
-    expect(await screen.findByText('412')).toBeInTheDocument();
-    // Sizes only mean something against what is left on the disk.
-    expect(await screen.findByText(/free of/)).toBeInTheDocument();
+    // The count is still there beside the size: a kind can be most of the space and a handful
+    // of the files, and both halves of that are worth knowing.
+    expect(await screen.findByText(/412 files/)).toBeInTheDocument();
+    // Each kind's full name, exactly, scoped to the chart's own legend so the table below
+    // cannot satisfy it. This cannot catch CSS truncation, which is what actually shortened
+    // "Profile photos" to "Profile ph": jsdom does no layout and clipping leaves no ellipsis in
+    // the DOM. It does catch the code shortening a label itself; the visual case needs a person.
+    const legend = (await screen.findByRole('heading', { name: 'Uploads by kind' })).closest(
+      'section',
+    )!;
+    expect(within(legend).getByText('Reference solutions')).toBeInTheDocument();
+    expect(within(legend).getByText('Student submissions')).toBeInTheDocument();
+    // Free space is part of the chart, not a separate note: the sizes only mean something
+    // against how much room is left. Scoped to the disk chart, since the headline figures
+    // repeat the same number and a page-wide query would pass on either one.
+    const disk = (await screen.findByRole('heading', { name: 'The disk' })).closest('section')!;
+    expect(within(disk).getByText('Free')).toBeInTheDocument();
+    expect(within(disk).getAllByText(/11\.18 GB/).length).toBeGreaterThan(0);
+    // The disk holds more than uploads, and saying so is what stops somebody reading the
+    // uploads figure as the reason a disk is full.
+    expect(within(disk).getByText('Everything else')).toBeInTheDocument();
   });
 
   it('raises a file AFCT records but cannot find as its own alert', async () => {
@@ -212,6 +234,44 @@ describe('SystemStatusClient', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('2 files are recorded but not on the server');
+  });
+
+  it('still lists a kind whose files have all gone missing', async () => {
+    // The case the alert describes: a database restored without its uploads. The kind holds
+    // nothing, so a "does it hold anything" filter dropped it, and it was then described as
+    // having nothing stored while the alert above said thousands of its files were missing.
+    filesOverride = {
+      storage: {
+        categories: [
+          {
+            category: 'submissions',
+            label: 'Student submissions',
+            inUseCount: 0,
+            inUseBytes: 0,
+            abandonedCount: 0,
+            abandonedBytes: 0,
+            missingCount: 5000,
+            missingSamples: ['a.jff', 'b.jff'],
+          },
+        ],
+        inUseCount: 0,
+        inUseBytes: 0,
+        missingCount: 5000,
+      },
+      abandonedFiles: { total: 0, totalSizeBytes: 0, listLimit: 500, categories: [], files: [] },
+    };
+    localStorage.setItem('afct.systemStatusTab', 'files');
+    renderWithClient(<SystemStatusClient />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '5000 files are recorded but not on the server',
+    );
+    // Named, with the filenames that are the only lead anybody gets.
+    expect(await screen.findByText(/recorded but missing/)).toBeInTheDocument();
+    expect(await screen.findByText(/a\.jff/)).toBeInTheDocument();
+    expect(await screen.findByText(/a\.jff/)).toBeInTheDocument();
+    // And never described as empty while that is true of it.
+    expect(screen.queryByText(/Nothing stored for student submissions/)).not.toBeInTheDocument();
   });
 
   it('does not fetch the Files endpoint while another tab is open', async () => {
