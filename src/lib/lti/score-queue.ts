@@ -42,11 +42,36 @@ export async function queueScore(opts: {
     sentAt: null,
   };
 
-  await prisma.ltiScoreQueue.upsert({
+  const row = await prisma.ltiScoreQueue.upsert({
     where: { assignmentId_userId: { assignmentId: opts.assignmentId, userId: opts.userId } },
     create: { assignmentId: opts.assignmentId, userId: opts.userId, ...fields },
     update: fields,
+    select: { assignment: { select: { courseId: true } } },
   });
+
+  /**
+   * The grade has been accepted for sending, which is a different fact from the grade changing
+   * and from it arriving.
+   *
+   * Those three together are what makes this readable afterwards. A grade that changed and was
+   * never queued looks identical, in a log holding only the first and last, to one that was
+   * queued and is still waiting: both are "graded, nothing at the LMS". Distinguishing them
+   * took a database prompt the first time it came up.
+   */
+  try {
+    await createEnhancedActivityLog(prisma, WORKER_CONTEXT, {
+      userId: opts.userId,
+      action: 'LTI_SCORE_QUEUED',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      courseId: row.assignment?.courseId ?? null,
+      assignmentId: opts.assignmentId,
+      metadata: { scoreGiven: opts.scoreGiven, scoreMaximum: opts.scoreMaximum },
+    });
+  } catch (err) {
+    // The grade is queued either way; failing to note it must not undo that.
+    console.error('[lti] could not log a queued score', err);
+  }
 }
 
 /**
@@ -107,10 +132,44 @@ export async function claimNextScore(now = new Date()) {
 
 /** Mark a queued grade as delivered. */
 export async function markSent(id: string, now = new Date()): Promise<void> {
-  await prisma.ltiScoreQueue.update({
+  const row = await prisma.ltiScoreQueue.update({
     where: { id },
     data: { state: 'SENT', sentAt: now, lastError: null },
+    select: {
+      userId: true,
+      assignmentId: true,
+      scoreGiven: true,
+      scoreMaximum: true,
+      assignment: { select: { courseId: true } },
+    },
   });
+
+  /**
+   * A grade arriving is worth recording, not only a grade failing.
+   *
+   * The log is what somebody reads to answer "did it go", and a log that only ever holds
+   * failures cannot distinguish "it worked" from "nothing was tried" — which is exactly the
+   * question that came up the first time a grade did reach an LMS. It is also the point where
+   * a grade leaves AFCT for a system with its own gradebook, and under FERPA that is a
+   * disclosure worth having a record of, with the student, the assignment and the number.
+   *
+   * INFO, unlike the failure: it is the ordinary case, and should not compete for attention
+   * with the ones that need somebody to act.
+   */
+  try {
+    await createEnhancedActivityLog(prisma, WORKER_CONTEXT, {
+      userId: row.userId,
+      action: 'LTI_SCORE_SENT',
+      severity: 'INFO',
+      category: 'SUBMISSION',
+      courseId: row.assignment?.courseId ?? null,
+      assignmentId: row.assignmentId,
+      metadata: { scoreGiven: row.scoreGiven, scoreMaximum: row.scoreMaximum },
+    });
+  } catch (err) {
+    // The grade is delivered either way; failing to note it must not undo that.
+    console.error('[lti] could not log a delivered score', err);
+  }
 }
 
 /**

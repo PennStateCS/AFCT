@@ -24,7 +24,9 @@ const USERS = ['u-queue-1', 'u-queue-2'];
 
 async function destroyFixtures() {
   // The failure log these tests now write, or a count from the previous test carries over.
-  await prisma.activityLog.deleteMany({ where: { action: 'LTI_SCORE_SEND_FAILED' } });
+  await prisma.activityLog.deleteMany({
+    where: { action: { in: ['LTI_SCORE_SEND_FAILED', 'LTI_SCORE_QUEUED', 'LTI_SCORE_SENT'] } },
+  });
   await prisma.ltiScoreQueue.deleteMany({});
   await prisma.assignment.deleteMany({ where: { id: { in: [ASSIGNMENT, OTHER_ASSIGNMENT] } } });
   await prisma.course.deleteMany({ where: { id: COURSE } });
@@ -265,6 +267,40 @@ describe('after an attempt', () => {
 
 /** What faculty see. A failure nobody can find is the same as a grade that never went. */
 describe('what somebody troubleshooting can see', () => {
+  /**
+   * Three facts, not one. A grade changing, a grade being accepted for sending, and a grade
+   * arriving are different events, and a log holding only the last cannot tell "never queued"
+   * from "queued and still waiting" — which is the question that came up the first time a grade
+   * did not appear in an LMS gradebook.
+   */
+  it('records a grade being queued for the LMS', async () => {
+    await queue();
+
+    const entry = await prisma.activityLog.findFirst({
+      where: { action: 'LTI_SCORE_QUEUED' },
+      select: { severity: true, courseId: true, assignmentId: true, metadata: true },
+    });
+    expect(entry?.severity).toBe('INFO');
+    expect(entry?.courseId).toBeTruthy();
+    expect(entry?.assignmentId).toBeTruthy();
+    expect(JSON.stringify(entry?.metadata)).toContain('scoreGiven');
+  });
+
+  it('records a grade the LMS accepted', async () => {
+    // The ordinary case, so INFO: it must not compete for attention with the failures.
+    await queue();
+    const claimed = await claimNextScore();
+
+    await markSent(claimed!.id);
+
+    const entry = await prisma.activityLog.findFirst({
+      where: { action: 'LTI_SCORE_SENT' },
+      select: { severity: true, assignmentId: true },
+    });
+    expect(entry?.severity).toBe('INFO');
+    expect(entry?.assignmentId).toBeTruthy();
+  });
+
   /**
    * A grade that will never reach the LMS gradebook is one of the worst things this system can
    * do quietly. The reason used to live only on the queue row, which no screen reads, so

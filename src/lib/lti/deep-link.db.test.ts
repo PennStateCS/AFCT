@@ -79,10 +79,20 @@ describe('the signed response', () => {
 
     const items = payload['https://purl.imsglobal.org/spec/lti-dl/claim/content_items'] as {
       custom: { afct_assignment_id: string };
-      lineItem?: { scoreMaximum: number };
+      lineItem?: { scoreMaximum: number; resourceId?: string; label?: string };
     }[];
     expect(items[0]?.custom.afct_assignment_id).toBe('a-1');
     expect(items[0]?.lineItem?.scoreMaximum).toBe(100);
+
+    /**
+     * The name the column will be found by later, and the reason there is only one of it.
+     *
+     * Sending a grade begins by asking the platform for the line item whose `resource_id` is
+     * this assignment. Omitting it here left the platform storing a column with no resource id,
+     * so that search found nothing and AFCT created a second column: Canvas then showed two
+     * assignments with the same title, one students open and an empty one collecting grades.
+     */
+    expect(items[0]?.lineItem?.resourceId).toBe('a-1');
   });
 
   /**
