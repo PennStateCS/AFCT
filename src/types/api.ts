@@ -2746,6 +2746,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lti/launch/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a launch using the state the platform stored in the browser
+         * @description Finishing a launch whose state came from the platform's browser storage rather than a cookie.   Reached only from `/lti/state-check`, which is reached only when the launch arrived without its  cookie and the platform had offered storage. The page reads what the platform kept and posts it  here; if it is the state this launch was issued, the token waiting on the launch row is  verified exactly as the ordinary path verifies it.   **What this proves, and what it does not.** A cookie is strong because the browser sends it  unprompted and no other site can read it or plant it. This is weaker: the value arrives from a  page, so it says a page on AFCT's origin in this browser was given this value by the platform,  not that this browser began this launch. It is used only where the cookie did not arrive, so  the alternative is not a stronger check but no launch at all, and never in place of a cookie  that did arrive. The launch is still single-use, still expires in minutes, and its token still  has to verify against the registration, which is what bounds the exposure.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/launch/state/route.ts)
+         */
+        post: operations["postLtiLaunchState"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lti/link": {
         parameters: {
             query?: never;
@@ -12180,6 +12202,41 @@ export interface operations {
             };
             /** @description The launch could not be verified. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postLtiLaunchState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    state: string;
+                    /** @description What the platform had kept for this launch */
+                    stored: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Verified; on to the signed-in destination. */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The stored value did not match, or there was nothing waiting. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

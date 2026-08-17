@@ -1647,6 +1647,21 @@ model LtiLaunchTransaction {
   /// the signed token's own target link URI must equal this.
   targetLinkUri String?
 
+  /// The frame the platform named for its browser storage, when it offered any.
+  ///
+  /// Set from `lti_storage_target` at login. Its presence is what says this platform can hold a
+  /// value for AFCT in the browser, which is the only route left when a browser refuses the
+  /// state cookie outright. Absent means cookies are the only mechanism available.
+  storageTarget String?
+
+  /// The signed token, held only while a launch waits for the browser to answer for its state.
+  ///
+  /// A launch that arrives without its cookie cannot be finished on that request: the answer is
+  /// in the platform's browser storage and only a page can read it. Rather than hand the token
+  /// back through the browser to be posted again, it waits here for the seconds that takes, and
+  /// is cleared the moment the launch is spent or expires.
+  idToken String?
+
   /// When the launch stops being completable.
   expiresAt DateTime
   /// When it was spent. Once set, the launch is refused as a replay.

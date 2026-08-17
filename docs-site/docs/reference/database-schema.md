@@ -147,6 +147,8 @@ erDiagram
   String nonceHash UK
   String platformId FK
   String targetLinkUri "nullable"
+  String storageTarget "nullable"
+  String idToken "nullable"
   DateTime expiresAt
   DateTime usedAt "nullable"
   DateTime createdAt
@@ -560,6 +562,19 @@ Properties as follows:
 - `targetLinkUri`
   > The target link URI the platform sent to the login endpoint, when it sent one. Core says
   > the signed token's own target link URI must equal this.
+- `storageTarget`
+  > The frame the platform named for its browser storage, when it offered any.
+  >
+  > Set from `lti_storage_target` at login. Its presence is what says this platform can hold a
+  > value for AFCT in the browser, which is the only route left when a browser refuses the
+  > state cookie outright. Absent means cookies are the only mechanism available.
+- `idToken`
+  > The signed token, held only while a launch waits for the browser to answer for its state.
+  >
+  > A launch that arrives without its cookie cannot be finished on that request: the answer is
+  > in the platform's browser storage and only a page can read it. Rather than hand the token
+  > back through the browser to be posted again, it waits here for the seconds that takes, and
+  > is cleared the moment the launch is spent or expires.
 - `expiresAt`: When the launch stops being completable.
 - `usedAt`: When it was spent. Once set, the launch is refused as a replay.
 - `createdAt`: When this record was created.

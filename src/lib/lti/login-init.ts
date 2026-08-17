@@ -46,6 +46,13 @@ export type LoginInitParams = {
   target_link_uri?: string | null;
   lti_message_hint?: string | null;
   client_id?: string | null;
+  /**
+   * The frame the platform will accept browser-storage messages on.
+   *
+   * Its presence is the platform saying it can hold a value for AFCT in the browser, which is
+   * the only way to check a returning launch when the browser refuses the state cookie.
+   */
+  lti_storage_target?: string | null;
   lti_deployment_id?: string | null;
 };
 
@@ -62,7 +69,8 @@ export type LoginInitRefusal =
   | 'ambiguous-platform';
 
 export type LoginInitResult =
-  { ok: true; redirectUrl: string; state: string } | { ok: false; reason: LoginInitRefusal };
+  | { ok: true; redirectUrl: string; state: string; storageTarget: string | null }
+  | { ok: false; reason: LoginInitRefusal };
 
 /**
  * Work out where to send the browser next, and mint the state and nonce for the launch.
@@ -105,6 +113,7 @@ export async function beginLaunch(opts: {
   const { state, nonce } = await startLaunch({
     platformId: platform.id,
     targetLinkUri: params.target_link_uri,
+    storageTarget: params.lti_storage_target,
   });
 
   const url = new URL(platform.authLoginUrl);
@@ -123,7 +132,12 @@ export async function beginLaunch(opts: {
   query.set('prompt', 'none');
   if (params.lti_message_hint) query.set('lti_message_hint', params.lti_message_hint);
 
-  return { ok: true, redirectUrl: url.toString(), state };
+  return {
+    ok: true,
+    redirectUrl: url.toString(),
+    state,
+    storageTarget: params.lti_storage_target?.trim() || null,
+  };
 }
 
 /** What to tell somebody whose launch could not even be started. */
