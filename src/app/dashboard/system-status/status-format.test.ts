@@ -33,7 +33,7 @@ describe('formatBytes', () => {
     [512, '512 B'],
     [1024, '1.0 KB'],
     [1024 * 1024, '1.0 MB'],
-    [1024 * 1024 * 1024, '1.00 GB'],
+    [1024 * 1024 * 1024, '1.0 GB'],
   ])('scales %i to the right unit', (bytes, expected) => {
     expect(formatBytes(bytes)).toBe(expected);
   });
@@ -59,9 +59,9 @@ describe('formatMs and formatRate', () => {
 
 describe('formatDbVersion', () => {
   it('reduces a Postgres banner to the engine and word size', () => {
-    expect(
-      formatDbVersion('PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc, 64-bit'),
-    ).toBe('PostgreSQL 16.2 64-bit');
+    expect(formatDbVersion('PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc, 64-bit')).toBe(
+      'PostgreSQL 16.2 64-bit',
+    );
   });
 
   it('keeps the engine alone when the banner has no word size', () => {

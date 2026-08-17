@@ -8,7 +8,9 @@
  * placeholder rather than throwing or printing NaN.
  */
 
-const DASH = '—';
+import { DASH } from '@/lib/format-bytes';
+
+export { DASH };
 
 export const formatUptime = (secs?: number | null) => {
   if (secs == null || Number.isNaN(Number(secs))) return DASH;
@@ -19,19 +21,10 @@ export const formatUptime = (secs?: number | null) => {
   return d > 0 ? `${d}d ${h}h ${m}m` : `${h}h ${m}m`;
 };
 
-export const formatBytes = (b?: number | null) => {
-  if (b == null || Number.isNaN(Number(b))) return DASH;
-  const bytes = Number(b);
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  if (bytes < 1024 * 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-  // Stopping at GB meant a terabyte volume read as "1006.85 GB", which is a number nobody
-  // converts in their head. The Files tab reports disk sizes now, so this range is reachable.
-  return `${(bytes / 1024 / 1024 / 1024 / 1024).toFixed(2)} TB`;
-};
-
-export const formatDbSize = formatBytes;
+// One implementation, shared with the system-settings pages. They used to have their own,
+// which rounded differently and carried a unit this one lacked.
+export { formatBytes } from '@/lib/format-bytes';
+export { formatBytes as formatDbSize } from '@/lib/format-bytes';
 
 export const formatMs = (ms?: number | null) =>
   typeof ms === 'number' && Number.isFinite(ms) ? `${ms} ms` : DASH;

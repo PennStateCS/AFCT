@@ -104,18 +104,8 @@ export type SetField = <K extends keyof FormSnapshot>(field: K, value: FormSnaps
 export const msToSec = (ms: number) => Math.round(ms / 1000);
 export const secToMs = (sec: number) => Math.round(sec * 1000);
 
-export const formatBytes = (n: number | null) => {
-  if (n == null) return '—';
-  if (n < 1024) return `${n} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let v = n / 1024;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(1)} ${units[i]}`;
-};
+// Shared with the status pages; see `lib/format-bytes`.
+export { formatBytes } from '@/lib/format-bytes';
 
 // Turn the backup filename timestamp (YYYYMMDD-HHMMSS) into a readable date, kept as-is
 // (server clock). Used for the tooltip and as the local-time fallback.
