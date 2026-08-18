@@ -103,7 +103,11 @@ beforeEach(() => {
 describe('runJavaEvaluator — guard branches', () => {
   it('fails immediately when no file was submitted', async () => {
     const result = await runJavaEvaluator(makeSubmission({ fileName: null }), CONFIG);
-    expect(result).toMatchObject({ status: 'FAILED', correct: false, feedback: 'No file submitted.' });
+    expect(result).toMatchObject({
+      status: 'FAILED',
+      correct: false,
+      feedback: 'No file submitted.',
+    });
     expect(loggedActions()).toContain('SUBMISSION_EVALUATION_ERROR');
   });
 
@@ -143,7 +147,10 @@ describe('runJavaEvaluator — Windows local dev path', () => {
 
 describe('runJavaEvaluator — evaluator execution', () => {
   it('parses a successful evaluation and reports correctness + feedback', async () => {
-    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"Nice work"}', stderr: '' });
+    executeMock.mockResolvedValue({
+      stdout: '{"correct":true,"feedback":"Nice work"}',
+      stderr: '',
+    });
     const result = await runJavaEvaluator(makeSubmission(), CONFIG);
     expect(result).toMatchObject({
       status: 'COMPLETED',
@@ -161,7 +168,13 @@ describe('runJavaEvaluator — evaluator execution', () => {
     submission.assignmentProblem.problem.isDeterministic = true;
     await runJavaEvaluator(submission, CONFIG);
     const [args] = executeMock.mock.calls[0];
-    expect(args).toEqual(['--json', expect.stringContaining('answer.txt'), expect.stringContaining('submission.txt'), '5', 'true']);
+    expect(args).toEqual([
+      '--json',
+      expect.stringContaining('answer.txt'),
+      expect.stringContaining('submission.txt'),
+      '5',
+      'true',
+    ]);
   });
 
   it('forwards the configured timeout, memory cap, and analyzer limit', async () => {
@@ -186,7 +199,10 @@ describe('runJavaEvaluator — evaluator execution', () => {
   });
 
   it('logs a warning when the evaluator writes to stderr but still parses stdout', async () => {
-    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"ok"}', stderr: 'a warning' });
+    executeMock.mockResolvedValue({
+      stdout: '{"correct":true,"feedback":"ok"}',
+      stderr: 'a warning',
+    });
     const result = await runJavaEvaluator(makeSubmission(), CONFIG);
     expect(result.correct).toBe(true);
     expect(loggedActions()).toContain('SUBMISSION_EVALUATION_STDERR');
@@ -214,6 +230,12 @@ describe('runJavaEvaluator — evaluator execution', () => {
   });
 });
 
+/**
+ * The worker only ever evaluates a row it has claimed, and the claim token is what every write
+ * is fenced on, so these drive it the same way the loop does.
+ */
+const CLAIM = 'claim-token-1';
+
 describe('evaluateSubmission', () => {
   beforeEach(() => {
     // Happy-path defaults; individual tests override as needed.
@@ -232,7 +254,7 @@ describe('evaluateSubmission', () => {
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -270,11 +292,45 @@ describe('evaluateSubmission', () => {
     expect(loggedActions()).toContain('SUBMISSION_AUTOGRADED');
   });
 
+  /**
+   * The gradebook keeps the later work.
+   *
+   * Rerunning an old attempt refreshes that attempt's own result, which is what staff asked
+   * for, and leaves the standing grade where the newer submission put it.
+   */
+  it('leaves the standing grade alone when a newer submission holds it', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    // What the authority check sees: a different, later submission for this student.
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-2' });
+    executeMock.mockResolvedValue({ stdout: '{"correct":false,"feedback":"nope"}', stderr: '' });
+
+    await evaluateSubmission('sub-1', CLAIM);
+
+    // The attempt's own result is still written...
+    expect(prismaMock.submission.updateMany).toHaveBeenCalled();
+    // ...and nothing touches the grade.
+    expect(prismaMock.assignmentProblemGrade.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentProblemGrade.createMany).not.toHaveBeenCalled();
+    expect(loggedActions()).toContain('SUBMISSION_AUTOGRADE_SKIPPED');
+    expect(loggedActions()).not.toContain('SUBMISSION_AUTOGRADED');
+  });
+
+  it('grades when it is itself the latest submission', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    prismaMock.submission.findFirst.mockResolvedValue({ id: 'sub-1' });
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+
+    await evaluateSubmission('sub-1', CLAIM);
+
+    expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalled();
+    expect(loggedActions()).toContain('SUBMISSION_AUTOGRADED');
+  });
+
   it('autogrades zero points when the submission is incorrect', async () => {
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
     executeMock.mockResolvedValue({ stdout: '{"correct":false,"feedback":"nope"}', stderr: '' });
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     expect(prismaMock.assignmentProblemGrade.createMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: [expect.objectContaining({ grade: 0 })] }),
@@ -286,7 +342,7 @@ describe('evaluateSubmission', () => {
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
     prismaMock.assignmentProblemGrade.updateMany.mockResolvedValue({ count: 1 }); // a non-manual row existed
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ grade: 10 }) }),
@@ -307,7 +363,7 @@ describe('evaluateSubmission', () => {
     ]);
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     // Non-manual rows for all three members are updated, and createMany covers all three.
     expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
@@ -336,7 +392,7 @@ describe('evaluateSubmission', () => {
     prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 'm1' }, { userId: 'm2' }]);
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     expect(prismaMock.assignmentProblemGrade.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -351,10 +407,13 @@ describe('evaluateSubmission', () => {
   // make a solo grade read as part of a group's.
   it('records no group provenance for an individual submission', async () => {
     // Set explicitly: a previous test's group submission would otherwise still be returned.
-    prismaMock.submission.findUnique.mockResolvedValue({ ...makeSubmission(), studentGroupId: null });
+    prismaMock.submission.findUnique.mockResolvedValue({
+      ...makeSubmission(),
+      studentGroupId: null,
+    });
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     const createArg = prismaMock.assignmentProblemGrade.createMany.mock.calls[0]![0];
     expect(createArg.data[0]).not.toHaveProperty('groupGradeGroupId');
@@ -370,7 +429,7 @@ describe('evaluateSubmission', () => {
     prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 'm1' }, { userId: 'm2' }]);
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     expect(prismaMock.$transaction).toHaveBeenCalled();
   });
@@ -386,7 +445,7 @@ describe('evaluateSubmission', () => {
     prismaMock.submission.findUnique.mockResolvedValue(submission);
     executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     expect(prismaMock.assignmentProblemGrade.updateMany).not.toHaveBeenCalled();
     expect(prismaMock.assignmentProblemGrade.createMany).not.toHaveBeenCalled();
@@ -405,7 +464,7 @@ describe('evaluateSubmission', () => {
     // The fenced completion write matches nothing: another worker re-claimed the row.
     prismaMock.submission.updateMany.mockResolvedValue({ count: 0 });
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     expect(prismaMock.assignmentProblemGrade.updateMany).not.toHaveBeenCalled();
     expect(prismaMock.assignmentProblemGrade.createMany).not.toHaveBeenCalled();
@@ -417,11 +476,11 @@ describe('evaluateSubmission', () => {
     // The completion write blows up → caught as a transient error.
     prismaMock.submission.updateMany.mockRejectedValueOnce(new Error('db blip'));
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     // The error path requeues the row (fenced on the claim attempts).
     expect(prismaMock.submission.updateMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({ data: { status: 'PENDING' } }),
+      expect.objectContaining({ data: { status: 'PENDING', processingToken: null } }),
     );
     expect(loggedActions()).toContain('SUBMISSION_ERROR');
   });
@@ -430,7 +489,7 @@ describe('evaluateSubmission', () => {
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission({ attempts: 3 }));
     prismaMock.submission.updateMany.mockRejectedValueOnce(new Error('db blip'));
 
-    await evaluateSubmission('sub-1');
+    await evaluateSubmission('sub-1', CLAIM);
 
     expect(prismaMock.submission.updateMany).toHaveBeenLastCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) }),
@@ -464,9 +523,16 @@ describe('runWorkerLoop — claiming and prioritization', () => {
 
     await runWorkerLoop();
 
-    // The claim flips the row to PROCESSING and bumps attempts...
+    // The claim flips the row to PROCESSING, bumps attempts, and stamps the token every
+    // later write is fenced on.
     expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: 'PROCESSING', attempts: { increment: 1 } } }),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'PROCESSING',
+          attempts: { increment: 1 },
+          processingToken: expect.any(String),
+        }),
+      }),
     );
     // ...and evaluation runs (findUnique is only reached inside evaluateSubmission).
     expect(prismaMock.submission.findUnique).toHaveBeenCalled();
@@ -648,7 +714,7 @@ describe('reapStuckSubmissions', () => {
     prismaMock.submission.updateMany.mockResolvedValue({ count: 2 });
     await reapStuckSubmissions();
     expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: 'PENDING' } }),
+      expect.objectContaining({ data: { status: 'PENDING', processingToken: null } }),
     );
     expect(loggedActions()).toContain('SUBMISSION_QUEUE_REAPED');
   });
@@ -665,4 +731,3 @@ describe('reapStuckSubmissions', () => {
     expect(loggedActions()).toContain('SUBMISSION_QUEUE_REAPER_ERROR');
   });
 });
-

@@ -418,6 +418,57 @@ async function runWorkerLoop() {
  * submission is rerun, reaped or re-claimed while the evaluator runs, the row holds a different
  * token and these writes match nothing rather than overwriting whoever owns it now.
  */
+/**
+ * Whether this submission is the one whose result the gradebook should reflect.
+ *
+ * AFCT keeps two different things: what an individual attempt scored, and the student's
+ * standing grade for the problem. Rerunning an old attempt refreshes the first, and must not
+ * touch the second: a student who got it wrong, then right, keeps the later mark even when
+ * staff rerun the earlier one. The same rule covers an evaluation overtaken mid-flight, which
+ * is why callers read this inside the transaction that writes the grade rather than when the
+ * evaluation began.
+ *
+ * A group assignment's standing grade follows the group's stream of submissions; an individual
+ * assignment's follows the student's own.
+ *
+ * Exported so the rule can be tested against a real database, where the ordering and the group
+ * scope are the parts that can be wrong.
+ */
+export async function holdsTheStandingGrade(
+  client: Pick<typeof prisma, 'submission'>,
+  submission: {
+    id: string;
+    assignmentId: string;
+    problemId: string;
+    studentId: string;
+    studentGroupId: string | null;
+  },
+): Promise<boolean> {
+  const stream = submission.studentGroupId
+    ? {
+        assignmentId: submission.assignmentId,
+        problemId: submission.problemId,
+        studentGroupId: submission.studentGroupId,
+      }
+    : {
+        assignmentId: submission.assignmentId,
+        problemId: submission.problemId,
+        studentId: submission.studentId,
+      };
+
+  const latest = await client.submission.findFirst({
+    where: stream,
+    // Time first, then id, so two submissions in the same instant still order the same way
+    // every time this is asked.
+    orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  });
+
+  // No rows at all should not be possible (this submission is one), but a missing answer is
+  // not a reason to refuse to grade the work in front of us.
+  return !latest || latest.id === submission.id;
+}
+
 async function evaluateSubmission(id: string, token: string | null = null) {
   let submission: WorkerSubmission | null = null;
 
@@ -472,6 +523,8 @@ async function evaluateSubmission(id: string, token: string | null = null) {
       // any manual row a TA set). Together this makes autograde skip any hand-set grade.
       const gradeAssignmentId = submission.assignmentId;
       const gradeProblemId = submission.problemId;
+      const gradeStudentId = submission.studentId;
+      const gradeGroupId = submission.studentGroupId;
       const gradeTargetIds = submission.studentGroupId
         ? (
             await prisma.groupMembership.findMany({
@@ -490,7 +543,18 @@ async function evaluateSubmission(id: string, token: string | null = null) {
 
       // One transaction: a group is graded together or not at all. As two statements a
       // failure between them left a group half-graded with nothing recording which half.
-      await prisma.$transaction(async (tx) => {
+      const graded = await prisma.$transaction(async (tx) => {
+        // Read inside the transaction that writes the grade, so a submission that arrived
+        // while this one was being evaluated counts.
+        const authoritative = await holdsTheStandingGrade(tx, {
+          id,
+          assignmentId: gradeAssignmentId,
+          problemId: gradeProblemId,
+          studentId: gradeStudentId,
+          studentGroupId: gradeGroupId,
+        });
+        if (!authoritative) return false;
+
         await tx.assignmentProblemGrade.updateMany({
           where: {
             assignmentId: gradeAssignmentId,
@@ -521,18 +585,35 @@ async function evaluateSubmission(id: string, token: string | null = null) {
           })),
           skipDuplicates: true,
         });
+        return true;
       });
 
-      await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
-        studentId: submission.studentId,
-        grade: earnedPoints,
-        maxPoints: submission.assignmentProblem.maxPoints,
-        correct: evaluation.correct ?? null,
-      });
+      if (!graded) {
+        /**
+         * A rerun of an older attempt, or an evaluation overtaken by a newer submission. The
+         * attempt's own result is already saved; the gradebook keeps the later work. Logged
+         * because "I reran it and the grade did not change" is otherwise a mystery.
+         */
+        await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADE_SKIPPED', 'INFO', {
+          studentId: submission.studentId,
+          reason: 'a later submission holds the grade',
+          correct: evaluation.correct ?? null,
+        });
+        console.log(
+          `[SubmissionWorker] Submission ${id} is not the latest; left the standing grade alone.`,
+        );
+      } else {
+        await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
+          studentId: submission.studentId,
+          grade: earnedPoints,
+          maxPoints: submission.assignmentProblem.maxPoints,
+          correct: evaluation.correct ?? null,
+        });
 
-      console.log(
-        `[SubmissionWorker] Auto-graded submission ${id}: ${earnedPoints} points (correct: ${evaluation.correct})`,
-      );
+        console.log(
+          `[SubmissionWorker] Auto-graded submission ${id}: ${earnedPoints} points (correct: ${evaluation.correct})`,
+        );
+      }
     }
 
     console.log(`[SubmissionWorker] Successfully evaluated submission ${id}`);
