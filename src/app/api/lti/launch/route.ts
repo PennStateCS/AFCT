@@ -6,7 +6,13 @@ import { stateCookieName } from '@/lib/lti/login-init';
 import { findLaunch, parkIdToken } from '@/lib/lti/launch-transaction';
 import { issueSingleUseToken } from '@/lib/single-use-token';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { peekLaunchTarget, resolveLaunchTarget, enrolFromLaunch } from '@/lib/lti/course-link';
+import {
+  peekLaunchTarget,
+  resolveLaunchTarget,
+  enrolFromLaunch,
+  linkableCourseCount,
+} from '@/lib/lti/course-link';
+import { dashboardWithNotice } from '@/lib/lti/launch-landing';
 import { errMessage } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 import { publicUrl } from '@/lib/lti/public-url';
@@ -281,7 +287,42 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
   const target = await resolveLaunchTarget({ identity, userId });
 
   if (target.status === 'linked') {
-    await enrolFromLaunch({ courseId: target.courseId, userId, roles: identity.roles });
+    const { role } = await enrolFromLaunch({
+      courseId: target.courseId,
+      userId,
+      roles: identity.roles,
+    });
+
+    /**
+     * What the launch is actually opening, read after the enrolment so the answer covers a
+     * course that changed while nobody was looking.
+     *
+     * A link outlives the course it points at. Deleting a course does not delete the link, and
+     * following one into a course that is gone lands on a page that cannot explain itself.
+     */
+    const course = await prisma.course.findUnique({
+      where: { id: target.courseId },
+      select: { isPublished: true, deletedAt: true },
+    });
+    if (!course || course.deletedAt) {
+      return dashboardWithNotice('course-missing', identity.contextTitle);
+    }
+
+    /**
+     * An unpublished course is staff-only, and a student sent to it sees a page saying so and
+     * nothing else. The dashboard is more use: the launch has just enrolled them, so the course
+     * appears there the moment it is published, and every later launch goes straight in.
+     *
+     * Staff go to the course as before. Publishing it is the thing they are there to do.
+     */
+    const admin = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
+    const staffHere = role !== 'STUDENT' || Boolean(admin?.isAdmin);
+    if (!course.isPublished && !staffHere) {
+      return dashboardWithNotice('not-published', identity.contextTitle);
+    }
 
     /**
      * A deep link names the assignment it was created for, so it opens there rather than at the
@@ -303,6 +344,13 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
   }
 
   if (target.status === 'needs-link') {
+    // Nothing to choose from is not a choice. Somebody allowed to link but on the staff of no
+    // AFCT course is sent to their dashboard and told what is missing, rather than being shown
+    // an empty picker with no way forward.
+    if ((await linkableCourseCount(userId)) === 0) {
+      return dashboardWithNotice('no-courses', identity.contextTitle);
+    }
+
     const pending = await prisma.ltiPendingLink.create({
       data: {
         platformId: identity.platformId,
@@ -321,7 +369,10 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
     return `/lti/link?pending=${pending.id}`;
   }
 
-  // Nothing to link, or nothing this person may do about it. The dashboard is a truthful
-  // landing place: they are signed in, just not anywhere specific.
-  return target.status === 'not-set-up' ? '/lti/link?notReady=1' : '/dashboard';
+  // Nothing this person may do about it (a student, most often), or a launch that named no
+  // course at all. Both land on the dashboard, which is where their other courses are; only
+  // the first has anything to explain.
+  return target.status === 'not-set-up'
+    ? dashboardWithNotice('not-linked', identity.contextTitle)
+    : '/dashboard';
 }

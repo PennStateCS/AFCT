@@ -41,12 +41,12 @@ export default async function LinkLaunchPage({
   const select = { id: true, name: true, code: true, semester: true } as const;
   const orderBy = [{ semester: 'desc' as const }, { name: 'asc' as const }];
 
-  // The courses this person runs. For everybody except an administrator this is the whole
-  // choice, because the API refuses anything else.
+  // The courses this person is staff on, faculty or TA. For everybody except an administrator
+  // this is the whole choice, because the API refuses anything else.
   const own = await prisma.course.findMany({
     where: {
       deletedAt: null,
-      roster: { some: { userId: session.user.id, role: 'FACULTY' } },
+      roster: { some: { userId: session.user.id, role: { in: ['FACULTY', 'TA'] } } },
     },
     select,
     orderBy,

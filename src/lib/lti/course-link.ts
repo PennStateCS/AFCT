@@ -235,18 +235,43 @@ export async function rememberContextMember(opts: {
   }
 }
 
+/** Course staff: the roles that may connect an LMS course to a course they are on. */
+const LINKING_ROLES: CourseRole[] = ['FACULTY', 'TA'];
+
 /**
  * Whether this person may link an LMS course to an AFCT one.
  *
- * Admins, and faculty on at least one course. **TAs may not**, even though they otherwise read
- * what faculty read: this is configuration, not coursework.
+ * Admins, and course staff on at least one course. TAs are included: they are the ones setting
+ * a course up often enough that excluding them mostly produced a dead end, and a TA already
+ * reads and grades everything in their course, so the LMS connection is not a new power. It is
+ * still per course, not in general: see {@link linkLaunchCourse}.
  */
 async function canLinkCourses(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
   if (user?.isAdmin) return true;
 
-  const faculty = await prisma.roster.count({ where: { userId, role: 'FACULTY' } });
-  return faculty > 0;
+  const staff = await prisma.roster.count({ where: { userId, role: { in: LINKING_ROLES } } });
+  return staff > 0;
+}
+
+/**
+ * How many courses this person could pick from, which decides whether asking is any use.
+ *
+ * Somebody allowed to link but with nothing to link it to should not be shown an empty picker;
+ * they are sent to their dashboard and told what is missing. An administrator may link any
+ * course, so for them this is the number of courses that exist.
+ */
+export async function linkableCourseCount(userId: string): Promise<number> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
+
+  return prisma.course.count({
+    where: {
+      deletedAt: null,
+      ...(user?.isAdmin
+        ? {}
+        : { roster: { some: { userId, role: { in: LINKING_ROLES } } } }),
+    },
+  });
 }
 
 export type LinkRefusal = 'not-allowed' | 'already-linked' | 'no-context';
@@ -268,10 +293,10 @@ export async function linkLaunchCourse(opts: {
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
   if (!user?.isAdmin) {
-    const runsThisCourse = await prisma.roster.count({
-      where: { userId, courseId, role: 'FACULTY' },
+    const staffHere = await prisma.roster.count({
+      where: { userId, courseId, role: { in: LINKING_ROLES } },
     });
-    if (runsThisCourse === 0) return { ok: false, reason: 'not-allowed' };
+    if (staffHere === 0) return { ok: false, reason: 'not-allowed' };
   }
 
   try {
