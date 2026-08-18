@@ -65,11 +65,13 @@ async function destroyFixtures() {
   await prisma.ltiLineItem.deleteMany({});
   await prisma.ltiPendingLink.deleteMany({});
   await prisma.ltiContextLink.deleteMany({});
-  await prisma.roster.deleteMany({ where: { courseId: 'c-launch-dest' } });
+  await prisma.roster.deleteMany({ where: { courseId: { in: ['c-launch-dest', 'c-gone'] } } });
   await prisma.assignment.deleteMany({
     where: { courseId: { in: ['c-launch-dest', 'c-elsewhere'] } },
   });
-  await prisma.course.deleteMany({ where: { id: { in: ['c-launch-dest', 'c-elsewhere'] } } });
+  await prisma.course.deleteMany({
+    where: { id: { in: ['c-launch-dest', 'c-elsewhere', 'c-gone'] } },
+  });
   await prisma.ltiPlatform.deleteMany({ where: { id: 'ltip-1' } });
   await prisma.singleUseToken.deleteMany({
     where: { purpose: 'LTI_SESSION_TICKET' },
@@ -134,6 +136,9 @@ const withCourse = async () => {
       credits: 3,
       startDate: new Date('2026-08-24T00:00:00Z'),
       endDate: new Date('2026-12-18T00:00:00Z'),
+      // Published, because that is the state a launch normally opens. The unpublished case is
+      // a landing rule of its own and is tested where it is decided.
+      isPublished: true,
     },
   });
 };
@@ -226,15 +231,121 @@ describe('where a launch lands', () => {
   });
 
   /**
-   * A student cannot fix an unlinked course and must not be asked to. Faculty get the picker,
-   * which is covered where the rule lives.
+   * A student cannot fix an unlinked course and must not be asked to. They land on their
+   * dashboard, where their other courses are, carrying the reason: a silent redirect reads as
+   * a link that went to the wrong place. Faculty get the picker, covered where the rule lives.
    */
-  it('tells somebody who cannot link that it is not ready', async () => {
+  it('sends somebody who cannot link to their dashboard, and says why', async () => {
     await withCourse();
 
     const res = await post(await goodLaunch());
+    const next = new URL(nextOf(res)!, 'https://afct.test');
 
-    expect(nextOf(res)).toBe('/lti/link?notReady=1');
+    expect(next.pathname).toBe('/dashboard');
+    expect(next.searchParams.get('lms')).toBe('not-linked');
+    expect(await prisma.ltiPendingLink.count()).toBe(0);
+  });
+
+  /**
+   * A student on a linked course that is not published yet.
+   *
+   * The launch enrols them either way, so the course appears on their dashboard the moment it
+   * is published. Sending them to the course itself would show a page saying only that they
+   * cannot see it.
+   */
+  it('sends a student to the dashboard when the course is not published', async () => {
+    await withCourse();
+    await prisma.course.update({ where: { id: COURSE }, data: { isPublished: false } });
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+
+    const res = await post(await goodLaunch());
+    const next = new URL(nextOf(res)!, 'https://afct.test');
+
+    expect(next.pathname).toBe('/dashboard');
+    expect(next.searchParams.get('lms')).toBe('not-published');
+    // Enrolled all the same, which is what makes the course appear once it is published.
+    expect(
+      await prisma.roster.count({ where: { courseId: COURSE, userId: USER_ID } }),
+    ).toBe(1);
+  });
+
+  /** Staff are there to publish it, so they go to the course as before. */
+  it('sends staff to an unpublished course, not to the dashboard', async () => {
+    await withCourse();
+    await prisma.course.update({ where: { id: COURSE }, data: { isPublished: false } });
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+    validateLaunch.mockResolvedValue({
+      ok: true,
+      identity: {
+        ...identity,
+        roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor'],
+      },
+    });
+
+    const res = await post(await goodLaunch());
+
+    expect(nextOf(res)).toBe(`/dashboard/courses/${COURSE}`);
+  });
+
+  /**
+   * A link outlives the course it points at. Following one into a deleted course lands on a
+   * page that 404s and cannot explain itself.
+   */
+  it('explains a link that points at a course that no longer exists', async () => {
+    await withCourse();
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+    await prisma.course.update({ where: { id: COURSE }, data: { deletedAt: new Date() } });
+
+    const res = await post(await goodLaunch());
+    const next = new URL(nextOf(res)!, 'https://afct.test');
+
+    expect(next.pathname).toBe('/dashboard');
+    expect(next.searchParams.get('lms')).toBe('course-missing');
+  });
+
+  /**
+   * Somebody allowed to link, with nothing to link to.
+   *
+   * An empty picker is a wall. They are told what is missing instead, and no pending link is
+   * written, since there is no choice for it to record.
+   */
+  it('sends staff with no course of their own to the dashboard', async () => {
+    await withCourse();
+    validateLaunch.mockResolvedValue({
+      ok: true,
+      identity: {
+        ...identity,
+        roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor'],
+      },
+    });
+    // Faculty somewhere, so they may link; that course is deleted, so there is nothing to pick.
+    await prisma.course.create({
+      data: {
+        id: 'c-gone',
+        name: 'Retired',
+        code: 'CMPSC 000',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: new Date('2026-08-24T00:00:00Z'),
+        endDate: new Date('2026-12-18T00:00:00Z'),
+        deletedAt: new Date(),
+      },
+    });
+    await prisma.roster.create({
+      data: { courseId: 'c-gone', userId: USER_ID, role: 'FACULTY' },
+    });
+
+    const res = await post(await goodLaunch());
+    const next = new URL(nextOf(res)!, 'https://afct.test');
+
+    expect(next.pathname).toBe('/dashboard');
+    expect(next.searchParams.get('lms')).toBe('no-courses');
     expect(await prisma.ltiPendingLink.count()).toBe(0);
   });
 

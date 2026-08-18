@@ -104,6 +104,12 @@ If the link shows an empty box or a message about the page refusing to connect, 
 
 An automatic registration that failed is logged as `LTI_DYNAMIC_REGISTRATION_FAILED`, with the reason. `configuration-unreachable` means AFCT's server could not reach your LMS, which is a network or firewall question rather than an LTI one. `registration-refused` means the LMS turned the registration down, usually because the link it gave AFCT had already expired: start again from the LMS. Registration links themselves are logged as `LTI_REGISTRATION_LINK_CREATED`, so you can see who created one and when.
 
+## Who can connect a course
+
+Faculty and TAs can connect an LMS course to any AFCT course they are staff on, and administrators to any course at all. An administrator is shown their own courses first, with everything else behind a deliberate click, because picking the wrong one does not fail safely: the LMS course would start enrolling students into somebody else's course and sending grades to it.
+
+Anyone who cannot connect it, which usually means a student, lands on their AFCT dashboard and is told the course is not connected yet. Nobody sees an error page for this.
+
 ## What faculty can do once it is connected
 
 - **Send grades to the LMS gradebook**, automatically as they are awarded or on demand.

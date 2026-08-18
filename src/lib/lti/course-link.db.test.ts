@@ -162,11 +162,15 @@ describe('where a launch lands', () => {
     expect(target).toEqual({ status: 'not-set-up' });
   });
 
-  // Course staff for reading, not for configuration.
-  it('does not offer the choice to a TA', async () => {
+  /**
+   * TAs may link. They are often the ones setting a course up, and a TA already reads and
+   * grades everything in their course, so the LMS connection is not a new power. Which course
+   * they may attach it to is still checked per course, below.
+   */
+  it('offers the choice to a TA', async () => {
     const target = await resolveLaunchTarget({ identity: identity(), userId: ids.ta });
 
-    expect(target).toEqual({ status: 'not-set-up' });
+    expect(target).toEqual({ status: 'needs-link' });
   });
 
   it('offers the choice to an admin who runs no courses', async () => {
@@ -213,13 +217,41 @@ describe('who may link a course', () => {
     expect(await prisma.ltiContextLink.count()).toBe(0);
   });
 
-  it('refuses a TA on that course', async () => {
+  it('allows a TA on that course', async () => {
     const result = await linkLaunchCourse({
       identity: identity(),
       courseId: COURSE,
       userId: ids.ta,
       context: CTX,
     });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  /**
+   * Being staff somewhere is not being staff here. The check is on this course, or a TA could
+   * point their LMS course at somebody else's and collect its grades.
+   */
+  it('refuses a TA of another course', async () => {
+    const elsewhere = await prisma.course.create({
+      data: {
+        name: 'Not theirs',
+        code: 'CMPSC 111',
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: new Date('2026-08-24T00:00:00Z'),
+        endDate: new Date('2026-12-18T00:00:00Z'),
+      },
+    });
+
+    const result = await linkLaunchCourse({
+      identity: identity(),
+      courseId: elsewhere.id,
+      userId: ids.ta,
+      context: CTX,
+    });
+
+    await prisma.course.delete({ where: { id: elsewhere.id } });
 
     expect(result).toEqual({ ok: false, reason: 'not-allowed' });
   });

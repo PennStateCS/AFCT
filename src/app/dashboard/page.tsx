@@ -8,13 +8,20 @@ import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
 import { assignedToStudentWhere } from '@/lib/assignment-visibility';
 import { effectiveDeadline } from '@/lib/effective-deadline';
+import { LaunchNotice } from '@/components/lti/LaunchNotice';
 
 export const metadata: Metadata = {
   title: 'AFCT Dashboard',
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  // Set when a launch from an LMS could not open a course and sent them here instead.
+  searchParams: Promise<{ lms?: string; course?: string }>;
+}) {
   const session = await auth();
+  const { lms, course: lmsCourseTitle } = await searchParams;
 
   if (!session?.user) {
     return (
@@ -215,6 +222,8 @@ export default async function DashboardPage() {
       <h1 className="sr-only">Dashboard</h1>
       {/* Left (Big Column) */}
       <div className="w-full lg:w-3/4">
+        {/* Renders nothing unless an LMS launch sent them here, which is most of the time. */}
+        <LaunchNotice notice={lms} courseTitle={lmsCourseTitle} />
         <DashboardClient
           sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
           courses={currentCourses}
