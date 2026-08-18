@@ -7,6 +7,7 @@
 - [Assignments](#assignments)
 - [Submissions](#submissions)
 - [System](#system)
+- [lti](#lti)
 
 ## Identity
 
@@ -1745,3 +1746,33 @@ Properties as follows:
   > When the row itself may be removed. See the note above: results are short-lived on
   > purpose, so a trial is never a lasting copy of somebody's work.
 - `updatedAt`: When this record was last changed.
+
+## lti
+
+```mermaid
+erDiagram
+"LtiDeepLink" {
+  String id PK
+  String contextLinkId FK
+  String assignmentId FK
+  String createdByUserId FK "nullable"
+  DateTime createdAt
+}
+```
+
+### `LtiDeepLink`
+
+An AFCT assignment somebody added to an LMS course as a link.
+
+Written when the deep linking response is returned, because that is the only moment AFCT
+knows: from then on the link lives in the LMS and is never reported back. Without it the
+picker cannot tell what it has already offered, and the same assignment can be added twice
+under two names, which then disagree about which gradebook column is theirs.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `contextLinkId`: The LMS course the link was added to.
+- `assignmentId`: The AFCT assignment it opens.
+- `createdByUserId`: Who added it. Null once that account is gone; the link outlives the person.
+- `createdAt`: When this record was created.

@@ -59,7 +59,12 @@ Syncing is always something you ask for. AFCT does not quietly change your roste
 
 ## Link straight to one assignment
 
-Some LMSs let you pick the AFCT assignment while adding the link, so students land on that assignment rather than on the AFCT course. If yours supports it, choosing AFCT while adding an assignment or module item shows a list of the assignments in your linked AFCT course, and the one you pick becomes the link.
+Some LMSs let you pick the AFCT assignment while adding the link, so students land on that assignment rather than on the AFCT course. If yours supports it, choosing AFCT while adding an assignment or module item offers two ways to go:
+
+- **Use an assignment that already exists.** Assignments already opened by a link in this LMS course are left out of the list, and the screen says how many, so a missing one is explained rather than mysterious.
+- **Create a new assignment.** Give it a title and a due date and AFCT makes it, publishes it and links it in one step. Problems, points and everything else are added in AFCT afterwards.
+
+**An assignment can only be linked once per LMS course.** Two links to the same work would give your gradebook two columns for it, and the grades would disagree about which is real.
 
 The course has to be linked first, and you have to be the one who runs it. These links need to open in a new tab as well, so check that setting on the assignment or module item once it has been added. You pick one assignment at a time, even in an LMS that would let you select several at once.
 
