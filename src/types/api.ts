@@ -3274,10 +3274,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Update a user
-         * @description Updates a user: names, admin flag, active status, timezone, and avatar. Accepts  either JSON or multipart/form-data (the latter carries the avatar file). A user  may edit themselves; only admins may edit others or change the admin flag.  Deactivation is blocked while the user is still on a published, unarchived  course. Field-level changes are recorded (before → after) in the audit log.
-         *
-         *     **Auth:** required
+         * PATCH /api/users/{id}
+         * @description **Auth:** required
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/users/[id]/route.ts)
          */
@@ -13463,92 +13461,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": {
-                    firstName?: string;
-                    lastName?: string;
-                    /** @description Global admin flag (only writable by admins) */
-                    isAdmin?: boolean;
-                    inactive?: boolean;
-                    /** @description New login email (admins only; must be unused) */
-                    email?: string;
-                    timezone?: string;
-                };
-                "multipart/form-data": {
-                    firstName?: string;
-                    lastName?: string;
-                    /** @enum {string} */
-                    inactive?: "true" | "false";
-                    timezone?: string;
-                    /** Format: binary */
-                    avatar?: string;
-                    /** @enum {string} */
-                    deleteAvatar?: "true";
-                };
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description The updated user. */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Invalid timezone. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not signed in. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Not allowed to edit this user, or deactivating an actively-enrolled user. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description The change would remove the last active administrator, or the new email is already in use. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Avatar exceeds the system upload limit. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Server error. */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
             };
         };
     };
