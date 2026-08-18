@@ -50,6 +50,17 @@ export default function CompleteLaunchClient() {
   const started = useRef(false);
   const [failed, setFailed] = useState(false);
 
+  /**
+   * The same launch, taken out of the frame.
+   *
+   * Built from what this page was given rather than remembered elsewhere: the ticket is
+   * single-use and still unspent when the sign-in fails this way, so the new tab completes the
+   * launch it was already doing instead of starting another.
+   */
+  const retryUrl = ticket
+    ? `/lti/complete?ticket=${encodeURIComponent(ticket)}&next=${encodeURIComponent(next)}`
+    : null;
+
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -91,10 +102,27 @@ export default function CompleteLaunchClient() {
       <div className="max-w-md text-center">
         {failed ? (
           <>
-            <h1 className="text-lg font-medium">AFCT could not open</h1>
+            <h1 className="text-lg font-medium">AFCT could not open here</h1>
+            {/*
+              Almost always the browser refusing AFCT a cookie because it is inside the LMS
+              page. A new tab is first-party, where nothing is refused, and the ticket is still
+              unspent because the sign-in never got far enough to use it. So the way out is one
+              click rather than a return to the LMS and a second identical failure.
+            */}
             <p className="text-muted-foreground mt-2 text-sm">
-              Go back to your LMS and open the link again. If it keeps happening, ask an
-              administrator to check the AFCT registration.
+              Your browser will not let AFCT sign you in inside this page. Opening it in its own tab
+              works.
+            </p>
+            <a
+              href={retryUrl ?? '/dashboard'}
+              target="_blank"
+              rel="noopener"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 mt-4 inline-flex h-9 items-center rounded-md px-4 text-sm font-medium"
+            >
+              Open AFCT in a new tab
+            </a>
+            <p className="text-muted-foreground mt-4 text-xs">
+              If that does not work either, ask an administrator to check the AFCT registration.
             </p>
           </>
         ) : (

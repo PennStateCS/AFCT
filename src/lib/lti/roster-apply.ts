@@ -31,16 +31,21 @@ export type ApplyResult = {
  * Anything already true is left alone, so applying the same diff twice is harmless: rosters get
  * synced repeatedly and a second run should be a no-op rather than a second set of changes.
  */
+/**
+ * Apply a roster diff.
+ *
+ * The platform and the LMS course travel on each change rather than being passed once, because
+ * a course can be opened by several LMS courses at a time and a person's identity belongs to
+ * the one they were read from. Applying somebody's membership against the wrong LMS course is
+ * how a grade ends up in the wrong gradebook.
+ */
 export async function applyRosterChanges(opts: {
   courseId: string;
-  issuer: string;
   changes: RosterChange[];
   actorUserId: string;
   context: AuditContext;
-  /** The LMS course this roster came from, so who belongs where is recorded as it is read. */
-  contextLinkId?: string;
 }): Promise<ApplyResult> {
-  const { courseId, issuer, changes, actorUserId, contextLinkId } = opts;
+  const { courseId, changes, actorUserId } = opts;
   const result: ApplyResult = {
     added: 0,
     dropped: 0,
@@ -63,20 +68,19 @@ export async function applyRosterChanges(opts: {
     for (const change of changes) {
       switch (change.kind) {
         case 'add': {
+          const { issuer, contextLinkId } = change.source;
           const userId =
             change.existingUserId ??
             (await createAccount(tx, change, () => result.accountsCreated++));
 
           // The LMS has just told us they are in this course, which is what decides where
           // their grade goes when several LMS courses open this one.
-          if (contextLinkId) {
-            await rememberContextMember({
-              contextLinkId,
-              userId,
-              ltiUserId: change.member.ltiUserId,
-              tx,
-            });
-          }
+          await rememberContextMember({
+            contextLinkId,
+            userId,
+            ltiUserId: change.member.ltiUserId,
+            tx,
+          });
 
           await tx.roster.upsert({
             where: { courseId_userId: { courseId, userId } },
@@ -123,6 +127,7 @@ export async function applyRosterChanges(opts: {
         }
 
         case 'link-identity': {
+          const { issuer } = change.source;
           await ensureIdentity(
             tx,
             { userId: change.userId, issuer, subject: change.ltiUserId },
@@ -162,7 +167,10 @@ export async function applyRosterChanges(opts: {
     action: 'LTI_ROSTER_SYNCED',
     severity: 'WARNING',
     category: 'COURSE',
-    metadata: { ...result, issuer },
+    metadata: {
+      ...result,
+      issuers: [...new Set(changes.flatMap((c) => ('source' in c ? [c.source.issuer] : [])))],
+    },
   });
 
   return result;

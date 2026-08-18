@@ -6,6 +6,7 @@ import { requireAuthSecret } from '@/lib/auth-secret';
 // Next 16 runs Proxy on the Node.js runtime, so the database is reachable here. It is read
 // once a minute at most, and only for the LTI routes.
 import { prisma } from '@/lib/prisma';
+import { frameMarkerCookie, isFramedRequest } from '@/lib/lti/frame-session';
 
 /**
  * Coarse, edge-level authentication net.
@@ -197,6 +198,17 @@ async function prepareCsp(req: NextRequest, pathname: string) {
     frameAncestors = `${frameAncestors} ${pending}`;
   }
   const csp = buildCsp(nonce, frameAncestors);
+
+  /**
+   * Mark a launch that is happening inside somebody else's frame.
+   *
+   * This is the only request where that is visible: a browser says `Sec-Fetch-Dest: iframe` on
+   * the document it is loading into the frame, and every fetch AFCT makes afterwards looks
+   * same-origin and says nothing about who is embedding. The sign-in cookies are chosen from
+   * this marker (`lib/lti/frame-session`), because a framed session needs attributes an
+   * ordinary one must not have.
+   */
+  const markFrame = isLtiPath(pathname) && isFramedRequest(req.headers);
   const requestHeaders = new Headers(req.headers);
   // A request header is invisible to the browser (so it doesn't enforce anything);
   // Next uses it only to discover the nonce and apply it to its script tags.
@@ -209,10 +221,12 @@ async function prepareCsp(req: NextRequest, pathname: string) {
     pass: () => {
       const res = NextResponse.next({ request: { headers: requestHeaders } });
       res.headers.set(responseHeader, csp);
+      if (markFrame) res.headers.append('set-cookie', frameMarkerCookie());
       return res;
     },
     withCsp: (res: NextResponse) => {
       res.headers.set(responseHeader, csp);
+      if (markFrame) res.headers.append('set-cookie', frameMarkerCookie());
       return res;
     },
   };

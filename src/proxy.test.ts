@@ -311,6 +311,38 @@ describe('proxy', () => {
     });
 
     /**
+     * A framed launch needs cookies an ordinary session must not have, and being framed is only
+     * visible on the request that loads AFCT into the frame. The edge marks it there.
+     */
+    describe('marking a launch that is inside a frame', () => {
+      const framed = (path: string) =>
+        new NextRequest(new URL(`http://localhost${path}`), {
+          headers: { 'sec-fetch-dest': 'iframe' },
+        });
+
+      it('drops a partitioned marker on the launch, and nothing else', async () => {
+        const res = await proxy(framed('/api/lti/launch'));
+
+        const cookie = res.headers.get('set-cookie') ?? '';
+        expect(cookie).toContain('afct.lti-frame=1');
+        expect(cookie).toContain('Partitioned');
+        expect(cookie).toContain('SameSite=None');
+      });
+
+      it('leaves an ordinary page alone even when it is framed', async () => {
+        const res = await proxy(framed('/login'));
+
+        expect(res.headers.get('set-cookie') ?? '').not.toContain('afct.lti-frame');
+      });
+
+      it('marks nothing when the launch is not framed', async () => {
+        const res = await proxy(req('/api/lti/launch'));
+
+        expect(res.headers.get('set-cookie') ?? '').not.toContain('afct.lti-frame');
+      });
+    });
+
+    /**
      * Automatic registration is the case the registered-platforms list cannot cover: the LMS
      * frames the registration page precisely because it is not registered yet.
      */

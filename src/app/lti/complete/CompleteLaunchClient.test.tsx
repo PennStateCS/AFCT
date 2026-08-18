@@ -74,7 +74,7 @@ describe('reloading a launch that already worked', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard/courses/c-1'));
     // The ticket is spent; asking again would only produce the error page.
     expect(signIn).not.toHaveBeenCalled();
-    expect(screen.queryByText('AFCT could not open')).not.toBeInTheDocument();
+    expect(screen.queryByText('AFCT could not open here')).not.toBeInTheDocument();
   });
 
   /**
@@ -99,14 +99,14 @@ describe('a launch that does not work', () => {
     signIn.mockResolvedValue({ error: 'CredentialsSignin' });
     show('ticket=bad');
 
-    expect(await screen.findByText('AFCT could not open')).toBeInTheDocument();
+    expect(await screen.findByText('AFCT could not open here')).toBeInTheDocument();
     expect(replace).not.toHaveBeenCalled();
   });
 
   it('reports a missing ticket without asking the server', async () => {
     show('next=%2Fdashboard');
 
-    expect(await screen.findByText('AFCT could not open')).toBeInTheDocument();
+    expect(await screen.findByText('AFCT could not open here')).toBeInTheDocument();
     expect(signIn).not.toHaveBeenCalled();
   });
 
@@ -115,13 +115,13 @@ describe('a launch that does not work', () => {
     signIn.mockRejectedValue(new Error('offline'));
     show('ticket=t-1');
 
-    expect(await screen.findByText('AFCT could not open')).toBeInTheDocument();
+    expect(await screen.findByText('AFCT could not open here')).toBeInTheDocument();
   });
 
   it('does not leave a marker behind, so a retry still tries', async () => {
     signIn.mockResolvedValue({ error: 'CredentialsSignin' });
     show('ticket=bad');
-    await screen.findByText('AFCT could not open');
+    await screen.findByText('AFCT could not open here');
 
     signIn.mockClear();
     signIn.mockResolvedValue({ error: undefined });
@@ -150,4 +150,19 @@ describe('where it will agree to go', () => {
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/dashboard/courses/c-9'));
   });
+});
+
+/**
+ * The failure this actually produces in the wild. A browser inside an LMS frame refuses AFCT
+ * its cookies, Auth.js answers MissingCSRF, and the launch stops. The ticket is still unspent,
+ * so the way out is the same launch in a first-party tab rather than starting again.
+ */
+it('offers the same launch in a new tab, carrying the unspent ticket', async () => {
+  signIn.mockResolvedValue({ error: 'CredentialsSignin' });
+
+  show('ticket=t-9&next=%2Fdashboard%2Fcourses%2Fc1');
+
+  const link = await screen.findByRole('link', { name: /Open AFCT in a new tab/ });
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(link).toHaveAttribute('href', '/lti/complete?ticket=t-9&next=%2Fdashboard%2Fcourses%2Fc1');
 });
