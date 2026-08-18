@@ -74,6 +74,7 @@ AFCT identifies an LMS by the combination of **issuer, client ID and deployment 
 Where it lives depends on the LMS:
 
 - **Canvas**: **Load In New Tab**, on the developer key's placements, and again on an individual link if somebody adds one by hand.
+- **Moodle**: **Launch container**, set to **New window**, under **Site administration → Plugins → Activity modules → External tool → Manage tools**, on the AFCT tool itself. Moodle stopped letting a tool ask for this in version 4.3, so AFCT's own request is ignored and this setting is the only thing that decides it.
 - **Brightspace** and **Blackboard**: an equivalent option on the link or the tool configuration, usually worded as opening in a new window.
 
 The reason is that browsers no longer let a site keep somebody signed in while it is being displayed inside another site's page. Firefox and Safari have blocked it for some time and Chrome is going the same way, so a link that opens AFCT in a panel will show an empty box or a message about the page refusing to connect. It is a browser rule rather than an AFCT setting, and there is nothing to turn on in AFCT that changes it.

@@ -52,6 +52,11 @@ import { asRichDescription } from '@/lib/rich-description';
 import { RichDescription } from '@/components/rich-description/RichDescription';
 import { buildProblemColumns } from './problem-columns';
 import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
+import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
+import {
+  AssignmentLmsLinksCard,
+  type AssignmentLmsLink,
+} from '@/components/lti/AssignmentLmsLinksCard';
 
 /**
  * The dialogs and the settings tab load on demand. Between them they were the only things
@@ -312,6 +317,21 @@ export default function AssignmentDashboardPage({
   const allAssignments = assignmentsQuery.data ?? [];
   const assignmentsLoading = assignmentsQuery.isFetching;
 
+  // Read 3: which LMS courses open this assignment. Held here rather than inside the settings
+  // card because the header badge reads the same answer, and removing a link has to change
+  // both at once.
+  const lmsLinksQuery = useQuery({
+    queryKey: ['course', id, 'assignment', aid, 'lms-links'],
+    queryFn: () =>
+      fetch(apiPaths.assignmentLmsLinks(id, aid))
+        .then((res) => (res.ok ? res.json() : { links: [] }))
+        .then((data: { links?: AssignmentLmsLink[] }) => data.links ?? [])
+        .catch(() => [] as AssignmentLmsLink[]),
+    enabled: !!id && !!aid,
+    staleTime: 30_000,
+  });
+  const lmsLinks = lmsLinksQuery.data ?? [];
+
   async function handleAddProblems(
     problemIds: string[],
     problemSettings?: {
@@ -537,6 +557,9 @@ export default function AssignmentDashboardPage({
                 )}
                 {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
               </Badge>
+              {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
+                  Settings holds the detail and the way to remove one. */}
+              <LmsLinkBadge links={lmsLinks} />
               {/* Quick jump to another assignment in this course. */}
               <div className="ml-auto w-56 shrink-0">
                 <SearchableSelect
@@ -687,7 +710,23 @@ export default function AssignmentDashboardPage({
               <AssignmentSimilarityPanel />
             </TabsContent>
             <TabsContent value="settings">
-              <GradeSyncCard assignmentId={aid} variant="settings" />
+              <div className="space-y-4">
+                <GradeSyncCard assignmentId={aid} variant="settings" />
+                <AssignmentLmsLinksCard
+                  courseId={id}
+                  assignmentId={aid}
+                  links={lmsLinks}
+                  loading={lmsLinksQuery.isLoading}
+                  courseIsArchived={courseIsArchived}
+                  onRemoved={(linkId) =>
+                    queryClient.setQueryData(
+                      ['course', id, 'assignment', aid, 'lms-links'],
+                      (current: AssignmentLmsLink[] | undefined) =>
+                        (current ?? []).filter((link) => link.id !== linkId),
+                    )
+                  }
+                />
+              </div>
             </TabsContent>
 
             <TabsContent value="assign-to">

@@ -48,6 +48,11 @@ export type FullCourse = Course & {
   assignmentTotal?: number;
   problemTotal?: number;
   rosterTotal?: number;
+  /**
+   * The LMS courses connected to this one, for the header badge. Staff only: the payload sends
+   * an empty array to a student rather than the real list.
+   */
+  lmsLinks?: Array<{ platform: string; context: string | null }>;
   // viewer's role in this course (ADMIN | FACULTY | TA | STUDENT) or null
   viewerRole?: string | null;
   // whether the viewer is a global site admin

@@ -135,6 +135,9 @@ export const apiPaths = {
   courseAssignments: (id: string, opts?: { includeUnpublished?: boolean }) =>
     `/api/courses/${id}/assignments${qs({ includeUnpublished: opts?.includeUnpublished ? '1' : undefined })}`,
   courseJoin: () => '/api/courses/join',
+  /** Which LMS courses open an assignment, and (with a link id) the record of one of them. */
+  assignmentLmsLinks: (courseId: string, assignmentId: string, linkId?: string) =>
+    `/api/courses/${courseId}/assignments/${assignmentId}/lti-links${linkId ? `/${linkId}` : ''}`,
 
   // --- "My" (self-scoped, /api/me/*) --------------------------------------
   me: () => '/api/me',

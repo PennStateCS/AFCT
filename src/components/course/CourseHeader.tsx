@@ -9,6 +9,7 @@ import type { FullCourse } from '@/types/course';
 import { getInstructors, type EnrolledUser } from '@/lib/course-roster';
 import { showToast } from '@/lib/toast';
 import { formatRegistrationCode } from '@/lib/format-registration-code';
+import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
 
 interface CourseHeaderProps {
   course: FullCourse;
@@ -150,6 +151,10 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
             {course.credits} credit{course.credits === 1 ? '' : 's'}
           </Badge>
           <Badge variant={courseStatus.theme.variant}>{courseStatus.label}</Badge>
+          {/* Only staff receive `lmsLinks`, so this is empty for a student and renders nothing.
+              It sits last because it is the one badge that is often absent, and a row that
+              changes length at the end is easier to read than one that shifts in the middle. */}
+          {!isStudent && <LmsLinkBadge links={course.lmsLinks ?? []} />}
         </div>
       </div>
 
