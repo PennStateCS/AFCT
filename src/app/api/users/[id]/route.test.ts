@@ -11,6 +11,9 @@ const prismaMock = vi.hoisted(() => ({
   },
   roster: { findMany: vi.fn() },
   activityLog: { deleteMany: vi.fn() },
+  // The last-administrator rule counts and updates in one serializable transaction, so the
+  // pair conflicts in Postgres rather than both succeeding. Here it simply runs the callback.
+  $transaction: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -36,6 +39,9 @@ const pngBytes = () =>
   Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
 
 beforeEach(() => {
+  prismaMock.$transaction.mockImplementation(async (cb: (client: typeof prismaMock) => unknown) =>
+    cb(prismaMock),
+  );
   vi.clearAllMocks();
   getSystemUploadLimitMock.mockResolvedValue({ maxBytes: 1024 * 1024, maxMb: 1 });
   prismaMock.roster.findMany.mockResolvedValue([]);
@@ -821,9 +827,7 @@ describe('PATCH /api/users/[id]', () => {
     authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ avatar: null, email: 'old@example.com' });
     prismaMock.user.findFirst.mockResolvedValue(null); // passes the pre-check
-    prismaMock.user.update.mockRejectedValue(
-      Object.assign(new Error('unique'), { code: 'P2002' }),
-    );
+    prismaMock.user.update.mockRejectedValue(Object.assign(new Error('unique'), { code: 'P2002' }));
 
     const req = new NextRequest('http://localhost/api/users/u1', {
       method: 'PATCH',
@@ -867,7 +871,9 @@ describe('DELETE /api/users/[id]', () => {
   });
 
   it('returns 403 when the acting admin is inactive', async () => {
-    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true, inactive: true } });
+    authMock.mockResolvedValue({
+      user: { id: 'admin', role: 'ADMIN', isAdmin: true, inactive: true },
+    });
 
     const req = new NextRequest('http://localhost/api/users/u1', { method: 'DELETE' });
     const res = await DELETE(req, { params: Promise.resolve({ id: 'u1' }) });
@@ -1095,5 +1101,63 @@ describe('POST /api/users/[id]', () => {
     expect(res.status).toBe(405);
     const body = await res.json();
     expect(body.error).toBe('Method not allowed');
+  });
+});
+
+/**
+ * Ordering between the database and the file.
+ *
+ * The row is the live account; the avatar is a file it points at. Removing the file first meant
+ * a failed delete left a working account whose photo had been deleted out from under it, with
+ * nothing on screen to say why. An orphaned file is the cheaper failure.
+ */
+describe('deleting a user', () => {
+  const asAdmin = () =>
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+
+  const deleteRequest = () =>
+    DELETE(new NextRequest('http://localhost/api/users/u2', { method: 'DELETE' }), {
+      params: Promise.resolve({ id: 'u2' }),
+    });
+
+  beforeEach(() => {
+    asAdmin();
+    prismaMock.user.findUnique.mockResolvedValue({
+      avatar: 'photo.png',
+      email: 'gone@example.test',
+      firstName: 'Gone',
+      lastName: 'Away',
+      isAdmin: false,
+      inactive: false,
+    });
+    prismaMock.roster.findMany.mockResolvedValue([]);
+  });
+
+  it('keeps the avatar when the database delete fails', async () => {
+    prismaMock.user.delete.mockRejectedValue(new Error('database is down'));
+
+    const res = await deleteRequest();
+
+    expect(res.status).toBe(500);
+    // The account still exists, so its photo must still exist too.
+    expect(unlinkMock).not.toHaveBeenCalled();
+  });
+
+  it('removes the avatar once the row is gone', async () => {
+    prismaMock.user.delete.mockResolvedValue({ id: 'u2' });
+
+    const res = await deleteRequest();
+
+    expect(res.status).toBe(200);
+    expect(unlinkMock).toHaveBeenCalled();
+  });
+
+  it('still reports the deletion when the avatar cannot be removed', async () => {
+    // The account is already gone; failing here would report a deletion that did happen as
+    // one that did not, and there is nothing for anybody to do about a stray file.
+    prismaMock.user.delete.mockResolvedValue({ id: 'u2' });
+    unlinkMock.mockRejectedValueOnce(new Error('permission denied'));
+
+    expect((await deleteRequest()).status).toBe(200);
   });
 });

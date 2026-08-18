@@ -1129,6 +1129,7 @@ erDiagram
   SubmissionStatus status
   DateTime submittedAt
   Int attempts
+  String processingToken "nullable"
 }
 "AssignmentProblemGrade" {
   String id PK
@@ -1321,6 +1322,14 @@ Properties as follows:
 - `status`: Where the attempt is: waiting, being graded, finished or failed.
 - `submittedAt`: When the student sent the attempt.
 - `attempts`: How many times grading has been tried for this attempt.
+- `processingToken`
+  > Who owns this row while it is being evaluated: a fresh random value on every claim,
+  > cleared when the evaluation lands or the submission is put back on the queue.
+  >
+  > The fence every post-claim write is conditioned on. `attempts` used to serve and could
+  > not: a rerun resets it to 0, the next claim takes it back to 1, and a worker still
+  > evaluating the older attempt matched again and overwrote the newer result. A random token
+  > never comes back round, so a worker that has lost the row can never write to it again.
 
 ### `AssignmentProblemGrade`
 
@@ -1564,6 +1573,7 @@ erDiagram
   SubmissionStatus status
   DateTime submittedAt
   Int attempts
+  String processingToken "nullable"
 }
 "ActivityLog" }o--o| "User" : user
 "ActivityLog" }o--o| "Course" : course

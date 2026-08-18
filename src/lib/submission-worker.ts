@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import os from 'os';
+import { randomUUID } from 'crypto';
 
 import { runEvaluatorJar } from './evaluator-runner';
 import { claimAndRunTrial, reapStuckTrials } from './trial-runner';
@@ -224,7 +225,9 @@ async function reapStuckSubmissions() {
 
     const reaped = await prisma.submission.updateMany({
       where: { status: 'PROCESSING', updatedAt: { lt: cutoff } },
-      data: { status: 'PENDING' },
+      // The token goes with the status: whoever held this row has lost it, and clearing the
+      // token is what stops them writing to it if they ever come back.
+      data: { status: 'PENDING', processingToken: null },
     });
 
     if (reaped.count > 0) {
@@ -255,42 +258,50 @@ async function reapStuckSubmissions() {
 }
 
 /**
- * Claim a submission for this worker. Returns false if someone else already has it.
+ * Claim a submission for this worker. Returns the ownership token, or null if someone else
+ * already has it.
  *
  * The `status: 'PENDING'` guard in the WHERE is the entire claim: Postgres evaluates it
  * under row lock, so of two workers racing the same row exactly one sees PENDING and
  * updates it, and the loser matches zero rows. There is no SELECT-then-UPDATE window to
- * lose. Incrementing `attempts` in the same statement is what makes the fencing token
- * below meaningful.
+ * lose. The token written in the same statement is what every later write is fenced on.
+ *
+ * A random value rather than a counter, and that is the whole point. `attempts` used to serve
+ * and could not: a rerun set it back to 0, the next claim took it to 1 again, and a worker
+ * still evaluating the previous attempt matched that value and overwrote the newer result. A
+ * token that is fresh on every claim can never come back round.
  *
  * Exported so the exclusivity can be tested against a real database - the guarantee is
  * a property of Postgres, and a mocked updateMany would assert nothing.
  */
-export async function claimSubmission(id: string): Promise<boolean> {
+export async function claimSubmission(id: string): Promise<string | null> {
+  const token = randomUUID();
   const claimed = await prisma.submission.updateMany({
     where: { id, status: 'PENDING' },
-    data: { status: 'PROCESSING', attempts: { increment: 1 } },
+    data: { status: 'PROCESSING', attempts: { increment: 1 }, processingToken: token },
   });
-  return claimed.count > 0;
+  return claimed.count > 0 ? token : null;
 }
 
 /**
- * A post-claim write, fenced on the `attempts` value the row carried when we claimed it.
+ * A post-claim write, fenced on the token the row carried when we claimed it.
  *
- * If the row was reaped and re-claimed by another worker while we were evaluating, the
- * re-claim incremented `attempts`, so our stale write matches nothing instead of
- * clobbering the new owner's result. Returns false when that happens.
+ * If the row was reaped, rerun or re-claimed by another worker while we were evaluating, it
+ * holds a different token (or none), so our stale write matches nothing instead of clobbering
+ * the new owner's result. Returns false when that happens.
  *
- * `claimedAttempts === null` means we never learned the token (we failed before reading
- * the row), so the write is unfenced - there is nothing to be stale relative to.
+ * `token === null` means we never learned one (we failed before the claim), so there is nothing
+ * to be stale relative to and the write is refused rather than let through unfenced: a worker
+ * with no claim has no business writing to the row at all.
  */
 export async function writeIfStillOwned(
   id: string,
-  claimedAttempts: number | null,
+  token: string | null,
   data: Prisma.SubmissionUpdateManyMutationInput,
 ): Promise<boolean> {
+  if (token === null) return false;
   const written = await prisma.submission.updateMany({
-    where: claimedAttempts !== null ? { id, attempts: claimedAttempts } : { id },
+    where: { id, processingToken: token },
     data,
   });
   return written.count > 0;
@@ -376,15 +387,16 @@ async function runWorkerLoop() {
       return;
     }
 
-    // false means another loop/instance beat us to it. Move on.
-    if (!(await claimSubmission(nextSubmission.id))) {
+    // null means another loop/instance beat us to it. Move on.
+    const token = await claimSubmission(nextSubmission.id);
+    if (!token) {
       scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
       return;
     }
 
     // Hold this loop until the evaluation finishes: one loop, one submission,
     // so the live loop count is the real concurrency limit.
-    await evaluateSubmission(nextSubmission.id);
+    await evaluateSubmission(nextSubmission.id, token);
 
     // Move to next check
     scheduleAsync(runWorkerLoop, LOOP_DELAY_MS.NEXT);
@@ -399,13 +411,66 @@ async function runWorkerLoop() {
   }
 }
 
-async function evaluateSubmission(id: string) {
+/**
+ * Evaluate a submission this worker has claimed.
+ *
+ * `token` is the claim: every write below is conditioned on the row still carrying it. If the
+ * submission is rerun, reaped or re-claimed while the evaluator runs, the row holds a different
+ * token and these writes match nothing rather than overwriting whoever owns it now.
+ */
+/**
+ * Whether this submission is the one whose result the gradebook should reflect.
+ *
+ * AFCT keeps two different things: what an individual attempt scored, and the student's
+ * standing grade for the problem. Rerunning an old attempt refreshes the first, and must not
+ * touch the second: a student who got it wrong, then right, keeps the later mark even when
+ * staff rerun the earlier one. The same rule covers an evaluation overtaken mid-flight, which
+ * is why callers read this inside the transaction that writes the grade rather than when the
+ * evaluation began.
+ *
+ * A group assignment's standing grade follows the group's stream of submissions; an individual
+ * assignment's follows the student's own.
+ *
+ * Exported so the rule can be tested against a real database, where the ordering and the group
+ * scope are the parts that can be wrong.
+ */
+export async function holdsTheStandingGrade(
+  client: Pick<typeof prisma, 'submission'>,
+  submission: {
+    id: string;
+    assignmentId: string;
+    problemId: string;
+    studentId: string;
+    studentGroupId: string | null;
+  },
+): Promise<boolean> {
+  const stream = submission.studentGroupId
+    ? {
+        assignmentId: submission.assignmentId,
+        problemId: submission.problemId,
+        studentGroupId: submission.studentGroupId,
+      }
+    : {
+        assignmentId: submission.assignmentId,
+        problemId: submission.problemId,
+        studentId: submission.studentId,
+      };
+
+  const latest = await client.submission.findFirst({
+    where: stream,
+    // Time first, then id, so two submissions in the same instant still order the same way
+    // every time this is asked.
+    orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }],
+    select: { id: true },
+  });
+
+  // No rows at all should not be possible (this submission is one), but a missing answer is
+  // not a reason to refuse to grade the work in front of us.
+  return !latest || latest.id === submission.id;
+}
+
+async function evaluateSubmission(id: string, token: string | null = null) {
   let submission: WorkerSubmission | null = null;
-  // Fencing token: the `attempts` value the row carried when we claimed it. Every
-  // post-claim write is conditioned on it. If the row is reran/reaped and
-  // re-claimed by another worker mid-evaluation (a re-claim increments attempts),
-  // our now-stale writes match nothing instead of clobbering the new owner's work.
-  let claimedAttempts: number | null = null;
 
   try {
     submission = await prisma.submission.findUnique({
@@ -420,13 +485,12 @@ async function evaluateSubmission(id: string) {
       console.error(`[SubmissionWorker] Submission ${id} not found`);
       return;
     }
-    claimedAttempts = submission.attempts;
 
     // Run Java evaluator with the configured resource limits
     const evalConfig = await getEvaluatorConfig();
     const evaluation = await runJavaEvaluator(submission, evalConfig);
 
-    const written = await writeIfStillOwned(id, claimedAttempts, {
+    const written = await writeIfStillOwned(id, token, {
       feedback: evaluation.feedback,
       correct: evaluation.correct,
       evaluationRaw:
@@ -434,6 +498,9 @@ async function evaluateSubmission(id: string) {
           ? Prisma.JsonNull
           : (evaluation.evaluationRaw as Prisma.InputJsonValue),
       status: evaluation.status,
+      // The claim ends with the result. Cleared in the same statement it is fenced on, so
+      // there is no moment where the row is finished and still looks owned.
+      processingToken: null,
     });
 
     if (!written) {
@@ -456,6 +523,8 @@ async function evaluateSubmission(id: string) {
       // any manual row a TA set). Together this makes autograde skip any hand-set grade.
       const gradeAssignmentId = submission.assignmentId;
       const gradeProblemId = submission.problemId;
+      const gradeStudentId = submission.studentId;
+      const gradeGroupId = submission.studentGroupId;
       const gradeTargetIds = submission.studentGroupId
         ? (
             await prisma.groupMembership.findMany({
@@ -474,7 +543,18 @@ async function evaluateSubmission(id: string) {
 
       // One transaction: a group is graded together or not at all. As two statements a
       // failure between them left a group half-graded with nothing recording which half.
-      await prisma.$transaction(async (tx) => {
+      const graded = await prisma.$transaction(async (tx) => {
+        // Read inside the transaction that writes the grade, so a submission that arrived
+        // while this one was being evaluated counts.
+        const authoritative = await holdsTheStandingGrade(tx, {
+          id,
+          assignmentId: gradeAssignmentId,
+          problemId: gradeProblemId,
+          studentId: gradeStudentId,
+          studentGroupId: gradeGroupId,
+        });
+        if (!authoritative) return false;
+
         await tx.assignmentProblemGrade.updateMany({
           where: {
             assignmentId: gradeAssignmentId,
@@ -505,18 +585,35 @@ async function evaluateSubmission(id: string) {
           })),
           skipDuplicates: true,
         });
+        return true;
       });
 
-      await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
-        studentId: submission.studentId,
-        grade: earnedPoints,
-        maxPoints: submission.assignmentProblem.maxPoints,
-        correct: evaluation.correct ?? null,
-      });
+      if (!graded) {
+        /**
+         * A rerun of an older attempt, or an evaluation overtaken by a newer submission. The
+         * attempt's own result is already saved; the gradebook keeps the later work. Logged
+         * because "I reran it and the grade did not change" is otherwise a mystery.
+         */
+        await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADE_SKIPPED', 'INFO', {
+          studentId: submission.studentId,
+          reason: 'a later submission holds the grade',
+          correct: evaluation.correct ?? null,
+        });
+        console.log(
+          `[SubmissionWorker] Submission ${id} is not the latest; left the standing grade alone.`,
+        );
+      } else {
+        await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
+          studentId: submission.studentId,
+          grade: earnedPoints,
+          maxPoints: submission.assignmentProblem.maxPoints,
+          correct: evaluation.correct ?? null,
+        });
 
-      console.log(
-        `[SubmissionWorker] Auto-graded submission ${id}: ${earnedPoints} points (correct: ${evaluation.correct})`,
-      );
+        console.log(
+          `[SubmissionWorker] Auto-graded submission ${id}: ${earnedPoints} points (correct: ${evaluation.correct})`,
+        );
+      }
     }
 
     console.log(`[SubmissionWorker] Successfully evaluated submission ${id}`);
@@ -544,14 +641,16 @@ async function evaluateSubmission(id: string) {
     // Fenced so a stale worker can't flip a row another worker has since re-claimed.
     await writeIfStillOwned(
       id,
-      claimedAttempts,
+      token,
       giveUp
         ? {
             status: 'FAILED',
             feedback: 'Autograder failed while processing this submission.',
             evaluationRaw: message as Prisma.InputJsonValue,
+            // Finished with it either way: the row is no longer being worked on.
+            processingToken: null,
           }
-        : { status: 'PENDING' },
+        : { status: 'PENDING', processingToken: null },
     );
   }
 }

@@ -201,5 +201,11 @@ export const POST = withCourseAuth(
       return NextResponse.json({ error: 'Failed to save group grade' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GROUP_PROBLEM_GRADE_DENIED', deniedCategory: 'GRADE' },
+  {
+    access: 'manage',
+    deniedAction: 'GROUP_PROBLEM_GRADE_DENIED',
+    deniedCategory: 'GRADE',
+    // An archived course is read-only, and this writes a grade for every member of the group.
+    blockWhenArchived: true,
+  },
 );

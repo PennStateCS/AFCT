@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  roster: { findFirst: vi.fn() },
+  roster: { findFirst: vi.fn(), findUnique: vi.fn() },
   assignmentProblem: { findUnique: vi.fn() },
   assignmentProblemGrade: {
     findUnique: vi.fn(),
@@ -32,6 +32,8 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    // The grade target: a student on the roster, which is what the route now requires.
+    prismaMock.roster.findUnique.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
     prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
       fn(prismaMock),
@@ -115,7 +117,10 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
       // Student is enrolled (passes read access) and is the owner of the grade,
       // so canManageCourse is false but user.id === studentId keeps them allowed.
       authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
 
       const res = await GET(new Request('http://localhost'), {
         params: Promise.resolve(defaultParams),
@@ -128,7 +133,10 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
     it('404-masks an unpublished assignment for the owning student', async () => {
       // Even reading their OWN grade, a student can't touch an unpublished assignment.
       authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
       prismaMock.assignmentProblem.findUnique.mockResolvedValue({
         assignment: { courseId: defaultParams.id, isPublished: false },
         maxPoints: 100,
@@ -145,7 +153,10 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
       // Enrolled as a plain student (read access granted) but not the owner and
       // not a manager -> hits the in-handler denial.
       authMock.mockResolvedValue({ user: { id: 'other-student', role: 'STUDENT' } });
-      prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
 
       const res = await GET(new Request('http://localhost'), {
         params: Promise.resolve(defaultParams),
@@ -403,5 +414,58 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
       expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
       expect(prismaMock.assignmentProblemGrade.deleteMany).not.toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * Who a grade may be recorded against.
+ *
+ * Being on the roster was not enough: a faculty member or TA could be given a grade row, and
+ * would then appear in a gradebook as if they had work. A dropped student is deliberately still
+ * gradable, because their submissions survive a drop and work handed in before somebody left
+ * still has to be markable.
+ */
+describe('the grade target', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
+    authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      assignment: { courseId: defaultParams.id, isPublished: true },
+      maxPoints: 100,
+    });
+  });
+
+  const grade = () =>
+    POST(
+      new NextRequest('http://localhost', { method: 'POST', body: JSON.stringify({ grade: 5 }) }),
+      { params: Promise.resolve(defaultParams) },
+    );
+
+  it.each([['FACULTY'], ['TA']])('refuses to grade a %s on the roster', async (role) => {
+    prismaMock.roster.findUnique.mockResolvedValue({ role });
+
+    const res = await grade();
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses somebody who is not on the roster at all', async () => {
+    prismaMock.roster.findUnique.mockResolvedValue(null);
+
+    expect((await grade()).status).toBe(404);
+  });
+
+  it('still grades a student who has dropped', async () => {
+    // Their submissions survive a drop on purpose, so work handed in before they left is
+    // still markable.
+    prismaMock.roster.findUnique.mockResolvedValue({ role: 'STUDENT' });
+
+    expect((await grade()).status).toBe(200);
   });
 });

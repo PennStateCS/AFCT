@@ -99,5 +99,11 @@ export const PATCH = withCourseAuth(
       return NextResponse.json({ error: 'Failed to update the grade hold' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'GRADE_MANUAL_HOLD_DENIED', deniedCategory: 'GRADE' },
+  {
+    access: 'manage',
+    deniedAction: 'GRADE_MANUAL_HOLD_DENIED',
+    deniedCategory: 'GRADE',
+    // An archived course is read-only, and holding or releasing a grade changes who owns it.
+    blockWhenArchived: true,
+  },
 );

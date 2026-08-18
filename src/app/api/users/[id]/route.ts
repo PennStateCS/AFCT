@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { auth } from '@/lib/auth';
 import { writeFile } from 'fs/promises';
 import path from 'path';
@@ -65,6 +66,9 @@ const pfpsDir = path.join('/private', 'uploads', 'pfps');
  *   413: { description: Avatar exceeds the system upload limit. }
  *   500: { description: Server error. }
  */
+/** Thrown inside the transaction so the rejection unwinds it rather than committing. */
+class LastAdminError extends Error {}
+
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const userId = id;
@@ -157,7 +161,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       if (decision.status === 'blocked') {
         return NextResponse.json(
           { error: 'Too many avatar changes. Please try again later.' },
-          { status: 429, headers: { 'Retry-After': formatRetryAfterSeconds(decision.retryAfterMs) } },
+          {
+            status: 429,
+            headers: { 'Retry-After': formatRetryAfterSeconds(decision.retryAfterMs) },
+          },
         );
       }
       const validated = await readAndValidateAvatar(avatarFile as File, uploadLimit);
@@ -282,28 +289,17 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       zoom,
     };
 
-    // Never let the deployment lose its last active admin: demoting or
-    // deactivating an active admin requires another one to remain (the realistic
-    // case is an admin doing it to themselves).
-    const losesAdmin = dataToUpdate.isAdmin === false || dataToUpdate.inactive === true;
-    if (losesAdmin && userRecord?.isAdmin && !userRecord.inactive) {
-      const otherActiveAdmins = await prisma.user.count({
-        where: { isAdmin: true, inactive: false, NOT: { id: userId } },
-      });
-      if (otherActiveAdmins === 0) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: actorId,
-          action: 'USER_UPDATE_REJECTED',
-          category: 'USER',
-          severity: 'WARNING',
-          metadata: { targetUserId: userId, reason: 'last-active-admin' },
-        });
-        return NextResponse.json(
-          { error: 'Cannot remove the last active administrator' },
-          { status: 409 },
-        );
-      }
-    }
+    /**
+     * Whether this change would take away somebody's administrator access.
+     *
+     * The count that guards it is not run here: two administrators demoting each other at the
+     * same moment would each see the other and both succeed, leaving none. It runs inside the
+     * update's own transaction below, where Postgres can make the pair conflict.
+     */
+    const losesAdmin =
+      (dataToUpdate.isAdmin === false || dataToUpdate.inactive === true) &&
+      !!userRecord?.isAdmin &&
+      !userRecord.inactive;
 
     // Now that every rejection path has passed, persist the new avatar to disk
     // (random UUID + sanitized extension, never a client-derived path, written
@@ -316,21 +312,75 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     let updatedUser;
     try {
-      updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: dataToUpdate,
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          isAdmin: true,
-          inactive: true,
-          avatar: true,
-          timezone: true,
-        },
-      });
+      const write = (client: Prisma.TransactionClient | typeof prisma) =>
+        client.user.update({
+          where: { id: userId },
+          data: dataToUpdate,
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            isAdmin: true,
+            inactive: true,
+            avatar: true,
+            timezone: true,
+          },
+        });
+
+      /**
+       * The last-administrator rule, counted and enforced in one serializable transaction.
+       *
+       * Two administrators demoting each other at the same moment each saw the other and both
+       * went through, which is how a deployment ends up with nobody who can administer it and
+       * no way to fix it from inside. Serializable makes the pair conflict, so one is rejected
+       * with a retry rather than both succeeding. Same shape as the last-faculty invariant on
+       * the roster route.
+       *
+       * An ordinary profile edit does not touch the invariant, so it stays a plain update
+       * rather than paying for a serializable transaction it does not need.
+       */
+      updatedUser = losesAdmin
+        ? await prisma.$transaction(
+            async (tx) => {
+              const otherActiveAdmins = await tx.user.count({
+                where: { isAdmin: true, inactive: false, NOT: { id: userId } },
+              });
+              if (otherActiveAdmins === 0) throw new LastAdminError();
+              return write(tx);
+            },
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          )
+        : await write(prisma);
     } catch (updateError) {
+      if (updateError instanceof LastAdminError) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: actorId,
+          action: 'USER_UPDATE_REJECTED',
+          category: 'USER',
+          severity: 'WARNING',
+          metadata: { targetUserId: userId, reason: 'last-active-admin' },
+        });
+        if (avatarBuffer && avatarFilename) {
+          await safeUnlinkInDir(pfpsDir, avatarFilename);
+        }
+        return NextResponse.json(
+          { error: 'Cannot remove the last active administrator' },
+          { status: 409 },
+        );
+      }
+      if (
+        updateError instanceof Prisma.PrismaClientKnownRequestError &&
+        updateError.code === 'P2034'
+      ) {
+        if (avatarBuffer && avatarFilename) {
+          await safeUnlinkInDir(pfpsDir, avatarFilename);
+        }
+        return NextResponse.json(
+          { error: 'Another administrator change conflicted; please retry.' },
+          { status: 409 },
+        );
+      }
       if (avatarBuffer && avatarFilename) {
         await safeUnlinkInDir(pfpsDir, avatarFilename);
       }
@@ -453,10 +503,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
         severity: 'WARNING',
         metadata: { targetUserId: userId, reason: 'self-delete' },
       });
-      return NextResponse.json(
-        { error: 'You cannot delete your own account' },
-        { status: 403 },
-      );
+      return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 403 });
     }
 
     // Capture the target's identity before the row is gone, for the audit + avatar cleanup.
@@ -465,10 +512,6 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       select: { avatar: true, email: true, firstName: true, lastName: true },
     });
 
-    if (user?.avatar) {
-      await safeUnlinkInDir(pfpsDir, user.avatar);
-    }
-
     // Delete user from database. The user's activity logs are intentionally
     // preserved for the audit trail: the schema's onDelete: SetNull nulls their
     // userId, and each entry keeps the actor's name/email in metadata.
@@ -476,6 +519,26 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       where: { id: userId },
     });
     invalidateSessionUser(userId);
+
+    /**
+     * The avatar goes last, and only once the row is really gone.
+     *
+     * Removing the file first meant a failed delete left a live account whose photo had been
+     * deleted out from under it: the account is broken and nothing says why. This way the
+     * worst case is a file nobody references, which costs disk and no correctness. A failure
+     * here is reported and not raised: the account is already gone, and turning cleanup into
+     * an error would report a deletion that did happen as one that did not.
+     */
+    if (user?.avatar) {
+      try {
+        await safeUnlinkInDir(pfpsDir, user.avatar);
+      } catch (cleanupError) {
+        console.warn(
+          `[DELETE] Deleted user ${userId} but could not remove their avatar:`,
+          cleanupError,
+        );
+      }
+    }
 
     // Log activity: record who was deleted, since the user row is now gone.
     await createEnhancedActivityLog(prisma, req, {

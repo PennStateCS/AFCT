@@ -61,17 +61,25 @@ const HOUR = 60 * 60 * 1000;
 const future = (ms = 24 * HOUR) => new Date(Date.now() + ms);
 const past = (ms = 24 * HOUR) => new Date(Date.now() - ms);
 
-/** The transaction client the real code sees inside `$transaction`. */
-function txClient(created: unknown, countInTx = 0) {
+/**
+ * The transaction client the real code sees inside `$transaction`.
+ *
+ * `findFirst` is here because the cooldown is re-read inside the transaction: the check before
+ * it is a courtesy, and two requests can both pass that one.
+ */
+function txClient(created: unknown, countInTx = 0, lastInTx: { submittedAt: Date } | null = null) {
   return {
     submission: {
       count: vi.fn().mockResolvedValue(countInTx),
       create: vi.fn().mockResolvedValue(created),
+      findFirst: vi.fn().mockResolvedValue(lastInTx),
     },
   };
 }
 
 type Overrides = {
+  /** What the cooldown re-read inside the transaction finds, when it differs from before. */
+  lastInTx?: { submittedAt: Date } | null;
   link?: Record<string, unknown> | null;
   assignment?: Record<string, unknown> | null;
   staff?: boolean;
@@ -90,7 +98,10 @@ function setup(o: Overrides = {}) {
 
   prismaMock.assignmentProblem.findUnique.mockResolvedValue(
     o.link === undefined
-      ? { maxSubmissions: 3, problem: { fileName: 'p.jff', type: 'FA', maxStates: null, isDeterministic: null } }
+      ? {
+          maxSubmissions: 3,
+          problem: { fileName: 'p.jff', type: 'FA', maxStates: null, isDeterministic: null },
+        }
       : o.link,
   );
 
@@ -124,7 +135,7 @@ function setup(o: Overrides = {}) {
   );
   prismaMock.submissionGrant.findMany.mockResolvedValue(o.grants ?? []);
 
-  const tx = txClient(created, o.countInTx ?? 0);
+  const tx = txClient(created, o.countInTx ?? 0, o.lastInTx ?? null);
   prismaMock.$transaction.mockImplementation(async (cb: (c: typeof tx) => unknown) => cb(tx));
   fsMock.existsSync.mockReturnValue(true);
 
@@ -175,7 +186,11 @@ describe('createSubmission', () => {
 
     it('404s when the assignment does not exist', async () => {
       setup({ assignment: null });
-      expect(await call()).toMatchObject({ ok: false, status: 404, error: 'Assignment not found.' });
+      expect(await call()).toMatchObject({
+        ok: false,
+        status: 404,
+        error: 'Assignment not found.',
+      });
     });
   });
 
@@ -263,9 +278,7 @@ describe('createSubmission', () => {
       // Base cap 3 already used; a +1 grant for this student lets a 4th through.
       setup({
         priorCount: 3,
-        grants: [
-          { targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 1 },
-        ],
+        grants: [{ targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 1 }],
       });
       expect(await call()).toMatchObject({ ok: true });
     });
@@ -273,9 +286,7 @@ describe('createSubmission', () => {
     it('the raised cap is enforced too, and the error names the effective limit', async () => {
       setup({
         priorCount: 4,
-        grants: [
-          { targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 1 },
-        ],
+        grants: [{ targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 1 }],
       });
       const res = await call();
       expect(res).toMatchObject({ ok: false, status: 409 });
@@ -340,6 +351,41 @@ describe('createSubmission', () => {
 
     it('allows a resubmit once the cooldown has elapsed', async () => {
       setup({ cooldownMs: 60_000, lastSubmittedAt: new Date(Date.now() - 120_000) });
+      expect(await call()).toMatchObject({ ok: true });
+    });
+
+    /**
+     * The check before the transaction is a courtesy; this is the rule.
+     *
+     * Two requests a millisecond apart both saw an empty cooldown and both submitted, which is
+     * the rule defeated by pressing the button twice. The authoritative read happens inside the
+     * same serializable transaction as the insert.
+     */
+    it('refuses a second submission that only the transaction can see', async () => {
+      setup({
+        cooldownMs: 60_000,
+        // Nothing to see before the transaction: the racing request had not landed yet.
+        lastSubmittedAt: null,
+        // By the time this one inserts, the other has committed.
+        lastInTx: { submittedAt: new Date(Date.now() - 1_000) },
+      });
+
+      const res = await call();
+
+      expect(res).toMatchObject({ ok: false, status: 429 });
+      // Answered the same way the fast check answers, so a student cannot tell which caught
+      // them and does not need to.
+      expect((res as { headers: Record<string, string> }).headers['Retry-After']).toBe('59');
+      expect(auditActions()).toContain('SUBMISSION_RATE_LIMITED');
+    });
+
+    it('lets it through when the transaction agrees the cooldown has passed', async () => {
+      setup({
+        cooldownMs: 60_000,
+        lastSubmittedAt: new Date(Date.now() - 120_000),
+        lastInTx: { submittedAt: new Date(Date.now() - 120_000) },
+      });
+
       expect(await call()).toMatchObject({ ok: true });
     });
 
@@ -515,7 +561,11 @@ describe('createSubmission', () => {
 
     it('submits individually when the student is in none of the set’s groups', async () => {
       const { tx } = setup({
-        assignment: groupAssignment({ assignedToEveryone: true, assignees: [], groupSet: { groups: [] } }),
+        assignment: groupAssignment({
+          assignedToEveryone: true,
+          assignees: [],
+          groupSet: { groups: [] },
+        }),
       });
       await call();
 

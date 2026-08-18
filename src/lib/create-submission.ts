@@ -22,13 +22,22 @@ import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import { lockGroupSetIfUsed } from '@/lib/group-set-service';
 import { submissionContentHash, submissionShapeHash } from '@/lib/similarity/content-hash';
-import {
-  extractProvenanceFeatures,
-  type ProvenanceFeatures,
-} from '@/lib/similarity/provenance';
+import { extractProvenanceFeatures, type ProvenanceFeatures } from '@/lib/similarity/provenance';
 
 /** Thrown inside the create transaction when the per-problem cap is already met. */
 class SubmissionCapReachedError extends Error {}
+
+/**
+ * Thrown inside the create transaction when the cooldown has not elapsed.
+ *
+ * Carries the wait so the caller can answer with the same `Retry-After` the pre-transaction
+ * check would have given, rather than a bare refusal.
+ */
+class ResubmitTooSoonError extends Error {
+  constructor(readonly retryAfterSec: number) {
+    super('resubmit cooldown');
+  }
+}
 
 const SUBMISSION_UPLOAD_DIR = path.join('/private', 'uploads', 'submissions');
 
@@ -86,7 +95,9 @@ function storeSubmissionFile(filePath: string, buffer: Buffer): void {
  * so each caller maps it to its own transport. The row is created `PENDING`; the
  * background worker picks it up.
  */
-export async function createSubmission(input: CreateSubmissionInput): Promise<CreateSubmissionResult> {
+export async function createSubmission(
+  input: CreateSubmissionInput,
+): Promise<CreateSubmissionResult> {
   const { user, assignmentId, problemId, file, req, source } = input;
   const { maxBytes, maxMb } = await getSystemUploadLimit();
 
@@ -318,7 +329,13 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
     }
   }
 
-  // Resubmit cooldown.
+  /**
+   * Resubmit cooldown, checked twice on purpose.
+   *
+   * This one is the fast answer: it costs a single query and gives a student a `Retry-After`
+   * before a file is uploaded or written. It is not the rule, though, because two requests
+   * can both pass it; the authoritative check is inside the transaction that inserts.
+   */
   const { resubmitCooldownMs } = await getQueueSettings();
   if (resubmitCooldownMs > 0) {
     const lastSubmission = await prisma.submission.findFirst({
@@ -383,13 +400,21 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
         ...meta,
         reason: 'Late submissions are not allowed for this assignment.',
       });
-      return { ok: false, status: 403, error: 'Late submissions are not allowed for this assignment.' };
+      return {
+        ok: false,
+        status: 403,
+        error: 'Late submissions are not allowed for this assignment.',
+      };
     }
     await audit('SUBMISSION_REJECTED_LATE_CUTOFF', 'WARNING', {
       ...meta,
       reason: 'Late submission cutoff has passed for this assignment.',
     });
-    return { ok: false, status: 403, error: 'Late submission cutoff has passed for this assignment.' };
+    return {
+      ok: false,
+      status: 403,
+      error: 'Late submission cutoff has passed for this assignment.',
+    };
   }
 
   let fileName: string | null = null;
@@ -446,8 +471,8 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       storeSubmissionFile(uploadedFilePath, buffer);
     }
 
-    // Re-check the cap inside a serializable transaction so concurrent submits can't
-    // both slip past the earlier count.
+    // Re-check the cap and the cooldown inside a serializable transaction so concurrent
+    // submits cannot both slip past the earlier reads.
     let submission: Prisma.SubmissionGetPayload<object>;
     try {
       submission = await prisma.$transaction(
@@ -456,6 +481,35 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
             const priorCount = await tx.submission.count({ where: countScope });
             if (priorCount >= limit.max) {
               throw new SubmissionCapReachedError();
+            }
+          }
+
+          /**
+           * The cooldown, re-read here because the check before the transaction is only a
+           * courtesy.
+           *
+           * Two requests a millisecond apart both saw an empty cooldown and both submitted,
+           * which is the whole point of the rule defeated by pressing the button twice. Read
+           * inside the same serializable transaction as the insert, over the same scope as the
+           * cap (the group's submissions on a group assignment, the student's own otherwise),
+           * so Postgres makes the pair conflict instead of letting both through.
+           *
+           * Staff are exempt here as they are above: rerunning and testing a problem is not
+           * resubmitting to it.
+           */
+          if (!isCourseStaff && resubmitCooldownMs > 0) {
+            const last = await tx.submission.findFirst({
+              where: countScope,
+              orderBy: { submittedAt: 'desc' },
+              select: { submittedAt: true },
+            });
+            if (last) {
+              // Measured from the same clock the pre-check used, so the number a student is
+              // told and the rule they are held to are the same rule.
+              const elapsedMs = Date.now() - last.submittedAt.getTime();
+              if (elapsedMs < resubmitCooldownMs) {
+                throw new ResubmitTooSoonError(Math.ceil((resubmitCooldownMs - elapsedMs) / 1000));
+              }
             }
           }
           const created = await tx.submission.create({
@@ -488,8 +542,26 @@ export async function createSubmission(input: CreateSubmissionInput): Promise<Cr
       if (err instanceof SubmissionCapReachedError) {
         return { ok: false, status: 409, error: `Submission limit reached (${limit.max}).` };
       }
+      if (err instanceof ResubmitTooSoonError) {
+        // The same answer the pre-check gives, so a student cannot tell which check caught
+        // them and does not need to.
+        await audit('SUBMISSION_RATE_LIMITED', 'WARNING', {
+          cooldownMs: resubmitCooldownMs,
+          concurrent: true,
+        });
+        return {
+          ok: false,
+          status: 429,
+          error: `Please wait ${err.retryAfterSec}s before resubmitting to this problem.`,
+          headers: { 'Retry-After': String(err.retryAfterSec) },
+        };
+      }
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2034') {
-        return { ok: false, status: 409, error: 'A concurrent submission conflicted; please retry.' };
+        return {
+          ok: false,
+          status: 409,
+          error: 'A concurrent submission conflicted; please retry.',
+        };
       }
       throw err;
     }

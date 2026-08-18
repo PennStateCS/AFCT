@@ -60,16 +60,21 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ success: true, count: 2 });
 
-    // A single updateMany, resetting attempts (fresh budget + fences in-flight workers).
+    // A single updateMany. Clearing the claim token is what fences a worker mid-evaluation;
+    // resetting attempts only gives a fresh budget, and used to hand the same value back to a
+    // stale worker on the next claim.
     expect(prismaMock.submission.updateMany).toHaveBeenCalledTimes(1);
     expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { courseId: 'c1' },
+        // Submissions already queued or being graded are left where they are: re-queuing one
+        // that is running now produces a second run of the same work.
+        where: { courseId: 'c1', status: { notIn: ['PENDING', 'PROCESSING'] } },
         data: expect.objectContaining({
           status: 'PENDING',
           feedback: null,
           correct: null,
           attempts: 0,
+          processingToken: null,
         }),
       }),
     );
