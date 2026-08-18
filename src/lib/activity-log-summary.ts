@@ -186,6 +186,13 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       return issuer ? `${issuer}${client ? `, client ${client}` : ''}${automatic}` : null;
     }
 
+    case 'SUBMISSION_AUTOGRADE_SKIPPED':
+      // Why the grade did not move, which is the whole content of the entry.
+      return str(metadata, 'reason');
+
+    case 'SUBMISSION_STALE_DISCARDED':
+      return 'the submission was reclaimed while it was being graded';
+
     case 'LTI_DYNAMIC_REGISTRATION_FAILED':
       // Why it stopped. Every value is one of the fixed reasons the registration code returns.
       return str(metadata, 'reason');

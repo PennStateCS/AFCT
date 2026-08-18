@@ -469,6 +469,172 @@ export async function holdsTheStandingGrade(
   return !latest || latest.id === submission.id;
 }
 
+/**
+ * What a persistence attempt did, once it committed.
+ *
+ * `stale` is the only one that changed nothing: the row belongs to somebody else now.
+ */
+export type PersistOutcome = 'graded' | 'grade-skipped' | 'no-autograde' | 'stale';
+
+/**
+ * Everything the evaluation changes in the database, in one transaction.
+ *
+ * The claim is held until this commits. It used to be released with the result write, and the
+ * grade written afterwards: a failure in between then left a submission COMPLETED, its claim
+ * cleared, its standing grade stale or missing, and nothing on the queue to try again. There is
+ * no state in which that is recoverable, because the row no longer looks like work.
+ *
+ * So ownership, the attempt's result, the authority decision and the grade rows are one unit.
+ * If any part fails the whole thing rolls back, the row is still PROCESSING and still carries
+ * this worker's token, and the caller can put it back on the queue exactly as it does for an
+ * evaluator failure.
+ *
+ * **Serializable**, because the authority decision is a read that a concurrent write can
+ * invalidate: another worker grading a newer attempt for the same student reads the same rows
+ * and writes the same grade rows, and at a weaker level both could commit with the older
+ * verdict landing last. AFCT already uses Serializable for its other read-then-write
+ * invariants, and a serialization failure surfaces as P2034 for the caller to retry.
+ *
+ * The Java evaluator runs before any of this. Nothing slow is inside the transaction.
+ */
+export async function persistEvaluation(opts: {
+  id: string;
+  /** The claim. Null means this worker never held one, and it writes nothing. */
+  token: string | null;
+  assignmentId: string;
+  problemId: string;
+  studentId: string;
+  studentGroupId: string | null;
+  autograderEnabled: boolean;
+  maxPoints: number;
+  /** Exactly what the evaluator returned, unchanged. */
+  evaluation: SubmissionEvaluationResult;
+  /**
+   * Test-only seam: run after the authority decision and before the grade write.
+   *
+   * The interleaving this transaction exists to refuse cannot be produced from the outside,
+   * because it needs something to commit while this transaction is open. Nothing in production
+   * passes it.
+   */
+  pauseBeforeGradeWrite?: () => Promise<void>;
+}): Promise<PersistOutcome> {
+  // A worker with no claim has no business writing to the row at all.
+  if (opts.token === null) return 'stale';
+
+  return prisma.$transaction(
+    async (tx) => {
+      /**
+       * Ownership, proved inside the transaction rather than before it, and proved by the
+       * write itself: the result only lands on a row still carrying this token.
+       */
+      const owned = await tx.submission.updateMany({
+        where: { id: opts.id, processingToken: opts.token },
+        data: {
+          feedback: opts.evaluation.feedback,
+          correct: opts.evaluation.correct ?? null,
+          evaluationRaw:
+            opts.evaluation.evaluationRaw === null
+              ? Prisma.JsonNull
+              : (opts.evaluation.evaluationRaw as Prisma.InputJsonValue),
+          status: opts.evaluation.status,
+        },
+      });
+      if (owned.count === 0) return 'stale';
+
+      let outcome: PersistOutcome = 'no-autograde';
+
+      if (opts.autograderEnabled) {
+        const earnedPoints = opts.evaluation.correct ? opts.maxPoints : 0;
+
+        if (
+          await holdsTheStandingGrade(tx, {
+            id: opts.id,
+            assignmentId: opts.assignmentId,
+            problemId: opts.problemId,
+            studentId: opts.studentId,
+            studentGroupId: opts.studentGroupId,
+          })
+        ) {
+          /**
+           * A group submission's grade fans out to every current member (each gets a
+           * per-student row, defaulting to the group's grade); an individual submission grades
+           * only the submitter. The membership is read here so the fan-out and the grade are
+           * the same snapshot.
+           */
+          if (opts.pauseBeforeGradeWrite) await opts.pauseBeforeGradeWrite();
+
+          const targetIds = opts.studentGroupId
+            ? (
+                await tx.groupMembership.findMany({
+                  where: { groupId: opts.studentGroupId },
+                  select: { userId: true },
+                })
+              ).map((m) => m.userId)
+            : [opts.studentId];
+
+          // Where the grade came from, matching what manual group grading records. Without it
+          // a member later changed by hand looks the same as one the group was never graded
+          // together on, so the "adjusted from" marker never appears for autograded groups.
+          const groupProvenance = opts.studentGroupId
+            ? { groupGradeGroupId: opts.studentGroupId, groupGradeValue: earnedPoints }
+            : {};
+
+          // Never overwrite a manually-entered grade: update only non-manual rows, and create
+          // rows only where none exists (skipDuplicates no-ops on any manual row a TA set).
+          await tx.assignmentProblemGrade.updateMany({
+            where: {
+              assignmentId: opts.assignmentId,
+              problemId: opts.problemId,
+              studentId: { in: targetIds },
+              gradedManually: false,
+            },
+            // Stamping the source here matters for released grades: a grade a person entered
+            // and then handed back becomes the autograder's the moment it overwrites it, and
+            // saying otherwise would credit a person with a number they did not choose.
+            data: {
+              grade: earnedPoints,
+              feedback: opts.evaluation.feedback,
+              gradeSource: 'AUTOGRADER',
+              ...groupProvenance,
+            },
+          });
+          await tx.assignmentProblemGrade.createMany({
+            data: targetIds.map((studentId) => ({
+              assignmentId: opts.assignmentId,
+              problemId: opts.problemId,
+              studentId,
+              grade: earnedPoints,
+              feedback: opts.evaluation.feedback,
+              gradedManually: false,
+              gradeSource: 'AUTOGRADER' as const,
+              ...groupProvenance,
+            })),
+            skipDuplicates: true,
+          });
+          outcome = 'graded';
+        } else {
+          outcome = 'grade-skipped';
+        }
+      }
+
+      /**
+       * The claim ends here, last, and still fenced on the token.
+       *
+       * Until this statement the row is PROCESSING and owned, which is what makes every failure
+       * above recoverable: the caller can requeue or fail it, and no other worker can take it
+       * in the meantime.
+       */
+      await tx.submission.updateMany({
+        where: { id: opts.id, processingToken: opts.token },
+        data: { processingToken: null },
+      });
+
+      return outcome;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
 async function evaluateSubmission(id: string, token: string | null = null) {
   let submission: WorkerSubmission | null = null;
 
@@ -490,140 +656,78 @@ async function evaluateSubmission(id: string, token: string | null = null) {
     const evalConfig = await getEvaluatorConfig();
     const evaluation = await runJavaEvaluator(submission, evalConfig);
 
-    const written = await writeIfStillOwned(id, token, {
-      feedback: evaluation.feedback,
-      correct: evaluation.correct,
-      evaluationRaw:
-        evaluation.evaluationRaw === null
-          ? Prisma.JsonNull
-          : (evaluation.evaluationRaw as Prisma.InputJsonValue),
-      status: evaluation.status,
-      // The claim ends with the result. Cleared in the same statement it is fenced on, so
-      // there is no moment where the row is finished and still looks owned.
-      processingToken: null,
+    const outcome = await persistEvaluation({
+      id,
+      token,
+      assignmentId: submission.assignmentId,
+      problemId: submission.problemId,
+      studentId: submission.studentId,
+      studentGroupId: submission.studentGroupId,
+      autograderEnabled: submission.assignmentProblem.autograderEnabled === true,
+      maxPoints: submission.assignmentProblem.maxPoints,
+      evaluation,
     });
 
-    if (!written) {
-      // The row was reran/reaped and re-claimed by another worker while we
-      // evaluated; discard our stale result rather than overwrite theirs.
+    if (outcome === 'stale') {
+      // The row was rerun, reaped or re-claimed by another worker while we evaluated; discard
+      // our result rather than overwrite theirs. Nothing was written.
       console.warn(
         `[SubmissionWorker] Submission ${id} was reclaimed during evaluation; discarding stale result.`,
       );
+      await logSubmissionActivity(submission, 'SUBMISSION_STALE_DISCARDED', 'WARNING', {
+        studentId: submission.studentId,
+      });
       return;
     }
 
-    // Autograde submission if enabled
-    if (submission.assignmentProblem.autograderEnabled === true) {
+    // Logged after the commit, never inside it: an audit write that fails must not roll back a
+    // grade that is already correct, which is the trade AFCT makes everywhere else too.
+    if (outcome === 'graded') {
       const earnedPoints = evaluation.correct ? submission.assignmentProblem.maxPoints : 0;
-
-      // A group submission's grade fans out to every current group member (each gets a
-      // per-student row, defaulting to the group's grade); an individual submission grades
-      // only the submitter. Never overwrite a manually-entered grade: update only
-      // non-manual rows, and create rows only where none exists (skipDuplicates no-ops on
-      // any manual row a TA set). Together this makes autograde skip any hand-set grade.
-      const gradeAssignmentId = submission.assignmentId;
-      const gradeProblemId = submission.problemId;
-      const gradeStudentId = submission.studentId;
-      const gradeGroupId = submission.studentGroupId;
-      const gradeTargetIds = submission.studentGroupId
-        ? (
-            await prisma.groupMembership.findMany({
-              where: { groupId: submission.studentGroupId },
-              select: { userId: true },
-            })
-          ).map((m) => m.userId)
-        : [submission.studentId];
-
-      // Where the grade came from, matching what manual group grading records. Without it a
-      // member later changed by hand looks the same as one the group was never graded
-      // together on, so the "adjusted from" marker never appears for autograded groups.
-      const groupProvenance = submission.studentGroupId
-        ? { groupGradeGroupId: submission.studentGroupId, groupGradeValue: earnedPoints }
-        : {};
-
-      // One transaction: a group is graded together or not at all. As two statements a
-      // failure between them left a group half-graded with nothing recording which half.
-      const graded = await prisma.$transaction(async (tx) => {
-        // Read inside the transaction that writes the grade, so a submission that arrived
-        // while this one was being evaluated counts.
-        const authoritative = await holdsTheStandingGrade(tx, {
-          id,
-          assignmentId: gradeAssignmentId,
-          problemId: gradeProblemId,
-          studentId: gradeStudentId,
-          studentGroupId: gradeGroupId,
-        });
-        if (!authoritative) return false;
-
-        await tx.assignmentProblemGrade.updateMany({
-          where: {
-            assignmentId: gradeAssignmentId,
-            problemId: gradeProblemId,
-            studentId: { in: gradeTargetIds },
-            gradedManually: false,
-          },
-          // Stamping the source here matters for released grades: a grade a person entered
-          // and then handed back becomes the autograder's the moment it overwrites it, and
-          // saying otherwise would credit a person with a number they did not choose.
-          data: {
-            grade: earnedPoints,
-            feedback: evaluation.feedback,
-            gradeSource: 'AUTOGRADER',
-            ...groupProvenance,
-          },
-        });
-        await tx.assignmentProblemGrade.createMany({
-          data: gradeTargetIds.map((studentId) => ({
-            assignmentId: gradeAssignmentId,
-            problemId: gradeProblemId,
-            studentId,
-            grade: earnedPoints,
-            feedback: evaluation.feedback,
-            gradedManually: false,
-            gradeSource: 'AUTOGRADER',
-            ...groupProvenance,
-          })),
-          skipDuplicates: true,
-        });
-        return true;
+      await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
+        studentId: submission.studentId,
+        grade: earnedPoints,
+        maxPoints: submission.assignmentProblem.maxPoints,
+        correct: evaluation.correct ?? null,
       });
-
-      if (!graded) {
-        /**
-         * A rerun of an older attempt, or an evaluation overtaken by a newer submission. The
-         * attempt's own result is already saved; the gradebook keeps the later work. Logged
-         * because "I reran it and the grade did not change" is otherwise a mystery.
-         */
-        await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADE_SKIPPED', 'INFO', {
-          studentId: submission.studentId,
-          reason: 'a later submission holds the grade',
-          correct: evaluation.correct ?? null,
-        });
-        console.log(
-          `[SubmissionWorker] Submission ${id} is not the latest; left the standing grade alone.`,
-        );
-      } else {
-        await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADED', 'INFO', {
-          studentId: submission.studentId,
-          grade: earnedPoints,
-          maxPoints: submission.assignmentProblem.maxPoints,
-          correct: evaluation.correct ?? null,
-        });
-
-        console.log(
-          `[SubmissionWorker] Auto-graded submission ${id}: ${earnedPoints} points (correct: ${evaluation.correct})`,
-        );
-      }
+      console.log(
+        `[SubmissionWorker] Auto-graded submission ${id}: ${earnedPoints} points (correct: ${evaluation.correct})`,
+      );
+    } else if (outcome === 'grade-skipped') {
+      /**
+       * A rerun of an older attempt, or an evaluation overtaken by a newer submission. The
+       * attempt's own result is saved; the gradebook keeps the later work. Logged because "I
+       * reran it and the grade did not change" is otherwise a mystery.
+       */
+      await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADE_SKIPPED', 'INFO', {
+        studentId: submission.studentId,
+        reason: 'a later submission holds the grade',
+        correct: evaluation.correct ?? null,
+      });
+      console.log(
+        `[SubmissionWorker] Submission ${id} is not the latest; left the standing grade alone.`,
+      );
     }
 
     console.log(`[SubmissionWorker] Successfully evaluated submission ${id}`);
   } catch (error) {
     const message = errMessage(error);
 
+    /**
+     * A serialization failure is a transient one, and worth naming.
+     *
+     * Under Serializable, another worker grading a newer attempt for the same student can make
+     * Postgres refuse this transaction rather than let the older verdict land last. Nothing was
+     * written; the row is still PROCESSING and still ours, so it goes back on the queue like
+     * any other transient failure. Silently swallowing it would leave the grade wrong instead.
+     */
+    const serializationConflict =
+      error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+
     // This catch only fires on unexpected/transient errors (DB blip, evaluator
-    // crash). Known bad-input cases come back as evaluation.status === 'FAILED'
-    // above and never reach here. So retry by returning to PENDING until we've
-    // burned through the attempt budget, then fail it for good.
+    // crash, a rolled-back persistence transaction). Known bad-input cases come back as
+    // evaluation.status === 'FAILED' above and never reach here. So retry by returning to
+    // PENDING until we've burned through the attempt budget, then fail it for good.
     const giveUp = (submission?.attempts ?? maxAttempts) >= maxAttempts;
 
     if (submission) {
@@ -632,13 +736,22 @@ async function evaluateSubmission(id: string, token: string | null = null) {
         submission,
         giveUp ? 'SUBMISSION_FAILED_PERMANENTLY' : 'SUBMISSION_ERROR',
         'ERROR',
-        { error: message, attempts: submission.attempts },
+        {
+          error: message,
+          attempts: submission.attempts,
+          ...(serializationConflict ? { reason: 'serialization conflict' } : {}),
+        },
       );
     }
 
     console.error(`[SubmissionWorker] Failed submission ${id}:`, error);
 
-    // Fenced so a stale worker can't flip a row another worker has since re-claimed.
+    /**
+     * Fenced, and reachable: the persistence transaction holds the claim until it commits, so
+     * a failure anywhere in it leaves the row still carrying this token. Before that was true
+     * this write matched nothing whenever the result had already been saved, and the
+     * submission stayed COMPLETED with no grade and nothing on the queue to fix it.
+     */
     await writeIfStillOwned(
       id,
       token,

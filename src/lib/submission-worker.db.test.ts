@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { claimSubmission, holdsTheStandingGrade, writeIfStillOwned } from './submission-worker';
+import { Prisma } from '@prisma/client';
+import {
+  claimSubmission,
+  holdsTheStandingGrade,
+  persistEvaluation,
+  writeIfStillOwned,
+} from './submission-worker';
 
 /**
  * Worker queue concurrency, against a real Postgres.
@@ -377,5 +383,319 @@ describe('which submission holds the standing grade', () => {
 
       expect(await holdsTheStandingGrade(prisma, ours)).toBe(true);
     });
+  });
+});
+
+/**
+ * Persisting an evaluation: the attempt's result, the standing grade and the claim, as one unit.
+ *
+ * The claim used to be released with the result and the grade written afterwards. A failure in
+ * between left a submission COMPLETED, unowned, with a stale or missing grade, and nothing on
+ * the queue to fix it: no state that is recoverable, because the row no longer looks like work.
+ * These run against real Postgres because that is where the atomicity and the isolation live.
+ */
+describe('persisting an evaluation', () => {
+  const OK = {
+    feedback: 'looks right',
+    correct: true,
+    evaluationRaw: { verdict: 'ok' },
+    status: 'COMPLETED' as const,
+  };
+
+  const persist = (
+    submission: { id: string; studentGroupId?: string | null },
+    token: string | null,
+    over: Partial<Parameters<typeof persistEvaluation>[0]> = {},
+  ) =>
+    persistEvaluation({
+      id: submission.id,
+      token,
+      assignmentId: ids.assignment,
+      problemId: ids.problem,
+      studentId: ids.user,
+      studentGroupId: submission.studentGroupId ?? null,
+      autograderEnabled: true,
+      maxPoints: 100,
+      evaluation: OK,
+      ...over,
+    });
+
+  const gradeRows = () =>
+    prisma.assignmentProblemGrade.findMany({ where: { assignmentId: ids.assignment } });
+
+  beforeEach(async () => {
+    await prisma.assignmentProblemGrade.deleteMany({ where: { assignmentId: ids.assignment } });
+  });
+
+  it('saves the result, the grade and the released claim together', async () => {
+    const sub = await newSubmission();
+    const token = await claimSubmission(sub.id);
+
+    expect(await persist(sub, token)).toBe('graded');
+
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(after).toMatchObject({ status: 'COMPLETED', correct: true, processingToken: null });
+    expect(await gradeRows()).toMatchObject([{ grade: 100, gradeSource: 'AUTOGRADER' }]);
+  });
+
+  /**
+   * The failure this whole shape exists for. Nothing may be left committed, and the row has to
+   * still be somebody's work, or it is stranded: finished-looking, ungraded, and off the queue.
+   */
+  it('leaves the submission owned and unfinished when the grade write fails', async () => {
+    const sub = await newSubmission();
+    const token = await claimSubmission(sub.id);
+
+    // A grade write that cannot succeed: the assignment it names does not exist, so the row
+    // fails its foreign key inside the transaction.
+    await expect(persist(sub, token, { assignmentId: 'no-such-assignment' })).rejects.toThrow();
+
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
+    // The attempt result rolled back with the grade: not COMPLETED, and still claimed.
+    expect(after.status).toBe('PROCESSING');
+    expect(after.processingToken).toBe(token);
+    expect(after.feedback).toBeNull();
+    expect(await gradeRows()).toHaveLength(0);
+
+    // And therefore recoverable: the worker's own requeue still matches the row.
+    expect(
+      await writeIfStillOwned(sub.id, token, { status: 'PENDING', processingToken: null }),
+    ).toBe(true);
+  });
+
+  it('changes nothing at all for a worker that has lost the row', async () => {
+    const sub = await newSubmission();
+    const stale = await claimSubmission(sub.id);
+    await prisma.submission.update({
+      where: { id: sub.id },
+      data: { status: 'PENDING', processingToken: null },
+    });
+    const owner = await claimSubmission(sub.id);
+
+    expect(await persist(sub, stale)).toBe('stale');
+
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(after.status).toBe('PROCESSING');
+    expect(after.feedback).toBeNull();
+    expect(after.processingToken).toBe(owner);
+    expect(await gradeRows()).toHaveLength(0);
+  });
+
+  it('writes nothing for a caller that never claimed the row', async () => {
+    const sub = await newSubmission();
+
+    expect(await persist(sub, null)).toBe('stale');
+
+    expect((await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } })).status).toBe(
+      'PENDING',
+    );
+  });
+
+  it("saves an older attempt's own result without moving the grade", async () => {
+    // Attempt 1 is rerun after attempt 2 has already taken the grade.
+    const first = await newSubmission();
+    await prisma.submission.create({
+      data: {
+        courseId: ids.course,
+        assignmentId: ids.assignment,
+        problemId: ids.problem,
+        studentId: ids.user,
+        status: 'COMPLETED',
+        submittedAt: new Date(Date.now() + 60_000),
+      },
+    });
+    await prisma.assignmentProblemGrade.create({
+      data: {
+        assignmentId: ids.assignment,
+        problemId: ids.problem,
+        studentId: ids.user,
+        grade: 100,
+        gradedManually: false,
+        gradeSource: 'AUTOGRADER',
+      },
+    });
+    const token = await claimSubmission(first.id);
+
+    expect(
+      await persist(first, token, {
+        evaluation: { ...OK, correct: false, feedback: 'still wrong' },
+      }),
+    ).toBe('grade-skipped');
+
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: first.id } });
+    // Its own result is refreshed...
+    expect(after).toMatchObject({ correct: false, feedback: 'still wrong', processingToken: null });
+    // ...and the gradebook keeps the later work.
+    expect(await gradeRows()).toMatchObject([{ grade: 100 }]);
+  });
+
+  it('does not touch a grade somebody entered by hand', async () => {
+    const sub = await newSubmission();
+    await prisma.assignmentProblemGrade.create({
+      data: {
+        assignmentId: ids.assignment,
+        problemId: ids.problem,
+        studentId: ids.user,
+        grade: 42,
+        feedback: 'marked by a person',
+        gradedManually: true,
+        gradeSource: 'MANUAL',
+      },
+    });
+    const token = await claimSubmission(sub.id);
+
+    expect(await persist(sub, token)).toBe('graded');
+
+    expect(await gradeRows()).toMatchObject([
+      { grade: 42, gradedManually: true, gradeSource: 'MANUAL' },
+    ]);
+  });
+
+  it('saves the result and no grade at all when the autograder is off', async () => {
+    const sub = await newSubmission();
+    const token = await claimSubmission(sub.id);
+
+    expect(await persist(sub, token, { autograderEnabled: false })).toBe('no-autograde');
+
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(after).toMatchObject({ status: 'COMPLETED', processingToken: null });
+    expect(await gradeRows()).toHaveLength(0);
+  });
+});
+
+/**
+ * Two workers, or a worker and a student, at the same moment.
+ *
+ * The authority check is a read, and a read can be made wrong by a write that commits after it.
+ * Serializable is what stops the older verdict landing last; these prove it against Postgres
+ * rather than against a mock that would agree with whatever was written.
+ */
+describe('persisting an evaluation while something else happens', () => {
+  const OK = {
+    feedback: 'ok',
+    correct: true,
+    evaluationRaw: null,
+    status: 'COMPLETED' as const,
+  };
+
+  const persistFor = (id: string, token: string | null, feedback: string) =>
+    persistEvaluation({
+      id,
+      token,
+      assignmentId: ids.assignment,
+      problemId: ids.problem,
+      studentId: ids.user,
+      studentGroupId: null,
+      autograderEnabled: true,
+      maxPoints: 100,
+      evaluation: { ...OK, feedback },
+    });
+
+  beforeEach(async () => {
+    await prisma.assignmentProblemGrade.deleteMany({ where: { assignmentId: ids.assignment } });
+  });
+
+  it('leaves the grade to the newer submission when one arrives mid-evaluation', async () => {
+    const running = await newSubmission();
+    const token = await claimSubmission(running.id);
+
+    // Submitted while the evaluator was still working on the first attempt.
+    await prisma.submission.create({
+      data: {
+        courseId: ids.course,
+        assignmentId: ids.assignment,
+        problemId: ids.problem,
+        studentId: ids.user,
+        status: 'PENDING',
+        submittedAt: new Date(Date.now() + 30_000),
+      },
+    });
+
+    expect(await persistFor(running.id, token, 'from the older attempt')).toBe('grade-skipped');
+
+    // Its own result is saved, and the gradebook waits for the newer attempt.
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: running.id } });
+    expect(after).toMatchObject({ feedback: 'from the older attempt', processingToken: null });
+    expect(
+      await prisma.assignmentProblemGrade.count({ where: { assignmentId: ids.assignment } }),
+    ).toBe(0);
+  });
+
+  /**
+   * The interleaving the isolation level exists for.
+   *
+   * An older attempt reads "am I the latest?" and is told yes. Before it writes, a newer
+   * submission arrives *and is graded*. At a weaker isolation level the older write lands last
+   * and the student's grade goes backwards for good; the check was true when it was read and
+   * false by the time it mattered. The pause is the only way to hold that window open, since
+   * nothing can commit inside somebody else's transaction from the outside.
+   */
+  it('refuses an older attempt whose authority went stale while it was writing', async () => {
+    const older = await newSubmission();
+    const tokenA = await claimSubmission(older.id);
+
+    const conflict = await (async () => {
+      let outcome: unknown;
+      try {
+        outcome = await persistEvaluation({
+          id: older.id,
+          token: tokenA,
+          assignmentId: ids.assignment,
+          problemId: ids.problem,
+          studentId: ids.user,
+          studentGroupId: null,
+          autograderEnabled: true,
+          maxPoints: 100,
+          evaluation: { feedback: 'A', correct: false, evaluationRaw: null, status: 'COMPLETED' },
+          // While A holds its authority decision: a newer attempt is submitted and graded.
+          pauseBeforeGradeWrite: async () => {
+            const newer = await prisma.submission.create({
+              data: {
+                courseId: ids.course,
+                assignmentId: ids.assignment,
+                problemId: ids.problem,
+                studentId: ids.user,
+                status: 'PENDING',
+                submittedAt: new Date(Date.now() + 30_000),
+              },
+            });
+            const tokenB = await claimSubmission(newer.id);
+            await persistEvaluation({
+              id: newer.id,
+              token: tokenB,
+              assignmentId: ids.assignment,
+              problemId: ids.problem,
+              studentId: ids.user,
+              studentGroupId: null,
+              autograderEnabled: true,
+              maxPoints: 100,
+              evaluation: {
+                feedback: 'B',
+                correct: true,
+                evaluationRaw: null,
+                status: 'COMPLETED',
+              },
+            });
+          },
+        });
+      } catch (error) {
+        return error;
+      }
+      return outcome;
+    })();
+
+    // Postgres refuses the older transaction rather than letting its write land last.
+    expect(conflict).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+    expect((conflict as Prisma.PrismaClientKnownRequestError).code).toBe('P2034');
+
+    // The newer attempt's grade stands, and the older attempt is still owned, so the worker
+    // puts it back on the queue rather than losing it.
+    const grades = await prisma.assignmentProblemGrade.findMany({
+      where: { assignmentId: ids.assignment },
+    });
+    expect(grades).toMatchObject([{ grade: 100, feedback: 'B' }]);
+    const stale = await prisma.submission.findUniqueOrThrow({ where: { id: older.id } });
+    expect(stale).toMatchObject({ status: 'PROCESSING', processingToken: tokenA });
+    expect(stale.feedback).toBeNull();
   });
 });
