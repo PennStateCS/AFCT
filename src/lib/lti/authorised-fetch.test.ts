@@ -184,7 +184,10 @@ describe('the guarantees every caller inherits', () => {
     // Deliberately not special-cased. A same-origin redirect is harmless in itself, but the
     // rule stays simple enough that nobody has to reason about which redirects are safe.
     const sameOrigin = http.createServer((req, res) => {
-      if ((req.url ?? '') === '/moved') return res.end('{}');
+      if ((req.url ?? '') === '/moved') {
+        res.end('{}');
+        return;
+      }
       res.writeHead(302, { Location: '/moved' });
       res.end();
     });
