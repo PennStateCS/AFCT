@@ -39,7 +39,7 @@ vi.mock('jose', async (importOriginal) => {
 });
 
 const { prisma } = await import('@/lib/prisma');
-const { validateLaunch } = await import('./launch');
+const { validateLaunch, launchRefusalMessage } = await import('./launch');
 const { startLaunch } = await import('./launch-transaction');
 
 const TARGET_LINK_URI = 'https://afct.example.test/api/lti/launch';
@@ -1095,6 +1095,27 @@ describe('deep linking settings of the wrong type', () => {
     expect(await refused(deepLinkSettings({ data: { opaque: true } }))).toEqual(malformed);
   });
 
+  /**
+   * An empty string is a value, not an absence.
+   *
+   * It used to be refused as malformed, which meant a platform sending `data: ""` could not
+   * deep link at all. Deep Linking says the value comes back unchanged, so it is kept as
+   * itself and returned as itself.
+   */
+  it('accepts an empty data value and keeps it', async () => {
+    const result = await refused(deepLinkSettings({ data: '' }));
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.identity.deepLink?.data).toBe('');
+  });
+
+  it('records no data at all when the platform sent none', async () => {
+    const result = await refused(deepLinkSettings({ data: undefined }));
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.identity.deepLink?.data).toBeNull();
+  });
+
   // Only the settings AFCT reads are type-checked. Refusing a launch over the shape of a value
   // that changes nothing would cost interoperability and buy nothing.
   it('ignores the shape of settings it never reads', async () => {
@@ -1306,5 +1327,76 @@ describe('whether the platform takes more than one item', () => {
 
   it('reads an omitted setting as unknown rather than as a no', async () => {
     expect(await acceptMultipleOf(deepLinkSettings())).toBeNull();
+  });
+});
+
+/**
+ * `azp`, the "authorised party" claim.
+ *
+ * `jwtVerify` proves AFCT's client id is in `aud`, which is the check that matters. `azp`
+ * answers the narrower question a multi-audience token raises: which of those audiences the
+ * token was issued for. A token naming somebody else is one AFCT was allowed to see rather
+ * than one it was given.
+ */
+describe('which party a launch was issued for', () => {
+  /** A launch that is correct in every way except the claims under test. */
+  const launchWith = async (claims: Record<string, unknown>, audience?: string | string[]) => {
+    const nonce = await beginFixture();
+    const token = await signed(
+      {
+        [`${CLAIM}/deployment_id`]: DEPLOYMENT_ID,
+        [`${CLAIM}/message_type`]: 'LtiResourceLinkRequest',
+        [`${CLAIM}/version`]: '1.3.0',
+        [`${CLAIM}/roles`]: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
+        [`${CLAIM}/context`]: { id: 'ctx-1', title: 'Theory of Computation' },
+        [`${CLAIM}/resource_link`]: { id: 'rl-1' },
+        [`${CLAIM}/target_link_uri`]: TARGET_LINK_URI,
+        email: 'Student@example.test',
+        nonce,
+        ...claims,
+      },
+      audience ? { audience } : {},
+    );
+    return validateLaunch({ idToken: token, state: lastState });
+  };
+
+  it('accepts a token with one audience and no azp', async () => {
+    // The common case, and nothing more is needed: the audience has already been matched.
+    expect((await launchWith({})).ok).toBe(true);
+  });
+
+  it('accepts several audiences when azp names AFCT', async () => {
+    const result = await launchWith({ azp: CLIENT_ID }, [CLIENT_ID, 'some-other-tool']);
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('refuses a token issued for another application', async () => {
+    const result = await launchWith({ azp: 'some-other-tool' }, [CLIENT_ID, 'some-other-tool']);
+
+    /**
+     * Refused earlier than the azp check, and for a reason that is still true: the registration
+     * is looked up by the party the token names, and AFCT has no registration under somebody
+     * else's client id. Recorded here because the refusal reason is what an administrator
+     * reads, and this is the one it will be.
+     */
+    expect(result).toMatchObject({ ok: false, reason: 'unregistered-platform' });
+  });
+
+  it('refuses a wrong azp even when AFCT is the only audience', async () => {
+    const result = await launchWith({ azp: 'some-other-tool' });
+
+    expect(result).toMatchObject({ ok: false, reason: 'wrong-authorized-party' });
+  });
+
+  it('still refuses a token AFCT is not an audience of at all', async () => {
+    // The stronger check, which jose does: this must not depend on azp being present.
+    const result = await launchWith({}, ['some-other-tool']);
+
+    expect(result).toMatchObject({ ok: false });
+  });
+
+  it('says what to check', () => {
+    expect(launchRefusalMessage('wrong-authorized-party')).toContain('client id');
   });
 });

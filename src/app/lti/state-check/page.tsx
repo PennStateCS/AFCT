@@ -4,9 +4,9 @@ import StateCheckClient from './StateCheckClient';
 export default async function StateCheckPage({
   searchParams,
 }: {
-  searchParams: Promise<{ state?: string; target?: string }>;
+  searchParams: Promise<{ state?: string }>;
 }) {
-  const { state, target } = await searchParams;
+  const { state } = await searchParams;
 
   if (!state) {
     return (
@@ -39,10 +39,17 @@ export default async function StateCheckPage({
     }
   })();
 
+  /**
+   * The frame to ask, taken from the launch record rather than the URL.
+   *
+   * The platform named it at login initiation and AFCT stored it then. Reading it back from a
+   * query parameter would let whoever holds the link choose which frame is asked for the
+   * launch's state, which is the value this page exists to check.
+   */
   return (
     <StateCheckClient
       state={state}
-      storageTarget={target ?? null}
+      storageTarget={launch.ok ? launch.launch.storageTarget : null}
       platformOrigin={platformOrigin}
     />
   );

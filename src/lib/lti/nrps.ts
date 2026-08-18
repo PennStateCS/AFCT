@@ -7,6 +7,11 @@
  */
 
 import { getAccessToken } from '@/lib/lti/access-token';
+import {
+  authorisedFetch,
+  authorisedFetchFailureDetail,
+  samePageOrigin,
+} from '@/lib/lti/authorised-fetch';
 
 /** Reading membership needs its own scope, separate from the grade ones. */
 export const NRPS_SCOPES = [
@@ -36,7 +41,9 @@ export type NrpsFailure =
   | 'rejected'
   | 'unreachable'
   /** More pages remained than we will follow, so the roster read is incomplete. */
-  | 'incomplete';
+  | 'incomplete'
+  /** The LMS answered with something that is not a membership container. */
+  | 'malformed';
 
 export type NrpsResult =
   { ok: true; members: Member[] } | { ok: false; reason: NrpsFailure; detail?: string };
@@ -54,14 +61,27 @@ function nextPage(response: Response): string | null {
   return null;
 }
 
+/**
+ * One member, or null when the LMS did not send one AFCT can act on.
+ *
+ * Null is a refusal, not a skip: the caller fails the whole read. A roster is diffed against
+ * AFCT's own, so a member quietly dropped here reads as a student who has left the course.
+ *
+ * Roles are taken exactly as sent or not at all. They decide whether somebody is enrolled as
+ * faculty or as a student, so a array with a stray non-string in it is a message AFCT does not
+ * understand rather than one to tidy up, and the launch validator treats its own role claim the
+ * same way.
+ */
 function readMember(raw: unknown): Member | null {
   const member = raw as Record<string, unknown>;
   const ltiUserId = typeof member?.user_id === 'string' ? member.user_id : null;
   if (!ltiUserId) return null;
 
-  const roles = Array.isArray(member.roles)
-    ? member.roles.filter((r): r is string => typeof r === 'string')
-    : [];
+  // Required by NRPS, and load-bearing for authorisation, so its absence is malformed rather
+  // than "no roles".
+  if (!Array.isArray(member.roles)) return null;
+  if (!member.roles.every((r): r is string => typeof r === 'string')) return null;
+  const roles = member.roles;
 
   return {
     ltiUserId,
@@ -90,6 +110,14 @@ export async function fetchMembership(opts: {
   });
   if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
+  let firstUrl: URL;
+  try {
+    firstUrl = new URL(opts.membershipsUrl);
+  } catch {
+    return { ok: false, reason: 'malformed', detail: 'the roster address is not a URL' };
+  }
+  const firstOrigin = firstUrl.origin;
+
   const members: Member[] = [];
   let url: string | null = opts.membershipsUrl;
   // A platform that points a page back at one already read would otherwise loop until the page
@@ -97,35 +125,74 @@ export async function fetchMembership(opts: {
   const seen = new Set<string>();
 
   for (let page = 0; url && page < MAX_PAGES; page++) {
-    if (seen.has(url)) return { ok: false, reason: 'incomplete', detail: 'the roster pages repeat' };
+    if (seen.has(url))
+      return { ok: false, reason: 'incomplete', detail: 'the roster pages repeat' };
     seen.add(url);
 
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token.token}`, Accept: MEMBERSHIP_TYPE },
-      });
-    } catch (error) {
+    // Through the shared helper, which refuses to follow a redirect: `fetch` drops the
+    // Authorization header when a redirect crosses an origin, and following one at all would
+    // hand this bearer token to wherever the platform pointed.
+    const attempt = await authorisedFetch(url, {
+      headers: { Authorization: `Bearer ${token.token}`, Accept: MEMBERSHIP_TYPE },
+    });
+    if (!attempt.ok) {
       return {
         ok: false,
-        reason: 'unreachable',
-        detail: error instanceof Error ? error.message : 'network error',
+        reason: attempt.failure.kind === 'redirected' ? 'rejected' : 'unreachable',
+        detail: authorisedFetchFailureDetail(attempt.failure),
       };
     }
+    const response = attempt.response;
 
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
       return { ok: false, reason: 'rejected', detail: detail.slice(0, 500) };
     }
 
+    /**
+     * A page that is not a membership container fails the read.
+     *
+     * Treating it as an empty page is the dangerous reading: an empty roster is a complete
+     * answer as far as the caller can tell, and it proposes dropping every student in the
+     * course. `{}`, `{"members": "nope"}` and `null` are all this case.
+     */
     const body = (await response.json().catch(() => null)) as { members?: unknown } | null;
-    const pageMembers = Array.isArray(body?.members) ? body.members : [];
-    for (const raw of pageMembers) {
-      const member = readMember(raw);
-      if (member) members.push(member);
+    if (!body || typeof body !== 'object' || !Array.isArray(body.members)) {
+      return { ok: false, reason: 'malformed', detail: 'the membership list was missing' };
     }
 
-    url = nextPage(response);
+    for (const raw of body.members) {
+      const member = readMember(raw);
+      if (!member) {
+        return { ok: false, reason: 'malformed', detail: 'a member was missing an id or roles' };
+      }
+      members.push(member);
+    }
+
+    const advertised = nextPage(response);
+    // No further page: clear the cursor before leaving, or the "pages remained" check below
+    // reads this page's own address as one still outstanding.
+    if (!advertised) {
+      url = null;
+      break;
+    }
+
+    /**
+     * Only ever the origin the roster read started on.
+     *
+     * The `Link` header is the platform's to write and this request carries a bearer token, so
+     * a next page pointing at another host would send that token there. AGS has held this line
+     * since it was written; NRPS did not, which is the bug.
+     */
+    const following = samePageOrigin(advertised, firstOrigin);
+    if (!following) {
+      return {
+        ok: false,
+        reason: 'rejected',
+        detail: 'the next page of the roster is not on the same server',
+      };
+    }
+    url = following;
   }
 
   /**
@@ -151,6 +218,10 @@ export function nrpsFailureMessage(reason: NrpsFailure): string {
       return 'AFCT could not reach your LMS. Try again shortly.';
     case 'incomplete':
       return 'AFCT could not read your whole course roster from your LMS, so it has not changed anything. Try again shortly, and tell an administrator if it keeps happening.';
+    case 'malformed':
+      // Said plainly rather than as "no students": an answer AFCT cannot read must never look
+      // like a course that has emptied.
+      return 'Your LMS sent a roster AFCT could not read, so nothing has been changed. Tell an administrator, who can check the AFCT registration in your LMS.';
     case 'rejected':
     default:
       return 'Your LMS refused to share this course’s roster. Check that AFCT is still installed in that course.';

@@ -487,6 +487,55 @@ describe('a launch that verifies but cannot be signed in', () => {
   });
 
   /**
+   * The pause must not act on the claim it exists to doubt.
+   *
+   * An LMS asserting an administrator's email is exactly what the password confirms, so nothing
+   * the launch said about that person may be written down before it. Working out where they
+   * were headed is a courtesy, and a courtesy that records LMS-asserted facts is a side effect
+   * nobody asked for.
+   */
+  it('records nothing about an administrator before the password', async () => {
+    await withCourse();
+    // Already connected, which is the case that writes: an unlinked course has nothing to
+    // record against.
+    const link = await prisma.ltiContextLink.create({
+      data: {
+        platformId: PLATFORM_ID,
+        contextId: 'ctx-1',
+        courseId: COURSE,
+        lineItemsUrl: 'https://canvas.example.test/old/line_items',
+        membershipsUrl: 'https://canvas.example.test/old/memberships',
+      },
+      select: { id: true },
+    });
+    const admin = await prisma.user.create({
+      data: { email: 'admin-nowrite@example.edu', isAdmin: true, firstName: 'A', lastName: 'D' },
+      select: { id: true },
+    });
+    resolveLaunchSignIn.mockResolvedValue({
+      ok: false,
+      reason: 'admin-requires-deliberate-link',
+      userId: admin.id,
+    });
+    const before = await prisma.ltiContextLink.findUniqueOrThrow({
+      where: { id: link.id },
+      select: { lineItemsUrl: true, membershipsUrl: true },
+    });
+
+    await post(await goodLaunch());
+
+    // No membership recorded against the account the LMS claimed.
+    expect(await prisma.ltiContextMember.count({ where: { userId: admin.id } })).toBe(0);
+    // And the service endpoints the launch advertised are not adopted either.
+    expect(
+      await prisma.ltiContextLink.findUniqueOrThrow({
+        where: { id: link.id },
+        select: { lineItemsUrl: true, membershipsUrl: true },
+      }),
+    ).toEqual(before);
+  });
+
+  /**
    * The pause has to remember what the launch was for.
    *
    * Staff launching from a course that is not connected yet came to connect it. The
@@ -584,7 +633,11 @@ describe('a launch that arrives without its cookie', () => {
     expect(res.status).toBe(303);
     const location = new URL(res.headers.get('location') ?? '', 'https://afct.test');
     expect(location.pathname).toBe('/lti/state-check');
-    expect(location.searchParams.get('target')).toBe('post_message_forwarding');
+    // Only the state travels. The frame the platform named is already on the launch row, and
+    // reading it back from the URL would let whoever holds the link choose which frame is
+    // asked for this launch's state.
+    expect(location.searchParams.get('target')).toBeNull();
+    expect(location.searchParams.get('state')).toBe(state);
 
     // The token waits on its own launch row rather than being handed back through the browser.
     const row = await prisma.ltiLaunchTransaction.findFirst({

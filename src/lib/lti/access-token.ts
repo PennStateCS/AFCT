@@ -13,6 +13,7 @@
 
 import { SignJWT, importPKCS8 } from 'jose';
 import { getSigningKey, LTI_SIGNING_ALG } from '@/lib/lti/keys';
+import { authorisedFetch, authorisedFetchFailureDetail } from '@/lib/lti/authorised-fetch';
 import { prisma } from '@/lib/prisma';
 
 /** The AGS scopes AFCT asks for. Only what grade passback needs. */
@@ -136,25 +137,37 @@ export async function getAccessToken(opts: {
     deploymentId,
   });
 
-  let response: Response;
-  try {
-    response = await fetch(opts.tokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
-        client_assertion: assertion,
-        scope: scopes.join(' '),
-      }),
-    });
-  } catch (error) {
+  /**
+   * Through the same helper the service calls use, for the same two reasons.
+   *
+   * A redirect is never followed: this POST carries the signed client assertion in its body,
+   * and a 307 or 308 resends that body to wherever the platform pointed. The assertion is a
+   * credential minted for one audience, and handing it to another host is the one mistake here
+   * that cannot be undone by fixing a setting afterwards.
+   *
+   * And it is bounded: a token request that never returns holds up a grade or a roster read,
+   * and in the worker it holds up the queue behind it.
+   */
+  const attempt = await authorisedFetch(opts.tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+      client_assertion: assertion,
+      scope: scopes.join(' '),
+    }),
+  });
+  if (!attempt.ok) {
     return {
       ok: false,
-      reason: 'unreachable',
-      detail: error instanceof Error ? error.message : 'network error',
+      // A platform that redirects its own token endpoint has misconfigured itself, which is a
+      // setup problem rather than an outage, so it is reported as a refusal with the detail.
+      reason: attempt.failure.kind === 'redirected' ? 'rejected' : 'unreachable',
+      detail: authorisedFetchFailureDetail(attempt.failure),
     };
   }
+  const response = attempt.response;
 
   if (!response.ok) {
     // The body usually says which of the many setup mistakes this is, and an administrator

@@ -19,7 +19,20 @@
 
 /** What a call failed on, when it did not reach the endpoint at all. */
 export type AuthorisedFetchFailure =
-  { kind: 'redirected'; from: string; to: string } | { kind: 'network'; detail: string };
+  | { kind: 'redirected'; from: string; to: string }
+  | { kind: 'network'; detail: string }
+  /** The platform accepted the connection and then said nothing for long enough to matter. */
+  | { kind: 'timeout'; ms: number };
+
+/**
+ * How long an LMS gets to answer.
+ *
+ * These calls happen while somebody is waiting: a grade being sent, a roster being read. A
+ * platform that accepts the connection and then stalls would otherwise hold the request open
+ * indefinitely, and in a worker that means the queue stops rather than the one grade failing.
+ * Ten seconds, the same bound automatic registration uses.
+ */
+export const LTI_REQUEST_TIMEOUT_MS = 10_000;
 
 export type AuthorisedFetchResult =
   { ok: true; response: Response } | { ok: false; failure: AuthorisedFetchFailure };
@@ -57,9 +70,30 @@ export function preferPlatformScheme(endpoint: string, reference: string): strin
   }
 }
 
+/**
+ * A page URL the platform handed back, if it is safe to follow.
+ *
+ * The `Link` header is the platform's to write, and a paged read carries a bearer token. A next
+ * page pointing somewhere else would send that token to whatever host the header named, so a
+ * page is only followed on the origin the read started from. Shared by both paged services:
+ * AGS had this and NRPS did not, which is exactly the kind of difference one copy prevents.
+ */
+export function samePageOrigin(candidate: string, origin: string): string | null {
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return url.origin === origin ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A message for the person reading it, not for the developer who wrote the call. */
 export function authorisedFetchFailureDetail(failure: AuthorisedFetchFailure): string {
   if (failure.kind === 'network') return failure.detail;
+  if (failure.kind === 'timeout') {
+    return `your LMS did not answer within ${Math.round(failure.ms / 1000)} seconds`;
+  }
   return (
     `your LMS redirected AFCT from ${failure.from} to ${failure.to}, which drops the ` +
     'credentials the request carries. The address your LMS advertises for this service is ' +
@@ -75,12 +109,22 @@ export function authorisedFetchFailureDetail(failure: AuthorisedFetchFailure): s
  */
 export async function authorisedFetch(
   url: string,
-  init: RequestInit & { headers: Record<string, string> },
+  init: RequestInit & { headers: Record<string, string>; timeoutMs?: number },
 ): Promise<AuthorisedFetchResult> {
+  const { timeoutMs = LTI_REQUEST_TIMEOUT_MS, ...request } = init;
   let response: Response;
   try {
-    response = await fetch(url, { ...init, redirect: 'manual' });
+    response = await fetch(url, {
+      ...request,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
   } catch (error) {
+    // A timeout is worth telling apart from a refused connection: one is a platform that is up
+    // and slow, the other is one that is not there, and they are fixed by different people.
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+      return { ok: false, failure: { kind: 'timeout', ms: timeoutMs } };
+    }
     return {
       ok: false,
       failure: {

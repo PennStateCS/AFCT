@@ -6,7 +6,7 @@ import { stateCookieName } from '@/lib/lti/login-init';
 import { findLaunch, parkIdToken } from '@/lib/lti/launch-transaction';
 import { issueSingleUseToken } from '@/lib/single-use-token';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { resolveLaunchTarget, enrolFromLaunch } from '@/lib/lti/course-link';
+import { peekLaunchTarget, resolveLaunchTarget, enrolFromLaunch } from '@/lib/lti/course-link';
 import { errMessage } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 import { publicUrl } from '@/lib/lti/public-url';
@@ -94,9 +94,10 @@ export async function POST(request: Request) {
     if (launch.ok && launch.launch.storageTarget) {
       const parked = await parkIdToken(launch.launch.id, idToken);
       if (parked) {
+        // Only the state travels. The frame to ask is on the launch row already, put there at
+        // login initiation by the platform, and the page reads it from there.
         const check = new URL(publicUrl('/lti/state-check', request));
         check.searchParams.set('state', state);
-        check.searchParams.set('target', launch.launch.storageTarget);
         return NextResponse.redirect(check, 303);
       }
     }
@@ -175,7 +176,9 @@ export async function completeLaunch(request: Request, idToken: string, state: s
        */
       let next: string | null = null;
       try {
-        const target = await resolveLaunchTarget({
+        // Read-only on purpose: nothing the LMS asserted about this administrator may be
+        // recorded until the password proves the account is theirs.
+        const target = await peekLaunchTarget({
           identity: verified.identity,
           userId: signIn.userId,
         });

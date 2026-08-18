@@ -136,13 +136,17 @@ describe('reading the roster', () => {
     expect(result.ok && result.members[0]).toMatchObject({ ltiUserId: 'lms-1', email: null });
   });
 
-  // Without an LMS id there is nothing to post a grade against, so the row is useless.
-  it('skips an entry with no LMS id', async () => {
+  /**
+   * Changed deliberately: this used to skip the entry and return the rest.
+   *
+   * A skipped member is indistinguishable from a member the LMS never sent, and the caller
+   * proposes dropping anybody it did not see. Refusing the read is recoverable; quietly
+   * returning a roster one student short is what marks that student as having left.
+   */
+  it('refuses the read when an entry has no LMS id, rather than dropping them quietly', async () => {
     platformServing([{ body: { members: [member({ user_id: undefined }), member()] } }]);
 
-    const result = await fetchIt();
-
-    expect(result.ok && result.members).toHaveLength(1);
+    expect(await fetchIt()).toMatchObject({ ok: false, reason: 'malformed' });
   });
 });
 
@@ -191,7 +195,7 @@ describe('a roster that cannot be read in full', () => {
         if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
         const n = Number(new URL(url).searchParams.get('p') ?? '0');
         return json(
-          { members: [{ user_id: `u-${n}`, email: `u${n}@example.test` }] },
+          { members: [member({ user_id: `u-${n}`, email: `u${n}@example.test` })] },
           { link: `<${MEMBERSHIPS_URL}?p=${n + 1}>; rel="next"` },
         );
       }),
@@ -207,7 +211,10 @@ describe('a roster that cannot be read in full', () => {
       'fetch',
       vi.fn(async (url: string) => {
         if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
-        return json({ members: [{ user_id: 'u-1' }] }, { link: `<${MEMBERSHIPS_URL}>; rel="next"` });
+        return json(
+          { members: [member({ user_id: 'u-1' })] },
+          { link: `<${MEMBERSHIPS_URL}>; rel="next"` },
+        );
       }),
     );
 
@@ -216,8 +223,8 @@ describe('a roster that cannot be read in full', () => {
 
   it('still returns a roster that ends on its own', async () => {
     platformServing([
-      { body: { members: [{ user_id: 'u-1' }] }, next: `${MEMBERSHIPS_URL}?p=2` },
-      { body: { members: [{ user_id: 'u-2' }] } },
+      { body: { members: [member({ user_id: 'u-1' })] }, next: `${MEMBERSHIPS_URL}?p=2` },
+      { body: { members: [member({ user_id: 'u-2' })] } },
     ]);
 
     const result = await fetchIt();
@@ -228,5 +235,130 @@ describe('a roster that cannot be read in full', () => {
 
   it('says what to do about it', () => {
     expect(nrpsFailureMessage('incomplete')).toContain('has not changed anything');
+  });
+});
+
+/**
+ * The roster read carries an OAuth bearer token for the LMS, and the `Link` header that says
+ * where the next page lives is the platform's to write. So where that header points is a
+ * security question, not a convenience.
+ */
+describe('where a next page may point', () => {
+  const servingNext = (next: string) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+        return json({ members: [member()] }, { link: `<${next}>; rel="next"` });
+      }),
+    );
+
+  it('follows another page on the same server', async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+        calls++;
+        return calls === 1
+          ? json({ members: [member()] }, { link: `<${MEMBERSHIPS_URL}?p=2>; rel="next"` })
+          : json({ members: [member({ user_id: 'lms-2' })] });
+      }),
+    );
+
+    const result = await fetchIt();
+
+    expect(result.ok && result.members.map((m) => m.ltiUserId)).toEqual(['lms-1', 'lms-2']);
+  });
+
+  it('refuses to carry the token to another host', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+      return json({ members: [member()] }, { link: '<https://evil.example/collect>; rel="next"' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await fetchIt()).toMatchObject({ ok: false, reason: 'rejected' });
+    // The point is not the refusal but that the other host was never called at all.
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('https://evil.example/collect');
+  });
+
+  it('refuses a next page that is not a URL', async () => {
+    servingNext('javascript:alert(1)');
+
+    expect(await fetchIt()).toMatchObject({ ok: false, reason: 'rejected' });
+  });
+
+  it('refuses to follow a redirect, which would hand the token on or lose it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === PLATFORM.tokenUrl) return json({ access_token: 'tok', expires_in: 3600 });
+        return new Response(null, {
+          status: 302,
+          headers: { location: 'https://elsewhere.example/members' },
+        });
+      }),
+    );
+
+    const result = await fetchIt();
+
+    expect(result).toMatchObject({ ok: false, reason: 'rejected' });
+    // Named, because "your LMS redirected us" is something an administrator can act on.
+    expect(result.ok === false && result.detail).toContain('elsewhere.example');
+  });
+});
+
+/**
+ * An answer AFCT cannot read must never look like a course with nobody in it. The caller diffs
+ * this against AFCT's roster and proposes dropping everyone it did not see, so "empty" and
+ * "unreadable" have to be different answers.
+ */
+describe('a membership container AFCT cannot read', () => {
+  const serving = (body: unknown) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url === PLATFORM.tokenUrl
+          ? json({ access_token: 'tok', expires_in: 3600 })
+          : json(body as Record<string, unknown>),
+      ),
+    );
+
+  it.each([
+    ['an object with no members', {}],
+    ['members that are not a list', { members: 'bad-data' }],
+    ['null', null],
+  ])('refuses %s rather than reading it as an empty roster', async (_label, body) => {
+    serving(body);
+
+    expect(await fetchIt()).toMatchObject({ ok: false, reason: 'malformed' });
+  });
+
+  it('still accepts a genuinely empty course', async () => {
+    // The difference that matters: the LMS said "nobody", which is a complete answer.
+    serving({ members: [] });
+
+    expect(await fetchIt()).toMatchObject({ ok: true, members: [] });
+  });
+
+  it('refuses a member whose roles are not all strings', async () => {
+    // Roles decide whether somebody is enrolled as faculty or as a student, so a list AFCT
+    // only partly understands is not one to tidy up. The launch validator is equally strict.
+    serving({ members: [member({ roles: ['...#Instructor', 123] })] });
+
+    expect(await fetchIt()).toMatchObject({ ok: false, reason: 'malformed' });
+  });
+
+  it('refuses a member with no roles at all', async () => {
+    serving({ members: [member({ roles: undefined })] });
+
+    expect(await fetchIt()).toMatchObject({ ok: false, reason: 'malformed' });
+  });
+
+  it('says what to do about it without saying the course is empty', () => {
+    const message = nrpsFailureMessage('malformed');
+    expect(message).toContain('could not read');
+    expect(message).toContain('nothing has been changed');
   });
 });
