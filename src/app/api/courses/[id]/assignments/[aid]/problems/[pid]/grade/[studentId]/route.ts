@@ -154,14 +154,24 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
       }
 
-      // The grade target must actually be enrolled in this course; never create a
-      // grade row for an arbitrary user id that isn't on the roster.
-      const enrolled = await prisma.roster.findFirst({
-        where: { courseId, userId: studentId },
-        select: { id: true },
+      /**
+       * The grade target must be a student on this course's roster.
+       *
+       * Being on the roster was not enough: it let a grade row be created for a faculty member
+       * or a TA, who have no work to grade and would then appear in a gradebook as if they did.
+       * Same predicate the extra-submission grants route uses, minus one deliberate difference:
+       * a **dropped** student may still be graded. Their submissions and grades survive a drop
+       * on purpose, and work handed in before somebody left still has to be markable.
+       */
+      const rosterEntry = await prisma.roster.findUnique({
+        where: { courseId_userId: { courseId, userId: studentId } },
+        select: { role: true },
       });
-      if (!enrolled) {
-        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
+      if (!rosterEntry || rosterEntry.role !== 'STUDENT') {
+        return NextResponse.json(
+          { error: 'Grades can only be recorded for students enrolled in this course.' },
+          { status: 404 },
+        );
       }
 
       const parsed = await readJson(req, GradeBody);

@@ -16,13 +16,16 @@ const canManageCourseMock = vi.hoisted(() => vi.fn());
 const canAccessCourseMock = vi.hoisted(() => vi.fn());
 const lockGroupSetMock = vi.hoisted(() => vi.fn());
 
+/** Flipped by the archived-course test; every other test runs against a live course. */
+const archivedMock = vi.hoisted(() => ({ current: false }));
+
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/permissions', () => ({
   canManageCourse: canManageCourseMock,
   canAccessCourse: canAccessCourseMock,
-  isCourseArchived: async () => false,
+  isCourseArchived: async () => archivedMock.current,
 }));
 vi.mock('@/lib/group-set-service', () => ({ lockGroupSetIfUsed: lockGroupSetMock }));
 
@@ -216,4 +219,18 @@ describe('POST group-grade', () => {
 
     expect(res.status).toBe(404);
   });
+});
+
+/**
+ * An archived course is read-only, and this writes a grade for every member of the group.
+ */
+it('refuses to grade a group when the course is archived', async () => {
+  authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+  canManageCourseMock.mockResolvedValue(true);
+  archivedMock.current = true;
+
+  const res = await post({ grade: 10 });
+
+  expect(res.status).toBe(409);
+  archivedMock.current = false;
 });
