@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 
 // ---- Hoisted mocks for every side-effecting dependency of the worker ----
 const prismaMock = vi.hoisted(() => ({
@@ -298,6 +299,41 @@ describe('evaluateSubmission', () => {
    * Rerunning an old attempt refreshes that attempt's own result, which is what staff asked
    * for, and leaves the standing grade where the newer submission put it.
    */
+  /**
+   * A rolled-back persistence transaction is a transient failure like any other: the row is
+   * still PROCESSING and still owned, so it goes back on the queue.
+   */
+  it('requeues the submission when persistence fails, rather than leaving it finished', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+    prismaMock.$transaction.mockRejectedValueOnce(new Error('database went away'));
+
+    await evaluateSubmission('sub-1', CLAIM);
+
+    expect(prismaMock.submission.updateMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        // Fenced on the claim, which the failed transaction left in place.
+        where: { id: 'sub-1', processingToken: CLAIM },
+        data: { status: 'PENDING', processingToken: null },
+      }),
+    );
+    expect(loggedActions()).toContain('SUBMISSION_ERROR');
+    expect(loggedActions()).not.toContain('SUBMISSION_AUTOGRADED');
+  });
+
+  it('names a serialization conflict as the reason, rather than burying it', async () => {
+    const conflict = Object.assign(new Error('could not serialize access'), { code: 'P2034' });
+    Object.setPrototypeOf(conflict, Prisma.PrismaClientKnownRequestError.prototype);
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+    prismaMock.$transaction.mockRejectedValueOnce(conflict);
+
+    await evaluateSubmission('sub-1', CLAIM);
+
+    const error = activityLogMock.mock.calls.find((call) => call[2]?.action === 'SUBMISSION_ERROR');
+    expect(error?.[2]?.metadata?.reason).toBe('serialization conflict');
+  });
+
   it('leaves the standing grade alone when a newer submission holds it', async () => {
     prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
     // What the authority check sees: a different, later submission for this student.
