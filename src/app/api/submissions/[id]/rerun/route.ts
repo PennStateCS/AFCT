@@ -47,6 +47,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         studentId: true,
         fileName: true,
         originalFileName: true,
+        status: true,
       },
     });
 
@@ -71,6 +72,27 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
     if (await isCourseArchived(submission.courseId)) {
       return NextResponse.json(
         { error: 'Course is archived and cannot be modified' },
+        { status: 409 },
+      );
+    }
+
+    /**
+     * A submission already on the queue is not rerun.
+     *
+     * It is about to be evaluated, or is being evaluated right now, so a rerun asks for
+     * something that is already happening. Worse, it looks like it did something: the row goes
+     * back to PENDING, the screen says it was queued, and the result that lands is the run
+     * nobody asked twice for. Enforced here rather than only on the button, because the button
+     * is not the only caller.
+     */
+    if (submission.status === 'PENDING' || submission.status === 'PROCESSING') {
+      return NextResponse.json(
+        {
+          error:
+            submission.status === 'PENDING'
+              ? 'This submission is already waiting to be graded.'
+              : 'This submission is being graded right now.',
+        },
         { status: 409 },
       );
     }
@@ -112,9 +134,12 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         feedback: null,
         correct: null,
         evaluationRaw: Prisma.DbNull,
-        // Fresh attempt budget, and fences any worker mid-processing this row (its
-        // claimed attempts value no longer matches, so its stale write no-ops).
+        // A fresh attempt budget, and the row is nobody's: clearing the token is what stops a
+        // worker that was mid-evaluation from writing its result over the rerun. `attempts` was
+        // never enough for that, because a rerun reset it and the next claim took it back to
+        // the same value the stale worker was holding.
         attempts: 0,
+        processingToken: null,
         updatedAt: new Date(),
       },
     });

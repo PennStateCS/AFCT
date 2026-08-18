@@ -125,9 +125,7 @@ describe('claim exclusivity', () => {
     // overwhelmingly likely to produce more than one winner.
     const sub = await newSubmission();
 
-    const results = await Promise.all(
-      Array.from({ length: 8 }, () => claimSubmission(sub.id)),
-    );
+    const results = await Promise.all(Array.from({ length: 8 }, () => claimSubmission(sub.id)));
 
     expect(results.filter(Boolean)).toHaveLength(1);
     const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
@@ -136,7 +134,7 @@ describe('claim exclusivity', () => {
 
   it('refuses to claim a row that is already PROCESSING', async () => {
     const sub = await newSubmission('PROCESSING', 1);
-    expect(await claimSubmission(sub.id)).toBe(false);
+    expect(await claimSubmission(sub.id)).toBeNull();
 
     const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
     expect(after.attempts).toBe(1); // untouched
@@ -147,35 +145,38 @@ describe('claim exclusivity', () => {
     // What reapStuckSubmissions does: hand the row back to the queue.
     await prisma.submission.update({ where: { id: sub.id }, data: { status: 'PENDING' } });
 
-    expect(await claimSubmission(sub.id)).toBe(true);
+    expect(await claimSubmission(sub.id)).toBeTruthy();
     const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
     expect(after.attempts).toBe(2);
   });
 
   it('does not claim a submission that no longer exists', async () => {
-    expect(await claimSubmission('missing-submission-id')).toBe(false);
+    expect(await claimSubmission('missing-submission-id')).toBeNull();
   });
 });
 
 describe('fencing token', () => {
   it('discards a stale write from a worker whose row was reaped and re-claimed', async () => {
-    // 1. Worker A claims (attempts 0 -> 1) and remembers its token.
+    // 1. Worker A claims and remembers its token.
     const sub = await newSubmission();
-    expect(await claimSubmission(sub.id)).toBe(true);
-    const workerAToken = (await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } }))
-      .attempts;
-    expect(workerAToken).toBe(1);
+    const workerA = await claimSubmission(sub.id);
+    expect(workerA).toBeTruthy();
 
-    // 2. A is presumed stuck: the row is reaped and re-claimed as attempt 2 by worker B.
-    await prisma.submission.update({ where: { id: sub.id }, data: { status: 'PENDING' } });
-    expect(await claimSubmission(sub.id)).toBe(true);
+    // 2. A is presumed stuck: the row is reaped and re-claimed by worker B.
+    await prisma.submission.update({
+      where: { id: sub.id },
+      data: { status: 'PENDING', processingToken: null },
+    });
+    const workerB = await claimSubmission(sub.id);
+    expect(workerB).toBeTruthy();
 
     // 3. Worker B finishes first and writes its verdict.
-    const bWrote = await writeIfStillOwned(sub.id, 2, { correct: true, feedback: 'from B' });
-    expect(bWrote).toBe(true);
+    expect(await writeIfStillOwned(sub.id, workerB, { correct: true, feedback: 'from B' })).toBe(
+      true,
+    );
 
     // 4. Worker A finally comes back with a stale result. It must affect zero rows.
-    const aWrote = await writeIfStillOwned(sub.id, workerAToken, {
+    const aWrote = await writeIfStillOwned(sub.id, workerA, {
       correct: false,
       feedback: 'from A (stale)',
     });
@@ -186,34 +187,96 @@ describe('fencing token', () => {
     expect(after.correct).toBe(true);
   });
 
+  /**
+   * The sequence the counter could not survive.
+   *
+   * A rerun set `attempts` back to 0 and the next claim took it to 1 again, which is exactly
+   * the value the worker from the previous run was holding. Its result then matched and
+   * overwrote the newer evaluation, and the gradebook took the older verdict.
+   */
+  it('discards a stale write after a rerun, where the old counter came back round', async () => {
+    const sub = await newSubmission();
+
+    // 1. Worker A claims it.
+    const workerA = await claimSubmission(sub.id);
+
+    // 2. Staff rerun it: back on the queue, fresh attempt budget, owned by nobody.
+    await prisma.submission.update({
+      where: { id: sub.id },
+      data: { status: 'PENDING', attempts: 0, processingToken: null, feedback: null },
+    });
+
+    // 3. Worker B claims the rerun. `attempts` is 1 again, as it was for A.
+    const workerB = await claimSubmission(sub.id);
+    const claimed = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(claimed.attempts).toBe(1);
+
+    // 4. Worker A finishes and tries to write.
+    const aWrote = await writeIfStillOwned(sub.id, workerA, {
+      correct: false,
+      feedback: 'from A (before the rerun)',
+    });
+
+    // 5. Refused, and 6. B still owns the row.
+    expect(aWrote).toBe(false);
+    expect(await writeIfStillOwned(sub.id, workerB, { correct: true, feedback: 'from B' })).toBe(
+      true,
+    );
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(after.feedback).toBe('from B');
+  });
+
+  it('stops a stale worker putting a finished row back on the queue', async () => {
+    // The failure path writes PENDING or FAILED, and those have to be fenced too: a stale
+    // worker resurrecting a row somebody else has finished is the same bug wearing a hat.
+    const sub = await newSubmission();
+    const workerA = await claimSubmission(sub.id);
+    await prisma.submission.update({
+      where: { id: sub.id },
+      data: { status: 'PENDING', processingToken: null },
+    });
+    const workerB = await claimSubmission(sub.id);
+    await writeIfStillOwned(sub.id, workerB, { status: 'COMPLETED', correct: true });
+
+    expect(await writeIfStillOwned(sub.id, workerA, { status: 'PENDING' })).toBe(false);
+    expect(await writeIfStillOwned(sub.id, workerA, { status: 'FAILED' })).toBe(false);
+
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
+    expect(after.status).toBe('COMPLETED');
+  });
+
   it('accepts a write from the worker that still owns the row', async () => {
     const sub = await newSubmission();
-    await claimSubmission(sub.id);
+    const token = await claimSubmission(sub.id);
 
-    expect(await writeIfStillOwned(sub.id, 1, { feedback: 'ok', correct: true })).toBe(true);
+    expect(await writeIfStillOwned(sub.id, token, { feedback: 'ok', correct: true })).toBe(true);
     const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
     expect(after.feedback).toBe('ok');
   });
 
-  it('writes unfenced when the claim token was never learned', async () => {
-    // The failure path passes null when it blew up before reading the row; there is no
-    // token to be stale relative to, so the write must still land.
+  it('refuses a write from a caller that never claimed the row', async () => {
+    // Changed deliberately: an unfenced write used to be allowed when no token was known.
+    // A worker that never got a claim has no business writing to the row, and the failure
+    // path that used to rely on it now fails before there is anything to write.
     const sub = await newSubmission('PROCESSING', 3);
 
-    expect(await writeIfStillOwned(sub.id, null, { status: 'PENDING' })).toBe(true);
+    expect(await writeIfStillOwned(sub.id, null, { status: 'PENDING' })).toBe(false);
     const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
-    expect(after.status).toBe('PENDING');
+    expect(after.status).toBe('PROCESSING');
   });
 
   it('does not let two stale workers both resurrect a finished row', async () => {
     const sub = await newSubmission();
-    await claimSubmission(sub.id); // attempts 1
-    await prisma.submission.update({ where: { id: sub.id }, data: { status: 'PENDING' } });
-    await claimSubmission(sub.id); // attempts 2, current owner
+    const stale = await claimSubmission(sub.id);
+    await prisma.submission.update({
+      where: { id: sub.id },
+      data: { status: 'PENDING', processingToken: null },
+    });
+    await claimSubmission(sub.id); // the current owner
 
     const [a, b] = await Promise.all([
-      writeIfStillOwned(sub.id, 1, { status: 'FAILED', feedback: 'stale A' }),
-      writeIfStillOwned(sub.id, 1, { status: 'FAILED', feedback: 'stale B' }),
+      writeIfStillOwned(sub.id, stale, { status: 'FAILED', feedback: 'stale A' }),
+      writeIfStillOwned(sub.id, stale, { status: 'FAILED', feedback: 'stale B' }),
     ]);
 
     expect(a).toBe(false);

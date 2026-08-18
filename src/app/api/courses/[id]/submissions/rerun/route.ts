@@ -26,14 +26,29 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 export const POST = withCourseAuth(
   async (req, ctx, { user, courseId }) => {
     try {
-      // Re-queue in a single statement instead of a per-row loop (which also ran a
-      // ~6-query audit-log call per submission — tens of thousands of round-trips on
-      // a large course). Reset attempts to 0 so a fresh evaluation budget applies and
-      // any worker mid-processing a row is fenced (its claimed attempts no longer
-      // match), so it can't write a stale result over the re-queued row.
+      /**
+       * Re-queue in a single statement instead of a per-row loop (which also ran a ~6-query
+       * audit-log call per submission — tens of thousands of round-trips on a large course).
+       *
+       * Submissions already on the queue are left alone: PENDING is where this would put them
+       * anyway, and a PROCESSING row is being evaluated right now, so re-queuing it produces a
+       * second run of the same work and a result nobody asked for. The single-submission rerun
+       * refuses those outright; here they are simply not part of the batch, because a
+       * course-wide rerun is a sweep rather than a request about one submission.
+       *
+       * Clearing `processingToken` is what fences a worker mid-evaluation: its write is
+       * conditioned on the token, so it now matches nothing. `attempts` never did that job
+       * properly, since resetting it let the next claim hand the same value back.
+       */
       const { count } = await prisma.submission.updateMany({
-        where: { courseId },
-        data: { status: 'PENDING', feedback: null, correct: null, attempts: 0 },
+        where: { courseId, status: { notIn: ['PENDING', 'PROCESSING'] } },
+        data: {
+          status: 'PENDING',
+          feedback: null,
+          correct: null,
+          attempts: 0,
+          processingToken: null,
+        },
       });
 
       // One batch-summary audit event for the whole-course rerun.

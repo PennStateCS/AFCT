@@ -33,6 +33,8 @@ const submissionRecord = {
   studentId: 'u2',
   fileName: 'sub.txt',
   originalFileName: 'sub.txt',
+  // Finished, which is the only state a rerun makes sense from.
+  status: 'COMPLETED',
 };
 
 beforeEach(() => {
@@ -109,6 +111,41 @@ describe('POST /api/submissions/[id]/rerun', () => {
     expect(prismaMock.submission.update).not.toHaveBeenCalled();
   });
 
+  /**
+   * A submission on the queue is not rerun.
+   *
+   * It is about to be graded, or is being graded right now, so a rerun asks for something
+   * already happening while looking like it did something new. Enforced here rather than only
+   * on the button, because the button is not the only caller.
+   */
+  it.each([
+    ['PENDING', 'already waiting'],
+    ['PROCESSING', 'being graded right now'],
+  ])('returns 409 for a submission that is %s', async (status, expected) => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.submission.findUnique.mockResolvedValue({ ...submissionRecord, status });
+
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain(expected);
+    // Nothing was touched, so the run in flight keeps its claim.
+    expect(prismaMock.submission.update).not.toHaveBeenCalled();
+  });
+
+  it('still reruns a submission that failed', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.submission.findUnique.mockResolvedValue({ ...submissionRecord, status: 'FAILED' });
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      problem: { fileName: 'answer.jff', maxStates: null, isDeterministic: null, type: 'RE' },
+    });
+    prismaMock.submission.update.mockResolvedValue({ ...submissionRecord, status: 'PENDING' });
+
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 's1' }) });
+
+    expect(res.status).toBe(202);
+  });
+
   it('queues the submission and returns 202', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.submission.findUnique.mockResolvedValue(submissionRecord);
@@ -134,6 +171,9 @@ describe('POST /api/submissions/[id]/rerun', () => {
           status: 'PENDING',
           feedback: null,
           correct: null,
+          // What actually fences a worker mid-evaluation. Resetting attempts does not: the
+          // next claim hands the same value back to the worker that was already holding it.
+          processingToken: null,
         }),
       }),
     );
