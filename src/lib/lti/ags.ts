@@ -8,6 +8,7 @@
 
 import { prisma } from '@/lib/prisma';
 import {
+  samePageOrigin,
   authorisedFetch,
   authorisedFetchFailureDetail,
   preferPlatformScheme,
@@ -155,23 +156,6 @@ export type LineItemLookup =
    * registration; a 503 or a dropped connection is worth retrying. Both must still fail closed.
    */
   | { status: 'error'; detail: string; httpStatus?: number };
-
-/**
- * A page URL the platform handed back, if it is safe to follow.
- *
- * The `Link` header is the platform's to write, and this request carries a bearer token. A next
- * page pointing somewhere else would send that token to whatever host the header named, so a
- * page is only followed on the origin the lookup started from.
- */
-function samePageOrigin(candidate: string, origin: string): string | null {
-  try {
-    const url = new URL(candidate);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    return url.origin === origin ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
 
 async function findLineItem(
   lineItemsUrl: string,

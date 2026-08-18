@@ -290,3 +290,61 @@ describe('when it cannot get one', () => {
     expect(result).toMatchObject({ ok: false, reason: 'rejected' });
   });
 });
+
+/**
+ * The request that carries the client assertion.
+ *
+ * That assertion is a credential AFCT signs for one audience, so where the POST goes is not the
+ * platform's to change mid-flight: a 307 or 308 resends the body, credential and all.
+ */
+describe('the token request itself', () => {
+  // These two care about the request, not the assertion, but a signing key still has to exist
+  // for one to be built at all.
+  beforeEach(async () => {
+    await createKeyPair();
+  });
+
+  it('refuses a redirect rather than resending the assertion elsewhere', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(null, { status: 307, headers: { location: 'https://evil.example/token' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getAccessToken({
+      platformId: nextPlatform(),
+      clientId: CLIENT_ID,
+      tokenUrl: TOKEN_URL,
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: 'rejected' });
+    expect(result.ok === false && result.detail).toContain('evil.example');
+    // One call: the redirect was reported, not followed.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not wait on a platform for ever', async () => {
+    // A token request runs while somebody waits for a grade, and in the worker the queue waits
+    // behind it, so an unbounded request is a stall rather than a slow answer.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init: RequestInit) => {
+        expect(init.signal).toBeInstanceOf(AbortSignal);
+        return Promise.resolve(
+          new Response(JSON.stringify({ access_token: 'tok', expires_in: 60 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }),
+    );
+
+    expect(
+      await getAccessToken({
+        platformId: nextPlatform(),
+        clientId: CLIENT_ID,
+        tokenUrl: TOKEN_URL,
+      }),
+    ).toMatchObject({ ok: true });
+  });
+});

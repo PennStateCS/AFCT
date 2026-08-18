@@ -54,7 +54,40 @@ export type LaunchTarget =
   /** The launch carried no course at all, so there is nothing to link. */
   | { status: 'no-context' };
 
-/** Where a launch should land, for somebody already resolved to an AFCT account. */
+/**
+ * Where a launch would land, changing nothing.
+ *
+ * Exists for the administrator pause. An administrator's first launch is held for a password
+ * before their LMS identity is attached, because an LMS asserting an administrator's email is
+ * exactly the claim that pause exists to doubt. Working out where they were headed is a
+ * courtesy AFCT does before asking, and it must be a read: {@link resolveLaunchTarget} records
+ * that this person is in this LMS course, which is the assertion not yet proved.
+ */
+export async function peekLaunchTarget(opts: {
+  identity: LaunchIdentity;
+  userId: string;
+}): Promise<LaunchTarget> {
+  const { identity, userId } = opts;
+  if (!identity.contextId) return { status: 'no-context' };
+
+  const link = await prisma.ltiContextLink.findUnique({
+    where: {
+      platformId_contextId: { platformId: identity.platformId, contextId: identity.contextId },
+    },
+    select: { courseId: true },
+  });
+  if (link) return { status: 'linked', courseId: link.courseId };
+
+  return (await canLinkCourses(userId)) ? { status: 'needs-link' } : { status: 'not-set-up' };
+}
+
+/**
+ * Where a launch should land, for somebody already resolved to an AFCT account.
+ *
+ * Unlike {@link peekLaunchTarget} this records what the launch asserted: the service endpoints
+ * the platform named this time, that this person is in this LMS course, and which gradebook
+ * column the link is bound to. Only for a launch that has finished establishing who somebody is.
+ */
 export async function resolveLaunchTarget(opts: {
   identity: LaunchIdentity;
   userId: string;

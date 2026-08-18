@@ -144,16 +144,33 @@ export async function fetchPlatformConfiguration(
     );
   }
 
+  /**
+   * Redirects are not followed, on either call.
+   *
+   * The https check above is worth nothing if the address can hand AFCT on to somewhere that
+   * would not have passed it, and the registration POST below carries the platform's own
+   * registration token, which must not be delivered to a host the administrator never saw. A
+   * platform that redirects its own well-known configuration has misconfigured itself, and
+   * saying so is more useful than quietly following it.
+   */
   let response: Response;
   try {
     response = await fetch(url, {
       headers: { Accept: 'application/json' },
+      redirect: 'manual',
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
     return fail(
       'configuration-unreachable',
       'AFCT could not reach your LMS to read its settings. Check that this AFCT server can reach it, then start the registration again.',
+    );
+  }
+
+  if (response.status >= 300 && response.status < 400) {
+    return fail(
+      'configuration-redirected',
+      `Your LMS redirected AFCT to ${response.headers.get('location') ?? 'somewhere it did not name'} when asked for its settings. Registration needs the address your LMS publishes, not one it forwards to.`,
     );
   }
 
@@ -317,6 +334,9 @@ export async function requestRegistration(opts: {
   try {
     response = await fetch(opts.config.registration_endpoint, {
       method: 'POST',
+      // Never followed: this request carries the platform's registration token, and a 307 or
+      // 308 would resend it, body and all, to whatever host the redirect named.
+      redirect: 'manual',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -331,6 +351,13 @@ export async function requestRegistration(opts: {
     return fail(
       'registration-unreachable',
       'AFCT could not reach your LMS to complete the registration. Check that this AFCT server can reach it, then start again.',
+    );
+  }
+
+  if (response.status >= 300 && response.status < 400) {
+    return fail(
+      'registration-redirected',
+      `Your LMS redirected the registration to ${response.headers.get('location') ?? 'somewhere it did not name'}. AFCT will not send your LMS's registration token to another address.`,
     );
   }
 

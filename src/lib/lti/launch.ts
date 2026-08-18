@@ -51,6 +51,8 @@ export type LaunchRefusal =
   | 'wrong-message-type'
   /** The deployment id in the token disagrees with the registration matched. */
   | 'deployment-mismatch'
+  /** The token names another party as the one it was issued for. */
+  | 'wrong-authorized-party'
   /** The platform sent no email, so AFCT cannot identify or create a person. */
   | 'no-email'
   /** A claim LTI Core requires is missing, so the launch is not one AFCT can trust. */
@@ -300,12 +302,19 @@ function readDeepLinkSettings(
     return { ok: false, reason: 'deep-link-settings' };
   }
 
-  // Declared a string, and it has to come back to the platform exactly as it arrived. A value of
-  // another type cannot be returned faithfully, and platforms reject a response whose `data`
-  // does not match, so sending the choice on and having it refused would be the worse outcome.
-  if (settings.data !== undefined && claimString(settings.data) === null) {
+  /**
+   * Declared a string, and it has to come back to the platform exactly as it arrived.
+   *
+   * A value of another type cannot be returned faithfully, and platforms reject a response
+   * whose `data` does not match, so sending the choice on and having it refused would be the
+   * worse outcome. An **empty** string is a legitimate value, though, and is kept as itself:
+   * "absent" and "supplied, and empty" are different things to return, and treating the second
+   * as malformed refused the whole launch over a value the platform is entitled to send.
+   */
+  if (settings.data !== undefined && typeof settings.data !== 'string') {
     return { ok: false, reason: 'deep-link-settings' };
   }
+  const data = typeof settings.data === 'string' ? settings.data : null;
 
   /**
    * Whether AFCT can answer at all, which is a separate question from whether the request was
@@ -321,7 +330,7 @@ function readDeepLinkSettings(
     ok: true,
     request: {
       returnUrl,
-      data: claimString(settings.data),
+      data,
       acceptMultiple: acceptMultiple.value,
       acceptTypes,
       acceptPresentationDocumentTargets: targets,
@@ -438,6 +447,23 @@ export async function validateLaunch(opts: {
   // the token's own word for this; this is the check that means something.
   if (claimString(payload[`${CLAIM}/deployment_id`]) !== platform.deploymentId) {
     return { ok: false, reason: 'deployment-mismatch' };
+  }
+
+  /**
+   * `azp`, when the platform sent one, has to name AFCT.
+   *
+   * `jwtVerify` above already proves AFCT's client id is *in* `aud`, which is the check that
+   * matters. `azp` answers a narrower question that a multi-audience token raises: which of
+   * those audiences the token was issued for. OpenID Connect says a client that sees an `azp`
+   * should check it is itself, and a token that names somebody else is one AFCT was allowed to
+   * see rather than one it was given.
+   *
+   * Absent `azp` is not an error here: it is required only when there are several audiences,
+   * and a token with one audience that AFCT has already matched needs nothing more.
+   */
+  const authorizedParty = claimString(payload.azp);
+  if (authorizedParty !== null && authorizedParty !== platform.clientId) {
+    return { ok: false, reason: 'wrong-authorized-party' };
   }
 
   const messageType = payload[`${CLAIM}/message_type`];
@@ -597,6 +623,8 @@ export function launchRefusalMessage(reason: LaunchRefusal): string {
       return 'Your LMS did not share an email address with AFCT, so you cannot be signed in. An administrator needs to allow AFCT to see email addresses in the LMS privacy settings.';
     case 'deployment-mismatch':
       return 'The launch came from a different deployment than the one registered. Check the deployment id in the registration.';
+    case 'wrong-authorized-party':
+      return 'Your LMS sent a launch that names a different application as the one it was issued for. Check that the client id in the registration is the one your LMS created for AFCT.';
     case 'missing-claims':
       return 'The launch was missing information LTI requires, so AFCT could not trust it. An administrator needs to check what the LMS is configured to send.';
     case 'deep-link-settings':

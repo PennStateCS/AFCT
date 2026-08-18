@@ -361,3 +361,63 @@ describe('naming a registration', () => {
     expect(registrationName(config)).toBe('lms.example.test');
   });
 });
+
+/**
+ * Redirects during registration.
+ *
+ * The https check on a platform's addresses is worth nothing if the address can hand AFCT on
+ * somewhere else, and the registration POST carries the platform's own registration token in a
+ * request whose body a 307 or 308 would resend to the new host.
+ */
+describe('when a platform redirects', () => {
+  const redirecting = (to: string) =>
+    vi.fn(async () => new Response(null, { status: 307, headers: { location: to } }));
+
+  it('refuses to follow a redirect on the settings read, naming where it went', async () => {
+    const fetchMock = redirecting('https://elsewhere.example/openid-configuration');
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchPlatformConfiguration(CONFIG_URL);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('configuration-redirected');
+    expect(result.message).toContain('elsewhere.example');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to carry the registration token to a redirected address', async () => {
+    const fetchMock = redirecting('https://evil.example/collect');
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await requestRegistration({
+      config: configuration() as never,
+      registrationToken: 'platform-token',
+      baseUrl: 'https://afct.example.test',
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('registration-redirected');
+    // Never delivered: one call, and the token went nowhere else.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for both without following anything', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify(configuration()), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchPlatformConfiguration(CONFIG_URL);
+
+    // The setting itself, since a passing test above proves only that a redirect was refused
+    // once it happened.
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.redirect).toBe('manual');
+  });
+});

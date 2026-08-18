@@ -30,12 +30,27 @@ const frame = (name: string) => ({
   },
 });
 
-/** Answer the last message of a subject, the way Canvas does: on `window`, with the same id. */
-const reply = (subject: string, extra: Record<string, unknown> = {}) => {
+const PLATFORM_ORIGIN = 'https://canvas.example.test';
+
+/**
+ * Answer the last message of a subject, the way a platform does: on `window`, with the same id,
+ * from the window that was addressed and from the platform's own origin.
+ *
+ * `origin` and `source` are part of the answer, not decoration: every page on the internet can
+ * post a message to this window, and an answer to `lti.get_data` becomes a value AFCT treats as
+ * the platform's.
+ */
+const reply = (
+  subject: string,
+  extra: Record<string, unknown> = {},
+  from: { origin?: string; source?: unknown } = {},
+) => {
   const last = [...posted].reverse().find((p) => p.message.subject === subject);
   window.dispatchEvent(
     new MessageEvent('message', {
       data: { subject: `${subject}.response`, message_id: last?.message.message_id, ...extra },
+      origin: from.origin ?? PLATFORM_ORIGIN,
+      source: (from.source ?? window.parent) as MessageEventSource,
     }),
   );
 };
@@ -61,7 +76,7 @@ describe('putData', () => {
       key: 'k',
       value: 'v',
       storageTarget: PARENT_TARGET,
-      platformOrigin: 'https://canvas.example.test',
+      platformOrigin: PLATFORM_ORIGIN,
     });
     await vi.waitFor(() => expect(posted.length).toBeGreaterThan(0));
     reply('lti.put_data', { key: 'k', value: 'v' });
@@ -134,7 +149,7 @@ describe('which frame is addressed', () => {
     void getData({
       key: 'k',
       storageTarget: 'post_message_forwarding',
-      platformOrigin: 'https://canvas.example.test',
+      platformOrigin: PLATFORM_ORIGIN,
     });
     await vi.waitFor(() => expect(posted.length).toBe(2));
 
@@ -149,5 +164,76 @@ describe('which frame is addressed', () => {
     await vi.waitFor(() => expect(posted.length).toBe(1));
 
     expect(posted[0]).toMatchObject({ via: 'parent', origin: '*' });
+  });
+});
+
+/**
+ * Who is allowed to answer.
+ *
+ * The outbound message has to keep a wildcard target for Canvas in some placements, but sending
+ * to anyone is not the same as believing anyone. Every page that frames AFCT sees the outbound
+ * message, id and all, so matching the id proves nothing about who replied. An accepted
+ * `lti.get_data` answer becomes the launch state AFCT checks a launch against.
+ */
+describe('which replies are believed', () => {
+  const ask = () =>
+    getData({ key: 'k', storageTarget: PARENT_TARGET, platformOrigin: PLATFORM_ORIGIN });
+
+  it('takes an answer from the platform', async () => {
+    const promise = ask();
+    await vi.waitFor(() => expect(posted.length).toBeGreaterThan(0));
+    reply('lti.get_data', { value: 'the-state' });
+
+    expect(await promise).toBe('the-state');
+  });
+
+  it('ignores an answer from another origin', async () => {
+    const promise = ask();
+    await vi.waitFor(() => expect(posted.length).toBeGreaterThan(0));
+    reply('lti.get_data', { value: 'forged' }, { origin: 'https://evil.example' });
+
+    // Nothing believed, so the exchange times out and the caller falls back to the cookie.
+    expect(await promise).toBeNull();
+  });
+
+  it('ignores an answer from a window it never spoke to', async () => {
+    const promise = ask();
+    await vi.waitFor(() => expect(posted.length).toBeGreaterThan(0));
+    reply('lti.get_data', { value: 'forged' }, { source: { postMessage: () => {} } });
+
+    expect(await promise).toBeNull();
+  });
+
+  it('still ignores an answer to a different message', async () => {
+    const promise = ask();
+    await vi.waitFor(() => expect(posted.length).toBeGreaterThan(0));
+    reply('lti.get_data', { value: 'forged', message_id: 'some-other-exchange' });
+
+    expect(await promise).toBeNull();
+  });
+
+  it('still ignores an answer about a different subject', async () => {
+    const promise = ask();
+    await vi.waitFor(() => expect(posted.length).toBeGreaterThan(0));
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { subject: 'lti.put_data.response', value: 'forged' },
+        origin: PLATFORM_ORIGIN,
+        source: window.parent as MessageEventSource,
+      }),
+    );
+
+    expect(await promise).toBeNull();
+  });
+
+  it('accepts an answer when the registration named no origin to check', async () => {
+    // Canvas compatibility: with no origin known there is nothing to compare, and refusing
+    // every answer would disable the fallback rather than secure it. The source check still
+    // applies.
+    const promise = getData({ key: 'k', storageTarget: PARENT_TARGET, platformOrigin: null });
+    await vi.waitFor(() => expect(posted.length).toBeGreaterThan(0));
+    reply('lti.get_data', { value: 'the-state' }, { origin: 'https://anything.example' });
+
+    expect(await promise).toBe('the-state');
   });
 });

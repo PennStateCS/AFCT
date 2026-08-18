@@ -135,6 +135,39 @@ describe('the signed response', () => {
     expect(payload['https://purl.imsglobal.org/spec/lti-dl/claim/data']).toBe('platform-state');
   });
 
+  /**
+   * "Unchanged" includes an empty string. A platform that sends `data: ""` and gets a response
+   * with no data claim has been answered with something other than what it sent, and platforms
+   * check this value.
+   */
+  it('returns an empty state as an empty state, not as no state', async () => {
+    await createKeyPair();
+    const result = await build({ data: '' });
+    if (!result.ok) return;
+
+    const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
+    const { payload } = await jwtVerify(result.jwt, keyset, {
+      issuer: PLATFORM.clientId,
+      audience: PLATFORM.issuer,
+    });
+
+    expect(payload).toHaveProperty('https://purl.imsglobal.org/spec/lti-dl/claim/data', '');
+  });
+
+  it('sends no data claim when the platform sent none', async () => {
+    await createKeyPair();
+    const result = await build({ data: null });
+    if (!result.ok) return;
+
+    const keyset = createLocalJWKSet({ keys: (await listPublicJwks()) as unknown as JWK[] });
+    const { payload } = await jwtVerify(result.jwt, keyset, {
+      issuer: PLATFORM.clientId,
+      audience: PLATFORM.issuer,
+    });
+
+    expect(payload).not.toHaveProperty('https://purl.imsglobal.org/spec/lti-dl/claim/data');
+  });
+
   it('says so when AFCT has no key to sign with', async () => {
     expect(await build()).toEqual({ ok: false, reason: 'no-signing-key' });
   });

@@ -123,7 +123,10 @@ export async function buildDeepLinkResponse(opts: {
     [`${CLAIM}/version`]: '1.3.0',
     [`${CLAIM}/deployment_id`]: opts.platform.deploymentId,
     [`${DL_CLAIM}/content_items`]: contentItems,
-    ...(opts.data ? { [`${DL_CLAIM}/data`]: opts.data } : {}),
+    // Included whenever the platform supplied one, empty string included: DL 2.0 says the
+    // value comes back unchanged, and an empty string that arrives and does not return is a
+    // change.
+    ...(opts.data !== null && opts.data !== undefined ? { [`${DL_CLAIM}/data`]: opts.data } : {}),
   })
     .setProtectedHeader({ alg: LTI_SIGNING_ALG, kid: signing.kid })
     // Reversed from a launch: AFCT is the issuer here and the platform is the audience.

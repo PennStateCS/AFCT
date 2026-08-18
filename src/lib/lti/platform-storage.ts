@@ -82,6 +82,16 @@ async function exchange(
   const destinations = targets(storageTarget, platformOrigin);
   if (destinations.length === 0) return null;
 
+  /**
+   * The windows this exchange actually spoke to.
+   *
+   * A reply is only accepted from one of them. Every message is delivered on `window`, so any
+   * page that has framed AFCT can answer, and an answer to `lti.get_data` is a value AFCT then
+   * treats as the platform's. Matching the id is not enough on its own: the outbound message
+   * carries that id to the parent, so whoever is embedding has already seen it.
+   */
+  const spokenTo = destinations.map((d) => d.frame).filter((frame): frame is Window => !!frame);
+
   return new Promise((resolve) => {
     let settled = false;
     const finish = (result: StorageMessage | null) => {
@@ -103,6 +113,17 @@ async function exchange(
               }
             })()
           : (event.data as StorageMessage | null);
+      /**
+       * Only the platform answers for the platform.
+       *
+       * Checked before the message is read at all. The outbound target has to stay `*` for
+       * Canvas in some placements, but sending to anyone is not the same as believing anyone:
+       * an inbound origin can be checked whenever the registration told us what it should be.
+       */
+      if (platformOrigin && event.origin !== platformOrigin) return;
+      // And from a window this exchange addressed, not merely from something on the page.
+      if (event.source && !spokenTo.includes(event.source as Window)) return;
+
       if (!data || typeof data.subject !== 'string') return;
       if (data.subject !== `${message.subject}.response`) return;
       if (data.message_id !== message.message_id) return;
