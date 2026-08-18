@@ -4,6 +4,9 @@ const prismaMock = vi.hoisted(() => ({
   submission: { findMany: vi.fn(), count: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
+  // Group overrides name a group; a submission names a student, so the members are read once
+  // for the whole page rather than per row.
+  groupMembership: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -40,6 +43,7 @@ beforeEach(() => {
   prismaMock.submission.findMany.mockResolvedValue([]);
   prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
   prismaMock.assignment.findMany.mockResolvedValue([]);
+  prismaMock.groupMembership.findMany.mockResolvedValue([]);
 });
 
 describe('getAutograderSubmissionsPage', () => {
@@ -144,9 +148,31 @@ describe('getAutograderSubmissionsPage', () => {
   });
 
   describe('timing filter', () => {
+    /**
+     * The filter reads the assignments in scope twice: once for the ids, once with their
+     * overrides. The second read is what carries the per-student dates.
+     */
+    const withAssignments = (
+      rows: { id: string; dueDate: Date }[],
+      overrides: Record<string, unknown>[] = [],
+    ) => {
+      prismaMock.assignment.findMany
+        .mockResolvedValueOnce(rows.map((r) => ({ id: r.id })))
+        .mockResolvedValueOnce(
+          rows.map((r) => ({
+            id: r.id,
+            dueDate: r.dueDate,
+            unlockAt: null,
+            allowLateSubmissions: false,
+            lateCutoff: null,
+            overrides: overrides.filter((o) => o.assignmentId === r.id),
+          })),
+        );
+    };
+
     it('emits one clause per assignment for Late', async () => {
       const due = new Date('2026-01-01T00:00:00.000Z');
-      prismaMock.assignment.findMany.mockResolvedValue([
+      withAssignments([
         { id: 'a1', dueDate: due },
         { id: 'a2', dueDate: due },
       ]);
@@ -161,9 +187,81 @@ describe('getAutograderSubmissionsPage', () => {
       });
     });
 
+    /**
+     * A student with an extension is judged against their own date. Showing them as late for
+     * submitting inside an extension the instructor gave them is a report of something that
+     * did not happen, and the filter has to agree with the chip.
+     */
+    it('judges a student with an extension against their own date', async () => {
+      const base = new Date('2026-01-01T00:00:00.000Z');
+      const extended = new Date('2026-01-02T23:59:00.000Z');
+      withAssignments(
+        [{ id: 'a1', dueDate: base }],
+        [
+          {
+            assignmentId: 'a1',
+            targetType: 'STUDENT',
+            userId: 's1',
+            groupId: null,
+            unlockAt: null,
+            dueDate: extended,
+            lateCutoff: null,
+            allowLateSubmissions: null,
+          },
+        ],
+      );
+
+      await getAutograderSubmissionsPage({ skip: 0, take: 10, timing: ['late'] });
+
+      expect(whereClauses()).toContainEqual({
+        OR: [
+          // Everybody else against the assignment's own date...
+          { assignmentId: 'a1', studentId: { notIn: ['s1'] }, submittedAt: { gt: base } },
+          // ...and the student with the extension against theirs.
+          { assignmentId: 'a1', studentId: 's1', submittedAt: { gt: extended } },
+        ],
+      });
+    });
+
+    it('expands a group extension to the group members', async () => {
+      const base = new Date('2026-01-01T00:00:00.000Z');
+      const extended = new Date('2026-01-03T23:59:00.000Z');
+      withAssignments(
+        [{ id: 'a1', dueDate: base }],
+        [
+          {
+            assignmentId: 'a1',
+            targetType: 'GROUP',
+            userId: null,
+            groupId: 'g1',
+            unlockAt: null,
+            dueDate: extended,
+            lateCutoff: null,
+            allowLateSubmissions: null,
+          },
+        ],
+      );
+      prismaMock.groupMembership.findMany.mockResolvedValue([
+        { groupId: 'g1', userId: 's1' },
+        { groupId: 'g1', userId: 's2' },
+      ]);
+
+      await getAutograderSubmissionsPage({ skip: 0, take: 10, timing: ['ontime'] });
+
+      // A submission names a student and an override names a group, so the members are what
+      // the clause can be written against.
+      expect(whereClauses()).toContainEqual({
+        OR: [
+          { assignmentId: 'a1', studentId: { notIn: ['s1', 's2'] }, submittedAt: { lte: base } },
+          { assignmentId: 'a1', studentId: 's1', submittedAt: { lte: extended } },
+          { assignmentId: 'a1', studentId: 's2', submittedAt: { lte: extended } },
+        ],
+      });
+    });
+
     it('compares the other way for On time', async () => {
       const due = new Date('2026-01-01T00:00:00.000Z');
-      prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1', dueDate: due }]);
+      withAssignments([{ id: 'a1', dueDate: due }]);
 
       await getAutograderSubmissionsPage({ skip: 0, take: 10, timing: ['ontime'] });
 
@@ -308,5 +406,109 @@ describe('getAutograderSubmissionsPage', () => {
 
       expect(prismaMock.assignmentProblemGrade.findMany).not.toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * What the row carries as its due date.
+ *
+ * The client draws the Late / On time chip from this field, so the student's own date has to be
+ * the one that travels: an extension the instructor gave has to show as on time here, or the
+ * page reports something that did not happen.
+ */
+describe('the due date on a row', () => {
+  const submissionRow = (over: Record<string, unknown> = {}) => ({ ...row, ...over });
+
+  const pageWith = (
+    rows: Record<string, unknown>[],
+    assignment: Record<string, unknown>,
+    memberships: { groupId: string; userId: string }[] = [],
+  ) => {
+    prismaMock.submission.findMany.mockResolvedValue(rows);
+    prismaMock.submission.count.mockResolvedValue(rows.length);
+    prismaMock.assignment.findMany.mockResolvedValue([assignment]);
+    prismaMock.groupMembership.findMany.mockResolvedValue(memberships);
+  };
+
+  const baseAssignment = (overrides: Record<string, unknown>[] = []) => ({
+    id: 'a1',
+    dueDate: new Date('2026-01-01T23:59:00.000Z'),
+    unlockAt: null,
+    allowLateSubmissions: false,
+    lateCutoff: null,
+    overrides,
+  });
+
+  it('is the assignment date when the student has no override', async () => {
+    pageWith([submissionRow()], baseAssignment());
+
+    const { rows } = await getAutograderSubmissionsPage({ skip: 0, take: 10 });
+
+    expect(rows[0]?.dueDate).toBe('2026-01-01T23:59:00.000Z');
+  });
+
+  it("is the student's own date when they have an extension", async () => {
+    pageWith(
+      [submissionRow({ studentId: 's1' })],
+      baseAssignment([
+        {
+          targetType: 'STUDENT',
+          userId: 's1',
+          groupId: null,
+          unlockAt: null,
+          dueDate: new Date('2026-01-02T23:59:00.000Z'),
+          lateCutoff: null,
+          allowLateSubmissions: null,
+        },
+      ]),
+    );
+
+    const { rows } = await getAutograderSubmissionsPage({ skip: 0, take: 10 });
+
+    expect(rows[0]?.dueDate).toBe('2026-01-02T23:59:00.000Z');
+  });
+
+  it('is the group date for a member of a group with an extension', async () => {
+    pageWith(
+      [submissionRow({ studentId: 's2' })],
+      baseAssignment([
+        {
+          targetType: 'GROUP',
+          userId: null,
+          groupId: 'g1',
+          unlockAt: null,
+          dueDate: new Date('2026-01-03T23:59:00.000Z'),
+          lateCutoff: null,
+          allowLateSubmissions: null,
+        },
+      ]),
+      [{ groupId: 'g1', userId: 's2' }],
+    );
+
+    const { rows } = await getAutograderSubmissionsPage({ skip: 0, take: 10 });
+
+    expect(rows[0]?.dueDate).toBe('2026-01-03T23:59:00.000Z');
+  });
+
+  it('leaves a student outside the group on the assignment date', async () => {
+    pageWith(
+      [submissionRow({ studentId: 'somebody-else' })],
+      baseAssignment([
+        {
+          targetType: 'GROUP',
+          userId: null,
+          groupId: 'g1',
+          unlockAt: null,
+          dueDate: new Date('2026-01-03T23:59:00.000Z'),
+          lateCutoff: null,
+          allowLateSubmissions: null,
+        },
+      ]),
+      [{ groupId: 'g1', userId: 's2' }],
+    );
+
+    const { rows } = await getAutograderSubmissionsPage({ skip: 0, take: 10 });
+
+    expect(rows[0]?.dueDate).toBe('2026-01-01T23:59:00.000Z');
   });
 });

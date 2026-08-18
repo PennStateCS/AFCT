@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 
 /**
  * One page of the Autograder page's table, with search, filters and sort applied in the
@@ -21,12 +22,7 @@ export type AutograderStatus = 'pending' | 'processing' | 'failed' | 'correct' |
 
 /** Search scope: 'all' spans every field listed in `SEARCH_CLAUSES`. */
 export type AutograderSearchField =
-  | 'all'
-  | 'student'
-  | 'course'
-  | 'assignment'
-  | 'problem'
-  | 'file';
+  'all' | 'student' | 'course' | 'assignment' | 'problem' | 'file';
 
 export type AutograderSubmissionRow = {
   id: string;
@@ -40,7 +36,11 @@ export type AutograderSubmissionRow = {
   courseName: string;
   assignmentTitle: string;
   problemTitle: string;
-  /** The assignment's due date, so the client can render Timing without loading assignments. */
+  /**
+   * The due date this student is held to, so the client can render Timing without loading
+   * assignments or knowing about overrides. A student with an extension carries their own date
+   * here, not the assignment's.
+   */
   dueDate: string;
   /** Decides which viewer the file opens in (JFLAP vs the RE/CFG editors). */
   problemType: string | null;
@@ -182,9 +182,116 @@ function scopeWhere(params: AutograderPageParams): Prisma.SubmissionWhereInput |
  * scope, which is why it is only built when the admin has actually picked one side: with
  * both values selected (or neither) the filter says nothing and we skip the query entirely.
  *
- * This matches what the page has always shown, which compares against the assignment's base
- * due date and does not apply per-student overrides.
+ * The date compared against is the one that applies to that student: a student with an
+ * extension who submits inside it is on time, and the filter and the chip have to agree with
+ * the rule submission acceptance uses or the page reports something that did not happen.
  */
+/**
+ * The due date each student is actually held to, for a set of assignments.
+ *
+ * The page shows Late or On time, and a student with an extension who submits inside it is on
+ * time: showing them as late is a report of something that did not happen. Overrides are the
+ * exception rather than the rule, so they are loaded whole for the assignments in scope and
+ * the effective date is worked out from them, rather than asking per submission.
+ *
+ * Group overrides are expanded to their members here, because a submission names a student and
+ * an override names a group.
+ */
+async function effectiveDueDates(assignmentIds: string[]): Promise<{
+  /** Assignment id to the date that applies when nobody has an override. */
+  base: Map<string, Date>;
+  /** `assignmentId\u0000studentId` to the date that applies to them instead. */
+  overridden: Map<string, Date>;
+  /** Assignment id to the students whose date is not the base one. */
+  overriddenStudents: Map<string, string[]>;
+}> {
+  const base = new Map<string, Date>();
+  const overridden = new Map<string, Date>();
+  const overriddenStudents = new Map<string, string[]>();
+  if (assignmentIds.length === 0) return { base, overridden, overriddenStudents };
+
+  const assignments = await prisma.assignment.findMany({
+    where: { id: { in: assignmentIds } },
+    select: {
+      id: true,
+      dueDate: true,
+      unlockAt: true,
+      allowLateSubmissions: true,
+      lateCutoff: true,
+      overrides: {
+        select: {
+          targetType: true,
+          userId: true,
+          groupId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+        },
+      },
+    },
+  });
+
+  // One lookup for every group named by an override, rather than one per override.
+  const groupIds = [
+    ...new Set(
+      assignments.flatMap((a) =>
+        a.overrides.flatMap((o) => (o.targetType === 'GROUP' && o.groupId ? [o.groupId] : [])),
+      ),
+    ),
+  ];
+  const memberships = groupIds.length
+    ? await prisma.groupMembership.findMany({
+        where: { groupId: { in: groupIds } },
+        select: { groupId: true, userId: true },
+      })
+    : [];
+  const membersOf = new Map<string, string[]>();
+  for (const m of memberships) {
+    membersOf.set(m.groupId, [...(membersOf.get(m.groupId) ?? []), m.userId]);
+  }
+
+  for (const assignment of assignments) {
+    const fields = {
+      dueDate: assignment.dueDate,
+      unlockAt: assignment.unlockAt,
+      allowLateSubmissions: assignment.allowLateSubmissions,
+      lateCutoff: assignment.lateCutoff,
+    };
+    // Through the same resolver the submit path uses, so "on time here" and "accepted there"
+    // cannot drift apart: it also clamps a due date that sits before the unlock.
+    base.set(assignment.id, effectiveDeadline(fields, [], '__nobody__', []).dueDate);
+
+    for (const override of assignment.overrides) {
+      const students =
+        override.targetType === 'STUDENT'
+          ? override.userId
+            ? [override.userId]
+            : []
+          : override.groupId
+            ? (membersOf.get(override.groupId) ?? [])
+            : [];
+      for (const studentId of students) {
+        const key = `${assignment.id}\u0000${studentId}`;
+        // A student is never targeted more than one way for an assignment, and where the data
+        // says otherwise the resolver's own precedence decides.
+        if (overridden.has(key)) continue;
+        const groupIdsForStudent = override.groupId ? [override.groupId] : [];
+        overridden.set(
+          key,
+          effectiveDeadline(fields, [override], studentId, groupIdsForStudent).dueDate,
+        );
+        overriddenStudents.set(assignment.id, [
+          ...(overriddenStudents.get(assignment.id) ?? []),
+          studentId,
+        ]);
+      }
+    }
+  }
+
+  return { base, overridden, overriddenStudents };
+}
+
 async function timingWhere(
   params: AutograderPageParams,
 ): Promise<Prisma.SubmissionWhereInput | null> {
@@ -202,18 +309,41 @@ async function timingWhere(
         ? { courseId: { in: params.courseIds } }
         : {};
 
-  const assignments = await prisma.assignment.findMany({
-    where,
-    select: { id: true, dueDate: true },
-  });
+  const assignments = await prisma.assignment.findMany({ where, select: { id: true } });
   if (assignments.length === 0) return { id: { in: [] } };
 
-  return {
-    OR: assignments.map((a) => ({
-      assignmentId: a.id,
-      submittedAt: late ? { gt: a.dueDate } : { lte: a.dueDate },
-    })),
-  };
+  const { base, overridden, overriddenStudents } = await effectiveDueDates(
+    assignments.map((a) => a.id),
+  );
+
+  /**
+   * One clause per assignment for everybody on the base date, plus one per student whose date
+   * is different. Bounded by the number of overrides, which are exceptions, rather than by the
+   * number of submissions.
+   */
+  const clauses: Prisma.SubmissionWhereInput[] = [];
+  for (const assignment of assignments) {
+    const exceptions = overriddenStudents.get(assignment.id) ?? [];
+    const baseDue = base.get(assignment.id);
+    if (baseDue) {
+      clauses.push({
+        assignmentId: assignment.id,
+        ...(exceptions.length ? { studentId: { notIn: exceptions } } : {}),
+        submittedAt: late ? { gt: baseDue } : { lte: baseDue },
+      });
+    }
+    for (const studentId of exceptions) {
+      const due = overridden.get(`${assignment.id}\u0000${studentId}`);
+      if (!due) continue;
+      clauses.push({
+        assignmentId: assignment.id,
+        studentId,
+        submittedAt: late ? { gt: due } : { lte: due },
+      });
+    }
+  }
+
+  return { OR: clauses };
 }
 
 /**
@@ -286,6 +416,20 @@ export async function getAutograderSubmissionsPage(
     }
   }
 
+  /**
+   * The date each row is judged against, which is the student's own.
+   *
+   * Two queries for the page rather than one per row: the assignments on the page are few, and
+   * their overrides are exceptions. The client draws the Late / On time chip from this field,
+   * so sending the effective date is what makes the chip right without the client learning
+   * about overrides at all.
+   */
+  const dueDates = await effectiveDueDates([...new Set(submissions.map((s) => s.assignmentId))]);
+  const dueFor = (assignmentId: string, studentId: string, fallback: Date) =>
+    dueDates.overridden.get(`${assignmentId}\u0000${studentId}`) ??
+    dueDates.base.get(assignmentId) ??
+    fallback;
+
   const rows = submissions.map((s) => ({
     id: s.id,
     studentId: s.studentId,
@@ -298,7 +442,11 @@ export async function getAutograderSubmissionsPage(
     courseName: s.course.name,
     assignmentTitle: s.assignmentProblem.assignment.title,
     problemTitle: s.assignmentProblem.problem.title,
-    dueDate: s.assignmentProblem.assignment.dueDate.toISOString(),
+    dueDate: dueFor(
+      s.assignmentId,
+      s.studentId,
+      s.assignmentProblem.assignment.dueDate,
+    ).toISOString(),
     problemType: s.assignmentProblem.problem.type,
     submittedAt: s.submittedAt.toISOString(),
     status: s.status,
