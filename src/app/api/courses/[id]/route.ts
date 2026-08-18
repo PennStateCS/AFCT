@@ -18,6 +18,7 @@ import { toEmptyStringNotation } from '@/lib/empty-string-notation';
 import { CourseUpdateApiSchema } from '@/schemas/course';
 import { countByAssignment, type OptionalCountDelegate } from '@/lib/course-aggregates';
 import { diffFacultyRoster } from '@/lib/course-faculty';
+import { courseLmsLinks } from '@/lib/lti/links';
 import { serializeAssignment, type AssignmentRow } from '@/lib/course-serialize';
 
 /**
@@ -267,6 +268,11 @@ export const GET = withCourseAuth(
       // Viewer's role, from the roster lookup above (viewerIsAdmin/isStaff too).
       const viewerRole: string | null = viewerRoster?.role ?? null;
 
+      // Which LMS courses open this one, for the header badge. Staff only: how the course is
+      // wired to an LMS is course administration, and a student already reaches AFCT through
+      // whichever route they were given.
+      const lmsLinks = isStaff ? await courseLmsLinks(course.id) : [];
+
       const response = {
         id: course.id,
         name: course.name,
@@ -297,6 +303,7 @@ export const GET = withCourseAuth(
           : assignmentRows.length,
         problemTotal: isStaff ? (courseData._count?.problems ?? problemRows.length) : 0,
         rosterTotal: courseData._count?.roster ?? rosterRows.length,
+        lmsLinks,
         viewerRole,
         viewerIsAdmin,
       };

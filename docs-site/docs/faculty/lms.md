@@ -66,7 +66,13 @@ Some LMSs let you pick the AFCT assignment while adding the link, so students la
 
 **An assignment can only be linked once per LMS course.** Two links to the same work would give your gradebook two columns for it, and the grades would disagree about which is real.
 
-The course has to be linked first, and you have to be the one who runs it. These links need to open in a new tab as well, so check that setting on the assignment or module item once it has been added. You pick one assignment at a time, even in an LMS that would let you select several at once.
+## Seeing what is already in your LMS
+
+A course that an LMS opens carries an **In Canvas** badge (or whichever LMS it is) beside its name, and so does each assignment that has been added to an LMS course. Hover it to see which LMS course.
+
+The assignment's **Settings** tab lists the same thing in full, with the LMS course, who added it and when, and a **Remove** beside each one. Removing tells AFCT the assignment is no longer in that LMS course, which is what lets you add it again. **It changes nothing in your LMS:** the link there goes on opening the assignment until you delete it yourself. Use it when a link was never added successfully, or when you deleted it in the LMS and want to add it back.
+
+The course has to be linked first, and you have to be the one who runs it. These links need to open in a new tab as well, so check that setting on the assignment or module item once it has been added. In Moodle that setting belongs to the AFCT tool rather than the link, so ask your administrator if AFCT opens inside the page. You pick one assignment at a time, even in an LMS that would let you select several at once.
 
 Not every spot in an LMS accepts this kind of link. If you add AFCT somewhere that only takes a page or a file, AFCT tells you so instead of quietly doing nothing, and the message says what to do about it. The fix is normally to add AFCT somewhere that takes an external tool link, or to ask your administrator to look at how the AFCT placement is set up.
 

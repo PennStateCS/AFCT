@@ -30,6 +30,12 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblem: {
     findMany: vi.fn(),
   },
+  // The header badge asks which LMS courses open this one. Mocked here as well as everywhere
+  // else the payload is read: a missing delegate makes the whole route 500, which reads as an
+  // unrelated failure.
+  ltiContextLink: {
+    findMany: vi.fn(),
+  },
   systemSettings: {
     findUnique: vi.fn(),
   },
@@ -63,6 +69,7 @@ beforeEach(() => {
   authMock.mockResolvedValue(null);
   // Default: the course is not archived, so the wrapper's archive freeze is a no-op.
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  prismaMock.ltiContextLink.findMany.mockResolvedValue([]);
   canArchiveMock.mockResolvedValue({ canArchive: true, reason: '' });
   canUnpublishMock.mockResolvedValue({ canUnpublish: true, reason: '' });
   toDateTimeMock.mockImplementation((val: string) => new Date(val));
@@ -150,6 +157,51 @@ describe('GET /api/courses/[id]', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.viewerRole).toBe('STUDENT');
+  });
+
+  it('tells staff which LMS courses open this one, and a student nothing', async () => {
+    const course = {
+      id: 'course-1',
+      name: 'C1',
+      code: 'CS1',
+      semester: 'Fall 2026',
+      credits: 3,
+      startDate: new Date('2026-08-25T13:00:00.000Z'),
+      endDate: new Date('2026-12-15T22:00:00.000Z'),
+      isPublished: true,
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    };
+    prismaMock.course.findUnique.mockResolvedValue(course);
+    prismaMock.ltiContextLink.findMany.mockResolvedValue([
+      { contextTitle: 'CMPSC 464 F26', platform: { name: 'Canvas', issuer: 'https://c.test' } },
+    ]);
+
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    const staffBody = await (
+      await GET(new Request('http://localhost/api/courses/1'), {
+        params: Promise.resolve({ id: 'course-1' }),
+      })
+    ).json();
+
+    expect(staffBody.lmsLinks).toEqual([{ platform: 'Canvas', context: 'CMPSC 464 F26' }]);
+
+    // How a course is wired to an LMS is course administration, so the same payload says
+    // nothing about it to a student, whatever the links are.
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    const studentBody = await (
+      await GET(new Request('http://localhost/api/courses/1'), {
+        params: Promise.resolve({ id: 'course-1' }),
+      })
+    ).json();
+
+    expect(studentBody.lmsLinks).toEqual([]);
   });
 
   it('restricts a student view to published assignments and omits the problem bank', async () => {

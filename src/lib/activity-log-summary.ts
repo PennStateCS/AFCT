@@ -238,6 +238,15 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       return assignment ? `linked to ${assignment}` : null;
     }
 
+    case 'LTI_DEEP_LINK_REMOVED': {
+      // Names the LMS as well as the assignment: the same assignment can be linked in more
+      // than one LMS course, so "unlinked X" alone would not say which link went.
+      const assignment = str(metadata, 'assignmentTitle');
+      const platform = str(metadata, 'platform');
+      if (assignment && platform) return `${assignment} is no longer marked as in ${platform}`;
+      return assignment ? `${assignment} is no longer marked as in an LMS` : null;
+    }
+
     case 'IDENTITY_LINK_DENIED':
       return str(metadata, 'reason');
 

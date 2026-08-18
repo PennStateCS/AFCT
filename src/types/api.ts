@@ -1212,6 +1212,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/assignments/{aid}/lti-links/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a record that this assignment is in an LMS course
+         * @description Forget that an assignment was added to an LMS course.   This changes nothing in the LMS and cannot: the link there carries the assignment id as a  custom parameter, so it goes on opening the same assignment whether or not this record  exists. All the record does is stop the picker offering that assignment again, which is what  makes removing it necessary. If the LMS never accepted the response, or somebody deleted the  activity afterwards, AFCT is left believing an assignment is linked when nothing opens it,  and there was no way to say otherwise.   Deleting the LMS activity is the other half of the job and belongs to whoever runs the LMS  course, so the screen says so rather than implying this did it.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/lti-links/[linkId]/route.ts)
+         */
+        delete: operations["deleteCoursesByIdAssignmentsByAidLtiLinksByLinkId"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/courses/{id}/assignments/{aid}/lti-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * LMS links that open this assignment
+         * @description Which LMS courses open this assignment.   Staff only, and course-scoped: the assignment has to belong to the course in the path, so a  link cannot be read by asking a course you run about somebody else's assignment.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/lti-links/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidLtiLinks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/assignments/{aid}/overrides/{oid}": {
         parameters: {
             query?: never;
@@ -6525,6 +6569,112 @@ export interface operations {
             };
             /** @description Server error. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCoursesByIdAssignmentsByAidLtiLinksByLinkId: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                linkId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such link on an assignment in this course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The course is archived. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidLtiLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The LMS courses this assignment has been added to. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such assignment in this course. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
