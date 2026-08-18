@@ -1,4 +1,5 @@
 import NextAuth from 'next-auth';
+import type { NextAuthConfig } from 'next-auth';
 import { headers } from 'next/headers';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -22,7 +23,14 @@ import type { Adapter } from 'next-auth/adapters';
  * the provider on takes effect without a restart, and an install that never configures one
  * simply has no such provider.
  */
-export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
+/**
+ * The config NextAuth asks for on every request.
+ *
+ * Exported so the parts of it that are decisions rather than wiring can be tested: whether a
+ * framed launch gets the widened cookies is one, and it is the join between two pieces that are
+ * each tested on their own and would agree with each other whether or not they were connected.
+ */
+export async function buildAuthConfig(): Promise<NextAuthConfig> {
   const oidc = await getOidcConfig();
   /**
    * Widen the sign-in cookies only for a request that is inside an LMS frame.
@@ -240,7 +248,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
     },
     secret: requireAuthSecret(),
   };
-});
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth(buildAuthConfig);
+
 
 /**
  * Whether this request carries the framed-launch marker.
