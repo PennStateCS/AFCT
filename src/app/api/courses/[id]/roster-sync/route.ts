@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth';
 import { readJson } from '@/lib/api/request';
 import { apiError } from '@/lib/api/http';
 import { canManageCourse } from '@/lib/permissions';
-import { fetchMembership, nrpsFailureMessage } from '@/lib/lti/nrps';
+import { fetchMembership, nrpsFailureMessage, type Member } from '@/lib/lti/nrps';
 import { diffRoster } from '@/lib/lti/roster-diff';
 import { applyRosterChanges } from '@/lib/lti/roster-apply';
 
@@ -23,37 +23,56 @@ async function gate(courseId: string) {
     return { ok: false as const, response: apiError(403, 'Forbidden') };
   }
 
-  const link = await prisma.ltiContextLink.findFirst({
+  /**
+   * Every LMS course that opens this one, not one of them.
+   *
+   * Cross-listed sections are separate courses in an LMS and all of them open the same AFCT
+   * course, which the Settings tab lists and supports. Reading one and applying it would mark
+   * everybody in the others as dropped, so the roster is the union of them all.
+   */
+  const links = await prisma.ltiContextLink.findMany({
     where: { courseId },
     include: { platform: { select: { id: true, clientId: true, tokenUrl: true, issuer: true } } },
+    orderBy: { createdAt: 'asc' },
   });
-  if (!link)
+  if (links.length === 0)
     return {
       ok: false as const,
       response: apiError(404, 'This course is not connected to an LMS.'),
     };
 
-  return { ok: true as const, link, userId: session.user.id };
+  return { ok: true as const, links, userId: session.user.id };
 }
 
 /** Read the LMS roster and work out what applying it would do. */
 async function preview(
   courseId: string,
-  link: NonNullable<Awaited<ReturnType<typeof gate>>['link']>,
+  links: NonNullable<Awaited<ReturnType<typeof gate>>['links']>,
 ) {
-  const membership = await fetchMembership({
-    platform: link.platform,
-    membershipsUrl: link.membershipsUrl,
-  });
-  if (!membership.ok) {
-    return { ok: false as const, message: nrpsFailureMessage(membership.reason) };
+  const sources: { issuer: string; contextLinkId: string; members: Member[] }[] = [];
+
+  for (const link of links) {
+    const membership = await fetchMembership({
+      platform: link.platform,
+      membershipsUrl: link.membershipsUrl,
+    });
+    /**
+     * One unreadable LMS course fails the whole sync.
+     *
+     * A partial union is indistinguishable from a smaller roster, and the difference decides
+     * who gets marked dropped. Refusing is recoverable; applying half a roster is not.
+     */
+    if (!membership.ok) {
+      return { ok: false as const, message: nrpsFailureMessage(membership.reason) };
+    }
+    sources.push({
+      issuer: link.platform.issuer,
+      contextLinkId: link.id,
+      members: membership.members,
+    });
   }
 
-  const diff = await diffRoster({
-    courseId,
-    issuer: link.platform.issuer,
-    members: membership.members,
-  });
+  const diff = await diffRoster({ courseId, sources });
   return { ok: true as const, diff };
 }
 
@@ -71,7 +90,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const allowed = await gate(id);
   if (!allowed.ok) return allowed.response;
 
-  const result = await preview(id, allowed.link);
+  const result = await preview(id, allowed.links);
   if (!result.ok) return apiError(502, result.message);
 
   return NextResponse.json(result.diff);
@@ -104,16 +123,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = await readJson(request, ApplySchema);
   if (!body.ok) return body.response;
 
-  const result = await preview(id, allowed.link);
+  const result = await preview(id, allowed.links);
   if (!result.ok) return apiError(502, result.message);
 
   const applied = await applyRosterChanges({
     courseId: id,
-    issuer: allowed.link.platform.issuer,
     changes: result.diff.changes,
     actorUserId: allowed.userId,
     context: request,
-    contextLinkId: allowed.link.id,
   });
 
   return NextResponse.json(applied);

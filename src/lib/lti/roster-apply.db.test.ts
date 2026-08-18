@@ -14,6 +14,10 @@ import type { Member } from './nrps';
 
 const ISSUER = 'https://canvas.example.test';
 const COURSE = 'c-apply';
+const PLATFORM = 'ltip-apply';
+const CONTEXT_LINK = 'cl-apply';
+const SOURCE = { issuer: ISSUER, contextLinkId: CONTEXT_LINK };
+
 const CONTEXT = { ipAddress: '10.0.0.1', userAgent: 'test' };
 const ids = { actor: 'u-apply-actor', student: 'u-apply-student', existing: 'u-apply-existing' };
 const R = 'http://purl.imsglobal.org/vocab/lis/v2/membership';
@@ -30,6 +34,10 @@ const member = (over: Partial<Member> = {}): Member => ({
 
 async function destroyFixtures() {
   await prisma.activityLog.deleteMany({ where: { courseId: COURSE } });
+  await prisma.ltiContextMember.deleteMany({ where: { contextLinkId: CONTEXT_LINK } });
+  await prisma.ltiContextLink.deleteMany({ where: { platformId: PLATFORM } });
+  await prisma.ltiPlatform.deleteMany({ where: { id: PLATFORM } });
+
   await prisma.linkedIdentity.deleteMany({ where: { issuer: ISSUER } });
   await prisma.roster.deleteMany({ where: { courseId: COURSE } });
   await prisma.course.deleteMany({ where: { id: COURSE } });
@@ -58,6 +66,21 @@ beforeEach(async () => {
       endDate: new Date('2026-12-18T00:00:00Z'),
     },
   });
+  await prisma.ltiPlatform.create({
+    data: {
+      id: PLATFORM,
+      name: 'Canvas',
+      issuer: ISSUER,
+      clientId: 'client-1',
+      deploymentId: '1',
+      authLoginUrl: `${ISSUER}/auth`,
+      tokenUrl: `${ISSUER}/token`,
+      keysetUrl: `${ISSUER}/jwks`,
+    },
+  });
+  await prisma.ltiContextLink.create({
+    data: { id: CONTEXT_LINK, platformId: PLATFORM, contextId: 'ctx-1', courseId: COURSE },
+  });
 });
 
 afterAll(async () => {
@@ -67,10 +90,12 @@ afterAll(async () => {
 
 /** Diff then apply, the way the screen will. */
 async function sync(members: Member[]) {
-  const { changes } = await diffRoster({ courseId: COURSE, issuer: ISSUER, members });
+  const { changes } = await diffRoster({
+    courseId: COURSE,
+    sources: [{ ...SOURCE, members }],
+  });
   return applyRosterChanges({
     courseId: COURSE,
-    issuer: ISSUER,
     changes,
     actorUserId: ids.actor,
     context: CONTEXT,
@@ -171,7 +196,6 @@ describe('what it refuses to decide', () => {
 
     await applyRosterChanges({
       courseId: COURSE,
-      issuer: ISSUER,
       // A stale change: it names a different account than the one that now owns this id.
       changes: [
         {
@@ -179,6 +203,7 @@ describe('what it refuses to decide', () => {
           userId: ids.existing,
           name: 'Someone else',
           ltiUserId: 'lms-shared',
+          source: SOURCE,
         },
       ],
       actorUserId: ids.actor,

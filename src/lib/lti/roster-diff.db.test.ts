@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { diffRoster } from './roster-diff';
 import type { Member } from './nrps';
@@ -13,6 +13,9 @@ import type { Member } from './nrps';
 
 const ISSUER = 'https://canvas.example.test';
 const COURSE = 'c-diff';
+const CONTEXT_LINK = 'cl-diff';
+const SOURCE = { issuer: ISSUER, contextLinkId: CONTEXT_LINK };
+
 const ids = {
   student: 'u-diff-student',
   dropped: 'u-diff-dropped',
@@ -77,7 +80,8 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const diff = (members: Member[]) => diffRoster({ courseId: COURSE, issuer: ISSUER, members });
+const diff = (members: Member[]) =>
+  diffRoster({ courseId: COURSE, sources: [{ ...SOURCE, members }] });
 
 const linkIdentity = (userId: string, subject: string) =>
   prisma.linkedIdentity.create({
@@ -209,5 +213,98 @@ describe('roles', () => {
     expect(result.changes).toContainEqual(
       expect.objectContaining({ kind: 'add', role: 'FACULTY' }),
     );
+  });
+});
+
+/**
+ * A course opened by two LMS courses at once, which the Settings tab supports and cross-listed
+ * sections produce. Reading one section and applying it used to mark the other section's
+ * students as dropped, because the sync picked whichever connection came back first.
+ */
+describe('a course connected to more than one LMS course', () => {
+  const SECOND_PLATFORM = 'ltip-diff-2';
+  const SECOND_LINK = 'cl-diff-2';
+  const SECOND_ISSUER = 'https://moodle.example.test';
+  const secondSource = { issuer: SECOND_ISSUER, contextLinkId: SECOND_LINK };
+
+  beforeEach(async () => {
+    await prisma.ltiPlatform.create({
+      data: {
+        id: SECOND_PLATFORM,
+        name: 'Moodle',
+        issuer: SECOND_ISSUER,
+        clientId: 'client-2',
+        deploymentId: '1',
+        authLoginUrl: `${SECOND_ISSUER}/auth`,
+        tokenUrl: `${SECOND_ISSUER}/token`,
+        keysetUrl: `${SECOND_ISSUER}/jwks`,
+      },
+    });
+    await prisma.ltiContextLink.create({
+      data: { id: SECOND_LINK, platformId: SECOND_PLATFORM, contextId: 'ctx-2', courseId: COURSE },
+    });
+  });
+
+  afterEach(async () => {
+    await prisma.ltiContextLink.deleteMany({ where: { platformId: SECOND_PLATFORM } });
+    await prisma.ltiPlatform.deleteMany({ where: { id: SECOND_PLATFORM } });
+    await prisma.linkedIdentity.deleteMany({ where: { issuer: SECOND_ISSUER } });
+  });
+
+  it('takes the roster as the union of them, dropping nobody who is in the other', async () => {
+    // Already enrolled in AFCT by the shared fixture, and listed only by the second LMS course.
+    await linkIdentity(ids.student, 'lms-second');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-first', email: 'first@example.test' })] },
+        {
+          ...secondSource,
+          members: [member({ ltiUserId: 'lms-second', email: 'student@example.test' })],
+        },
+      ],
+    });
+
+    // The one the first LMS course does not list is not dropped: the second one has them.
+    expect(result.changes.filter((c) => c.kind === 'drop')).toHaveLength(0);
+    expect(result.changes.filter((c) => c.kind === 'add')).toHaveLength(1);
+  });
+
+  it('remembers which LMS course each person came from', async () => {
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-a', email: 'a@example.test' })] },
+        { ...secondSource, members: [member({ ltiUserId: 'lms-b', email: 'b@example.test' })] },
+      ],
+    });
+
+    // Applying an identity against the wrong platform is how a grade reaches the wrong
+    // gradebook, so the source travels with the change rather than being assumed.
+    const adds = result.changes.filter((c) => c.kind === 'add');
+    expect(adds.map((c) => (c.kind === 'add' ? c.source.contextLinkId : null)).sort()).toEqual([
+      CONTEXT_LINK,
+      SECOND_LINK,
+    ]);
+  });
+
+  it('matches an identity to the platform that issued it, not merely to the subject', async () => {
+    // The same opaque subject from two platforms is two different people.
+    await linkIdentity(ids.student, 'shared-subject');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        {
+          ...secondSource,
+          members: [member({ ltiUserId: 'shared-subject', email: 'someone@example.test' })],
+        },
+      ],
+    });
+
+    // Not treated as the AFCT student who holds that subject on the *other* platform.
+    expect(result.changes.some((c) => c.kind === 'add')).toBe(true);
+    expect(result.changes.some((c) => c.kind === 'drop' && c.userId === ids.student)).toBe(true);
   });
 });

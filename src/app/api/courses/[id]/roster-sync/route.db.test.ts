@@ -239,3 +239,89 @@ describe('who may do this', () => {
     expect((await call('GET')).status).toBe(404);
   });
 });
+
+/**
+ * A course opened by two LMS courses at once, which the Settings tab lists and cross-listed
+ * sections produce. The route used to read whichever connection came back first, so applying a
+ * sync marked every student in the other section as dropped.
+ */
+describe('a course connected to more than one LMS course', () => {
+  const SECOND = 'ltip-sync-route-2';
+  const SECOND_ISSUER = 'https://moodle.example.test';
+
+  const secondLearner = {
+    user_id: 'lms-2',
+    email: 'second@example.test',
+    given_name: 'Grace',
+    family_name: 'Hopper',
+    roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
+    status: 'Active',
+  };
+
+  /** Each LMS course answers with its own roster, so a read of only one is visible. */
+  const bothLmsCourses = () =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/token')) return json({ access_token: 'tok', expires_in: 3600 });
+        return url.startsWith(SECOND_ISSUER)
+          ? json({ members: [secondLearner] })
+          : json({ members: [learner] });
+      }),
+    );
+
+  beforeEach(async () => {
+    await prisma.ltiPlatform.create({
+      data: {
+        id: SECOND,
+        name: 'Moodle',
+        issuer: SECOND_ISSUER,
+        clientId: 'client-2',
+        deploymentId: '1',
+        authLoginUrl: `${SECOND_ISSUER}/auth`,
+        tokenUrl: `${SECOND_ISSUER}/token`,
+        keysetUrl: `${SECOND_ISSUER}/jwks`,
+      },
+    });
+    await prisma.ltiContextLink.create({
+      data: {
+        platformId: SECOND,
+        contextId: 'ctx-2',
+        courseId: COURSE,
+        membershipsUrl: `${SECOND_ISSUER}/contexts/2/memberships`,
+      },
+    });
+  });
+
+  afterEach(async () => {
+    await prisma.ltiContextLink.deleteMany({ where: { platformId: SECOND } });
+    await prisma.linkedIdentity.deleteMany({ where: { issuer: SECOND_ISSUER } });
+    await prisma.ltiPlatform.deleteMany({ where: { id: SECOND } });
+  });
+
+  it('reads every connection, not whichever one came back first', async () => {
+    bothLmsCourses();
+
+    const body = await (await call('GET')).json();
+
+    // Both sections' students are offered, which only happens if both were read.
+    const added = body.changes.filter((c: { kind: string }) => c.kind === 'add');
+    expect(added).toHaveLength(2);
+  });
+
+  it('refuses the whole sync when one of them cannot be read', async () => {
+    // Half a union is indistinguishable from a smaller roster, and the difference is who gets
+    // marked dropped.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.endsWith('/token')) return json({ access_token: 'tok', expires_in: 3600 });
+        return url.startsWith(SECOND_ISSUER)
+          ? new Response('nope', { status: 500 })
+          : json({ members: [learner] });
+      }),
+    );
+
+    expect((await call('GET')).status).toBe(502);
+  });
+});
