@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import CourseClient from './CourseClient';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { courseLmsLinks } from '@/lib/lti/links';
 import { getCourseRole } from '@/lib/permissions';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 
@@ -112,6 +113,10 @@ export default async function AdminCoursePage({ params }: Props) {
     assignmentTotal: course._count.assignments,
     problemTotal: course._count.problems,
     rosterTotal: course._count.roster,
+    // Which LMS courses open this one, for the header badge. Read here as well as in the API,
+    // because this page renders from its own query and never calls it. Staff only: how a course
+    // is wired to an LMS is course administration.
+    lmsLinks: isStaff ? await courseLmsLinks(course.id) : [],
     viewerRole,
     viewerIsAdmin,
   };

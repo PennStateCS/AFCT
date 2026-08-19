@@ -9,6 +9,11 @@ const prismaMock = vi.hoisted(() => ({
   course: {
     findFirst: vi.fn(),
   },
+  // The header badge asks which LMS courses open this one. Mocked here because the page reads
+  // it directly: a missing delegate would throw and look like an unrelated failure.
+  ltiContextLink: {
+    findMany: vi.fn(),
+  },
 }));
 const authMock = vi.hoisted(() => vi.fn());
 const getCourseRoleMock = vi.hoisted(() => vi.fn());
@@ -32,7 +37,14 @@ import AdminCoursePage from './page';
 
 // AdminCoursePage returns `<CourseClient initialCourse={...} />` without rendering
 // it, so read the payload straight off the element props.
-type CourseClientEl = { props: { initialCourse: { staff: Array<Record<string, unknown>> } } };
+type CourseClientEl = {
+  props: {
+    initialCourse: {
+      staff: Array<Record<string, unknown>>;
+      lmsLinks?: Array<{ platform: string; context: string | null }>;
+    };
+  };
+};
 const initialCourseOf = (el: unknown) => (el as CourseClientEl).props.initialCourse;
 
 const faculty = {
@@ -66,6 +78,7 @@ const courseWith = (roster: unknown[]) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  prismaMock.ltiContextLink.findMany.mockResolvedValue([]);
 });
 
 describe('AdminCoursePage access control', () => {
@@ -133,5 +146,37 @@ describe('AdminCoursePage access control', () => {
     expect(staff).toContainEqual(
       expect.objectContaining({ firstName: 'Fay', courseRole: 'FACULTY' }),
     );
+  });
+});
+
+/**
+ * The LMS badge on the course header reads this. The page renders from its own query rather
+ * than the courses API, which is exactly how the badge came to be missing on it once.
+ */
+describe('what the page tells the header about an LMS', () => {
+  it('names the LMS courses that open this one, for staff', async () => {
+    authMock.mockResolvedValue({ user: { id: 'fac', isAdmin: false } });
+    getCourseRoleMock.mockResolvedValue('FACULTY');
+    prismaMock.course.findFirst.mockResolvedValue(courseWith([faculty]));
+    prismaMock.ltiContextLink.findMany.mockResolvedValue([
+      { contextTitle: 'MDL 101', platform: { name: 'Moodle', issuer: 'https://m.test' } },
+    ]);
+
+    const el = await AdminCoursePage({ params: Promise.resolve({ id: 'c1' }) });
+
+    expect(initialCourseOf(el).lmsLinks).toEqual([{ platform: 'Moodle', context: 'MDL 101' }]);
+  });
+
+  it('tells a student nothing about it', async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu2', isAdmin: false } });
+    getCourseRoleMock.mockResolvedValue('STUDENT');
+    prismaMock.course.findFirst.mockResolvedValue(courseWith([faculty, student]));
+    prismaMock.ltiContextLink.findMany.mockResolvedValue([
+      { contextTitle: 'MDL 101', platform: { name: 'Moodle', issuer: 'https://m.test' } },
+    ]);
+
+    const el = await AdminCoursePage({ params: Promise.resolve({ id: 'c1' }) });
+
+    expect(initialCourseOf(el).lmsLinks).toEqual([]);
   });
 });

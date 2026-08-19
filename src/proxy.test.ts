@@ -9,7 +9,11 @@ vi.mock('@/lib/prisma', () => ({ prisma: { ltiPlatform: { findMany: findManyMock
 
 import { proxy, resetFrameAncestorCache } from './proxy';
 
-const req = (path: string) => new NextRequest(new URL(`http://localhost${path}`));
+const req = (path: string, headers?: Record<string, string>) =>
+  new NextRequest(new URL(`http://localhost${path}`), { headers });
+
+/** Every `Set-Cookie` on a response, which can carry several. */
+const setCookies = (res: Response): string[] => res.headers.getSetCookie();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -59,6 +63,67 @@ describe('proxy', () => {
       expect(getTokenMock).toHaveBeenCalledWith(expect.objectContaining({ secureCookie: false }));
     });
   });
+  /**
+   * The marker that says AFCT is inside somebody's iframe.
+   *
+   * It has to outlive the launch, because the fetches that follow cannot tell anyone they are
+   * framed. That is also how it once locked somebody out: it stayed after the launch, ordinary
+   * sign-ins were written with framed attributes, and the browser kept both cookies. A page
+   * opened in its own tab is where the marker stops applying.
+   */
+  describe('remembering and forgetting an LMS frame', () => {
+    const marker = 'afct.lti-frame=1';
+
+    it('marks a launch that a browser says is loading into a frame', async () => {
+      const res = await proxy(req('/api/lti/launch', { 'sec-fetch-dest': 'iframe' }));
+
+      expect(setCookies(res).join(' ')).toContain('afct.lti-frame=1');
+    });
+
+    it('forgets the frame when a page is opened at the top level', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1', isAdmin: false });
+
+      const res = await proxy(
+        req('/dashboard', { 'sec-fetch-dest': 'document', cookie: marker }),
+      );
+
+      const cleared = setCookies(res).find((c) => c.startsWith('afct.lti-frame='));
+      expect(cleared).toContain('Max-Age=0');
+    });
+
+    it('leaves the marker alone on the fetches a framed page makes', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1', isAdmin: false });
+
+      const res = await proxy(req('/api/courses', { 'sec-fetch-dest': 'empty', cookie: marker }));
+
+      expect(setCookies(res).some((c) => c.startsWith('afct.lti-frame='))).toBe(false);
+    });
+
+    /**
+     * A framed session's cookies have names of their own, so the edge has to be told which to
+     * read. Reading the ordinary name would find nothing and bounce somebody who is signed in.
+     */
+    it('reads the framed session cookie for a framed request', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1', isAdmin: false });
+
+      await proxy(req('/api/courses', { 'sec-fetch-dest': 'empty', cookie: marker }));
+
+      expect(getTokenMock).toHaveBeenCalledWith(
+        expect.objectContaining({ cookieName: '__Host-afct.framed.session-token' }),
+      );
+    });
+
+    it('reads the ordinary one once the frame has been forgotten', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1', isAdmin: false });
+
+      await proxy(req('/dashboard', { 'sec-fetch-dest': 'document', cookie: marker }));
+
+      expect(getTokenMock).toHaveBeenCalledWith(
+        expect.not.objectContaining({ cookieName: expect.anything() }),
+      );
+    });
+  });
+
   describe('/api/admin/*', () => {
     it('403s a positively-confirmed non-admin', async () => {
       getTokenMock.mockResolvedValue({ isAdmin: false });
