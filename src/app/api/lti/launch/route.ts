@@ -287,18 +287,13 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
   const target = await resolveLaunchTarget({ identity, userId });
 
   if (target.status === 'linked') {
-    const { role } = await enrolFromLaunch({
-      courseId: target.courseId,
-      userId,
-      roles: identity.roles,
-    });
-
     /**
-     * What the launch is actually opening, read after the enrolment so the answer covers a
-     * course that changed while nobody was looking.
+     * What the launch is opening, read **before** anybody is enrolled in it.
      *
-     * A link outlives the course it points at. Deleting a course does not delete the link, and
-     * following one into a course that is gone lands on a page that cannot explain itself.
+     * A link outlives the course it points at: deleting a course does not delete the link, and
+     * following an old one used to write a roster row into a deleted course and only then
+     * decide not to open it. Nothing else undid that row, so a course nobody could reach
+     * quietly gained members.
      */
     const course = await prisma.course.findUnique({
       where: { id: target.courseId },
@@ -307,6 +302,18 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
     if (!course || course.deletedAt) {
       return dashboardWithNotice('course-missing', identity.contextTitle);
     }
+
+    /**
+     * Enrolment happens once the course is known to be real. A course deleted between these
+     * two statements still enrols somebody: that race is bounded (the roster row is soft and
+     * the course is already unreachable) and closing it means a transaction around a launch
+     * that has other reasons to fail, which costs more than it saves.
+     */
+    const { role } = await enrolFromLaunch({
+      courseId: target.courseId,
+      userId,
+      roles: identity.roles,
+    });
 
     /**
      * An unpublished course is staff-only, and a student sent to it sees a page saying so and

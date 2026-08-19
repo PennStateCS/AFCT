@@ -189,17 +189,18 @@ export default function StudentAssignmentPage({
    *
    * The assignment and its context are fetched separately and fail together, so a student who
    * followed a link to something they cannot open was told twice and pushed to the dashboard
-   * twice. One cause, one message.
+   * twice. One cause, one message, whatever the cause was.
    */
   const reportedFailure = useRef(false);
 
   const reportLoadFailure = useCallback(
     (error: unknown, context: string) => {
+      // Every page-level failure, not only the ones that navigate: two reads failing with a 500
+      // produced the same "could not load" message twice, which reads as two faults.
+      if (reportedFailure.current) return;
+      reportedFailure.current = true;
+
       const status = error instanceof HttpError ? error.status : undefined;
-      if (status === 404 || status === 403) {
-        if (reportedFailure.current) return;
-        reportedFailure.current = true;
-      }
       if (status === 404) {
         showToast.error(
           'This assignment is not available. It may have been removed, or you may not have access to it.',

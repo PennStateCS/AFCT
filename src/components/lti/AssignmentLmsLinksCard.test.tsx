@@ -28,15 +28,22 @@ const link: AssignmentLmsLink = {
   addedBy: 'Ada Lovelace',
 };
 
-function show(links: AssignmentLmsLink[], onRemoved = vi.fn(), archived = false) {
+function show(
+  links: AssignmentLmsLink[],
+  onRemoved = vi.fn(),
+  archived = false,
+  extra?: { failed?: boolean; onRetry?: () => void },
+) {
   render(
     <AssignmentLmsLinksCard
       courseId="c-1"
       assignmentId="a-1"
       links={links}
       loading={false}
+      failed={extra?.failed}
       courseIsArchived={archived}
       onRemoved={onRemoved}
+      onRetry={extra?.onRetry}
     />,
   );
   return onRemoved;
@@ -113,5 +120,36 @@ describe('an assignment an LMS opens', () => {
     show([link], vi.fn(), true);
 
     expect(screen.getByRole('button', { name: 'Remove' })).toBeDisabled();
+  });
+});
+
+/**
+ * A read that failed is not a read that found nothing.
+ *
+ * Saying "not added to your LMS" because a request 500'd invites somebody to add a second link
+ * for work that already has one, which is two gradebook columns and two disagreeing grades.
+ */
+describe('when the links cannot be read', () => {
+  it('says so, and does not claim the assignment is absent from the LMS', () => {
+    show([], vi.fn(), false, { failed: true });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not check/i);
+    expect(screen.queryByText(/has not been added to a course in your LMS/)).not.toBeInTheDocument();
+  });
+
+  it('offers a retry', async () => {
+    const onRetry = vi.fn();
+    show([], vi.fn(), false, { failed: true, onRetry });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('still says plainly when the answer really is none', () => {
+    show([]);
+
+    expect(screen.getByText(/has not been added to a course in your LMS/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

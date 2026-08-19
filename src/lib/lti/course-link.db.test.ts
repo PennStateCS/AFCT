@@ -374,6 +374,42 @@ describe('enrolling from a launch', () => {
 
     expect(result).toEqual({ created: true, role: 'FACULTY' });
   });
+
+  /**
+   * The race the catch exists for: the row is already there, so the launch reads back what the
+   * constraint settled on rather than failing.
+   */
+  it('accepts a row another launch has already written', async () => {
+    await prisma.roster.create({ data: { courseId: COURSE, userId: ids.student, role: 'TA' } });
+
+    const result = await enrolFromLaunch({
+      courseId: COURSE,
+      userId: ids.student,
+      roles: [`${R}#Learner`],
+    });
+
+    // The existing role stands: an LMS role must not quietly demote somebody mid-term.
+    expect(result).toEqual({ created: false, role: 'TA' });
+  });
+
+  /**
+   * Everything else must travel. The catch used to swallow any failure and answer with a role
+   * nobody had written, so a launch went on to open a course the person was not enrolled in.
+   */
+  it('lets a failure that is not the race travel, as itself', async () => {
+    // A foreign key that does not hold, which the catch must not read as "somebody got here
+    // first". Asserting the code rather than merely that it threw: a broad catch followed by a
+    // missing-row check would also throw, and would hide what actually happened.
+    await expect(
+      enrolFromLaunch({
+        courseId: 'no-such-course',
+        userId: ids.student,
+        roles: [`${R}#Learner`],
+      }),
+    ).rejects.toMatchObject({ code: 'P2003' });
+
+    expect(await prisma.roster.count({ where: { userId: ids.student } })).toBe(0);
+  });
 });
 
 /**

@@ -449,6 +449,92 @@ describe('DataTable', () => {
       expect(screen.getAllByText(/42 total/).length).toBeGreaterThan(0);
     });
 
+    /**
+     * A server-paginated table can shrink under somebody: a log prune, a delete, a filter.
+     * Left alone they sit on page 20 of a 19-page result, looking at an empty table and
+     * concluding the records are gone.
+     */
+    it('pulls back to the last page when the result set shrinks', () => {
+      const onPaginationChange = vi.fn();
+      const { rerender } = render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={20}
+          rowCount={200}
+          pagination={{ pageIndex: 19, pageSize: 10 }}
+          onPaginationChange={onPaginationChange}
+        />,
+      );
+      expect(onPaginationChange).not.toHaveBeenCalled();
+
+      // The same table, now holding far less.
+      rerender(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={3}
+          rowCount={25}
+          pagination={{ pageIndex: 19, pageSize: 10 }}
+          onPaginationChange={onPaginationChange}
+        />,
+      );
+
+      expect(onPaginationChange).toHaveBeenCalledWith({ pageIndex: 2, pageSize: 10 });
+    });
+
+    it('goes to the first page when everything is gone', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={[]}
+          manualPagination
+          pageCount={0}
+          rowCount={0}
+          pagination={{ pageIndex: 4, pageSize: 10 }}
+          onPaginationChange={onPaginationChange}
+        />,
+      );
+
+      expect(onPaginationChange).toHaveBeenCalledWith({ pageIndex: 0, pageSize: 10 });
+    });
+
+    it('leaves a table alone while the total is still unknown', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pagination={{ pageIndex: 4, pageSize: 10 }}
+          onPaginationChange={onPaginationChange}
+        />,
+      );
+
+      // No pageCount yet: a page cannot be too high against a total nobody has stated.
+      expect(onPaginationChange).not.toHaveBeenCalled();
+    });
+
+    it('stays put when the page is the last one exactly', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          manualPagination
+          pageCount={5}
+          rowCount={50}
+          pagination={{ pageIndex: 4, pageSize: 10 }}
+          onPaginationChange={onPaginationChange}
+        />,
+      );
+
+      expect(onPaginationChange).not.toHaveBeenCalled();
+    });
+
     it('reports a page change to the parent instead of paging itself', () => {
       const onPaginationChange = vi.fn();
       render(

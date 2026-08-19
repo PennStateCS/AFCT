@@ -9,9 +9,9 @@ import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import type { LmsLinkSummary } from '@/lib/lti/link-labels';
+import type { AssignmentLmsLink } from '@/lib/lti/fetch-assignment-links';
 
-export type AssignmentLmsLink = Omit<LmsLinkSummary, 'addedAt'> & { addedAt: string };
+export type { AssignmentLmsLink };
 
 /**
  * Where this assignment appears in an LMS, and the only way to take that record back.
@@ -25,15 +25,20 @@ export function AssignmentLmsLinksCard({
   assignmentId,
   links,
   loading,
+  failed,
   courseIsArchived,
   onRemoved,
+  onRetry,
 }: {
   courseId: string;
   assignmentId: string;
   links: AssignmentLmsLink[];
   loading: boolean;
+  /** The list could not be read. Saying nothing was added would be a guess, not an answer. */
+  failed?: boolean;
   courseIsArchived?: boolean;
   onRemoved: (linkId: string) => void;
+  onRetry?: () => void;
 }) {
   const { timezone, hour12 } = useEffectiveTimezone();
   const [toRemove, setToRemove] = useState<AssignmentLmsLink | null>(null);
@@ -64,6 +69,18 @@ export function AssignmentLmsLinksCard({
       <CardContent className="space-y-4 text-sm">
         {loading ? (
           <p className="text-muted-foreground">Loading…</p>
+        ) : failed ? (
+          <div className="space-y-2">
+            <p role="alert" className="text-status-danger">
+              AFCT could not check where this assignment appears in your LMS. This does not mean
+              it is not there.
+            </p>
+            {onRetry ? (
+              <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                Try again
+              </Button>
+            ) : null}
+          </div>
         ) : links.length === 0 ? (
           <p className="text-muted-foreground">
             This assignment has not been added to a course in your LMS. Add it from the LMS

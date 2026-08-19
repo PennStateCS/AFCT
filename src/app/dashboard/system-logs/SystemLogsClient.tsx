@@ -32,11 +32,13 @@ import { describeActivity, formatActivityDetails } from '@/lib/activity-log-summ
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
-// Shape returned by GET /api/logging (userId is resolved to a display name).
+// Shape returned by GET /api/logging. `userId` is the real id, which is what Copy JSON needs;
+// `userDisplayName` is the same person in words.
 type LogRow = {
   id: string;
   timestamp: string;
   userId: string | null;
+  userDisplayName: string | null;
   userFirstName: string | null;
   userLastName: string | null;
   action: string;

@@ -8,7 +8,9 @@
 
 import { errMessage } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
-import type { CourseRole, Prisma } from '@prisma/client';
+// `Prisma` is a value here, not only a type: the error code below is read off it.
+import { Prisma } from '@prisma/client';
+import type { CourseRole } from '@prisma/client';
 import type { LaunchIdentity } from '@/lib/lti/launch';
 import type { AuditContext } from '@/lib/linked-identity';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -235,6 +237,17 @@ export async function rememberContextMember(opts: {
   }
 }
 
+/**
+ * The one database error these paths expect: a row that already exists.
+ *
+ * Matched on Prisma's code rather than the message, and narrowly, so an outage or a broken
+ * foreign key travels on to the caller as a failure rather than being read as "somebody got
+ * here first".
+ */
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
 /** Course staff: the roles that may connect an LMS course to a course they are on. */
 const LINKING_ROLES: CourseRole[] = ['FACULTY', 'TA'];
 
@@ -311,9 +324,11 @@ export async function linkLaunchCourse(opts: {
         linkedByUserId: userId,
       },
     });
-  } catch {
+  } catch (error) {
     // The unique constraint, rather than a check-then-create that two simultaneous launches
-    // could both pass.
+    // could both pass. Only that: telling somebody their course is "already linked" because
+    // the database was unreachable sends them looking for a link that does not exist.
+    if (!isUniqueConstraintError(error)) throw error;
     return { ok: false, reason: 'already-linked' };
   }
 
@@ -353,13 +368,25 @@ export async function enrolFromLaunch(opts: {
   const role = mapLtiRoles(roles);
   try {
     await prisma.roster.create({ data: { courseId, userId, role } });
-  } catch {
-    // Two launches at once. The constraint decided; read back what it settled on.
+  } catch (error) {
+    /**
+     * Only the duplicate is expected: two launches at once, where the constraint decided and
+     * this one lost. Anything else (the database gone, a foreign key that does not hold) was
+     * being swallowed and answered with a role nobody had written, so a launch went on to
+     * open a course the person was not enrolled in.
+     */
+    if (!isUniqueConstraintError(error)) throw error;
+
     const settled = await prisma.roster.findUnique({
       where: { courseId_userId: { courseId, userId } },
       select: { role: true },
     });
-    return { created: false, role: settled?.role ?? role };
+    // The constraint said the row exists, so its absence here is not a race, it is a fault.
+    // Reporting a role anyway would claim an enrolment that does not exist.
+    if (!settled) {
+      throw new Error(`Roster row for ${userId} in ${courseId} vanished after a duplicate insert`);
+    }
+    return { created: false, role: settled.role };
   }
 
   return { created: true, role };

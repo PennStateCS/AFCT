@@ -20,7 +20,8 @@ function displayName(u: {
 }
 
 /**
- * A single page of activity (audit) logs, newest first, with `userId` resolved to
+ * A single page of activity (audit) logs, newest first, with the author's name resolved
+ * alongside the id rather than in place of it. `userId` is the real id; see the mapping to
  * the author's display name. Search, severity filter, and sort all run server-side.
  * @openapi
  * summary: List activity (audit) logs
@@ -188,8 +189,16 @@ export const GET = withAdminAuth(
         const problem = log.problemId ? problemById[log.problemId] : null;
         return {
           ...log,
-          // Combined display name kept for the Full Log viewer / back-compat.
-          userId: u ? displayName(u) : log.userId,
+          /**
+           * The id stays an id.
+           *
+           * It used to be replaced with the person's name, which reads well and destroys the
+           * one field an investigation needs: Copy JSON exists so an entry can go into a bug
+           * report or a disclosure record, and a name is not an identifier. Two people share a
+           * name; nobody shares an id, and a renamed or deleted account leaves the name behind
+           * pointing at nothing. The name is still here, under its own key.
+           */
+          userDisplayName: u ? displayName(u) : null,
           userFirstName: u?.firstName ?? null,
           userLastName: u?.lastName ?? null,
           /**

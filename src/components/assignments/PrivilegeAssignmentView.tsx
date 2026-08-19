@@ -53,10 +53,11 @@ import { RichDescription } from '@/components/rich-description/RichDescription';
 import { buildProblemColumns } from './problem-columns';
 import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
+import { AssignmentLmsLinksCard } from '@/components/lti/AssignmentLmsLinksCard';
 import {
-  AssignmentLmsLinksCard,
+  fetchAssignmentLmsLinks,
   type AssignmentLmsLink,
-} from '@/components/lti/AssignmentLmsLinksCard';
+} from '@/lib/lti/fetch-assignment-links';
 
 /**
  * The dialogs and the settings tab load on demand. Between them they were the only things
@@ -322,11 +323,15 @@ export default function AssignmentDashboardPage({
   // both at once.
   const lmsLinksQuery = useQuery({
     queryKey: ['course', id, 'assignment', aid, 'lms-links'],
-    queryFn: () =>
-      fetch(apiPaths.assignmentLmsLinks(id, aid))
-        .then((res) => (res.ok ? res.json() : { links: [] }))
-        .then((data: { links?: AssignmentLmsLink[] }) => data.links ?? [])
-        .catch(() => [] as AssignmentLmsLink[]),
+    /**
+     * A failure here is a failure, not an answer.
+     *
+     * This used to map any refusal or network error onto an empty list, so the card told
+     * somebody "this assignment has not been added to a course in your LMS", which is a
+     * statement about their LMS made from no information at all. Acting on it means adding a
+     * second link for work that already has one. Throwing lets the card say it could not check.
+     */
+    queryFn: () => fetchAssignmentLmsLinks(id, aid),
     enabled: !!id && !!aid,
     staleTime: 30_000,
   });
@@ -717,6 +722,8 @@ export default function AssignmentDashboardPage({
                   assignmentId={aid}
                   links={lmsLinks}
                   loading={lmsLinksQuery.isLoading}
+                  failed={lmsLinksQuery.isError}
+                  onRetry={() => void lmsLinksQuery.refetch()}
                   courseIsArchived={courseIsArchived}
                   onRemoved={(linkId) =>
                     queryClient.setQueryData(

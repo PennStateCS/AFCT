@@ -264,6 +264,22 @@ describe('StudentAssignmentPage', () => {
       );
     });
 
+    it('says a server error once as well, not once per read', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: 'Internal error' }),
+        })),
+      );
+
+      renderWithClient(<StudentAssignmentPage initialAssignment={null} />);
+
+      await waitFor(() => expect(toastError).toHaveBeenCalled());
+      expect(toastError).toHaveBeenCalledTimes(1);
+    });
+
     it('still offers a refresh for a failure that might actually be transient', async () => {
       vi.stubGlobal('fetch', refuse(500, 'Internal error'));
 

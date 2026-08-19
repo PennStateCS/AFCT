@@ -237,6 +237,19 @@ async function prepareCsp(req: NextRequest, pathname: string) {
    */
   const dropStaleCookies =
     isTopLevelDocument(req.headers) && hasDuplicateAuthCookie(req.headers.get('cookie'));
+
+  /**
+   * Logged because whether this ever happens is genuinely unknown.
+   *
+   * Partitioned cookies are keyed by the top-level site, so in theory a copy written inside an
+   * LMS frame belongs to the LMS's partition and is neither sent nor deletable here. In
+   * practice a browser locked somebody out of AFCT until they cleared cookies, and the two
+   * cannot both be right. A line in the log settles it with evidence rather than argument: if
+   * this never appears, the cleanup is dead code and can go.
+   */
+  if (dropStaleCookies) {
+    console.warn('[auth] two session cookies of one name arrived; expiring the partitioned copy');
+  }
   const requestHeaders = new Headers(req.headers);
   // A request header is invisible to the browser (so it doesn't enforce anything);
   // Next uses it only to discover the nonce and apply it to its script tags.
