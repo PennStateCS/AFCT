@@ -172,3 +172,41 @@ describe('coming back from the provider', () => {
     );
   });
 });
+
+/**
+ * `LinkedIdentity` holds LMS launches as well as institutional sign-ins, and every row used to
+ * carry the one configured OIDC label: somebody's Canvas identity was presented to them as an
+ * institutional account they had connected.
+ */
+describe('what each connection is called', () => {
+  it('names an LMS identity as an LMS, not as the institution', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        respond({
+          identities: [
+            { ...identity, id: 'i-lti', kind: 'LTI', issuer: 'https://canvas.school.edu' },
+          ],
+          hasPassword: true,
+        }),
+      ),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+
+    expect(await screen.findByText(/Your LMS \(canvas.school.edu\)/)).toBeInTheDocument();
+    expect(screen.queryByText('Penn State')).not.toBeInTheDocument();
+  });
+
+  it('offers no new connection when institutional sign-in is unavailable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [], hasPassword: true })),
+    );
+
+    render(<IdentitiesSection providerLabel={null} canConnect={false} />);
+
+    expect(await screen.findByText(/not switched on for this AFCT/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /connect/i })).not.toBeInTheDocument();
+  });
+});

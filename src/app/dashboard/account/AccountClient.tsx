@@ -82,7 +82,14 @@ export default function AccountClient({
     { value: 'password', label: 'Password', Icon: KeyRound },
     // Only when an administrator has set institutional sign-in up. An install using local
     // accounts alone should not carry a tab whose every answer is "not available".
-    ...(oidcAvailable ? [{ value: 'accounts', label: 'Connected accounts', Icon: Link2 }] : []),
+    /**
+     * Always offered. The tab used to appear only while institutional sign-in was configured,
+     * so turning the provider off hid identities that still existed and still worked: somebody
+     * could neither see what was attached to their account nor remove it. What the provider
+     * being unavailable changes is whether a *new* one can be connected, which is decided
+     * inside the tab.
+     */
+    { value: 'accounts', label: 'Connected accounts', Icon: Link2 },
     { value: 'tokens', label: 'App tokens', Icon: Terminal },
   ];
 
@@ -118,11 +125,9 @@ export default function AccountClient({
             <PasswordSection onChangePassword={changePassword} />
           </TabsContent>
 
-          {oidcAvailable && (
-            <TabsContent value="accounts">
-              <IdentitiesSection providerLabel={oidcLabel} />
-            </TabsContent>
-          )}
+          <TabsContent value="accounts">
+            <IdentitiesSection providerLabel={oidcLabel} canConnect={oidcAvailable} />
+          </TabsContent>
 
           <TabsContent value="tokens">
             <TokensSection />

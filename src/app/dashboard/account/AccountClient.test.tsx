@@ -56,14 +56,18 @@ describe('AccountClient', () => {
   });
 
   /**
-   * The tab only exists when an administrator has set institutional sign-in up. An install
-   * using local accounts alone should not carry a tab whose every answer is "not available".
+   * The tab is always there.
+   *
+   * It used to appear only while institutional sign-in was configured, which hid identities
+   * that still existed: an LMS launch attaches one too, and turning the provider off left
+   * people unable to see or remove anything attached to their account. What being unavailable
+   * changes is whether a new one can be connected.
    */
   describe('the connected-accounts tab', () => {
-    it('is absent when institutional sign-in is off', () => {
+    it('is there even when institutional sign-in is off, because identities may exist', () => {
       render(<AccountClient user={user} oidcAvailable={false} oidcLabel={null} />);
 
-      expect(screen.queryByRole('tab', { name: /connected accounts/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /connected accounts/i })).toBeInTheDocument();
     });
 
     it('is there once it is configured', () => {

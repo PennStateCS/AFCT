@@ -113,6 +113,14 @@ Only turn it on if your provider controls the addresses it reports. At a provide
 can choose their own address, it would let someone reach an account that is not theirs.
 Administrator accounts are never matched automatically either way: an administrator connects
 their institutional login deliberately, from their own account page.
+
+**On Entra, this setting is only half of it.** It answers a provider that does not say an address
+is verified. It cannot help when there is no address at all, and Entra does not always send one:
+for people inside the tenant, the `email` claim has to be released, either as an optional claim on
+the app registration or through the OpenID scope on v2.0 endpoints. If your people are refused with
+"your institution did not share an email address", that claim is what is missing, and no AFCT
+setting can substitute for it. AFCT will not fall back to a username instead: Microsoft's own
+guidance is that those are neither durable nor guaranteed to be real addresses.
 :::
 
 ## LTI
