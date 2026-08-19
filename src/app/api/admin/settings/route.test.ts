@@ -16,7 +16,7 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: auditMock }));
 
 import { GET, PUT } from './route';
-import { decryptSecret } from '@/lib/secret-encryption';
+import { decryptSecret, encryptSecret } from '@/lib/secret-encryption';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,6 +87,7 @@ describe('GET /api/system-settings', () => {
       oidcIssuer: '',
       oidcClientId: '',
       oidcClientSecretConfigured: false,
+      oidcClientSecretReadable: false,
       oidcButtonLabel: '',
       oidcTrustEmail: false,
     });
@@ -151,6 +152,7 @@ describe('GET /api/system-settings', () => {
       oidcIssuer: '',
       oidcClientId: '',
       oidcClientSecretConfigured: false,
+      oidcClientSecretReadable: false,
       oidcButtonLabel: '',
       oidcTrustEmail: false,
     });
@@ -1025,5 +1027,66 @@ describe('PUT /api/system-settings, institutional sign-in', () => {
     expect(prismaMock.systemSettings.upsert.mock.calls[0]?.[0].update).not.toHaveProperty(
       'oidcClientSecret',
     );
+  });
+});
+
+/**
+ * Whether institutional sign-in is usable *here*, which is not the same as it being switched on.
+ *
+ * A stored secret this deployment cannot decrypt (a rotated or missing encryption key) leaves
+ * `getOidcConfig` returning null: the button disappears from the sign-in page while the settings
+ * screen goes on saying "Enabled" and nothing explains why.
+ */
+describe('GET /api/system-settings, whether the client secret can be read', () => {
+  const read = () =>
+    GET(new Request('http://localhost/api/system-settings'), routeCtx()).then((r) => r.json());
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+  });
+
+  it('reports a readable secret as readable, without returning it', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      oidcEnabled: true,
+      oidcIssuer: 'https://login.example.edu',
+      oidcClientId: 'client',
+      oidcClientSecret: encryptSecret('a-real-secret'),
+    });
+
+    const body = (await read()) as Record<string, unknown>;
+
+    expect(body.oidcClientSecretConfigured).toBe(true);
+    expect(body.oidcClientSecretReadable).toBe(true);
+    expect(JSON.stringify(body)).not.toContain('a-real-secret');
+  });
+
+  it('reports a secret it cannot decrypt as unreadable', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      oidcEnabled: true,
+      oidcIssuer: 'https://login.example.edu',
+      oidcClientId: 'client',
+      // Encrypted shape, wrong key: what a rotated SECRET_ENCRYPTION_KEY leaves behind.
+      oidcClientSecret: 'enc.v1:AAAAAAAAAAAAAAAAAAAAAA==:BBBBBBBBBBBBBBBBBBBBBB==:Q0NDQ0ND',
+    });
+
+    const body = (await read()) as Record<string, unknown>;
+
+    expect(body.oidcClientSecretConfigured).toBe(true);
+    expect(body.oidcClientSecretReadable).toBe(false);
+  });
+
+  it('reports nothing stored as neither configured nor readable', async () => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      oidcEnabled: false,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+    });
+
+    const body = (await read()) as Record<string, unknown>;
+
+    expect(body.oidcClientSecretConfigured).toBe(false);
+    expect(body.oidcClientSecretReadable).toBe(false);
   });
 });

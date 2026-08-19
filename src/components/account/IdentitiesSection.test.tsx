@@ -206,7 +206,57 @@ describe('what each connection is called', () => {
 
     render(<IdentitiesSection providerLabel={null} canConnect={false} />);
 
-    expect(await screen.findByText(/not switched on for this AFCT/)).toBeInTheDocument();
+    expect(await screen.findByText(/switched off for this AFCT/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /connect/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * What the page says about identities it cannot currently use.
+ *
+ * With institutional sign-in off, an OIDC identity is kept and removable but cannot sign
+ * anybody in, because the provider is not installed at all. An LMS identity is unaffected: it
+ * comes back whenever somebody opens AFCT from the LMS.
+ */
+describe('when institutional sign-in is switched off', () => {
+  it('does not claim an institutional connection still signs you in', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [identity], hasPassword: true })),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" canConnect={false} />);
+
+    const message = await screen.findByText(/switched off for this AFCT/);
+    expect(message).toHaveTextContent(/cannot be used to sign in/);
+    expect(message).toHaveTextContent(/works again if it is switched back on/);
+  });
+});
+
+/**
+ * The two kinds are undone differently, and the dialog used to describe the configured
+ * institution whichever row was being removed.
+ */
+describe('the disconnect confirmation', () => {
+  const openDialogFor = async (over: Record<string, unknown>) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => respond({ identities: [{ ...identity, ...over }], hasPassword: true })),
+    );
+    render(<IdentitiesSection providerLabel="Penn State" />);
+    await userEvent.click(await screen.findByRole('button', { name: /disconnect/i }));
+  };
+
+  it('names the institution for an institutional account', async () => {
+    await openDialogFor({});
+
+    expect(await screen.findByText(/sign in to AFCT with Penn State/)).toBeInTheDocument();
+  });
+
+  it('describes an LMS identity as an LMS, and how it comes back', async () => {
+    await openDialogFor({ kind: 'LTI', issuer: 'https://canvas.school.edu' });
+
+    expect(await screen.findByText(/Opening AFCT from that LMS again/)).toBeInTheDocument();
+    expect(screen.queryByText(/sign in to AFCT with Penn State/)).not.toBeInTheDocument();
   });
 });

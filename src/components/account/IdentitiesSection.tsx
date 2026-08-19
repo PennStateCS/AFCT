@@ -212,8 +212,10 @@ export function IdentitiesSection({
         </Button>
       ) : (
         <p className="text-muted-foreground text-sm">
-          Institutional sign-in is not switched on for this AFCT, so there is nothing new to
-          connect. Anything already connected still works and can be disconnected here.
+          Institutional sign-in is switched off for this AFCT, so there is nothing new to connect
+          and an institutional account cannot be used to sign in at the moment. Anything already
+          connected is kept, can be disconnected here, and works again if it is switched back on.
+          Connections from your LMS are unaffected: they come from opening AFCT there.
         </p>
       )}
 
@@ -221,7 +223,21 @@ export function IdentitiesSection({
         open={unlinking !== null}
         onCancel={() => setUnlinking(null)}
         title="Disconnect this account?"
-        description={`You will no longer be able to sign in to AFCT with ${label}. You can connect it again at any time.`}
+        /**
+         * Written from the row being removed, not from the configured provider.
+         *
+         * The two kinds are undone differently: an institutional account is connected again
+         * from this page, and an LMS identity comes back by opening AFCT from the LMS. Naming
+         * the institution while removing a Canvas identity told somebody the wrong thing about
+         * both what they were losing and how to get it back.
+         */
+        description={
+          unlinking
+            ? unlinking.kind === 'LTI'
+              ? `${rowLabel(unlinking)} will be removed from your AFCT account. Opening AFCT from that LMS again may reconnect it.`
+              : `You will no longer be able to sign in to AFCT with ${rowLabel(unlinking)}. You can connect it again from this page.`
+            : undefined
+        }
         confirmText="Disconnect"
         // Removes a way into the account, which is what this variant is for.
         variant="destructive"

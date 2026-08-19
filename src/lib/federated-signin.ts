@@ -147,12 +147,54 @@ export async function resolveFederatedSignIn(opts: {
       where: { issuer_subject: { issuer: ref.issuer, subject: ref.subject } },
       select: { userId: true, user: { select: { inactive: true } } },
     });
-    // Nothing there means the collision was on the address rather than the identity: somebody
-    // holds that email without this identity attached, which is the deliberate-link case rather
-    // than a race, and attaching to them automatically is exactly what must not happen here.
-    if (!settled) return { ok: false, reason: 'already-linked-elsewhere' };
-    if (settled.user.inactive) return { ok: false, reason: 'account-inactive' };
-    return { ok: true, userId: settled.userId, created: false };
+    if (settled) {
+      if (settled.user.inactive) return { ok: false, reason: 'account-inactive' };
+      return { ok: true, userId: settled.userId, created: false };
+    }
+
+    /**
+     * No identity, so the collision was on the address: somebody else created an account with
+     * it while this request was deciding to. That happens legitimately when two *different*
+     * identities assert the same trusted address, which is two people signing in for the first
+     * time from one institution, or one person arriving through two providers.
+     *
+     * The recovery is the match this request would have made had it arrived a moment later,
+     * and it is made the same way: through `linkIdentity`, which holds every guardrail. An
+     * administrator is still refused an automatic link, an inactive account is still closed,
+     * and an identity already attached elsewhere is still refused. Nothing here decides
+     * anything the unraced path would not have decided; refusing instead, as this used to,
+     * turned a timing accident into a failed sign-in with no conflict behind it.
+     *
+     * The address was required to be present and trusted before any of this ran, so re-reading
+     * by it is not a new trust decision either.
+     */
+    const raced = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, inactive: true },
+    });
+    if (!raced) throw error;
+    if (raced.inactive) return { ok: false, reason: 'account-inactive' };
+
+    const linked = await linkIdentity({
+      ref,
+      userId: raced.id,
+      via: 'AUTO_VERIFIED_EMAIL',
+      actorUserId: raced.id,
+      context,
+    });
+    if (!linked.ok) {
+      if (linked.reason === 'admin-requires-deliberate-link') {
+        return { ok: false, reason: 'admin-requires-deliberate-link', userId: raced.id };
+      }
+      return {
+        ok: false,
+        reason:
+          linked.reason === 'already-linked-elsewhere'
+            ? 'already-linked-elsewhere'
+            : 'account-inactive',
+      };
+    }
+    return { ok: true, userId: raced.id, created: false };
   }
 
   // Logged outside the transaction: the audit write must not be able to roll the account back,

@@ -24,6 +24,7 @@ export function SignInTab({
   clientSecret,
   setClientSecret,
   clientSecretConfigured,
+  clientSecretReadable,
   clientSecretClear,
   setClientSecretClear,
   redirectUri,
@@ -38,6 +39,12 @@ export function SignInTab({
   clientSecret: string;
   setClientSecret: (value: string) => void;
   clientSecretConfigured: boolean;
+  /**
+   * Whether the stored secret can be decrypted here. A stored secret this deployment cannot
+   * read leaves institutional sign-in switched on and unusable, and nothing on the sign-in page
+   * says so: the button is simply absent.
+   */
+  clientSecretReadable: boolean;
   clientSecretClear: boolean;
   setClientSecretClear: (value: boolean) => void;
   /** What the identity provider must be told to allow. Read-only; derived from the site URL. */
@@ -53,13 +60,18 @@ export function SignInTab({
       <div className="mb-5 space-y-2">
         <h2 className="text-sm font-medium">Current status</h2>
         <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
-          <Badge variant={enabled ? 'success' : 'warning'} className="w-fit">
-            {enabled ? 'Enabled' : 'Disabled'}
+          <Badge
+            variant={!enabled ? 'warning' : clientSecretReadable ? 'success' : 'destructive'}
+            className="w-fit"
+          >
+            {!enabled ? 'Disabled' : clientSecretReadable ? 'Enabled' : 'Enabled, but unavailable'}
           </Badge>
           <p className="text-muted-foreground">
-            {enabled
-              ? 'People can sign in with their institution. AFCT passwords still work as well.'
-              : 'Everyone signs in with an AFCT password.'}
+            {!enabled
+              ? 'Everyone signs in with an AFCT password.'
+              : clientSecretReadable
+                ? 'People can sign in with their institution. AFCT passwords still work as well.'
+                : 'The saved client secret cannot be read, so the institution button is not shown and nobody can sign in that way. This usually means the encryption key this AFCT was set up with has changed. Save the secret again, or restore the key.'}
           </p>
         </div>
       </div>

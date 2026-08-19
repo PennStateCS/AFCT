@@ -242,10 +242,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get system settings
-         * @description Returns the singleton system settings, falling back to defaults for any unset  field. The hCaptcha secret is never returned; only `hcaptchaSecretConfigured`  reports whether one is stored. System administrators only.
-         *
-         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/route.ts)
+         * GET /api/admin/settings
+         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/settings/route.ts)
          */
         get: operations["getAdminSettings"];
         /**
@@ -3872,48 +3870,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The effective system settings. */
+            /** @description Success */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": {
-                        timezone?: string;
-                        maxUploadSizeMb?: number;
-                        allowSignup?: boolean;
-                        /** @description Comma-separated email-domain allow-list; blank = any */
-                        signupAllowedDomains?: string;
-                        sessionTimeoutMinutes?: number;
-                        submissionEvalTimeoutMs?: number;
-                        submissionEvalMaxMemoryMb?: number;
-                        submissionResubmitCooldownMs?: number;
-                        submissionMaxConcurrent?: number;
-                        submissionMaxAttempts?: number;
-                        submissionAnalyzerLimit?: number;
-                        loginMaxAttempts?: number;
-                        loginLockoutMinutes?: number;
-                        backupEnabled?: boolean;
-                        /** @description Hour of day (0-23) the daily backup runs */
-                        backupHour?: number;
-                        backupRetentionDays?: number;
-                        activityLogRetentionDays?: number;
-                        hcaptchaSiteKey?: string;
-                        /** @description Whether a secret is stored; the value is never returned */
-                        hcaptchaSecretConfigured?: boolean;
-                        /** @description Read-only NEXTAUTH_URL (the app public address); set at the server level and not editable here */
-                        configuredUrl?: string;
-                    };
-                };
-            };
-            /** @description Caller is not a system administrator. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
+                content?: never;
             };
         };
     };

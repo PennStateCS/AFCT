@@ -154,6 +154,11 @@ export default function SystemSettingsClient() {
   const [oidcClientSecretConfigured, setOidcClientSecretConfigured] = useState(() =>
     Boolean(settingsData?.oidcClientSecretConfigured),
   );
+  // Whether this deployment can actually read the stored secret, which decides between
+  // "Enabled" and "Enabled, but unavailable" on the tab.
+  const [oidcClientSecretReadable, setOidcClientSecretReadable] = useState(() =>
+    Boolean(settingsData?.oidcClientSecretReadable),
+  );
   const [oidcClientSecretClear, setOidcClientSecretClear] = useState(false);
 
   // Baseline of saved values, for unsaved-changes detection. Seeded synchronously
@@ -174,6 +179,7 @@ export default function SystemSettingsClient() {
     setSmtpPassword('');
     setSmtpPasswordClear(false);
     setOidcClientSecretConfigured(Boolean(settingsData.oidcClientSecretConfigured));
+    setOidcClientSecretReadable(Boolean(settingsData.oidcClientSecretReadable));
     setOidcClientSecret('');
     setOidcClientSecretClear(false);
     setBaseline(norm);
@@ -545,6 +551,8 @@ export default function SystemSettingsClient() {
                 clientSecret={oidcClientSecret}
                 setClientSecret={setOidcClientSecret}
                 clientSecretConfigured={oidcClientSecretConfigured}
+                // A secret typed just now is readable by definition; otherwise ask the server.
+                clientSecretReadable={oidcClientSecret !== '' || oidcClientSecretReadable}
                 clientSecretClear={oidcClientSecretClear}
                 setClientSecretClear={setOidcClientSecretClear}
                 // Derived from the site URL the installer set, so an admin can hand it to IT
