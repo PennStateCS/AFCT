@@ -664,3 +664,20 @@ describe('what deliberately has no summary', () => {
     );
   });
 });
+
+/**
+ * Signing out used to say nothing at all, so a reader could see that a session ended and not
+ * what kind of session it was. The provider is carried on the token from sign-in for this.
+ */
+describe('LOGOUT', () => {
+  it('says which way in the session came from', () => {
+    expect(describeActivity('LOGOUT', { provider: 'oidc' })).toBe('with institutional sign-in');
+    expect(describeActivity('LOGOUT', { provider: 'lti-launch' })).toBe('from an LMS');
+    expect(describeActivity('LOGOUT', { provider: 'credentials' })).toBe('with an AFCT password');
+  });
+
+  it('stays quiet for a session that predates the provider being recorded', () => {
+    expect(describeActivity('LOGOUT', {})).toBeNull();
+    expect(describeActivity('LOGOUT', { provider: 'something-new' })).toBeNull();
+  });
+});

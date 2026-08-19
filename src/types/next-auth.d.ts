@@ -14,6 +14,8 @@ declare module 'next-auth' {
       cropY?: number;
       zoom?: number;
       mustChangePassword?: boolean;
+    /** Which provider signed this session in, so signing out can say where it came from. */
+    provider?: string;
       name?: string;
       image?: string;
       ipAddress?: string;

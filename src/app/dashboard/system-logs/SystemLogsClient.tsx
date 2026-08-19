@@ -238,11 +238,17 @@ export default function SystemLogsClient() {
         header: 'What happened',
         meta: { priority: 2 },
         enableSorting: false,
-        cell: ({ row }: { row: { original: LogRow } }) =>
-          describeActivity(
-            row.original.action,
-            row.original.metadata as Record<string, unknown> | null,
-          ) ?? '—',
+        // Upper-cased to sit beside the Action column, which is upper-case because the stored
+        // action is. Styled rather than transformed, so what a screen reader announces and what
+        // Copy JSON carries stay in ordinary case.
+        cell: ({ row }: { row: { original: LogRow } }) => (
+          <span className="uppercase">
+            {describeActivity(
+              row.original.action,
+              row.original.metadata as Record<string, unknown> | null,
+            ) ?? '—'}
+          </span>
+        ),
       },
       {
         accessorKey: 'userLastName',

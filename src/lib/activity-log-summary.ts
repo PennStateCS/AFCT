@@ -31,6 +31,32 @@ function counts(meta: Metadata): string {
   return parts.length > 0 ? parts.join(', ') : 'nothing changed';
 }
 
+/**
+ * The short name for a way in, for the Action column.
+ *
+ * Kept out of the stored action on purpose. `LOGIN_SUCCESS` is what searches, filters and the
+ * research record are keyed on, and splitting it into three values would divide every entry
+ * written so far from every entry written after. The source is metadata; this is how it is
+ * shown.
+ */
+const SIGN_IN_SOURCE: Record<string, string> = {
+  credentials: 'PASSWORD',
+  'lti-launch': 'LTI',
+  oidc: 'SSO',
+};
+
+/**
+ * "LOGIN SUCCESS: SSO" — the action as it is displayed, with the way in when there is one.
+ *
+ * Only sign-in and sign-out carry a provider, so everything else is returned unchanged.
+ */
+export function actionLabel(action: string, metadata: Metadata): string {
+  const readable = action.replace(/_/g, ' ');
+  const provider = str(metadata, 'provider');
+  const source = provider ? SIGN_IN_SOURCE[provider] : null;
+  return source ? `${readable}: ${source}` : readable;
+}
+
 /** How somebody signed in, by the provider id NextAuth reports. */
 const SIGN_IN: Record<string, string> = {
   credentials: 'with an AFCT password',
@@ -230,6 +256,13 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       const temporary = metadata?.temporaryPasswordLogin === true;
       if (!how) return temporary ? 'with a temporary password' : null;
       return temporary ? `${how}, temporary password` : how;
+    }
+
+    case 'LOGOUT': {
+      // Which session ended. Recorded from the token, so it is there for a sign-out that
+      // followed an institutional or LMS sign-in as well as a password one.
+      const how = str(metadata, 'provider');
+      return how ? (SIGN_IN[how] ?? null) : null;
     }
 
     case 'LTI_DEEP_LINK_RETURNED': {
