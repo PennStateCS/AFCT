@@ -14,6 +14,7 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { passwordRules } from '@/lib/password-policy';
 import { safeCallbackUrl } from '@/lib/safe-callback';
+import { oidcRefusalMessage } from '@/lib/oidc-refusal-message';
 import { isValidEmail } from '@/lib/email';
 import { SignupFormSchema } from '@/schemas/auth';
 
@@ -153,6 +154,17 @@ export default function LoginForm({
           ? 'Unusual activity detected. Complete the security check below to continue.'
           : 'Too many attempts. Please wait a moment before trying again.',
       );
+      return;
+    }
+
+    /**
+     * Institutional sign-in refusals, which are not password failures and must not be reported
+     * as one: somebody whose provider shared no address would otherwise retype a password that
+     * was never wrong. The reason is a fixed word from the callback, and the wording avoids
+     * saying whether an AFCT account exists.
+     */
+    if (error === 'oidc') {
+      showToast.error(oidcRefusalMessage(searchParams.get('reason')));
       return;
     }
 
@@ -489,7 +501,10 @@ export default function LoginForm({
                       type="button"
                       variant="outline"
                       className="w-full"
-                      onClick={() => void signIn('oidc', { callbackUrl: '/dashboard' })}
+                      // The same sanitised destination the password form uses. Somebody sent to
+                      // the login page from a course link should land on that link, whichever way
+                      // they sign in.
+                      onClick={() => void signIn('oidc', { callbackUrl })}
                     >
                       {oidcButtonLabel}
                     </Button>

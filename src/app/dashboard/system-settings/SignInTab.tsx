@@ -82,7 +82,7 @@ export function SignInTab({
           setValue={(v) => setField('oidcIssuer', v)}
           disabled={disabled}
           placeholder="https://login.your-university.edu"
-          description="Everything else is discovered from this. No trailing slash."
+          description="Everything else is discovered from this. Copy it exactly as your provider states it, including a trailing slash if it has one."
         />
         <InputGroup
           label="Client ID"
@@ -166,6 +166,14 @@ export function SignInTab({
           nobody at those institutions is matched automatically. With it on at a provider where
           people can choose their own address, someone could reach an account that is not theirs.
           Administrator accounts are never matched automatically either way.
+        </p>
+        {/* The distinction people got wrong: this setting answers an unverified address, not a
+            missing one, and Entra can send no address at all unless the claim is released. */}
+        <p className="text-muted-foreground text-xs">
+          This does not help if your provider sends no address at all. On Entra the email claim has
+          to be released on the app registration, or through the OpenID scope on v2.0 endpoints;
+          without it, people are refused with &ldquo;your institution did not share an email
+          address&rdquo; whatever this setting says.
         </p>
       </div>
     </>

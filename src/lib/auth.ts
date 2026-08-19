@@ -1,7 +1,6 @@
 import NextAuth from 'next-auth';
 import type { NextAuthConfig } from 'next-auth';
 import { headers } from 'next/headers';
-import { PrismaAdapter } from '@auth/prisma-adapter';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
@@ -15,7 +14,6 @@ import { buildJwtToken, buildSession } from '@/lib/auth-callbacks';
 import { buildOidcProvider, getOidcConfig, OIDC_PROVIDER_ID } from '@/lib/oidc-provider';
 import { resolveOidcSignIn } from '@/lib/oidc-signin';
 import { linkIdentity } from '@/lib/linked-identity';
-import type { Adapter } from 'next-auth/adapters';
 
 /**
  * The config is a function rather than an object because institutional sign-in is configured by
@@ -43,7 +41,20 @@ export async function buildAuthConfig(): Promise<NextAuthConfig> {
 
   return {
     ...(framed ? { cookies: framedAuthCookies() } : {}),
-    adapter: PrismaAdapter(prisma) as unknown as Adapter,
+    /**
+     * No adapter, deliberately.
+     *
+     * Auth.js's adapter owns identity in its own `Account`/`Session`/`User` tables. AFCT owns
+     * it in `LinkedIdentity`, keyed by issuer and subject, with JWT sessions and its own
+     * resolution rules (an address is only ever used for the first match, an administrator is
+     * never attached automatically). Installing both makes two sources of truth, and the schema
+     * has never carried Auth.js's tables, so the adapter it was given could not answer at all:
+     * an OIDC callback calls `getUserByAccount` *before* the `signIn` callback below, which
+     * meant every institutional sign-in failed inside Auth.js before any AFCT code ran.
+     *
+     * Nothing else needs it. Credentials providers (the password form, the LTI ticket) skip the
+     * adapter entirely, sessions are JWTs, and there is no email provider.
+     */
     providers: [
       ...(oidc ? [buildOidcProvider(oidc)] : []),
       /**

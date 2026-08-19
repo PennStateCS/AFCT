@@ -81,9 +81,22 @@ export function buildOidcProvider(config: OidcRuntimeConfig): OIDCConfig<Record<
     name: config.buttonLabel ?? 'Institution',
     type: 'oidc',
     issuer: config.issuer,
+    /**
+     * Built here rather than left to Auth.js, which joins with a slash unconditionally
+     * (`${issuer}/.well-known/openid-configuration`) and so produces a double slash for an
+     * issuer that already ends in one. The issuer itself is untouched: it is an identifier and
+     * is checked against `iss` exactly as stored.
+     */
+    wellKnown: `${config.issuer.replace(/\/$/, '')}/.well-known/openid-configuration`,
     clientId: config.clientId,
     clientSecret: config.clientSecret,
-    checks: ['pkce', 'state'],
+    /**
+     * State ties the answer to the request that started it, PKCE ties the code to this client,
+     * and the nonce ties the ID token to this authorization request. The first two are the ones
+     * that matter for a code flow; the nonce is what stops an ID token obtained elsewhere being
+     * replayed here, costs a claim, and is supported by every provider that implements OIDC.
+     */
+    checks: ['pkce', 'state', 'nonce'],
     // Only what is needed to identify a person. Asking for more than that is how an
     // integration ends up holding data nobody agreed to hand over.
     authorization: { params: { scope: 'openid email profile' } },

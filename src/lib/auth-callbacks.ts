@@ -56,9 +56,19 @@ export async function buildJwtToken({
     token.id = user.id;
     token.avatar = user.avatar;
     token.mustChangePassword = Boolean(user.mustChangePassword);
-    if (user.email) {
+    /**
+     * Read by id, not by the address the provider sent.
+     *
+     * Identity has already been resolved by this point: for institutional sign-in that is the
+     * issuer and subject, and the account they resolve to may hold a different address than the
+     * provider is asserting today. Looking the account up by that address found nothing after
+     * somebody's institutional address changed, which lost their name and, worse, left
+     * `pwChangedAt` null against an account that has a real `passwordChangedAt`, so the session
+     * that had just been created was treated as revoked by the check in `buildSession`.
+     */
+    if (user.id) {
       const fullUser = await prisma.user.findUnique({
-        where: { email: user.email },
+        where: { id: user.id },
         select: { firstName: true, lastName: true, passwordChangedAt: true },
       });
       token.firstName = fullUser?.firstName || undefined;

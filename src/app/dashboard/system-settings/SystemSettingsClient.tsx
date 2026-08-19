@@ -290,8 +290,9 @@ export default function SystemSettingsClient() {
       oidcTrustEmail,
       ...(oidcClientSecretClear
         ? { oidcClientSecretClear: true }
-        : oidcClientSecret.trim()
-          ? { oidcClientSecret: oidcClientSecret.trim() }
+        : // Sent exactly as typed: the secret is opaque, and its edges may be significant.
+          oidcClientSecret !== ''
+          ? { oidcClientSecret }
           : {}),
     });
     if (!parsedSettings.success) {
@@ -356,7 +357,7 @@ export default function SystemSettingsClient() {
         hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
       );
       setOidcClientSecretConfigured(
-        oidcClientSecretClear ? false : oidcClientSecret.trim() ? true : oidcClientSecretConfigured,
+        oidcClientSecretClear ? false : oidcClientSecret !== '' ? true : oidcClientSecretConfigured,
       );
       setOidcClientSecret('');
       setOidcClientSecretClear(false);
@@ -401,7 +402,7 @@ export default function SystemSettingsClient() {
               oidcTrustEmail,
               oidcClientSecretConfigured: oidcClientSecretClear
                 ? false
-                : oidcClientSecret.trim() !== '' || oidcClientSecretConfigured,
+                : oidcClientSecret !== '' || oidcClientSecretConfigured,
               // A password that was just set is now stored; a cleared one is not.
               smtpPasswordConfigured: smtpPasswordClear
                 ? false

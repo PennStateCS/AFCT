@@ -34,7 +34,18 @@ const HOW_LINKED: Record<string, string> = {
  * the account over there belongs to whoever is signed in here. It is also the only way an
  * admin gets one, since automatic linking refuses admin accounts.
  */
-export function IdentitiesSection({ providerLabel }: { providerLabel: string | null }) {
+export function IdentitiesSection({
+  providerLabel,
+  canConnect = true,
+}: {
+  providerLabel: string | null;
+  /**
+   * Whether a new institutional account can be connected right now. Separate from whether
+   * existing ones are shown: an administrator turning the provider off must not hide identities
+   * that still exist and still work.
+   */
+  canConnect?: boolean;
+}) {
   const { timezone, hour12 } = useEffectiveTimezone();
   const [identities, setIdentities] = useState<LinkedIdentity[] | null>(null);
   const [hasPassword, setHasPassword] = useState(true);
@@ -105,6 +116,24 @@ export function IdentitiesSection({ providerLabel }: { providerLabel: string | n
   };
 
   const label = providerLabel ?? 'your institution';
+
+  /**
+   * What a row actually is.
+   *
+   * `LinkedIdentity` holds institutional sign-ins and LMS launches alike, and every row used to
+   * be labelled with the one configured OIDC provider: somebody's Canvas identity was presented
+   * to them as an institutional account they had connected, which is neither true nor something
+   * they could act on. The issuer is shown for an LMS row because a person may be launching
+   * from more than one, and it is the only thing that tells them apart.
+   */
+  const rowLabel = (identity: { kind: string; issuer: string }) => {
+    if (identity.kind !== 'LTI') return label;
+    try {
+      return `Your LMS (${new URL(identity.issuer).host})`;
+    } catch {
+      return 'Your LMS';
+    }
+  };
   // Removing the last one would lock them out, and the refusal belongs where the button is
   // rather than as a surprise after the click.
   const isOnlyWayIn = !hasPassword && (identities?.length ?? 0) <= 1;
@@ -135,7 +164,7 @@ export function IdentitiesSection({ providerLabel }: { providerLabel: string | n
               className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{label}</p>
+                <p className="truncate text-sm font-medium">{rowLabel(identity)}</p>
                 <p className="text-muted-foreground truncate text-xs">
                   {HOW_LINKED[identity.linkedVia] ?? 'Connected'}
                   {' on '}
@@ -154,7 +183,7 @@ export function IdentitiesSection({ providerLabel }: { providerLabel: string | n
                 disabled={isOnlyWayIn}
                 title={
                   isOnlyWayIn
-                    ? 'Set a password first, or you would not be able to sign in.'
+                    ? 'This is the only way to sign in to your account.'
                     : undefined
                 }
               >
@@ -168,17 +197,25 @@ export function IdentitiesSection({ providerLabel }: { providerLabel: string | n
 
       {isOnlyWayIn && identities.length > 0 && (
         <p className="text-muted-foreground text-sm">
-          This is the only way to sign in to your account. Set a password on the Password tab before
-          disconnecting it.
+          This is the only way to sign in to your account, so it cannot be disconnected. To be able
+          to disconnect it, ask an administrator to send you a password reset, which lets you set an
+          AFCT password as well.
         </p>
       )}
 
-      <Button
-        onClick={() => void signIn('oidc', { callbackUrl: '/dashboard/account?tab=accounts' })}
-      >
-        <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
-        Connect {label}
-      </Button>
+      {canConnect ? (
+        <Button
+          onClick={() => void signIn('oidc', { callbackUrl: '/dashboard/account?tab=accounts' })}
+        >
+          <Link2 className="mr-2 h-4 w-4" aria-hidden="true" />
+          Connect {label}
+        </Button>
+      ) : (
+        <p className="text-muted-foreground text-sm">
+          Institutional sign-in is not switched on for this AFCT, so there is nothing new to
+          connect. Anything already connected still works and can be disconnected here.
+        </p>
+      )}
 
       <ConfirmDialog
         open={unlinking !== null}

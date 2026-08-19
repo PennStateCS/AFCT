@@ -181,3 +181,29 @@ describe('a person nobody has seen before', () => {
     expect(entry?.metadata).toMatchObject({ via: 'JUST_IN_TIME', accountCreated: true });
   });
 });
+
+/**
+ * Two first-time sign-ins for the same person, at the same moment.
+ *
+ * A launch in one tab and a sign-in in another is enough. Both look, both find nothing, both
+ * create, and the unique constraint refuses the second: that reached the browser as a failed
+ * sign-in for somebody whose account had in fact just been created.
+ */
+describe('two first sign-ins racing', () => {
+  it('signs both in as the same new person, and creates one account', async () => {
+    const newcomer = { subject: 'racing-subject', email: `racer-${SUFFIX}@example.test` };
+
+    const [first, second] = await Promise.all([
+      resolve(newcomer, true),
+      resolve(newcomer, true),
+    ]);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(first.userId).toBe(second.userId);
+
+    expect(await prisma.user.count({ where: { email: newcomer.email } })).toBe(1);
+    expect(await prisma.linkedIdentity.count({ where: { subject: 'racing-subject' } })).toBe(1);
+  });
+});

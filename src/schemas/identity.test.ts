@@ -23,8 +23,18 @@ describe('the issuer URL', () => {
 
   // Discovery appends a well-known path, and a trailing slash produces a double slash that some
   // providers reject and others quietly 404. Better to refuse what was pasted.
-  it('rejects a trailing slash', () => {
-    expect(accepts('https://login.your-university.edu/')).toBe(false);
+  /**
+   * An issuer is an identifier, compared against `iss` character by character, and some
+   * providers publish one that ends in a slash: Auth0 tenants do. Rejecting them made AFCT
+   * unusable with those providers; the discovery URL is built to suit instead.
+   */
+  it('accepts a trailing slash, because some issuers have one', () => {
+    expect(issuer.safeParse('https://tenant.eu.auth0.com/').success).toBe(true);
+  });
+
+  it('still refuses a query or a fragment, which discovery forbids', () => {
+    expect(issuer.safeParse('https://login.example.edu/?tenant=1').success).toBe(false);
+    expect(issuer.safeParse('https://login.example.edu/#x').success).toBe(false);
   });
 
   it('rejects plain http, which OIDC does not permit', () => {

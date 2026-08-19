@@ -927,3 +927,103 @@ describe('PUT /api/system-settings: SMTP transport security', () => {
     expect(prismaMock.systemSettings.upsert.mock.calls[0]?.[0].update.smtpPassword).toBeNull();
   });
 });
+
+/**
+ * Institutional sign-in, where "enabled" has to mean usable.
+ *
+ * Turning it on without an issuer, a client id or a secret left `getOidcConfig` returning null:
+ * the button disappears from the sign-in page while this screen still says it is on, so the
+ * administrator who turned it on has no way to tell that nobody can use it.
+ */
+describe('PUT /api/system-settings, institutional sign-in', () => {
+  const save = (body: Record<string, unknown>) =>
+    PUT(
+      new Request('http://localhost/api/system-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 50, ...body }),
+      }),
+      routeCtx(),
+    );
+
+  const stored = (over: Record<string, unknown> = {}) => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      smtpSecurity: 'STARTTLS',
+      smtpUsername: null,
+      smtpPassword: null,
+      oidcEnabled: false,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+      ...over,
+    });
+    prismaMock.systemSettings.upsert.mockResolvedValue({ id: 1 });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+  });
+
+  it('refuses to turn it on with nothing configured, and says what is missing', async () => {
+    stored();
+
+    const res = await save({ oidcEnabled: true });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('issuer');
+    expect(body.error).toContain('client ID');
+    expect(body.error).toContain('client secret');
+  });
+
+  it('refuses to turn it on without a secret', async () => {
+    stored({ oidcIssuer: 'https://login.example.edu', oidcClientId: 'client' });
+
+    expect((await save({ oidcEnabled: true })).status).toBe(400);
+  });
+
+  it('refuses to clear the secret while it is on', async () => {
+    stored({
+      oidcEnabled: true,
+      oidcIssuer: 'https://login.example.edu',
+      oidcClientId: 'client',
+      oidcClientSecret: 'encrypted',
+    });
+
+    expect((await save({ oidcClientSecretClear: true })).status).toBe(400);
+  });
+
+  it('accepts a complete configuration', async () => {
+    stored({ oidcIssuer: 'https://login.example.edu', oidcClientId: 'client' });
+
+    const res = await save({ oidcEnabled: true, oidcClientSecret: 'a-secret' });
+
+    expect(res.status).toBe(200);
+  });
+
+  /** Opaque, like the SMTP password beside it: the edges may be part of the secret. */
+  it('stores a client secret with its spaces intact', async () => {
+    stored({ oidcIssuer: 'https://login.example.edu', oidcClientId: 'client' });
+
+    await save({ oidcEnabled: true, oidcClientSecret: '  spaced secret  ' });
+
+    const written = prismaMock.systemSettings.upsert.mock.calls[0]?.[0].update.oidcClientSecret;
+    expect(decryptSecret(written)).toBe('  spaced secret  ');
+  });
+
+  it('leaves the stored secret alone when the field is empty', async () => {
+    stored({
+      oidcEnabled: true,
+      oidcIssuer: 'https://login.example.edu',
+      oidcClientId: 'client',
+      oidcClientSecret: 'encrypted',
+    });
+
+    await save({ oidcClientSecret: '' });
+
+    expect(prismaMock.systemSettings.upsert.mock.calls[0]?.[0].update).not.toHaveProperty(
+      'oidcClientSecret',
+    );
+  });
+});

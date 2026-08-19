@@ -136,3 +136,47 @@ describe('disconnecting one', () => {
     expect((await del(`li-p-${SUFFIX}`)).status).toBe(401);
   });
 });
+
+/**
+ * Two disconnections at once, on an account with no password and two identities.
+ *
+ * Each request used to read the count, see two, and delete a different row, leaving somebody
+ * with no password and no identity: an account nobody can get into without an administrator.
+ * The rule is now one serializable decision, so whichever request arrives second is refused.
+ */
+describe('removing two identities at the same moment', () => {
+  it('always leaves a way in', async () => {
+    session.current = { user: { id: ids.noPassword } };
+    const [first, second] = await Promise.all([
+      prisma.linkedIdentity.create({
+        data: {
+          userId: ids.noPassword,
+          kind: 'OIDC',
+          issuer: `${ISSUER}/one`,
+          subject: 'race-a',
+          linkedVia: 'SELF_SERVICE',
+        },
+      }),
+      prisma.linkedIdentity.create({
+        data: {
+          userId: ids.noPassword,
+          kind: 'OIDC',
+          issuer: `${ISSUER}/two`,
+          subject: 'race-b',
+          linkedVia: 'SELF_SERVICE',
+        },
+      }),
+    ]);
+
+    const before = await prisma.linkedIdentity.count({ where: { userId: ids.noPassword } });
+
+    const [a, b] = await Promise.all([del(first.id), del(second.id)]);
+
+    // One removal succeeds and the other is refused. Both succeeding is the fault: it leaves
+    // an account with no password and nothing left to sign in with.
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const after = await prisma.linkedIdentity.count({ where: { userId: ids.noPassword } });
+    expect(after).toBe(before - 1);
+    expect(after).toBeGreaterThanOrEqual(1);
+  });
+});
