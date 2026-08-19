@@ -191,16 +191,31 @@ export default function StudentAssignmentPage({
    * followed a link to something they cannot open was told twice and pushed to the dashboard
    * twice. One cause, one message, whatever the cause was.
    */
-  const reportedFailure = useRef(false);
+  /**
+   * What this page load has already said, ranked.
+   *
+   * Two reads fail together, so one cause used to be reported twice. A plain "reported
+   * already" flag fixes that and creates a worse fault: whichever read failed first decides
+   * everything, so a 500 arriving before a 403 swallows the 403 *and the redirect it owes*,
+   * leaving somebody sitting on a page they have no access to.
+   *
+   * Ranking keeps both properties. A generic failure speaks only if nothing has; a terminal
+   * one (gone, or refused) always gets its say once, because it is the answer and it carries
+   * the navigation. Worst case is two messages, and only when the two reads genuinely
+   * disagree about what went wrong.
+   */
+  const reported = useRef<'none' | 'generic' | 'terminal'>('none');
 
   const reportLoadFailure = useCallback(
     (error: unknown, context: string) => {
-      // Every page-level failure, not only the ones that navigate: two reads failing with a 500
-      // produced the same "could not load" message twice, which reads as two faults.
-      if (reportedFailure.current) return;
-      reportedFailure.current = true;
-
       const status = error instanceof HttpError ? error.status : undefined;
+      const terminal = status === 404 || status === 403;
+
+      // A terminal answer speaks once, whatever came before it; a generic one only when the
+      // page has said nothing at all.
+      if (terminal ? reported.current === 'terminal' : reported.current !== 'none') return;
+      reported.current = terminal ? 'terminal' : 'generic';
+
       if (status === 404) {
         showToast.error(
           'This assignment is not available. It may have been removed, or you may not have access to it.',
@@ -222,6 +237,15 @@ export default function StudentAssignmentPage({
     },
     [router],
   );
+
+  /**
+   * A load that works clears the slate, so a failure in a later cycle is still reported. The
+   * page refetches in place (see `refreshContext`), and without this the first failure would
+   * silence every later one for as long as the page stayed open.
+   */
+  useEffect(() => {
+    if (assignmentQuery.isSuccess && contextQuery.isSuccess) reported.current = 'none';
+  }, [assignmentQuery.isSuccess, contextQuery.isSuccess]);
 
   useEffect(() => {
     if (assignmentQuery.error)

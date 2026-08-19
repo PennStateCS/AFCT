@@ -376,10 +376,11 @@ describe('enrolling from a launch', () => {
   });
 
   /**
-   * The race the catch exists for: the row is already there, so the launch reads back what the
-   * constraint settled on rather than failing.
+   * A row that is already there when the launch looks, which returns before any insert is
+   * attempted. The branch behind the unique-constraint catch cannot be reached on demand
+   * against a real database, so it is driven with mocks in `course-link-races.test.ts`.
    */
-  it('accepts a row another launch has already written', async () => {
+  it('keeps the role on a row that already exists, without attempting an insert', async () => {
     await prisma.roster.create({ data: { courseId: COURSE, userId: ids.student, role: 'TA' } });
 
     const result = await enrolFromLaunch({
