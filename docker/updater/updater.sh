@@ -90,11 +90,21 @@ UPDATER_VERSION_FILE="${TRIGGER_DIR}/updater.version"
 # upgrade failed late with an error the operator could not act on.
 UPDATER_READINESS_FILE="${TRIGGER_DIR}/updater.readiness.json"
 
+# What the server itself needs, as opposed to what AFCT needs: a pending restart, waiting
+# security updates, a clock that has drifted. The app container deliberately cannot see any
+# of this (it grades untrusted submissions, so it gets no host mounts), but this container
+# already drives the Docker socket, so it is the one place the facts are reachable. Written
+# every poll beside the files above and read by Admin -> System Status.
+HOST_FACTS_FILE="${TRIGGER_DIR}/host.json"
+# Where the host's own directories are mounted, read-only. Overridden by the tests.
+HOST_ROOT="${UPDATER_HOST_ROOT:-/host}"
+
 HEALTH_TIMEOUT="${UPDATER_HEALTH_TIMEOUT:-300}"
 HEALTH_INTERVAL="${UPDATER_HEALTH_INTERVAL:-5}"
 BACKUP_TIMEOUT="${UPDATER_BACKUP_TIMEOUT:-600}"
 RESTORE_TIMEOUT="${UPDATER_RESTORE_TIMEOUT:-600}"
 POLL_INTERVAL="${UPDATER_POLL_INTERVAL:-5}"
+HOST_FACTS_INTERVAL="${UPDATER_HOST_FACTS_INTERVAL:-300}"
 REQUIRE_BACKUP="${UPDATER_REQUIRE_BACKUP:-false}"
 ONCE="${UPDATER_ONCE:-false}"
 
@@ -1424,6 +1434,96 @@ stamp_updater_readiness() {
     mv "${UPDATER_READINESS_FILE}.tmp" "$UPDATER_READINESS_FILE" 2>/dev/null || true
 }
 
+# --------------------------------------------------------------------------- #
+# Host facts
+# --------------------------------------------------------------------------- #
+
+# Read one KEY=value out of the host's os-release, unquoted.
+host_os_release_field() {
+  _field=$1
+  [ -r "${HOST_ROOT}/etc/os-release" ] || return 0
+  sed -n "s/^${_field}=//p" "${HOST_ROOT}/etc/os-release" 2>/dev/null |
+    head -n 1 | sed 's/^"//; s/"$//'
+}
+
+# The first number on the line of the pending-updates notice that matches a phrase.
+# The file is Ubuntu's own MOTD text, so it is matched loosely on purpose:
+#   "28 updates can be applied immediately."
+#   "5 of these updates are standard security updates."
+host_update_count() {
+  _phrase=$1
+  _file="${HOST_ROOT}/var/lib/update-notifier/updates-available"
+  [ -r "$_file" ] || return 0
+  grep -i -- "$_phrase" "$_file" 2>/dev/null | head -n 1 |
+    sed -n 's/^[^0-9]*\([0-9][0-9]*\).*/\1/p'
+}
+
+# Whether the host's clock is known to be in sync. Only systemd-timesyncd leaves a marker
+# we can see; a host running chrony or ntpd reports null (unknown) rather than false,
+# because "we cannot tell" and "the clock is wrong" are different answers and a wrong one
+# here would send an operator chasing a problem they do not have. It matters at all
+# because an LTI launch is signed and platforms allow only a few minutes of drift.
+host_time_synchronised() {
+  [ -d "${HOST_ROOT}/run/systemd/timesync" ] || return 0
+  if [ -e "${HOST_ROOT}/run/systemd/timesync/synchronized" ]; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+# Write what this container can see of the host it runs on. Everything is best-effort and
+# absence is reported as absence: `supported` is false unless the host is recognisably
+# Debian or Ubuntu with its /run mounted, so a Windows or unmounted install shows nothing
+# at all rather than claiming a server is up to date on no evidence.
+stamp_host_facts() {
+  _os_id=$(host_os_release_field ID)
+  _os_like=$(host_os_release_field ID_LIKE)
+  _os_name=$(host_os_release_field PRETTY_NAME)
+
+  _supported=false
+  case " ${_os_id} ${_os_like} " in
+    *" debian "*|*" ubuntu "*) [ -d "${HOST_ROOT}/run" ] && _supported=true ;;
+  esac
+
+  _reboot=false
+  _pkgs='[]'
+  _updates=null
+  _security=null
+  _synced=null
+
+  if [ "$_supported" = true ]; then
+    [ -f "${HOST_ROOT}/run/reboot-required" ] && _reboot=true
+    if [ -r "${HOST_ROOT}/run/reboot-required.pkgs" ]; then
+      _pkgs=$(sort -u "${HOST_ROOT}/run/reboot-required.pkgs" 2>/dev/null |
+        grep -v '^[[:space:]]*$' | jq -R . | jq -s . 2>/dev/null) || _pkgs='[]'
+      [ -n "$_pkgs" ] || _pkgs='[]'
+    fi
+    _n=$(host_update_count 'can be applied immediately')
+    [ -n "$_n" ] && _updates=$_n
+    _n=$(host_update_count 'security update')
+    [ -n "$_n" ] && _security=$_n
+    _n=$(host_time_synchronised)
+    [ -n "$_n" ] && _synced=$_n
+  fi
+
+  jq -n \
+    --arg checkedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg osName "$_os_name" \
+    --argjson supported "$_supported" \
+    --argjson rebootRequired "$_reboot" \
+    --argjson rebootPackages "$_pkgs" \
+    --argjson updatesAvailable "$_updates" \
+    --argjson securityUpdatesAvailable "$_security" \
+    --argjson timeSynchronised "$_synced" \
+    '{checkedAt:$checkedAt, supported:$supported, osName:$osName,
+      rebootRequired:$rebootRequired, rebootPackages:$rebootPackages,
+      updatesAvailable:$updatesAvailable, securityUpdatesAvailable:$securityUpdatesAvailable,
+      timeSynchronised:$timeSynchronised}' \
+    > "${HOST_FACTS_FILE}.tmp" 2>/dev/null &&
+    mv "${HOST_FACTS_FILE}.tmp" "$HOST_FACTS_FILE" 2>/dev/null || true
+}
+
 # This updater's own running version, recomputed live (same logic as stamp_updater_version
 # but returned, not written), for the self-update confirmation handshake.
 current_updater_version() {
@@ -1660,6 +1760,8 @@ recover_transaction() {
 log "AFCT updater started (watching ${TRIGGER_DIR})"
 stamp_updater_version
 stamp_updater_readiness
+stamp_host_facts
+HOST_FACTS_STAMPED_AT=$(date +%s 2>/dev/null || printf '0')
 beat
 # Say it in the log too, so `docker logs` shows the misconfiguration without the app.
 [ -f "$ENV_FILE" ] || log "WARNING: no environment file at ${ENV_FILE}; upgrades will fail until this updater is recreated"
@@ -1689,6 +1791,13 @@ while :; do
   # Re-stamped each poll rather than only at startup: the operator can fix a bad mount or
   # restore a missing env file on the host, and the Updates tab should clear on its own.
   stamp_updater_readiness
+  # Host facts change on the scale of an apt run, not a poll, and reading them costs a
+  # handful of processes, so they are refreshed on their own slower clock.
+  _now=$(date +%s 2>/dev/null || printf '0')
+  if [ $((_now - HOST_FACTS_STAMPED_AT)) -ge "$HOST_FACTS_INTERVAL" ]; then
+    stamp_host_facts
+    HOST_FACTS_STAMPED_AT=$_now
+  fi
   if [ -f "$REQUEST_FILE" ]; then
     process_request || log "request processing raised an unexpected error"
   fi

@@ -1,0 +1,89 @@
+import { describe, expect, it } from 'vitest';
+import { hostNotices, hostUnavailableMessage } from './host-notices';
+import type { HostBlock } from '@/lib/status/types';
+
+const host = (extra: Partial<HostBlock> = {}): HostBlock => ({
+  available: true,
+  checkedAt: '2026-08-19T11:58:00Z',
+  osName: 'Ubuntu 24.04.1 LTS',
+  rebootRequired: false,
+  rebootPackages: [],
+  updatesAvailable: 0,
+  securityUpdatesAvailable: 0,
+  timeSynchronised: true,
+  ...extra,
+});
+
+const ids = (block: HostBlock) => hostNotices(block).map((n) => n.id);
+
+describe('what the Host section says', () => {
+  it('says so plainly when there is nothing to do', () => {
+    expect(ids(host())).toEqual(['all-clear']);
+    expect(hostNotices(host())[0]?.tone).toBe('ok');
+  });
+
+  it('asks for a restart, and warns what a restart costs', () => {
+    const [notice] = hostNotices(host({ rebootRequired: true }));
+
+    expect(notice?.tone).toBe('warn');
+    // Whoever reads this runs a course. The consequence they need is that people get signed
+    // out and grading stops, not which packages asked for it.
+    expect(notice?.detail).toMatch(/signed out/i);
+    expect(notice?.detail).toMatch(/grading stops/i);
+  });
+
+  it('names a few of the packages behind a restart, and counts the rest', () => {
+    const [notice] = hostNotices(
+      host({ rebootRequired: true, rebootPackages: ['libc6', 'linux-image-generic', 'openssl', 'dbus', 'systemd'] }),
+    );
+
+    expect(notice?.detail).toContain('libc6');
+    expect(notice?.detail).toContain('and 2 more');
+  });
+
+  it('treats security updates as worth acting on and the rest as not', () => {
+    const security = hostNotices(host({ updatesAvailable: 12, securityUpdatesAvailable: 3 }))[0];
+    expect(security?.id).toBe('security-updates');
+    expect(security?.tone).toBe('warn');
+    expect(security?.title).toContain('3 security updates are');
+
+    const ordinary = hostNotices(host({ updatesAvailable: 12, securityUpdatesAvailable: 0 }))[0];
+    expect(ordinary?.id).toBe('updates');
+    expect(ordinary?.tone).toBe('info');
+  });
+
+  it('says nothing about updates it could not count', () => {
+    expect(ids(host({ updatesAvailable: null, securityUpdatesAvailable: null }))).toEqual(['all-clear']);
+  });
+
+  /** A clock AFCT cannot check is not a clock that is wrong. */
+  it('mentions the clock only when it is known to be adrift', () => {
+    expect(ids(host({ timeSynchronised: null }))).toEqual(['all-clear']);
+    expect(ids(host({ timeSynchronised: false }))).toContain('clock');
+    // The reason it matters here rather than in the abstract.
+    expect(hostNotices(host({ timeSynchronised: false }))[0]?.detail).toMatch(/Canvas|Moodle/);
+  });
+
+  it('reports several things at once', () => {
+    expect(ids(host({ rebootRequired: true, securityUpdatesAvailable: 2, timeSynchronised: false }))).toEqual([
+      'reboot',
+      'security-updates',
+      'clock',
+    ]);
+  });
+
+  it('says nothing at all when it has no report', () => {
+    expect(hostNotices({ available: false, reason: 'no-report' })).toEqual([]);
+  });
+
+  it.each(['no-report', 'stale', 'unsupported'] as const)(
+    'explains a missing report (%s) without blaming the operator',
+    (reason) => {
+      const message = hostUnavailableMessage({ available: false, reason });
+
+      expect(message).toMatch(/cannot|not running/i);
+      // The failure that matters: this must never read as an all-clear.
+      expect(message).not.toMatch(/up to date|nothing needs doing/i);
+    },
+  );
+});
