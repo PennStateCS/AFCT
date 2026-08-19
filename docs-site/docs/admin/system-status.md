@@ -12,13 +12,25 @@ Select **Refresh** for a new snapshot, or turn on **Auto-refresh** to update eve
 
 | Tab          | What to check                                                                                                               |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| **Server**   | CPU, memory, disk activity, software versions, environment, hostname, and network interfaces.                               |
+| **Server**   | Maintenance the server itself needs, plus CPU, memory, disk activity, software versions, environment, hostname, and network interfaces. |
 | **Database** | Connection health, provider, version, migration, size, table count, and database performance.                               |
 | **Docker**   | Container identity, hostname, and cgroup information. A non-container installation reports that Docker data is unavailable. |
 | **Network**  | Database and authentication latency, connection counts, error rates, DNS results, and configured hosts.                     |
 | **Session**  | Session counts and accounts seen during the last 24 hours, including recent IP and user-agent details.                      |
 | **Files**    | Uploaded files that exist on disk without a matching database record.                                                       |
 | **Rate Limits** | IP addresses AFCT is currently turning away for making too many requests.                                                |
+
+## What the server itself needs
+
+The **This server** section on the Server tab reports on the machine AFCT runs on, rather than on AFCT:
+
+- **A restart is waiting.** Updates have been installed that only take effect after the server is restarted. Restart it when nobody is using AFCT, because everyone signed in is signed out and grading stops until it comes back.
+- **Security updates are waiting.** Ask whoever administers the server to install them.
+- **The clock has drifted.** Worth fixing promptly. A launch from Canvas, Moodle or Blackboard is signed and timestamped, and platforms refuse one whose clock disagrees with theirs by more than a few minutes.
+
+When something needs attention, a **Server needs attention** badge also appears beside the page title.
+
+This information comes from the update service, which is the only part of AFCT allowed to see the machine (the application itself is deliberately walled off from it, because that is where submissions are graded). If that service is not running, or the server does not run Ubuntu or Debian, the section says AFCT cannot tell rather than reporting that everything is fine. Installing the updates themselves is always done on the server, never through AFCT.
 
 ## Remove an abandoned file
 

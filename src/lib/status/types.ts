@@ -349,6 +349,7 @@ export type RateLimitsStatusResponse = {
 /* ---------------- Summary (top cards) ---------------- */
 export type SummaryStatus = {
   db: { ok: boolean; message: string; provider: 'sqlite' | 'postgres' | 'unknown' };
+  host?: HostBlock;
   uptime?: number;
   procCpuPct?: number;
   procMemPct?: number;
