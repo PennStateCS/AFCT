@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  LTI_FRAME_COOKIE,
-  frameMarkerCookie,
-  framedAuthCookies,
-  hasFrameMarker,
-  isFramedRequest,
-} from './frame-session';
+import { LTI_FRAME_COOKIE, clearFrameMarkerCookie, frameMarkerCookie, framedAuthCookies, hasFrameMarker, isFramedRequest, isTopLevelDocument } from './frame-session';
 
 /**
  * The cookies a launch needs when AFCT is inside an LMS page.
@@ -66,10 +60,12 @@ describe('the sign-in cookies inside a frame', () => {
     expect(cookies.csrfToken.options.httpOnly).toBe(true);
   });
 
-  it('names no cookies, so Auth.js keeps its own for the deployment', () => {
-    // Naming them here would drop the `__Secure-` prefixes Auth.js chooses on https.
+  it('names every cookie, because sharing the Auth.js names locked people out', () => {
+    // They used to be unnamed, which left them sharing Auth.js's names with different
+    // attributes: the browser then kept both cookies instead of one replacing the other. The
+    // naming rules themselves are asserted below.
     for (const cookie of Object.values(cookies)) {
-      expect(cookie).not.toHaveProperty('name');
+      expect(cookie).toHaveProperty('name');
     }
   });
 
@@ -79,5 +75,57 @@ describe('the sign-in cookies inside a frame', () => {
     expect(cookies).not.toHaveProperty('state');
     expect(cookies).not.toHaveProperty('nonce');
     expect(cookies).not.toHaveProperty('pkceCodeVerifier');
+  });
+});
+
+describe('cookies that cannot collide with an ordinary session', () => {
+  /**
+   * The bug this prevents: the framed cookies used Auth.js's own names with different
+   * attributes, so a browser kept both instead of replacing one with the other. Signing in
+   * wrote one, the browser went on sending the other, and every page bounced back to the login
+   * form until the person cleared cookies for the site.
+   */
+  it('names every framed cookie differently from the ordinary ones', () => {
+    const cookies = framedAuthCookies();
+    const names = [
+      cookies.sessionToken.name,
+      cookies.csrfToken.name,
+      cookies.callbackUrl.name,
+    ];
+
+    expect(new Set(names).size).toBe(3);
+    for (const name of names) {
+      expect(name).toContain('afct.framed');
+      expect(name).not.toContain('authjs.session-token');
+    }
+  });
+
+  /** `__Host-` needs Secure and Path=/, which is exactly what Partitioned needs as well. */
+  it('keeps the attributes the __Host- prefix requires', () => {
+    const cookies = framedAuthCookies();
+
+    for (const cookie of Object.values(cookies)) {
+      expect(cookie.name.startsWith('__Host-')).toBe(true);
+      expect(cookie.options.secure).toBe(true);
+      expect(cookie.options.path).toBe('/');
+    }
+  });
+});
+
+describe('forgetting a frame', () => {
+  it('knows a page opened in its own tab from one loaded into a frame', () => {
+    expect(isTopLevelDocument(new Headers({ 'sec-fetch-dest': 'document' }))).toBe(true);
+    expect(isTopLevelDocument(new Headers({ 'sec-fetch-dest': 'iframe' }))).toBe(false);
+    expect(isTopLevelDocument(new Headers({ 'sec-fetch-dest': 'empty' }))).toBe(false);
+    expect(isTopLevelDocument(new Headers())).toBe(false);
+  });
+
+  it('expires the marker with the attributes it was set with, or it would not match', () => {
+    const cleared = clearFrameMarkerCookie();
+
+    expect(cleared).toContain('Max-Age=0');
+    expect(cleared).toContain('Partitioned');
+    expect(cleared).toContain('SameSite=None');
+    expect(cleared).toContain('Path=/');
   });
 });

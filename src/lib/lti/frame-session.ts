@@ -28,6 +28,18 @@
  * Not a complete answer on its own. Safari refuses third-party cookie writes outright unless
  * the tool has been granted storage access, so a launch there can still fail; the launch page
  * offers a new tab for that case, which is first-party and always works.
+ *
+ * ## Why the framed cookies have names of their own
+ *
+ * They used to reuse Auth.js's names with different attributes, which locked somebody out of
+ * AFCT entirely. A browser keys a cookie by name, domain and path, and treats a partitioned one
+ * as separate storage, so the two did not replace each other: signing in wrote one while the
+ * browser went on sending the other, the edge read one and the app read the other, and every
+ * sign-in succeeded and every page bounced back to the login form. The only way out was
+ * clearing cookies for the site, which nobody would guess.
+ *
+ * Distinct names make that impossible rather than unlikely: a framed session and an ordinary
+ * one are different cookies, both can exist, and each context reads its own.
  */
 
 /** Present only inside a framed launch, because that is the only place it can be set. */
@@ -39,6 +51,18 @@ const FRAME_COOKIE_MAX_AGE_S = 24 * 60 * 60;
 /** Whether this request is a document being loaded into somebody else's frame. */
 export function isFramedRequest(headers: Headers): boolean {
   return headers.get('sec-fetch-dest') === 'iframe';
+}
+
+/**
+ * Whether this request is a page being loaded at the top level, in its own tab or window.
+ *
+ * A browser says `document` for a normal navigation and `iframe` for one into a frame, so this
+ * is the moment AFCT can tell it is *not* embedded any more, and the moment to forget it ever
+ * was. Without it the marker outlives the launch and quietly changes how ordinary browsing is
+ * treated for the rest of the day.
+ */
+export function isTopLevelDocument(headers: Headers): boolean {
+  return headers.get('sec-fetch-dest') === 'document';
 }
 
 /** Whether AFCT is already known to be framed, from the marker set on the way in. */
@@ -68,6 +92,32 @@ export function frameMarkerCookie(): string {
   ].join('; ');
 }
 
+/** Expire the marker, for a page that has just been opened outside any frame. */
+export function clearFrameMarkerCookie(): string {
+  return [
+    `${LTI_FRAME_COOKIE}=`,
+    'Path=/',
+    'SameSite=None',
+    'Secure',
+    'Partitioned',
+    'HttpOnly',
+    'Max-Age=0',
+  ].join('; ');
+}
+
+/**
+ * The names a framed session's cookies use.
+ *
+ * `__Host-` because these only ever exist on https (an LMS will not embed anything else) and
+ * the prefix is what stops a subdomain writing one. Partitioned needs the same two properties
+ * the prefix enforces, `Secure` and `Path=/`, so the two agree by construction.
+ */
+export const FRAMED_COOKIE_NAMES = {
+  sessionToken: '__Host-afct.framed.session-token',
+  csrfToken: '__Host-afct.framed.csrf-token',
+  callbackUrl: '__Host-afct.framed.callback-url',
+} as const;
+
 /**
  * Auth.js cookie options for a request inside a framed launch.
  *
@@ -76,14 +126,18 @@ export function frameMarkerCookie(): string {
  * nonce and PKCE cookies are deliberately left alone, because institutional sign-in never runs
  * inside an LMS frame and widening them would be a change nobody asked for.
  *
- * Names are omitted so Auth.js keeps its own, which depend on whether the deployment is https;
- * the config is merged into its defaults rather than replacing them.
+ * The names are AFCT's own rather than Auth.js's defaults, so a framed session and an ordinary
+ * one are separate cookies that cannot overwrite or shadow each other. See the note at the top
+ * of this file for what happened when they shared names.
  */
 export function framedAuthCookies() {
   const options = { sameSite: 'none', secure: true, partitioned: true, path: '/' } as const;
   return {
-    sessionToken: { options: { ...options, httpOnly: true } },
-    csrfToken: { options: { ...options, httpOnly: true } },
-    callbackUrl: { options: { ...options, httpOnly: false } },
+    sessionToken: { name: FRAMED_COOKIE_NAMES.sessionToken, options: { ...options, httpOnly: true } },
+    csrfToken: { name: FRAMED_COOKIE_NAMES.csrfToken, options: { ...options, httpOnly: true } },
+    callbackUrl: {
+      name: FRAMED_COOKIE_NAMES.callbackUrl,
+      options: { ...options, httpOnly: false },
+    },
   };
 }

@@ -6,7 +6,14 @@ import { requireAuthSecret } from '@/lib/auth-secret';
 // Next 16 runs Proxy on the Node.js runtime, so the database is reachable here. It is read
 // once a minute at most, and only for the LTI routes.
 import { prisma } from '@/lib/prisma';
-import { frameMarkerCookie, isFramedRequest } from '@/lib/lti/frame-session';
+import {
+  clearFrameMarkerCookie,
+  frameMarkerCookie,
+  hasFrameMarker,
+  isFramedRequest,
+  isTopLevelDocument,
+  FRAMED_COOKIE_NAMES,
+} from '@/lib/lti/frame-session';
 
 /**
  * Coarse, edge-level authentication net.
@@ -209,6 +216,16 @@ async function prepareCsp(req: NextRequest, pathname: string) {
    * ordinary one must not have.
    */
   const markFrame = isLtiPath(pathname) && isFramedRequest(req.headers);
+
+  /**
+   * Forget the frame as soon as AFCT is opened outside one.
+   *
+   * The marker outlives a launch by design, because the fetches that follow cannot tell anyone
+   * they are framed. A page opened in its own tab can, and says so on every navigation, so this
+   * is where a marker left over from an LMS launch stops applying to ordinary browsing.
+   */
+  const forgetFrame =
+    !markFrame && isTopLevelDocument(req.headers) && hasFrameMarker(req.headers.get('cookie'));
   const requestHeaders = new Headers(req.headers);
   // A request header is invisible to the browser (so it doesn't enforce anything);
   // Next uses it only to discover the nonce and apply it to its script tags.
@@ -218,15 +235,22 @@ async function prepareCsp(req: NextRequest, pathname: string) {
     ? 'content-security-policy'
     : 'content-security-policy-report-only';
   return {
+    /**
+     * Whether this request belongs to a framed session, which decides where the edge looks for
+     * its cookie. Computed here beside the marker rules so the two cannot drift apart.
+     */
+    framed: !forgetFrame && hasFrameMarker(req.headers.get('cookie')),
     pass: () => {
       const res = NextResponse.next({ request: { headers: requestHeaders } });
       res.headers.set(responseHeader, csp);
       if (markFrame) res.headers.append('set-cookie', frameMarkerCookie());
+      if (forgetFrame) res.headers.append('set-cookie', clearFrameMarkerCookie());
       return res;
     },
     withCsp: (res: NextResponse) => {
       res.headers.set(responseHeader, csp);
       if (markFrame) res.headers.append('set-cookie', frameMarkerCookie());
+      if (forgetFrame) res.headers.append('set-cookie', clearFrameMarkerCookie());
       return res;
     },
   };
@@ -234,7 +258,7 @@ async function prepareCsp(req: NextRequest, pathname: string) {
 
 export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
-  const { pass, withCsp } = await prepareCsp(req, pathname);
+  const { pass, withCsp, framed } = await prepareCsp(req, pathname);
 
   const isApi = pathname.startsWith('/api/');
   const isDashboard = pathname.startsWith('/dashboard');
@@ -251,9 +275,15 @@ export async function proxy(req: NextRequest) {
     return pass();
   }
 
+  /**
+   * A framed session lives in cookies of its own, so the edge has to be told which to read.
+   * Reading the default names for a framed request would find nothing and bounce a signed-in
+   * person to a login page their LMS frame cannot show properly.
+   */
   const token = await getToken({
     req,
     secret: requireAuthSecret(),
+    ...(framed ? { cookieName: FRAMED_COOKIE_NAMES.sessionToken } : {}),
     // NextAuth names the session cookie from the URL scheme, not from NODE_ENV: on https it
     // sets `__Secure-next-auth.session-token`. Keying this off NODE_ENV alone means any https
     // deployment that is not a production build looks signed out to the edge, and every API
