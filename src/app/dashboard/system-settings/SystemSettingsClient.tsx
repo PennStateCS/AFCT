@@ -148,6 +148,11 @@ export default function SystemSettingsClient() {
     Boolean(settingsData?.smtpPasswordConfigured),
   );
   const [smtpPasswordClear, setSmtpPasswordClear] = useState(false);
+  // Whether this deployment can read the stored mail password, which separates "Enabled" from
+  // "Enabled, but unavailable" on the Email tab.
+  const [smtpPasswordReadable, setSmtpPasswordReadable] = useState(() =>
+    Boolean(settingsData?.smtpPasswordReadable),
+  );
 
   // The OIDC client secret is write-only for the same reason as the two above.
   const [oidcClientSecret, setOidcClientSecret] = useState('');
@@ -176,6 +181,7 @@ export default function SystemSettingsClient() {
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
     setSmtpPasswordConfigured(Boolean(settingsData.smtpPasswordConfigured));
+    setSmtpPasswordReadable(Boolean(settingsData.smtpPasswordReadable));
     setSmtpPassword('');
     setSmtpPasswordClear(false);
     setOidcClientSecretConfigured(Boolean(settingsData.oidcClientSecretConfigured));
@@ -286,8 +292,10 @@ export default function SystemSettingsClient() {
       // Same write-only rule as the hCaptcha secret: send nothing to keep what is stored.
       ...(smtpPasswordClear
         ? { smtpPasswordClear: true }
-        : smtpPassword.trim()
-          ? { smtpPassword: smtpPassword.trim() }
+        : // Sent exactly as typed. A mail password is opaque and its edges may be part of it;
+          // trimming here quietly undid the server's care to store it verbatim.
+          smtpPassword !== ''
+          ? { smtpPassword }
           : {}),
       oidcEnabled,
       oidcIssuer: oidcIssuer.trim(),
@@ -365,10 +373,18 @@ export default function SystemSettingsClient() {
       setOidcClientSecretConfigured(
         oidcClientSecretClear ? false : oidcClientSecret !== '' ? true : oidcClientSecretConfigured,
       );
+      // What the save left stored, so the placeholder and the status read true afterwards.
+      setSmtpPasswordConfigured(
+        smtpPasswordClear ? false : smtpPassword !== '' ? true : smtpPasswordConfigured,
+      );
       setOidcClientSecret('');
       setOidcClientSecretClear(false);
       setHcaptchaSecretKey('');
       setHcaptchaSecretClear(false);
+      // The plaintext has been saved; keeping it in the page serves nothing and outlives its
+      // purpose in memory and in the field.
+      setSmtpPassword('');
+      setSmtpPasswordClear(false);
       // Keep the read cache consistent with what we just saved so a later revisit
       // (served from cache) reflects the new values, not the pre-save response.
       queryClient.setQueryData<SystemSettingsResponse>(['admin', 'settings'], (prev) =>
@@ -412,7 +428,7 @@ export default function SystemSettingsClient() {
               // A password that was just set is now stored; a cleared one is not.
               smtpPasswordConfigured: smtpPasswordClear
                 ? false
-                : smtpPassword.trim() !== '' || smtpPasswordConfigured,
+                : smtpPassword !== '' || smtpPasswordConfigured,
               hcaptchaSecretConfigured: hcaptchaSecretClear
                 ? false
                 : hcaptchaSecretKey.trim()
@@ -432,8 +448,14 @@ export default function SystemSettingsClient() {
   const resetForm = () => {
     if (!baseline) return;
     dispatchForm({ type: 'reset', snapshot: baseline });
+    // Every unsaved secret, not only hCaptcha's: Reset means the form as it was saved, and a
+    // typed password left behind would be saved by the next click of Save.
     setHcaptchaSecretKey('');
     setHcaptchaSecretClear(false);
+    setSmtpPassword('');
+    setSmtpPasswordClear(false);
+    setOidcClientSecret('');
+    setOidcClientSecretClear(false);
   };
 
   // "Loading" until the cached response has seeded the form, so fields never
@@ -442,11 +464,26 @@ export default function SystemSettingsClient() {
   const disabled = loading || saving;
 
   // `form` is the current snapshot; compare it to the saved baseline for the dirty state.
+  /**
+   * Changed, including the secrets the form object cannot hold.
+   *
+   * Write-only secrets live outside `form` because the browser is never sent the stored value,
+   * so comparing snapshots cannot see them. Only hCaptcha was counted, which meant typing a
+   * mail password or a client secret and nothing else left the page looking saved: no unsaved
+   * marker, no Reset, and on the Email tab no warning that "Send test message" uses the
+   * settings that are stored rather than the ones on screen.
+   *
+   * The typed value is what counts, never the stored one, which is not here to compare.
+   */
   const isDirty =
     !!baseline &&
     (JSON.stringify(form) !== JSON.stringify(baseline) ||
       hcaptchaSecretKey.trim() !== '' ||
-      hcaptchaSecretClear);
+      hcaptchaSecretClear ||
+      smtpPassword !== '' ||
+      smtpPasswordClear ||
+      oidcClientSecret !== '' ||
+      oidcClientSecretClear);
 
   const hcaptchaEnabled =
     hcaptchaSiteKey.trim() !== '' ||
@@ -530,6 +567,8 @@ export default function SystemSettingsClient() {
                 setField={setField}
                 disabled={disabled}
                 password={smtpPassword}
+                // A password typed just now is readable by definition; otherwise ask the server.
+                passwordReadable={smtpPassword !== '' || smtpPasswordReadable}
                 setPassword={setSmtpPassword}
                 passwordConfigured={smtpPasswordConfigured}
                 passwordClear={smtpPasswordClear}
