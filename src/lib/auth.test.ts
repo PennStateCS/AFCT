@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * stop coming back.
  *
  * Everything else here is mocked to the edge of the module, because the config is built on every
- * request and pulls in the adapter, the providers and the settings lookup on the way.
+ * request and pulls in the providers and the settings lookup on the way. There is no adapter to
+ * mock: AFCT owns federated identity in `LinkedIdentity`, and Auth.js's own tables do not exist.
  */
 
 const headersMock = vi.hoisted(() => vi.fn());
@@ -22,7 +23,6 @@ vi.mock('next-auth', () => ({
   default: () => ({ handlers: {}, auth: vi.fn(), signIn: vi.fn(), signOut: vi.fn() }),
 }));
 vi.mock('next-auth/providers/credentials', () => ({ default: (config: unknown) => config }));
-vi.mock('@auth/prisma-adapter', () => ({ PrismaAdapter: () => ({}) }));
 vi.mock('@/lib/prisma', () => ({ prisma: {} }));
 vi.mock('@/lib/auth-secret', () => ({ requireAuthSecret: () => 'test-secret' }));
 vi.mock('@/lib/oidc-provider', () => ({

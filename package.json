@@ -82,7 +82,6 @@
   },
   "dependencies": {
     "@auth/core": "0.41.3",
-    "@auth/prisma-adapter": "^2.11.2",
     "@dnd-kit/core": "^6.3.1",
     "@hcaptcha/react-hcaptcha": "^2.0.2",
     "@prisma/adapter-pg": "^7.8.0",
@@ -192,9 +191,6 @@
   "overrides": {
     "@auth/core": "0.41.3",
     "next-auth": {
-      "@auth/core": "0.41.3"
-    },
-    "@auth/prisma-adapter": {
       "@auth/core": "0.41.3"
     },
     "@redocly/openapi-core": {
