@@ -73,6 +73,17 @@ function diffSettings(
 }
 
 // Audit logging must never turn a successful save into a 500, so swallow its errors.
+/** Whether a stored secret can be decrypted with the key this deployment holds. */
+function storedSecretReadable(stored: string | null): boolean {
+  if (!stored) return false;
+  try {
+    return readStoredSecret(stored) !== null;
+  } catch {
+    // A missing or wrong key. Reported as "cannot be read"; the reason stays in the log.
+    return false;
+  }
+}
+
 /**
  * Returns the singleton system settings, falling back to defaults for any unset
  * field. The hCaptcha secret is never returned; only `hcaptchaSecretConfigured`
@@ -106,20 +117,13 @@ function diffSettings(
  *             activityLogRetentionDays: { type: integer }
  *             hcaptchaSiteKey: { type: string }
  *             hcaptchaSecretConfigured: { type: boolean, description: Whether a secret is stored; the value is never returned }
+ *             smtpPasswordConfigured: { type: boolean, description: Whether a mail password is stored; the value is never returned }
+ *             smtpPasswordReadable: { type: boolean, description: Whether the stored mail password can be decrypted here; false means mail cannot be sent }
+ *             oidcClientSecretConfigured: { type: boolean, description: Whether a client secret is stored; the value is never returned }
+ *             oidcClientSecretReadable: { type: boolean, description: Whether the stored client secret can be decrypted here; false means institutional sign-in cannot run }
  *             configuredUrl: { type: string, description: Read-only NEXTAUTH_URL (the app public address); set at the server level and not editable here }
  *   403: { description: Caller is not a system administrator. }
  */
-/** Whether a stored secret can be decrypted with the key this deployment holds. */
-function storedSecretReadable(stored: string | null): boolean {
-  if (!stored) return false;
-  try {
-    return readStoredSecret(stored) !== null;
-  } catch {
-    // A missing or wrong key. Reported as "cannot be read"; the reason stays in the log.
-    return false;
-  }
-}
-
 export const GET = withAdminAuth(
   async () => {
     // The whole row on purpose, unlike the public endpoint's narrowed read. This handler
