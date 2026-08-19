@@ -19,7 +19,6 @@
   "ignoreDependencies": [
     "pg",
     "@types/pg",
-    "@auth/core",
     "cmdk",
     "react-resizable-panels",
     "tailwindcss",
