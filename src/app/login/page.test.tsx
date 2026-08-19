@@ -791,3 +791,51 @@ describe('LoginPage', () => {
     expect(signInMock).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * What an institutional refusal leaves behind on this page.
+ *
+ * The callback sends people back to `/login?error=oidc&reason=...`, and the Auth.js client
+ * reads an `error` parameter *in the URL a sign-in returns* as that sign-in having failed. With
+ * the destination left to default, Auth.js echoes this very page, so every password sign-in
+ * afterwards was reported as wrong credentials while the server had signed the person in.
+ */
+describe('signing in with a password after an institutional refusal', () => {
+  beforeEach(() => {
+    searchState.current = new URLSearchParams('error=oidc&reason=email-not-verified');
+    window.history.replaceState({}, '', '/login?error=oidc&reason=email-not-verified');
+  });
+
+  it('tells the sign-in where to go, rather than letting this page decide', async () => {
+    signInMock.mockResolvedValueOnce({ error: null });
+    const user = userEvent.setup();
+
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'admin@example.com' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'StrongPass1!' } });
+    await waitFor(() => expect(getSubmitButton(LOGIN_SUBMIT_LABEL)).not.toBeDisabled());
+    await user.click(getSubmitButton(LOGIN_SUBMIT_LABEL));
+
+    await waitFor(() =>
+      expect(signInMock).toHaveBeenCalledWith(
+        'credentials',
+        expect.objectContaining({ callbackUrl: '/dashboard' }),
+      ),
+    );
+  });
+
+  it('takes the message out of the address bar once it has been shown', async () => {
+    // Asserted on the rewrite rather than on `location`, which this suite stubs.
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+
+    render(<LoginPage />);
+
+    await waitFor(() => expect(showToastErrorMock).toHaveBeenCalled());
+    await waitFor(() => expect(replaceState).toHaveBeenCalled());
+    const rewritten = String(replaceState.mock.calls.at(-1)?.[2] ?? '');
+    expect(rewritten).not.toContain('error=');
+    expect(rewritten).not.toContain('reason=');
+    replaceState.mockRestore();
+  });
+});

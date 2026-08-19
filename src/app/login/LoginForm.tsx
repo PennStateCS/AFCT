@@ -137,6 +137,22 @@ export default function LoginForm({
     }
   }, [allowSignup, mode]);
 
+  /** Strip the one-shot error parameters, keeping everything else about the URL. */
+  const clearAuthErrorParams = useCallback(() => {
+    try {
+      // From the same parameters the message was read out of, so the two cannot disagree.
+      const params = new URLSearchParams(searchParams.toString());
+      if (!params.has('error') && !params.has('reason')) return;
+      params.delete('error');
+      params.delete('reason');
+      const query = params.toString();
+      window.history.replaceState({}, '', `/login${query ? `?${query}` : ''}`);
+    } catch {
+      // Only the tidying is lost if the address cannot be rewritten; the message was shown,
+      // and the sign-in below states its own destination rather than reading this.
+    }
+  }, [searchParams]);
+
   // Surface NextAuth error query params as toast feedback.
   useEffect(() => {
     const error = searchParams.get('error');
@@ -165,11 +181,16 @@ export default function LoginForm({
      */
     if (error === 'oidc') {
       showToast.error(oidcRefusalMessage(searchParams.get('reason')));
+      // Taken out of the address bar once it has been read. It has done its job, a reload
+      // should not repeat it, and leaving it there means every later sign-in from this page
+      // carries an `error` parameter that the Auth.js client reads as its own failure.
+      clearAuthErrorParams();
       return;
     }
 
     showToast.error('Invalid email or password.');
-  }, [searchParams, requestCaptchaIfAvailable]);
+    clearAuthErrorParams();
+  }, [searchParams, requestCaptchaIfAvailable, clearAuthErrorParams]);
 
   // Classify a failed sign-in by asking the read-only login-check endpoint (NextAuth
   // hides the real reason). Returns 'challenge' (show captcha), 'blocked' (rate
@@ -214,6 +235,14 @@ export default function LoginForm({
       interactionMs: computeInteractionMs(),
       captchaToken: captchaToken ?? undefined,
       redirect: false,
+      // The destination, stated rather than left to default.
+      //
+      // Auth.js answers a `redirect: false` sign-in with a URL, and the client library treats
+      // an `error` parameter *in that URL* as a failed sign-in. Left to itself it echoes the
+      // page the request came from, so after an institutional refusal this page carries
+      // `?error=oidc` and every password sign-in from it was reported as wrong credentials
+      // while the server had in fact signed the person in.
+      callbackUrl,
     });
 
     if (result?.error) {
@@ -351,6 +380,8 @@ export default function LoginForm({
       interactionMs: computeInteractionMs(),
       captchaToken: captchaToken ?? undefined,
       redirect: false,
+      // Same reason as the sign-in above: never let the current URL decide this.
+      callbackUrl,
     });
 
     // The account was created; if the immediate auto-login didn't take, don't
