@@ -8,6 +8,8 @@ import path from 'path';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { isAdmin } from '@/lib/permissions';
+// The ways an identity is attached without anybody deciding to; a promotion clears them.
+import { AUTOMATIC } from '@/lib/linked-identity';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { getSystemUploadLimit } from '@/lib/upload-limits';
 import { safeStoredFilename, resolveInsideDir, safeUnlinkInDir } from '@/lib/safe-upload';
@@ -311,6 +313,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     }
 
     let updatedUser;
+    // Reported in the audit entry below: removing somebody's way of signing in is worth a record
+    // even when it happens as a consequence of something else.
+    let automaticLinksRemoved = 0;
     try {
       const write = (client: Prisma.TransactionClient | typeof prisma) =>
         client.user.update({
@@ -340,7 +345,34 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
        * An ordinary profile edit does not touch the invariant, so it stays a plain update
        * rather than paying for a serializable transaction it does not need.
        */
-      updatedUser = losesAdmin
+      /**
+       * Becoming an administrator removes any sign-in that was attached automatically.
+       *
+       * "Administrators are never attached automatically" is enforced when a link is made, by
+       * reading the account's standing. Promotion is the other side of that: an identity
+       * attached a moment before somebody became an administrator would otherwise stay, and the
+       * account would hold exactly the kind of link the rule exists to prevent. Deliberate
+       * links are untouched: an administrator who connected their institution on purpose keeps
+       * it, which is the supported way for them to have one.
+       *
+       * In the same serializable transaction as the promotion, so a link being made at that
+       * moment conflicts with it rather than landing just after the delete. The automatic
+       * linking path is serializable for the same reason.
+       */
+      const gainsAdmin = dataToUpdate.isAdmin === true && !userRecord?.isAdmin;
+
+      updatedUser = gainsAdmin
+        ? await prisma.$transaction(
+            async (tx) => {
+              const removed = await tx.linkedIdentity.deleteMany({
+                where: { userId, linkedVia: { in: AUTOMATIC } },
+              });
+              automaticLinksRemoved = removed.count;
+              return write(tx);
+            },
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          )
+        : losesAdmin
         ? await prisma.$transaction(
             async (tx) => {
               const otherActiveAdmins = await tx.user.count({
@@ -436,6 +468,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         changedFields: Object.keys(changes),
         changes,
         avatarChanged: dataToUpdate.avatar !== undefined,
+        // Promotion removes automatically-attached sign-ins. Recorded because it takes a way
+        // into the account away, and somebody reading this later needs to know why it went.
+        ...(automaticLinksRemoved > 0 ? { automaticLinksRemoved } : {}),
       },
     });
 

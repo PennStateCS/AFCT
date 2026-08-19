@@ -14,6 +14,9 @@ const prismaStub = vi.hoisted(() => ({
   linkedIdentity: { findUnique: vi.fn(), create: vi.fn() },
   user: { findUnique: vi.fn() },
   activityLog: { create: vi.fn(async () => ({})) },
+  // Automatic links run inside a serializable transaction so a concurrent promotion conflicts
+  // with them; the callback is run against this same stub.
+  $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaStub)),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaStub }));

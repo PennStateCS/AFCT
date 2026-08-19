@@ -45,7 +45,12 @@ export type LinkRefusal =
 export type LinkResult = { ok: true; created: boolean } | { ok: false; reason: LinkRefusal };
 
 /** The methods that happen without a person deciding, and therefore need the guardrails. */
-const AUTOMATIC: IdentityLinkMethod[] = ['AUTO_VERIFIED_EMAIL', 'JUST_IN_TIME'];
+/**
+ * The ways an identity can be attached without anybody deciding to attach it: a trusted address
+ * matching an existing account, and an account created on first sign-in. These are the ones an
+ * administrator account must never receive, and the ones a promotion removes.
+ */
+export const AUTOMATIC: IdentityLinkMethod[] = ['AUTO_VERIFIED_EMAIL', 'JUST_IN_TIME'];
 
 /**
  * Find the account an identity signs in as, by issuer and subject.
@@ -60,6 +65,89 @@ export async function findUserByIdentity(ref: Pick<IdentityRef, 'issuer' | 'subj
     select: { id: true, userId: true, user: { select: { inactive: true } } },
   });
   return link ?? null;
+}
+
+/**
+ * Answer a duplicate insert by reading the row that won.
+ *
+ * Shared by both paths that can hit it: a plain link, which owns its own insert, and the
+ * serializable wrapper, whose transaction is dead by the time it sees this. Says what this
+ * function would have said had it read the row a moment earlier, and records a refusal the way
+ * every other refusal is recorded.
+ */
+async function settleDuplicate(opts: {
+  ref: IdentityRef;
+  userId: string;
+  via: IdentityLinkMethod;
+  actorUserId: string | null;
+  context: AuditContext;
+  error: unknown;
+}): Promise<LinkResult> {
+  const { issuer, subject } = opts.ref;
+  const settled = await prisma.linkedIdentity.findUnique({
+    where: { issuer_subject: { issuer, subject } },
+    select: { userId: true },
+  });
+
+  // The constraint said the row exists. If it does not, something else is wrong, and answering
+  // "already linked" would describe a state that is not there.
+  if (!settled) throw opts.error;
+  if (settled.userId === opts.userId) return { ok: true, created: false };
+
+  await createEnhancedActivityLog(prisma, opts.context, {
+    userId: opts.actorUserId,
+    action: 'IDENTITY_LINK_DENIED',
+    severity: 'SECURITY',
+    category: 'USER',
+    metadata: {
+      targetUserId: opts.userId,
+      issuer,
+      via: opts.via,
+      reason: 'already-linked-elsewhere',
+    },
+  });
+  return { ok: false, reason: 'already-linked-elsewhere' };
+}
+
+/**
+ * The automatic path, retried once.
+ *
+ * A serialization failure here means the account's standing changed while this was deciding,
+ * which is exactly the case this exists for. Running it again re-reads that standing and
+ * answers on what is true now: an account that has just become an administrator is refused, and
+ * an ordinary one is linked. One retry is enough; a second conflict means something is writing
+ * to that account continuously, and answering "refused" then is both honest and safe.
+ */
+async function linkWithinSerializable(
+  opts: Parameters<typeof linkIdentity>[0],
+  attempt = 1,
+): Promise<LinkResult> {
+  const pendingAudit: Parameters<typeof createEnhancedActivityLog>[2][] = [];
+  try {
+    const result = await prisma.$transaction(
+      async (tx) => linkIdentity({ ...opts, tx, pendingAudit }),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    // Committed, so what it decided actually happened and is worth recording.
+    for (const entry of pendingAudit) {
+      await createEnhancedActivityLog(prisma, opts.context, entry);
+    }
+    return result;
+  } catch (error) {
+    // The duplicate this transaction could not recover from itself: its own statement failed,
+    // so the read has to happen out here.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return settleDuplicate({ ...opts, error });
+    }
+
+    const conflict =
+      (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') ||
+      (error instanceof Error && error.message.includes('TransactionWriteConflict'));
+    if (!conflict) throw error;
+    if (attempt >= 2) return { ok: false, reason: 'account-inactive' };
+    return linkWithinSerializable(opts, attempt + 1);
+  }
 }
 
 /**
@@ -93,7 +181,36 @@ export async function linkIdentity(opts: {
   actorUserId: string | null;
   context: AuditContext;
   tx?: Prisma.TransactionClient;
+  /**
+   * Where to put the audit entry instead of writing it now.
+   *
+   * A log written inside a transaction that then rolls back describes something that did not
+   * happen: the automatic path retries on a serialization conflict, and without this an
+   * abandoned attempt would leave "identity linked" in the record with no identity behind it.
+   * The caller writes these once the transaction has committed.
+   */
+  pendingAudit?: Parameters<typeof createEnhancedActivityLog>[2][];
 }): Promise<LinkResult> {
+  /**
+   * An automatic link reads the account's standing and then writes, and the two have to be one
+   * decision.
+   *
+   * Between them, an administrator can be promoted: the read says "ordinary account", the
+   * promotion commits, and the insert lands on an account that is an administrator by the time
+   * it exists. "Administrators are never attached automatically" would then mean "not if they
+   * were administrators a moment ago", which is not the rule.
+   *
+   * Serializable makes the pair conflict, but only against another serializable transaction, so
+   * the promotion path is serializable too (see the user update route). Deliberate links do not
+   * need this: somebody is choosing, and the guardrail they cross is their own permission.
+   *
+   * Skipped when a caller supplies its own transaction: nesting is not available, and the
+   * caller has already chosen its isolation.
+   */
+  if (!opts.tx && AUTOMATIC.includes(opts.via)) {
+    return linkWithinSerializable(opts);
+  }
+
   const client = opts.tx ?? prisma;
   const { issuer, subject, kind } = opts.ref;
 
@@ -111,8 +228,16 @@ export async function linkIdentity(opts: {
   // A refusal is a security event, not a validation error: each one is an attempt to attach a
   // sign-in to an account it should not reach. `_DENIED` also classifies as SECURITY by the
   // action-naming convention, so the two agree.
+  const audit = async (entry: Parameters<typeof createEnhancedActivityLog>[2]) => {
+    if (opts.pendingAudit) {
+      opts.pendingAudit.push(entry);
+      return;
+    }
+    await createEnhancedActivityLog(prisma, opts.context, entry);
+  };
+
   const refuse = async (reason: LinkRefusal): Promise<LinkResult> => {
-    await createEnhancedActivityLog(prisma, opts.context, {
+    await audit({
       userId: opts.actorUserId,
       action: 'IDENTITY_LINK_DENIED',
       severity: 'SECURITY',
@@ -157,25 +282,18 @@ export async function linkIdentity(opts: {
 
     /**
      * Not recoverable inside somebody else's transaction: Postgres has already aborted it, so
-     * the read below would fail too. The caller owning the transaction owns the recovery.
+     * a read here would fail too. The caller owning the transaction owns the recovery, which
+     * for the automatic path is the serializable wrapper above.
      */
     if (opts.tx) throw error;
 
-    const settled = await prisma.linkedIdentity.findUnique({
-      where: { issuer_subject: { issuer, subject } },
-      select: { userId: true },
-    });
-    // The constraint said the row exists. If it does not, something else is wrong, and
-    // answering "already linked" would describe a state that is not there.
-    if (!settled) throw error;
-    if (settled.userId !== opts.userId) return refuse('already-linked-elsewhere');
-    return { ok: true, created: false };
+    return settleDuplicate({ ...opts, error });
   }
 
   // Linking changes who can sign in as this account, and for a student account that is who can
   // reach their records. The subject is recorded because it, with the issuer, is the identity;
   // no other identifying detail from the provider is.
-  await createEnhancedActivityLog(prisma, opts.context, {
+  await audit({
     userId: opts.actorUserId,
     action: 'IDENTITY_LINKED',
     severity: 'INFO',
