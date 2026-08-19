@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -184,9 +184,22 @@ export default function StudentAssignmentPage({
    * standing on, so they go back to the dashboard with the reason. Telling somebody to refresh
    * a page that will never load was the old behaviour and it wasted their time.
    */
+  /**
+   * Reported once, however many of the page's reads fail.
+   *
+   * The assignment and its context are fetched separately and fail together, so a student who
+   * followed a link to something they cannot open was told twice and pushed to the dashboard
+   * twice. One cause, one message.
+   */
+  const reportedFailure = useRef(false);
+
   const reportLoadFailure = useCallback(
     (error: unknown, context: string) => {
       const status = error instanceof HttpError ? error.status : undefined;
+      if (status === 404 || status === 403) {
+        if (reportedFailure.current) return;
+        reportedFailure.current = true;
+      }
       if (status === 404) {
         showToast.error(
           'This assignment is not available. It may have been removed, or you may not have access to it.',

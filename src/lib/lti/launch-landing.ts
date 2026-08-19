@@ -21,7 +21,9 @@ export type LaunchNotice =
   /** They could connect one, but there is no course in AFCT to connect it to. */
   | 'no-courses'
   /** Connected to an AFCT course that has since been deleted. */
-  | 'course-missing';
+  | 'course-missing'
+  /** The link names an assignment that is not open to students yet. */
+  | 'assignment-not-open';
 
 /**
  * An LMS course title is somebody else's text, so it is bounded before it becomes a URL.
@@ -32,10 +34,29 @@ export type LaunchNotice =
 const MAX_TITLE = 80;
 
 export function dashboardWithNotice(notice: LaunchNotice, contextTitle?: string | null): string {
+  return withNotice('/dashboard', notice, contextTitle);
+}
+
+/**
+ * The same notice, on the course itself.
+ *
+ * Used when the person can see the course but not the thing the link named, which is what an
+ * unpublished assignment is: sending them to the dashboard would take them further from their
+ * work than they already are.
+ */
+export function courseWithNotice(
+  courseId: string,
+  notice: LaunchNotice,
+  title?: string | null,
+): string {
+  return withNotice(`/dashboard/courses/${courseId}`, notice, title);
+}
+
+function withNotice(path: string, notice: LaunchNotice, title?: string | null): string {
   const params = new URLSearchParams({ lms: notice });
-  const title = contextTitle?.trim();
-  if (title) params.set('course', title.slice(0, MAX_TITLE));
-  return `/dashboard?${params.toString()}`;
+  const named = title?.trim();
+  if (named) params.set('course', named.slice(0, MAX_TITLE));
+  return `${path}?${params.toString()}`;
 }
 
 /** Whether a query value is a notice this build knows, so an invented one shows nothing. */
@@ -45,6 +66,7 @@ export function asLaunchNotice(value: string | null | undefined): LaunchNotice |
     case 'not-published':
     case 'no-courses':
     case 'course-missing':
+    case 'assignment-not-open':
       return value;
     default:
       return null;
@@ -70,5 +92,8 @@ export function launchNoticeMessage(notice: LaunchNotice, courseTitle: string | 
       return `${named} in your LMS cannot be connected yet, because you are not on the staff of any AFCT course. An administrator creates the course, then opening the link again will offer to connect it.`;
     case 'course-missing':
       return `${named} in your LMS was connected to an AFCT course that no longer exists. Ask your instructor to connect it again.`;
+    case 'assignment-not-open':
+      // Named for the assignment rather than the LMS course here, since that is what they clicked.
+      return `${named} is not open yet. Your instructor publishes it when it is ready, and the rest of the course is below in the meantime.`;
   }
 }

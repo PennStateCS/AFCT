@@ -92,6 +92,55 @@ export function frameMarkerCookie(): string {
   ].join('; ');
 }
 
+/**
+ * The Auth.js cookies as a framed launch wrote them **before** they had names of their own.
+ *
+ * Between the framed-cookie work shipping and this fix, a launch wrote partitioned cookies under
+ * Auth.js's own names. A browser keeps those alongside the ordinary ones, so somebody who
+ * launched in that window still carries a second session cookie of the same name, and it can win
+ * whichever way the reader happens to break the tie: the symptom is signing in as one person and
+ * being shown another, or being bounced to the login form for ever.
+ *
+ * Nothing in the app can tell whether that cookie is there, because two cookies of one name
+ * arrive indistinguishable. So they are expired unconditionally on the way out of a frame, which
+ * costs nothing when they do not exist. Deleting needs the same attributes they were set with,
+ * `Partitioned` included, or the browser matches a different cookie or none at all.
+ *
+ * This is safe to delete for good once no browser can still be carrying one, which in practice
+ * means after everyone's cookies have expired (24 hours of the marker, 30 days of a session).
+ */
+const LEGACY_FRAMED_COOKIES = [
+  '__Secure-authjs.session-token',
+  '__Host-authjs.csrf-token',
+  '__Secure-authjs.callback-url',
+  // The names the same cookies take when the deployment is not https, for completeness.
+  'authjs.session-token',
+  'authjs.csrf-token',
+  'authjs.callback-url',
+];
+
+/**
+ * Whether the browser is sending two cookies of the same name, which is the fault itself.
+ *
+ * Two cookies of one name arrive as two entries in the same header, so this is the only place
+ * the collision is visible at all: by the time anything parses them, one has silently won. It
+ * is also what makes the cleanup free for everybody else, since a browser with one of each
+ * cookie matches nothing here.
+ */
+export function hasDuplicateAuthCookie(cookieHeader: string | null | undefined): boolean {
+  if (!cookieHeader) return false;
+  const names = cookieHeader.split(';').map((part) => part.trim().split('=')[0]);
+  return LEGACY_FRAMED_COOKIES.some(
+    (name) => names.filter((seen) => seen === name).length > 1,
+  );
+}
+
+export function clearLegacyFramedCookies(): string[] {
+  return LEGACY_FRAMED_COOKIES.map((name) =>
+    [`${name}=`, 'Path=/', 'SameSite=None', 'Secure', 'Partitioned', 'Max-Age=0'].join('; '),
+  );
+}
+
 /** Expire the marker, for a page that has just been opened outside any frame. */
 export function clearFrameMarkerCookie(): string {
   return [

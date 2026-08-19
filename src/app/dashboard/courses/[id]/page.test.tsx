@@ -45,7 +45,16 @@ type CourseClientEl = {
     };
   };
 };
-const initialCourseOf = (el: unknown) => (el as CourseClientEl).props.initialCourse;
+// The page wraps <CourseClient> in a fragment alongside the LMS launch notice, so the payload
+// is on whichever child carries it rather than on the returned element itself.
+const initialCourseOf = (el: unknown) => {
+  const children = (el as { props?: { children?: unknown } })?.props?.children;
+  const nodes = Array.isArray(children) ? children : [children ?? el];
+  const found = nodes.find(
+    (node) => (node as CourseClientEl | undefined)?.props?.initialCourse !== undefined,
+  );
+  return (found as CourseClientEl).props.initialCourse;
+};
 
 const faculty = {
   role: 'FACULTY',

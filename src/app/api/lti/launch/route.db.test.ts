@@ -168,7 +168,15 @@ describe('where a launch lands', () => {
       data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
     });
     await prisma.assignment.create({
-      data: { id: 'a-deep', courseId: COURSE, title: 'Linked', dueDate: new Date() },
+      // Published, like any assignment a student is meant to open. The unpublished case lands
+      // at the course instead and is tested below.
+      data: {
+        id: 'a-deep',
+        courseId: COURSE,
+        title: 'Linked',
+        dueDate: new Date(),
+        isPublished: true,
+      },
     });
     validateLaunch.mockResolvedValue({
       ok: true,
@@ -214,6 +222,69 @@ describe('where a launch lands', () => {
     const res = await post(await goodLaunch());
 
     expect(nextOf(res)).toBe(`/dashboard/courses/${COURSE}`);
+  });
+
+  /**
+   * A student following a deep link to an assignment that is not published yet.
+   *
+   * They used to be sent to it and bounced straight back to the dashboard by the page, told it
+   * "may have been removed, or you may not have access to it". Both are wrong: it exists, it is
+   * theirs, and it is simply not open. They stop at the course, which they can see.
+   */
+  it('stops a student at the course when the assignment is not published', async () => {
+    await withCourse();
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+    await prisma.assignment.create({
+      data: {
+        id: 'a-unpublished',
+        courseId: COURSE,
+        title: 'Not open yet',
+        dueDate: new Date(),
+        isPublished: false,
+      },
+    });
+    validateLaunch.mockResolvedValue({
+      ok: true,
+      identity: { ...identity, assignmentId: 'a-unpublished' },
+    });
+
+    const res = await post(await goodLaunch());
+    const next = new URL(nextOf(res)!, 'https://afct.test');
+
+    expect(next.pathname).toBe(`/dashboard/courses/${COURSE}`);
+    expect(next.searchParams.get('lms')).toBe('assignment-not-open');
+    expect(next.searchParams.get('course')).toBe('Not open yet');
+  });
+
+  /** Staff are the ones who publish it, so the link takes them to it. */
+  it('takes staff to an unpublished assignment', async () => {
+    await withCourse();
+    await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM_ID, contextId: 'ctx-1', courseId: COURSE },
+    });
+    await prisma.assignment.create({
+      data: {
+        id: 'a-unpublished',
+        courseId: COURSE,
+        title: 'Not open yet',
+        dueDate: new Date(),
+        isPublished: false,
+      },
+    });
+    validateLaunch.mockResolvedValue({
+      ok: true,
+      identity: {
+        ...identity,
+        assignmentId: 'a-unpublished',
+        roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor'],
+      },
+    });
+
+    const res = await post(await goodLaunch());
+
+    expect(nextOf(res)).toBe(`/dashboard/courses/${COURSE}/a-unpublished`);
   });
 
   it('enrols the person on the way in', async () => {

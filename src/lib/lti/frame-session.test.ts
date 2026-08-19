@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LTI_FRAME_COOKIE, clearFrameMarkerCookie, frameMarkerCookie, framedAuthCookies, hasFrameMarker, isFramedRequest, isTopLevelDocument } from './frame-session';
+import { LTI_FRAME_COOKIE, clearFrameMarkerCookie, clearLegacyFramedCookies, frameMarkerCookie, framedAuthCookies, hasDuplicateAuthCookie, hasFrameMarker, isFramedRequest, isTopLevelDocument } from './frame-session';
 
 /**
  * The cookies a launch needs when AFCT is inside an LMS page.
@@ -127,5 +127,33 @@ describe('forgetting a frame', () => {
     expect(cleared).toContain('Partitioned');
     expect(cleared).toContain('SameSite=None');
     expect(cleared).toContain('Path=/');
+  });
+});
+
+describe('spotting the cookie collision left by the older build', () => {
+  it('sees two cookies of one name, which is the only trace it leaves', () => {
+    expect(
+      hasDuplicateAuthCookie('__Secure-authjs.session-token=a; __Secure-authjs.session-token=b'),
+    ).toBe(true);
+  });
+
+  it('is quiet for an ordinary browser', () => {
+    expect(hasDuplicateAuthCookie('__Secure-authjs.session-token=a; afct.lti-frame=1')).toBe(false);
+    expect(hasDuplicateAuthCookie('')).toBe(false);
+    expect(hasDuplicateAuthCookie(null)).toBe(false);
+  });
+
+  it('is not fooled by a different cookie whose name merely contains one', () => {
+    expect(
+      hasDuplicateAuthCookie('x__Secure-authjs.session-token=a; __Secure-authjs.session-token=b'),
+    ).toBe(false);
+  });
+
+  it('deletes with the attributes the cookies were written with, or nothing matches', () => {
+    for (const cookie of clearLegacyFramedCookies()) {
+      expect(cookie).toContain('Partitioned');
+      expect(cookie).toContain('Max-Age=0');
+      expect(cookie).toContain('Path=/');
+    }
   });
 });

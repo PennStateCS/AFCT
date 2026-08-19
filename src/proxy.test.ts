@@ -124,6 +124,56 @@ describe('proxy', () => {
     });
   });
 
+  /**
+   * Cleaning up after the version whose framed cookies shared Auth.js's names.
+   *
+   * A browser that launched in that window carries two cookies of one name, and which of them
+   * wins is not ours to decide: the symptom was signing in as one person and being shown
+   * another. The duplicate in the header is the only visible trace, so it is what triggers the
+   * cleanup.
+   */
+  describe('a browser carrying two session cookies of the same name', () => {
+    const duplicated =
+      '__Secure-authjs.session-token=aaa; __Secure-authjs.session-token=bbb';
+
+    it('expires the partitioned copy on a page load', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1', isAdmin: false });
+
+      const res = await proxy(
+        req('/dashboard', { 'sec-fetch-dest': 'document', cookie: duplicated }),
+      );
+
+      const cleared = setCookies(res).filter((c) =>
+        c.startsWith('__Secure-authjs.session-token='),
+      );
+      expect(cleared.length).toBe(1);
+      expect(cleared[0]).toContain('Partitioned');
+      expect(cleared[0]).toContain('Max-Age=0');
+    });
+
+    it('leaves an ordinary browser alone, so nobody else pays for it', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1', isAdmin: false });
+
+      const res = await proxy(
+        req('/dashboard', {
+          'sec-fetch-dest': 'document',
+          cookie: '__Secure-authjs.session-token=aaa',
+        }),
+      );
+
+      expect(setCookies(res).length).toBe(0);
+    });
+
+    /** Only a page load can delete it: the partition is decided by the top-level document. */
+    it('does nothing on the fetches a page makes', async () => {
+      getTokenMock.mockResolvedValue({ id: 'u1', isAdmin: false });
+
+      const res = await proxy(req('/api/courses', { 'sec-fetch-dest': 'empty', cookie: duplicated }));
+
+      expect(setCookies(res).length).toBe(0);
+    });
+  });
+
   describe('/api/admin/*', () => {
     it('403s a positively-confirmed non-admin', async () => {
       getTokenMock.mockResolvedValue({ isAdmin: false });
