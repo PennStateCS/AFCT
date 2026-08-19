@@ -230,6 +230,30 @@ describe('StudentAssignmentPage', () => {
       expect(pushMock).toHaveBeenCalledWith('/dashboard');
     });
 
+    /**
+     * Seen on prod: a student following an LMS link to something they could not open was told
+     * twice and pushed to the dashboard twice, because the assignment and its context are
+     * fetched separately and failed together.
+     */
+    it('says it once, however many of the page reads fail', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: false,
+          status: 404,
+          json: async () => ({ error: 'Not found' }),
+        })),
+      );
+
+      // No seeded assignment, so BOTH reads run and both fail: that is the case that reported
+      // twice. Seeding one leaves only the context query to fail, which never could.
+      renderWithClient(<StudentAssignmentPage initialAssignment={null} />);
+
+      await waitFor(() => expect(toastError).toHaveBeenCalled());
+      expect(toastError).toHaveBeenCalledTimes(1);
+      expect(pushMock).toHaveBeenCalledTimes(1);
+    });
+
     it('falls back to plain words when the server only says Forbidden', async () => {
       vi.stubGlobal('fetch', refuse(403, 'Forbidden'));
 

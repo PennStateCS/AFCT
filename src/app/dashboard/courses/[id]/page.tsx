@@ -5,6 +5,7 @@ import CourseClient from './CourseClient';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { courseLmsLinks } from '@/lib/lti/links';
+import { LaunchNotice } from '@/components/lti/LaunchNotice';
 import { getCourseRole } from '@/lib/permissions';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 
@@ -14,10 +15,13 @@ export const metadata: Metadata = {
 
 type Props = {
   params: Promise<{ id: string }>;
+  // Set when an LMS launch landed here rather than on the assignment the link named.
+  searchParams?: Promise<{ lms?: string; course?: string }>;
 };
 
-export default async function AdminCoursePage({ params }: Props) {
+export default async function AdminCoursePage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { lms, course: noticeSubject } = (await searchParams) ?? {};
   const session = await auth();
   const viewerIsAdmin = Boolean(session?.user?.isAdmin);
 
@@ -121,5 +125,11 @@ export default async function AdminCoursePage({ params }: Props) {
     viewerIsAdmin,
   };
 
-  return <CourseClient initialCourse={initialCourse} />;
+  return (
+    <>
+      {/* Renders nothing unless a launch sent them here, which is nearly always. */}
+      <LaunchNotice notice={lms} courseTitle={noticeSubject} />
+      <CourseClient initialCourse={initialCourse} />
+    </>
+  );
 }

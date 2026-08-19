@@ -8,6 +8,8 @@ import { requireAuthSecret } from '@/lib/auth-secret';
 import { prisma } from '@/lib/prisma';
 import {
   clearFrameMarkerCookie,
+  clearLegacyFramedCookies,
+  hasDuplicateAuthCookie,
   frameMarkerCookie,
   hasFrameMarker,
   isFramedRequest,
@@ -226,6 +228,15 @@ async function prepareCsp(req: NextRequest, pathname: string) {
    */
   const forgetFrame =
     !markFrame && isTopLevelDocument(req.headers) && hasFrameMarker(req.headers.get('cookie'));
+
+  /**
+   * Clean up after the version that gave framed sessions the same cookie names as ordinary
+   * ones. A browser that launched in that window still carries both, and the wrong one can win
+   * on any request, which reads as being signed in as somebody else. Only ever done on a page
+   * being loaded at the top level, where the partitioned copy is the one that gets deleted.
+   */
+  const dropStaleCookies =
+    isTopLevelDocument(req.headers) && hasDuplicateAuthCookie(req.headers.get('cookie'));
   const requestHeaders = new Headers(req.headers);
   // A request header is invisible to the browser (so it doesn't enforce anything);
   // Next uses it only to discover the nonce and apply it to its script tags.
@@ -245,12 +256,22 @@ async function prepareCsp(req: NextRequest, pathname: string) {
       res.headers.set(responseHeader, csp);
       if (markFrame) res.headers.append('set-cookie', frameMarkerCookie());
       if (forgetFrame) res.headers.append('set-cookie', clearFrameMarkerCookie());
+      if (dropStaleCookies) {
+        for (const cookie of clearLegacyFramedCookies()) {
+          res.headers.append('set-cookie', cookie);
+        }
+      }
       return res;
     },
     withCsp: (res: NextResponse) => {
       res.headers.set(responseHeader, csp);
       if (markFrame) res.headers.append('set-cookie', frameMarkerCookie());
       if (forgetFrame) res.headers.append('set-cookie', clearFrameMarkerCookie());
+      if (dropStaleCookies) {
+        for (const cookie of clearLegacyFramedCookies()) {
+          res.headers.append('set-cookie', cookie);
+        }
+      }
       return res;
     },
   };

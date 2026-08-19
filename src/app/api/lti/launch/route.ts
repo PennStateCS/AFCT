@@ -12,7 +12,7 @@ import {
   enrolFromLaunch,
   linkableCourseCount,
 } from '@/lib/lti/course-link';
-import { dashboardWithNotice } from '@/lib/lti/launch-landing';
+import { courseWithNotice, dashboardWithNotice } from '@/lib/lti/launch-landing';
 import { errMessage } from '@/lib/errors';
 import { prisma } from '@/lib/prisma';
 import { publicUrl } from '@/lib/lti/public-url';
@@ -333,9 +333,19 @@ async function decideDestination(identity: LaunchIdentity, userId: string): Prom
     if (identity.assignmentId) {
       const assignment = await prisma.assignment.findFirst({
         where: { id: identity.assignmentId, courseId: target.courseId },
-        select: { id: true },
+        select: { id: true, title: true, isPublished: true },
       });
       if (assignment) {
+        /**
+         * An unpublished assignment is staff-only, and a student sent to one was bounced back
+         * to the dashboard by the page itself, with a message saying it may have been removed
+         * or they may not have access. Neither is true: it exists and it is theirs, it is
+         * simply not open yet. So the launch stops at the course, which they can see, and says
+         * so in words that match what happened.
+         */
+        if (!assignment.isPublished && !staffHere) {
+          return courseWithNotice(target.courseId, 'assignment-not-open', assignment.title);
+        }
         return `/dashboard/courses/${target.courseId}/${assignment.id}`;
       }
     }
