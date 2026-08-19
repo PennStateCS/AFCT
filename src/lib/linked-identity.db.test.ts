@@ -1,12 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import {
-  findUserByIdentity,
-  linkIdentity,
-  listIdentitiesForUser,
-  recordIdentitySignIn,
-  unlinkIdentity,
-} from './linked-identity';
+import { AUTOMATIC, findUserByIdentity, linkIdentity, listIdentitiesForUser, recordIdentitySignIn, unlinkIdentity } from './linked-identity';
 
 /**
  * Linked identities, against a real Postgres.
@@ -395,5 +390,89 @@ describe('the audit trail', () => {
     await linkIdentity(args);
 
     expect(await entries('IDENTITY_LINKED')).toHaveLength(1);
+  });
+});
+
+/**
+ * "Administrators are never attached automatically" has two halves, and only one of them was
+ * enforced. Linking read the account's standing and then inserted; a promotion committing in
+ * between left an automatic identity on an administrator account, which is the thing the rule
+ * exists to prevent.
+ */
+describe('an account that becomes an administrator', () => {
+  const automatic = (subject: string) =>
+    linkIdentity({
+      ref: { kind: 'OIDC', issuer: ISSUER, subject },
+      userId: ids.user,
+      via: 'AUTO_VERIFIED_EMAIL',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
+
+  it('keeps no automatically attached sign-in once promoted', async () => {
+    await automatic('auto-before-promotion');
+    await linkIdentity({
+      ref: { kind: 'OIDC', issuer: `${ISSUER}/other`, subject: 'chosen' },
+      userId: ids.user,
+      via: 'SELF_SERVICE',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
+
+    // What the promotion route does, in the same shape.
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.linkedIdentity.deleteMany({
+          where: { userId: ids.user, linkedVia: { in: AUTOMATIC } },
+        });
+        await tx.user.update({ where: { id: ids.user }, data: { isAdmin: true } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    const left = await prisma.linkedIdentity.findMany({
+      where: { userId: ids.user },
+      select: { linkedVia: true },
+    });
+    // The one they chose survives; the one nobody chose does not.
+    expect(left.map((row) => row.linkedVia)).toEqual(['SELF_SERVICE']);
+  });
+
+  /**
+   * The race itself, run for real. Whichever order the two land in, the invariant is the same:
+   * an administrator account holds no automatically attached identity.
+   */
+  it('holds the rule when a promotion and an automatic link race', async () => {
+    await Promise.all([
+      automatic('auto-during-promotion').catch(() => null),
+      prisma
+        .$transaction(
+          async (tx) => {
+            await tx.linkedIdentity.deleteMany({
+              where: { userId: ids.user, linkedVia: { in: AUTOMATIC } },
+            });
+            await tx.user.update({ where: { id: ids.user }, data: { isAdmin: true } });
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        )
+        .catch(() => null),
+    ]);
+
+    const promoted = await prisma.user.findUniqueOrThrow({
+      where: { id: ids.user },
+      select: { isAdmin: true },
+    });
+    const automaticLeft = await prisma.linkedIdentity.count({
+      where: { userId: ids.user, linkedVia: { in: AUTOMATIC } },
+    });
+
+    if (promoted.isAdmin) expect(automaticLeft).toBe(0);
+  });
+
+  /** An ordinary account still links normally: the guard is about administrators. */
+  it('still links an ordinary account', async () => {
+    const result = await automatic('ordinary-account');
+
+    expect(result).toEqual({ ok: true, created: true });
   });
 });

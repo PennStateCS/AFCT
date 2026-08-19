@@ -11,6 +11,8 @@ const prismaMock = vi.hoisted(() => ({
   },
   roster: { findMany: vi.fn() },
   activityLog: { deleteMany: vi.fn() },
+  // Promotion clears automatically-attached sign-ins in the same transaction as the update.
+  linkedIdentity: { deleteMany: vi.fn(async () => ({ count: 0 })) },
   // The last-administrator rule counts and updates in one serializable transaction, so the
   // pair conflicts in Postgres rather than both succeeding. Here it simply runs the callback.
   $transaction: vi.fn(),
