@@ -244,7 +244,7 @@ describe('unlinking', () => {
         actorUserId: ids.user,
         context: CONTEXT,
       }),
-    ).toBe(true);
+    ).toBe('removed');
     expect(await findUserByIdentity(ref())).toBeNull();
   });
 
@@ -266,7 +266,9 @@ describe('unlinking', () => {
         actorUserId: ids.other,
         context: CONTEXT,
       }),
-    ).toBe(false);
+      // Not found rather than removed: the id belongs to somebody else, and the outcome now
+      // says which of the three things happened rather than just "no".
+    ).toBe('not-found');
     expect(await findUserByIdentity(ref())).not.toBeNull();
   });
 });

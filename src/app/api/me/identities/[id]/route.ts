@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { unlinkIdentity } from '@/lib/linked-identity';
 
@@ -27,12 +26,19 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const { id } = await params;
   const userId = session.user.id;
 
-  const [user, identityCount] = await Promise.all([
-    prisma.user.findUnique({ where: { id: userId }, select: { password: true } }),
-    prisma.linkedIdentity.count({ where: { userId } }),
-  ]);
+  /**
+   * The rule lives in `unlinkIdentity`, where the count and the delete are one serializable
+   * decision. Checking here first and deleting afterwards let two requests removing different
+   * identities at the same moment both pass, and leave an account with no way in at all.
+   */
+  const outcome = await unlinkIdentity({
+    id,
+    userId,
+    actorUserId: userId,
+    context: request,
+  });
 
-  if (!user?.password && identityCount <= 1) {
+  if (outcome === 'last-way-in') {
     return NextResponse.json(
       {
         error:
@@ -42,14 +48,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     );
   }
 
-  const removed = await unlinkIdentity({
-    id,
-    userId,
-    actorUserId: userId,
-    context: request,
-  });
-
-  if (!removed) {
+  if (outcome === 'not-found') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 

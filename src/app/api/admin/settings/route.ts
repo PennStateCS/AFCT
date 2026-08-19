@@ -348,8 +348,19 @@ export const PUT = withAdminAuth(
      */
     const storedSmtp = await prisma.systemSettings.findUnique({
       where: { id: 1 },
-      select: { smtpSecurity: true, smtpUsername: true, smtpPassword: true },
+      select: {
+        smtpSecurity: true,
+        smtpUsername: true,
+        smtpPassword: true,
+        // Read in the same breath, for the same reason: the institutional sign-in rule below
+        // is judged on what this save would leave behind, not on what the form happened to send.
+        oidcEnabled: true,
+        oidcIssuer: true,
+        oidcClientId: true,
+        oidcClientSecret: true,
+      },
     });
+    const storedOidc = storedSmtp;
     const resultingSecurity =
       typeof smtpData.smtpSecurity === 'string' ? smtpData.smtpSecurity : storedSmtp?.smtpSecurity;
     const resultingUsername =
@@ -373,9 +384,12 @@ export const PUT = withAdminAuth(
 
     if (body.oidcClientSecretClear === true) {
       oidcData.oidcClientSecret = null;
-    } else if (typeof body.oidcClientSecret === 'string' && body.oidcClientSecret.trim() !== '') {
+    } else if (typeof body.oidcClientSecret === 'string' && body.oidcClientSecret !== '') {
       try {
-        oidcData.oidcClientSecret = encryptSecret(body.oidcClientSecret.trim());
+        // Stored exactly as given. A client secret is opaque: whitespace at either end may be
+        // part of it, and trimming it produces an authentication failure the administrator
+        // cannot see the cause of. The SMTP password beside this has always been handled so.
+        oidcData.oidcClientSecret = encryptSecret(body.oidcClientSecret);
       } catch (error) {
         return NextResponse.json(
           {
@@ -385,6 +399,44 @@ export const PUT = withAdminAuth(
                 : 'The sign-in client secret could not be saved.',
           },
           { status: 500 },
+        );
+      }
+    }
+
+    /**
+     * Enabled has to mean usable.
+     *
+     * Nothing stopped an administrator turning institutional sign-in on with no issuer, no
+     * client id or no secret, or clearing the secret while leaving it on. `getOidcConfig` then
+     * returns null, so the button silently disappears from the sign-in page while this screen
+     * goes on saying it is enabled, and the person who turned it on has no way to tell that
+     * nobody can use it. Checked against what the settings will be after this write, not
+     * against what was sent, so changing one field does not require resending the others.
+     */
+    const resultingOidcEnabled =
+      'oidcEnabled' in oidcData ? oidcData.oidcEnabled : (storedOidc?.oidcEnabled ?? false);
+    if (resultingOidcEnabled) {
+      const resultingIssuer =
+        'oidcIssuer' in oidcData ? oidcData.oidcIssuer : (storedOidc?.oidcIssuer ?? null);
+      const resultingClientId =
+        'oidcClientId' in oidcData ? oidcData.oidcClientId : (storedOidc?.oidcClientId ?? null);
+      const resultingSecret =
+        'oidcClientSecret' in oidcData
+          ? oidcData.oidcClientSecret
+          : (storedOidc?.oidcClientSecret ?? null);
+
+      const missing = [
+        resultingIssuer ? null : 'the issuer URL',
+        resultingClientId ? null : 'the client ID',
+        resultingSecret ? null : 'the client secret',
+      ].filter((part): part is string => part !== null);
+
+      if (missing.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Institutional sign-in needs ${missing.join(', ')} before it can be turned on. Add ${missing.length === 1 ? 'it' : 'them'}, or leave institutional sign-in off.`,
+          },
+          { status: 400 },
         );
       }
     }

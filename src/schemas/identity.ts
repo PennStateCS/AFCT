@@ -11,19 +11,21 @@ import { z } from 'zod';
 export const OidcSettingsSchema = z.object({
   oidcEnabled: z.boolean().optional(),
   /**
-   * Must be an https URL, with no trailing slash. A path is fine and some providers need one
-   * (Microsoft issuers carry a tenant, `.../tenant-id/v2.0`).
+   * The issuer exactly as the provider advertises it.
    *
-   * The trailing slash matters because discovery appends a well-known path to whatever is
-   * stored, and the resulting double slash is rejected by some providers and quietly 404s at
-   * others. Refused rather than trimmed, so the admin corrects what they pasted instead of
-   * wondering later why their copy does not match ours.
+   * Stored verbatim, including a trailing slash: the issuer is an identifier, it is compared
+   * against the `iss` claim character by character, and some providers really do publish one
+   * that ends in `/` (Auth0 tenants among them). Rejecting those, as this used to, made AFCT
+   * unusable with them; normalising them would break the comparison instead.
+   *
+   * A path is fine and some providers need one (Microsoft issuers carry a tenant,
+   * `.../tenant-id/v2.0`). No query or fragment: OIDC Discovery forbids both.
    */
   oidcIssuer: z
     .string()
     .trim()
     .max(255)
-    .refine((v) => v === '' || /^https:\/\/[^\s/]+(?:\/[^\s?#/]+)*$/.test(v), {
+    .refine((v) => v === '' || /^https:\/\/[^\s/?#]+(?:\/[^\s?#/]+)*\/?$/.test(v), {
       message: 'Enter the provider’s issuer URL, for example https://login.your-university.edu.',
     })
     .optional(),

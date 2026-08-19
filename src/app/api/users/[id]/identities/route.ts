@@ -57,20 +57,9 @@ export const DELETE = withAdminAuth<{ params: Promise<{ id: string }> }>(
     const identityId = new URL(req.url).searchParams.get('identityId');
     if (!identityId) return apiError(400, 'Which sign-in method?');
 
-    const [user, count] = await Promise.all([
-      prisma.user.findUnique({ where: { id }, select: { password: true } }),
-      prisma.linkedIdentity.count({ where: { userId: id } }),
-    ]);
-    if (!user) return apiError(404, 'Not found');
-
-    if (!user.password && count <= 1) {
-      return apiError(
-        409,
-        'That is the only way this person can sign in. Give them a password first, then it can be removed.',
-      );
-    }
-
-    const removed = await unlinkIdentity({
+    // The last-way-in rule lives in `unlinkIdentity`, where the count and the delete are one
+    // serializable decision, so this route and the account holder's own cannot drift apart.
+    const outcome = await unlinkIdentity({
       id: identityId,
       userId: id,
       // The administrator did this, not the account holder. Recording the account holder here
@@ -78,7 +67,14 @@ export const DELETE = withAdminAuth<{ params: Promise<{ id: string }> }>(
       actorUserId: session.user.id,
       context: req,
     });
-    if (!removed) return apiError(404, 'Not found');
+
+    if (outcome === 'last-way-in') {
+      return apiError(
+        409,
+        'That is the only way this person can sign in. Give them a password first, then it can be removed.',
+      );
+    }
+    if (outcome === 'not-found') return apiError(404, 'Not found');
 
     return NextResponse.json({ success: true });
   },

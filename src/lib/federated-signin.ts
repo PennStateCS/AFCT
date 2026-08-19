@@ -12,6 +12,7 @@
  * before its owner arrives.
  */
 
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { linkIdentity, findUserByIdentity, recordIdentitySignIn } from '@/lib/linked-identity';
 import type { AuditContext, IdentityProviderKind } from '@/lib/linked-identity';
@@ -108,23 +109,51 @@ export async function resolveFederatedSignIn(opts: {
 
   // 3. Nobody here yet. Create the account and attach the identity in one transaction, so a
   //    failure cannot leave an account nobody can sign in to.
-  const userId = await prisma.$transaction(async (tx) => {
-    const created = await tx.user.create({
-      data: {
-        email,
-        firstName: claims.firstName ?? null,
-        lastName: claims.lastName ?? null,
-        // No local password. This account exists because a provider vouched for it, and
-        // `User.password` is optional for exactly this case.
-        password: null,
-      },
-      select: { id: true },
+  let userId: string;
+  try {
+    userId = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          email,
+          firstName: claims.firstName ?? null,
+          lastName: claims.lastName ?? null,
+          // No local password. This account exists because a provider vouched for it, and
+          // `User.password` is optional for exactly this case.
+          password: null,
+        },
+        select: { id: true },
+      });
+      await tx.linkedIdentity.create({
+        data: { ...ref, userId: created.id, linkedVia: 'JUST_IN_TIME' },
+      });
+      return created.id;
     });
-    await tx.linkedIdentity.create({
-      data: { ...ref, userId: created.id, linkedVia: 'JUST_IN_TIME' },
+  } catch (error) {
+    /**
+     * Somebody else created them while this request was deciding to.
+     *
+     * Two first-time sign-ins for the same person arrive together often enough to matter: a
+     * launch and a sign-in in two tabs, or a double-clicked button. Both find nothing, both
+     * create, and the unique constraint on the address or on the issuer and subject refuses the
+     * second, which used to reach the browser as a failed sign-in for a person whose account
+     * had in fact just been made. Re-reading the identity settles it: the row the winner wrote
+     * is the answer, and both requests sign in as the same person.
+     */
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+      throw error;
+    }
+
+    const settled = await prisma.linkedIdentity.findUnique({
+      where: { issuer_subject: { issuer: ref.issuer, subject: ref.subject } },
+      select: { userId: true, user: { select: { inactive: true } } },
     });
-    return created.id;
-  });
+    // Nothing there means the collision was on the address rather than the identity: somebody
+    // holds that email without this identity attached, which is the deliberate-link case rather
+    // than a race, and attaching to them automatically is exactly what must not happen here.
+    if (!settled) return { ok: false, reason: 'already-linked-elsewhere' };
+    if (settled.user.inactive) return { ok: false, reason: 'account-inactive' };
+    return { ok: true, userId: settled.userId, created: false };
+  }
 
   // Logged outside the transaction: the audit write must not be able to roll the account back,
   // and a person who exists without a log entry is better than one who does not exist at all.
