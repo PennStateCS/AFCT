@@ -40,11 +40,18 @@ function isCredentialRefresh(session: unknown): boolean {
 export async function buildJwtToken({
   token,
   user,
+  account,
   trigger,
   session,
 }: {
   token: JWT;
   user?: User | null;
+  /**
+   * Which provider this sign-in came through, present only on the sign-in itself. Kept on the
+   * token so signing out can say where the session came from: by then the provider is long out
+   * of the picture, and a logout entry that cannot say what it ended is half a record.
+   */
+  account?: { provider?: string } | null;
   trigger?: 'signIn' | 'signUp' | 'update';
   // The data passed to the client-side `update(data)` call, forwarded by NextAuth.
   session?: unknown;
@@ -53,6 +60,7 @@ export async function buildJwtToken({
   // existing token do no query at all.
   if (user) {
     token.id = user.id;
+    if (account?.provider) token.provider = account.provider;
     /**
      * Read by id, not by the address the provider sent.
      *
