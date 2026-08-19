@@ -112,6 +112,32 @@ afterAll(async () => {
 });
 
 describe('mapping LTI roles', () => {
+  /**
+   * The vocabulary spells one role several ways, and an unrecognised spelling silently became
+   * STUDENT: an instructor whose platform sends the legacy URI would have been enrolled as one
+   * of their own students.
+   */
+  it('reads the spellings a platform may actually send', () => {
+    expect(mapLtiRoles(['urn:lti:role:ims/lis/Instructor'])).toBe('FACULTY');
+    expect(
+      mapLtiRoles(['http://purl.imsglobal.org/vocab/lis/v2/institution/person#Instructor']),
+    ).toBe('FACULTY');
+    expect(
+      mapLtiRoles([
+        'http://purl.imsglobal.org/vocab/lis/v2/membership/Instructor#TeachingAssistant',
+      ]),
+    ).toBe('TA');
+  });
+
+  /** Least privilege for anything unknown, and for the roles that watch rather than teach. */
+  it('does not promote a role it does not know', () => {
+    expect(mapLtiRoles(['http://purl.imsglobal.org/vocab/lis/v2/membership#Mentor'])).toBe(
+      'STUDENT',
+    );
+    expect(mapLtiRoles(['something-nobody-has-defined'])).toBe('STUDENT');
+    expect(mapLtiRoles([])).toBe('STUDENT');
+  });
+
   it('reads the usual ones', () => {
     expect(mapLtiRoles([`${R}#Instructor`])).toBe('FACULTY');
     expect(mapLtiRoles([`${R}#TeachingAssistant`])).toBe('TA');

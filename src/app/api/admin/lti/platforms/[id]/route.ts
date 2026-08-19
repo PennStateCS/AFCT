@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { apiError } from '@/lib/api/http';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { clearAccessTokenCache } from '@/lib/lti/access-token';
 
 /**
  * Remove a registration, which stops that LMS launching into AFCT.
@@ -26,6 +27,8 @@ export const DELETE = withAdminAuth<{ params: Promise<{ id: string }> }>(
     if (!platform) return apiError(404, 'Not found');
 
     await prisma.ltiPlatform.delete({ where: { id } });
+    // Any token minted for this registration is now for something that no longer exists.
+    clearAccessTokenCache(id);
 
     await createEnhancedActivityLog(prisma, req, {
       userId: session.user.id,

@@ -123,6 +123,7 @@ erDiagram
   Float scoreMaximum
   LtiScoreState state
   Int attempts
+  String claimToken "nullable"
   String lastError "nullable"
   DateTime nextAttemptAt
   DateTime sentAt "nullable"
@@ -511,6 +512,16 @@ Properties as follows:
 - `scoreMaximum`:
 - `state`:
 - `attempts`: How many times sending has been tried. Drives the backoff and the give-up point.
+- `claimToken`
+  > Which send owns this row, as a random value written when a sender claims it.
+  >
+  > A sender that finishes must only record its own outcome. Without this, a grade changed
+  > while a send was in flight was overwritten by that send's result: the queue row is reused
+  > for the new grade, so the old sender marked the *new* score SENT and logged it as
+  > delivered, while the LMS held the old one and nothing ever sent the new one. A counter
+  > cannot fix it, because re-queuing resets the counter to a value a live sender still holds;
+  > a random token never comes round again. Cleared when the row is re-queued, which is what
+  > fences the sender that is still running.
 - `lastError`: Why the last attempt failed, for the screen that shows faculty what happened.
 - `nextAttemptAt`: Not before this time. Set into the future to back off after a failure.
 - `sentAt`: When the LMS accepted it.

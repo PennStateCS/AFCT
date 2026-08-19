@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { createLocalJWKSet, jwtVerify } from 'jose';
+import { createLocalJWKSet, decodeJwt, jwtVerify } from 'jose';
 import type { JWK } from 'jose';
 import { prisma } from '@/lib/prisma';
 import { createKeyPair, listPublicJwks } from './keys';
@@ -299,5 +299,60 @@ describe('what the platform said it would accept', () => {
     }[];
 
     expect(items[0]?.lineItem).toBeUndefined();
+  });
+});
+
+/**
+ * The response says how AFCT would like the link presented, and the request says what the
+ * platform will take. Answering with a target that was never offered is the tool ignoring the
+ * question, even though Deep Linking 2.0 does not forbid it.
+ */
+describe('how the link asks to be opened', () => {
+  // Each test signs, and the shared setup starts every test with no keys.
+  beforeEach(async () => {
+    await createKeyPair();
+  });
+
+  const itemFrom = async (targets: string[] | null) => {
+    const response = await build({ acceptPresentationDocumentTargets: targets });
+    if (!response.ok) throw new Error('expected a signed response');
+    const claims = decodeJwt(response.jwt);
+    const items = claims[
+      'https://purl.imsglobal.org/spec/lti-dl/claim/content_items'
+    ] as Array<Record<string, unknown>>;
+    return items[0]!;
+  };
+
+  it('asks for a new window when the platform offers one', async () => {
+    expect(await itemFrom(['iframe', 'window'])).toHaveProperty('window');
+  });
+
+  it('says nothing about presentation when the platform only embeds', async () => {
+    expect(await itemFrom(['iframe'])).not.toHaveProperty('window');
+  });
+
+  it('asks when the platform listed nothing, since there is nothing to contradict', async () => {
+    expect(await itemFrom(null)).toHaveProperty('window');
+  });
+});
+
+/**
+ * Not required by Deep Linking 2.0, whose required claims are `aud`, message type, version and
+ * deployment id. Sent because the 1EdTech reference tools send one and a message that cannot be
+ * replayed costs nothing.
+ */
+describe('the claims a response carries', () => {
+  beforeEach(async () => {
+    await createKeyPair();
+  });
+
+  it('includes a nonce as well as a jti', async () => {
+    const response = await build();
+    if (!response.ok) throw new Error('expected a signed response');
+
+    const claims = decodeJwt(response.jwt);
+    expect(typeof claims.nonce).toBe('string');
+    expect(typeof claims.jti).toBe('string');
+    expect(claims.nonce).not.toBe(claims.jti);
   });
 });

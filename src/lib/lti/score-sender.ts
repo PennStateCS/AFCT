@@ -50,6 +50,7 @@ export async function sendOneScore(): Promise<SendOutcome> {
   const fail = async (reason: AgsFailure, detail?: string) => {
     await markFailed({
       id: claimed.id,
+      claimToken: claimed.claimToken,
       attempts: claimed.attempts,
       error: detail ? `${agsFailureMessage(reason)} (${detail})` : agsFailureMessage(reason),
       retryable: RETRYABLE.includes(reason),
@@ -151,7 +152,13 @@ export async function sendOneScore(): Promise<SendOutcome> {
       scoreMaximum: claimed.scoreMaximum,
     });
     if (sent.ok) {
-      await markSent(claimed.id);
+      await markSent({
+        id: claimed.id,
+        claimToken: claimed.claimToken,
+        // What this send carried, so a grade changed mid-send cannot be recorded as delivered.
+        scoreGiven: claimed.scoreGiven,
+        scoreMaximum: claimed.scoreMaximum,
+      });
       return { status: 'sent' };
     }
 

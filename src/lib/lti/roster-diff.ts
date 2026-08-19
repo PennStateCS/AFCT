@@ -42,6 +42,14 @@ export type RosterChange =
   | { kind: 'drop'; userId: string; name: string; role: CourseRole }
   /** Enrolled here, dropped in AFCT, and the LMS says they are back. */
   | { kind: 'restore'; userId: string; name: string }
+  /**
+   * Listed by the LMS, and impossible for AFCT to act on.
+   *
+   * NRPS does not guarantee an email address, and AFCT cannot make an account without one.
+   * Surfacing it as its own outcome tells the instructor who was skipped and why, instead of
+   * failing the whole sync on one member or inventing an address for them.
+   */
+  | { kind: 'cannot-import'; name: string; reason: 'no-email'; source: RosterSource }
   /** Present in both, and only their LMS identity is missing, so grades cannot be sent. */
   | {
       kind: 'link-identity';
@@ -124,6 +132,32 @@ export async function diffRoster(opts: {
   const seen = new Set<string>();
   let unchanged = 0;
 
+  /**
+   * Every source is read before anything is decided.
+   *
+   * A cross-listed course is several LMS courses opening one AFCT course, and a person can be
+   * active in one and inactive in another: dropped from a section they finished, still sitting
+   * in the one they are taking. Deciding per source dropped them the moment the first source
+   * said so, and the second source saying otherwise arrived too late to help. The rule is that
+   * a person is dropped only when **no** connected LMS course lists them active.
+   *
+   * Aggregating also settles two things that were previously decided by iteration order: a
+   * person new to AFCT who appears in two sources produced two `add` operations, and a person
+   * whose sources disagree about their role took whichever came last.
+   */
+  type Candidate = {
+    userId: string | null;
+    active: boolean;
+    role: CourseRole;
+    member: Member;
+    source: RosterSource;
+  };
+  const candidates = new Map<string, Candidate>();
+
+  // Most privileged wins, as it does within one member's list of roles: somebody who teaches
+  // one section and takes another is staff, and demoting them would take work away.
+  const RANK: Record<CourseRole, number> = { FACULTY: 3, TA: 2, STUDENT: 1 };
+
   for (const { issuer, contextLinkId, members } of sources) {
     const source = { issuer, contextLinkId };
     for (const member of members) {
@@ -133,45 +167,82 @@ export async function diffRoster(opts: {
         userByLtiId.get(identityKey(issuer, member.ltiUserId)) ??
         (member.email ? byEmail.get(member.email) : undefined) ??
         null;
-      const role = mapLtiRoles(member.roles);
-      const name = displayName(member.firstName, member.lastName, member.email ?? member.ltiUserId);
-
       if (userId) seen.add(userId);
-      const existing = userId ? rosterByUser.get(userId) : undefined;
 
-      if (!member.active) {
-        // Only a drop if they are actually enrolled here; otherwise there is nothing to do.
-        if (existing && existing.status === 'ENROLLED') {
-          changes.push({ kind: 'drop', userId: existing.userId, name, role: existing.role });
-        }
+      /**
+       * One entry per person, however many sources hold them. Keyed by the AFCT account when
+       * there is one; otherwise by address, and only then by the platform's own id, which is
+       * the last resort because the same person in two platforms has two of them.
+       */
+      const key =
+        userId ?? (member.email ? `email:${member.email}` : `lti:${issuer}|${member.ltiUserId}`);
+      const role = mapLtiRoles(member.roles);
+      const previous = candidates.get(key);
+
+      if (!previous) {
+        candidates.set(key, { userId, active: member.active, role, member, source });
         continue;
       }
 
-      if (!existing) {
-        changes.push({ kind: 'add', member, role, existingUserId: userId, source });
-        continue;
-      }
-
-      if (existing.status === 'DROPPED') {
-        changes.push({ kind: 'restore', userId: existing.userId, name });
-        continue;
-      }
-
-      // Enrolled and correct. The one thing that may still be missing is the LMS identity, which
-      // is what grade passback needs, and a student who has never launched will not have one.
-      if (!ltiIdByUser.has(existing.userId)) {
-        changes.push({
-          kind: 'link-identity',
-          userId: existing.userId,
-          name,
-          ltiUserId: member.ltiUserId,
-          source,
-        });
-        continue;
-      }
-
-      unchanged++;
+      candidates.set(key, {
+        userId: previous.userId ?? userId,
+        active: previous.active || member.active,
+        role: RANK[role] > RANK[previous.role] ? role : previous.role,
+        // Prefer the source that lists them as active: that is the one whose identity and
+        // section membership are worth recording.
+        member: !previous.active && member.active ? member : previous.member,
+        source: !previous.active && member.active ? source : previous.source,
+      });
     }
+  }
+
+  for (const candidate of candidates.values()) {
+    const { userId, member, role, source } = candidate;
+    const existing = userId ? rosterByUser.get(userId) : undefined;
+    const name = displayName(member.firstName, member.lastName, member.email ?? member.ltiUserId);
+
+    if (!candidate.active) {
+      // Inactive everywhere. Only a drop if they are actually enrolled here.
+      if (existing && existing.status === 'ENROLLED') {
+        changes.push({ kind: 'drop', userId: existing.userId, name, role: existing.role });
+      }
+      continue;
+    }
+
+    if (!existing) {
+      /**
+       * An account needs an address, and NRPS does not promise one: a platform can be
+       * configured to withhold it. Saying so here keeps the rest of the sync working, where
+       * queuing an `add` that cannot succeed used to throw inside the apply transaction and
+       * roll back every other change in it.
+       */
+      if (!userId && !member.email) {
+        changes.push({ kind: 'cannot-import', name, reason: 'no-email', source });
+        continue;
+      }
+      changes.push({ kind: 'add', member, role, existingUserId: userId, source });
+      continue;
+    }
+
+    if (existing.status === 'DROPPED') {
+      changes.push({ kind: 'restore', userId: existing.userId, name });
+      continue;
+    }
+
+    // Enrolled and correct. The one thing that may still be missing is the LMS identity, which
+    // is what grade passback needs, and a student who has never launched will not have one.
+    if (!ltiIdByUser.has(existing.userId)) {
+      changes.push({
+        kind: 'link-identity',
+        userId: existing.userId,
+        name,
+        ltiUserId: member.ltiUserId,
+        source,
+      });
+      continue;
+    }
+
+    unchanged++;
   }
 
   /**

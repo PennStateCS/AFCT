@@ -268,6 +268,9 @@ export async function POST(request: Request) {
     ],
     acceptTypes: pending.acceptTypes,
     acceptLineItem: pending.acceptLineItem,
+    // What the platform said it would display, so AFCT does not answer with a target it was
+    // never offered.
+    acceptPresentationDocumentTargets: pending.acceptPresentationDocumentTargets,
   });
 
   if (!response.ok) {
