@@ -238,7 +238,19 @@ export async function buildAuthConfig(): Promise<NextAuthConfig> {
           await createEnhancedActivityLog(
             prisma,
             { ipAddress, userAgent },
-            { userId, action: 'LOGOUT', category: 'SYSTEM', severity: 'INFO', metadata: {} },
+            {
+              userId,
+              action: 'LOGOUT',
+              category: 'SYSTEM',
+              severity: 'INFO',
+              // Where the session came from, carried on the token since sign-in: a logout that
+              // cannot say what it ended leaves somebody reading the log to guess.
+              metadata: {
+                ...(typeof (token as { provider?: unknown })?.provider === 'string'
+                  ? { provider: (token as { provider: string }).provider }
+                  : {}),
+              },
+            },
           );
         } catch (e) {
           // don't block sign-out on logging failure
