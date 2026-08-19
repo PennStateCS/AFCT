@@ -657,3 +657,59 @@ describe('SystemSettingsClient — mail password', () => {
     await waitFor(() => expect(field).toHaveValue(''));
   });
 });
+
+/**
+ * A secret this deployment cannot decrypt shows as "Enabled, but unavailable". Replacing it is
+ * the fix, and the screen has to notice: updating only "a secret is stored" left the old
+ * "cannot be read" behind, so clearing the typed value flipped a working secret back to
+ * unavailable and only a page reload told the truth.
+ */
+describe('SystemSettingsClient — replacing an unreadable secret', () => {
+  const unreadable = () => ({
+    ...settingsPayload(),
+    oidcEnabled: true,
+    oidcIssuer: 'https://login.example.edu',
+    oidcClientId: 'client',
+    oidcClientSecretConfigured: true,
+    oidcClientSecretReadable: false,
+  });
+
+  const openSignInTab = async (user: ReturnType<typeof userEvent.setup>) => {
+    await waitFor(() => expect(screen.getByLabelText(/Max upload size/)).toBeInTheDocument());
+    await user.click(screen.getByRole('tab', { name: 'Sign-in' }));
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('says so before the secret is replaced', async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = makeFetch({ settings: unreadable() });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<SystemSettingsClient />);
+    await openSignInTab(user);
+
+    expect(await screen.findByText('Enabled, but unavailable')).toBeInTheDocument();
+  });
+
+  it('reads as enabled once a replacement is saved, without reloading', async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = makeFetch({ settings: unreadable() });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<SystemSettingsClient />);
+    await openSignInTab(user);
+
+    const field = screen.getByLabelText('Client secret', { exact: true });
+    await user.type(field, 'a-fresh-secret');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    // The typed value is gone, and what it left behind is a secret this AFCT can read.
+    await waitFor(() => expect(field).toHaveValue(''));
+    expect(await screen.findByText('Enabled')).toBeInTheDocument();
+    expect(screen.queryByText('Enabled, but unavailable')).not.toBeInTheDocument();
+  });
+});

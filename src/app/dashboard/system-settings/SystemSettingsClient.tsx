@@ -370,12 +370,34 @@ export default function SystemSettingsClient() {
       setHcaptchaSecretConfigured(
         hcaptchaSecretClear ? false : hcaptchaSecretKey.trim() ? true : hcaptchaSecretConfigured,
       );
-      setOidcClientSecretConfigured(
-        oidcClientSecretClear ? false : oidcClientSecret !== '' ? true : oidcClientSecretConfigured,
+      /**
+       * What the save left stored, worked out before the typed values are cleared below.
+       *
+       * Readable matters as much as configured. A secret this deployment could not decrypt
+       * shows as "Enabled, but unavailable"; replacing it fixes that, because whatever was
+       * just saved was encrypted with the key this deployment holds. Updating only
+       * `configured` left the old `readable: false` in place, so the moment the typed value
+       * was cleared the screen went back to calling a working secret unreadable, and the only
+       * way to see the truth was to reload the page.
+       */
+      const oidcSecretNowStored = oidcClientSecretClear
+        ? false
+        : oidcClientSecret !== '' || oidcClientSecretConfigured;
+      setOidcClientSecretConfigured(oidcSecretNowStored);
+      setOidcClientSecretReadable(
+        oidcClientSecretClear
+          ? false
+          : oidcClientSecret !== ''
+            ? true
+            : oidcClientSecretReadable,
       );
-      // What the save left stored, so the placeholder and the status read true afterwards.
-      setSmtpPasswordConfigured(
-        smtpPasswordClear ? false : smtpPassword !== '' ? true : smtpPasswordConfigured,
+
+      const smtpPasswordNowStored = smtpPasswordClear
+        ? false
+        : smtpPassword !== '' || smtpPasswordConfigured;
+      setSmtpPasswordConfigured(smtpPasswordNowStored);
+      setSmtpPasswordReadable(
+        smtpPasswordClear ? false : smtpPassword !== '' ? true : smtpPasswordReadable,
       );
       setOidcClientSecret('');
       setOidcClientSecretClear(false);
@@ -422,13 +444,17 @@ export default function SystemSettingsClient() {
               oidcClientId: oidcClientId.trim(),
               oidcButtonLabel: oidcButtonLabel.trim(),
               oidcTrustEmail,
-              oidcClientSecretConfigured: oidcClientSecretClear
+              // The same answers the component state took above, so a revisit served from
+              // cache says what the screen says rather than the pre-save response.
+              oidcClientSecretConfigured: oidcSecretNowStored,
+              oidcClientSecretReadable: oidcClientSecretClear
                 ? false
-                : oidcClientSecret !== '' || oidcClientSecretConfigured,
+                : oidcClientSecret !== '' || oidcClientSecretReadable,
               // A password that was just set is now stored; a cleared one is not.
-              smtpPasswordConfigured: smtpPasswordClear
+              smtpPasswordConfigured: smtpPasswordNowStored,
+              smtpPasswordReadable: smtpPasswordClear
                 ? false
-                : smtpPassword !== '' || smtpPasswordConfigured,
+                : smtpPassword !== '' || smtpPasswordReadable,
               hcaptchaSecretConfigured: hcaptchaSecretClear
                 ? false
                 : hcaptchaSecretKey.trim()
