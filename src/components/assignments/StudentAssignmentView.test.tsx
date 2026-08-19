@@ -280,6 +280,61 @@ describe('StudentAssignmentPage', () => {
       expect(toastError).toHaveBeenCalledTimes(1);
     });
 
+    /**
+     * The two reads can fail differently, and in either order.
+     *
+     * A "reported already" flag let whichever failed first decide everything, so a 500 landing
+     * before a 403 swallowed the 403 and the redirect it owes, and the student sat on a page
+     * they had no access to. A terminal answer speaks whatever came before it.
+     */
+    const failingWith = (assignmentStatus: number, contextStatus: number) =>
+      vi.fn(async (url: string) => {
+        const status = url.includes('student-context') ? contextStatus : assignmentStatus;
+        return { ok: false, status, json: async () => ({ error: `status ${status}` }) };
+      });
+
+    it('lets a 403 have its say, and its redirect, after a generic failure', async () => {
+      // The assignment read fails generically; the context read refuses.
+      vi.stubGlobal('fetch', failingWith(500, 403));
+
+      renderWithClient(<StudentAssignmentPage initialAssignment={null} />);
+
+      await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/dashboard'));
+      expect(pushMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets a 404 have its say after a generic failure', async () => {
+      vi.stubGlobal('fetch', failingWith(500, 404));
+
+      renderWithClient(<StudentAssignmentPage initialAssignment={null} />);
+
+      await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/dashboard'));
+      expect(
+        toastError.mock.calls.some(([message]) => String(message).includes('not available')),
+      ).toBe(true);
+    });
+
+    it('does not add a second message when a generic failure follows a refusal', async () => {
+      // Refusal first this time: the terminal answer is already on screen.
+      vi.stubGlobal('fetch', failingWith(403, 500));
+
+      renderWithClient(<StudentAssignmentPage initialAssignment={null} />);
+
+      await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/dashboard'));
+      expect(toastError).toHaveBeenCalledTimes(1);
+      expect(pushMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('says nothing twice when both reads refuse the same way', async () => {
+      vi.stubGlobal('fetch', failingWith(403, 403));
+
+      renderWithClient(<StudentAssignmentPage initialAssignment={null} />);
+
+      await waitFor(() => expect(toastError).toHaveBeenCalled());
+      expect(toastError).toHaveBeenCalledTimes(1);
+      expect(pushMock).toHaveBeenCalledTimes(1);
+    });
+
     it('still offers a refresh for a failure that might actually be transient', async () => {
       vi.stubGlobal('fetch', refuse(500, 'Internal error'));
 
