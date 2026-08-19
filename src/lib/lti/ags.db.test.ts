@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { prisma } from '@/lib/prisma';
 import { createKeyPair } from './keys';
 import { ensureLineItem, postScore, findLtiUserId } from './ags';
+import { clearAccessTokenCache } from './access-token';
 
 /**
  * Sending grades to an LMS, against a real Postgres.
@@ -731,5 +732,40 @@ describe('keeping the column in step with the assignment', () => {
       value: LINE_ITEM_URL,
     });
     expect((await prisma.ltiLineItem.findFirstOrThrow()).label).toBe('Problem set 1');
+  });
+});
+
+/**
+ * AGS grants line-item management and score posting as separate scopes, and a platform that
+ * created the column itself may grant only the second. Asking for both then has the token
+ * request refused outright, so no grade is sent at all.
+ */
+describe('the permissions each operation asks for', () => {
+  const scopesRequested = (fetchMock: ReturnType<typeof vi.fn>) => {
+    const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/token'));
+    const body = call?.[1]?.body as URLSearchParams | undefined;
+    return String(body?.get('scope') ?? '').split(' ').filter(Boolean);
+  };
+
+  it('asks only to post a score when posting a score', async () => {
+    // A cold cache, or an earlier test's token answers and no request is made to inspect.
+    clearAccessTokenCache();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/token')) return json({ access_token: 'tok', expires_in: 3600 });
+      return new Response('', { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await postScore({
+      platform: PLATFORM,
+      lineItemUrl: `${ISSUER}/lineitems/1`,
+      ltiUserId: 'lms-1',
+      scoreGiven: 8,
+      scoreMaximum: 10,
+    });
+
+    expect(scopesRequested(fetchMock)).toEqual([
+      'https://purl.imsglobal.org/spec/lti-ags/scope/score',
+    ]);
   });
 });

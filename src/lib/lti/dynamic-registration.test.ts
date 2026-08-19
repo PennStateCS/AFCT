@@ -421,3 +421,50 @@ describe('when a platform redirects', () => {
     expect(init.redirect).toBe('manual');
   });
 });
+
+/**
+ * Brightspace issues tokens from one address and expects the client assertion to be addressed
+ * to another. AFCT has always supported that as a setting somebody types in; a platform that
+ * publishes it should not need anybody to.
+ */
+describe('an authorization server of its own', () => {
+  const register = async (overrides: Record<string, unknown>) => {
+    vi.stubGlobal(
+      'fetch',
+      answering(201, {
+        client_id: 'client-9',
+        scope: REQUESTED_SCOPES.join(' '),
+        [TOOL_CONFIGURATION_CLAIM]: { deployment_id: 'deploy-9' },
+      }),
+    );
+    return requestRegistration({
+      config: configuration(overrides) as never,
+      registrationToken: 'platform-token',
+      baseUrl: 'https://afct.example.test',
+    });
+  };
+
+  it('is taken from the configuration when the platform names one', async () => {
+    const result = await register({
+      authorization_server: 'https://api.brightspace.example/auth',
+      [PLATFORM_CONFIGURATION_CLAIM]: { product_family_code: 'desire2learn' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.platform.tokenAudience).toBe('https://api.brightspace.example/auth');
+    // And nothing left for the administrator to type in by hand.
+    expect(result.notes.join(' ')).not.toContain('OAuth2 Audience');
+  });
+
+  it('is null when the platform says nothing, and Brightspace is told to add it', async () => {
+    const result = await register({
+      [PLATFORM_CONFIGURATION_CLAIM]: { product_family_code: 'desire2learn' },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.platform.tokenAudience).toBeNull();
+    expect(result.notes.join(' ')).toContain('OAuth2 Audience');
+  });
+});

@@ -23,6 +23,8 @@ export type ApplyResult = {
   restored: number;
   identitiesLinked: number;
   accountsCreated: number;
+  /** Listed by the LMS and impossible to act on, most often for want of an email address. */
+  skipped: number;
 };
 
 /**
@@ -52,6 +54,7 @@ export async function applyRosterChanges(opts: {
     restored: 0,
     identitiesLinked: 0,
     accountsCreated: 0,
+    skipped: 0,
   };
 
   /**
@@ -67,6 +70,15 @@ export async function applyRosterChanges(opts: {
   await prisma.$transaction(async (tx) => {
     for (const change of changes) {
       switch (change.kind) {
+        /**
+         * Nothing to do, by definition: the diff already decided AFCT cannot act on this
+         * person. Counted so the instructor is told they were skipped rather than left to
+         * notice a missing student later.
+         */
+        case 'cannot-import': {
+          result.skipped++;
+          break;
+        }
         case 'add': {
           const { issuer, contextLinkId } = change.source;
           const userId =

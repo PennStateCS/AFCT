@@ -17,8 +17,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   authorisedFetch,
   authorisedFetchFailureDetail,
+  isHttps,
   preferPlatformScheme,
   samePageOrigin,
+  // The transport half. These tests need real servers, which cannot be served over https here,
+  // so redirect and timeout behaviour is exercised through this and the https rule through
+  // `authorisedFetch` below.
+  sendWithoutFollowingRedirects,
 } from './authorised-fetch';
 
 /** Records what the Authorization header looked like by the time the request arrived. */
@@ -71,7 +76,7 @@ describe('the redirect that eats credentials', () => {
   });
 
   it('is refused rather than followed, and named', async () => {
-    const result = await authorisedFetch(redirectUrl, { headers: { Authorization: 'Bearer t' } });
+    const result = await sendWithoutFollowingRedirects(redirectUrl, { headers: { Authorization: 'Bearer t' } });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -83,7 +88,7 @@ describe('the redirect that eats credentials', () => {
   });
 
   it('carries the token when nothing redirects', async () => {
-    const result = await authorisedFetch(targetUrl, { headers: { Authorization: 'Bearer t' } });
+    const result = await sendWithoutFollowingRedirects(targetUrl, { headers: { Authorization: 'Bearer t' } });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -91,7 +96,7 @@ describe('the redirect that eats credentials', () => {
   });
 
   it('reports a host that is not there as a network failure, not a redirect', async () => {
-    const result = await authorisedFetch('http://127.0.0.1:1/x', {
+    const result = await sendWithoutFollowingRedirects('http://127.0.0.1:1/x', {
       headers: { Authorization: 'x' },
     });
 
@@ -144,7 +149,7 @@ describe('repairing the advertised scheme', () => {
  */
 describe('the guarantees every caller inherits', () => {
   it.each([301, 302, 303, 307, 308])('refuses %i rather than following it', async (status) => {
-    const result = await authorisedFetch(statusRedirectUrl(status), {
+    const result = await sendWithoutFollowingRedirects(statusRedirectUrl(status), {
       headers: { Authorization: 'Bearer secret-token' },
     });
 
@@ -170,7 +175,7 @@ describe('the guarantees every caller inherits', () => {
     });
     await new Promise<void>((resolve) => sender.listen(0, resolve));
 
-    await authorisedFetch(`http://127.0.0.1:${(sender.address() as AddressInfo).port}/x`, {
+    await sendWithoutFollowingRedirects(`http://127.0.0.1:${(sender.address() as AddressInfo).port}/x`, {
       headers: { Authorization: 'Bearer secret-token' },
     });
 
@@ -193,7 +198,7 @@ describe('the guarantees every caller inherits', () => {
     });
     await new Promise<void>((resolve) => sameOrigin.listen(0, resolve));
 
-    const result = await authorisedFetch(
+    const result = await sendWithoutFollowingRedirects(
       `http://127.0.0.1:${(sameOrigin.address() as AddressInfo).port}/x`,
       { headers: { Authorization: 'Bearer secret-token' } },
     );
@@ -203,7 +208,7 @@ describe('the guarantees every caller inherits', () => {
   });
 
   it('gives up on a platform that never answers', async () => {
-    const result = await authorisedFetch(silentUrl, {
+    const result = await sendWithoutFollowingRedirects(silentUrl, {
       headers: { Authorization: 'Bearer secret-token' },
       timeoutMs: 100,
     });
@@ -217,7 +222,7 @@ describe('the guarantees every caller inherits', () => {
   });
 
   it('reports an address that is not a URL rather than throwing', async () => {
-    const result = await authorisedFetch('not a url', { headers: {} });
+    const result = await sendWithoutFollowingRedirects('not a url', { headers: {} });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -232,7 +237,7 @@ describe('the guarantees every caller inherits', () => {
     });
     await new Promise<void>((resolve) => refusing.listen(0, resolve));
 
-    const result = await authorisedFetch(
+    const result = await sendWithoutFollowingRedirects(
       `http://127.0.0.1:${(refusing.address() as AddressInfo).port}/x`,
       { headers: {} },
     );
@@ -264,5 +269,55 @@ describe('which next page may be followed', () => {
     ['something that is not a URL', 'page2'],
   ])('refuses %s', (_label, candidate) => {
     expect(samePageOrigin(candidate, origin)).toBeNull();
+  });
+});
+
+/**
+ * The boundary a bearer token must not cross.
+ *
+ * Service addresses arrive inside signed launches, and a signature proves who sent an address,
+ * not that it is safe to send credentials to. A platform advertising `http://` would otherwise
+ * have AFCT read its own OAuth token onto the wire for anyone on the path.
+ */
+describe('credentials and plaintext', () => {
+  it('refuses an http address before sending anything', async () => {
+    const result = await authorisedFetch('http://lms.example.test/lineitems', {
+      headers: { Authorization: 'Bearer secret' },
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      failure: { kind: 'insecure', url: 'http://lms.example.test/lineitems' },
+    });
+  });
+
+  it('refuses anything that is not a URL at all', async () => {
+    const result = await authorisedFetch('not-a-url', { headers: {} });
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('says what is wrong in words an administrator can act on', () => {
+    const detail = authorisedFetchFailureDetail({
+      kind: 'insecure',
+      url: 'http://lms.example.test/lineitems',
+    });
+
+    expect(detail).toContain('https://');
+  });
+
+  it('knows an https address when it sees one', () => {
+    expect(isHttps('https://lms.example.test/x')).toBe(true);
+    expect(isHttps('http://lms.example.test/x')).toBe(false);
+    expect(isHttps('ftp://lms.example.test/x')).toBe(false);
+    expect(isHttps('')).toBe(false);
+  });
+
+  /** A `Link` header is the platform's to write, so a next page must not downgrade the scheme. */
+  it('will not follow a page that drops to http', () => {
+    expect(samePageOrigin('http://lms.example.test/page2', 'https://lms.example.test')).toBeNull();
+    expect(samePageOrigin('https://lms.example.test/page2', 'https://lms.example.test')).toBe(
+      'https://lms.example.test/page2',
+    );
   });
 });

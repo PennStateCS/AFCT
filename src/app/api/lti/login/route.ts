@@ -65,7 +65,13 @@ async function handle(request: Request, params: LoginInitParams) {
     // Plain text rather than JSON: this is read by a person staring at a failed launch inside an
     // LMS frame, not by code.
     return new NextResponse(loginInitRefusalMessage(result.reason), {
-      status: result.reason === 'missing-issuer' ? 400 : 404,
+      // A malformed request is the caller's fault (400); an unknown registration is a 404.
+      status:
+        result.reason === 'missing-issuer' ||
+        result.reason === 'missing-login-hint' ||
+        result.reason === 'missing-target-link-uri'
+          ? 400
+          : 404,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
   }

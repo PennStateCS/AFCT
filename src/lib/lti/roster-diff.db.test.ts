@@ -177,7 +177,9 @@ describe('somebody the LMS no longer lists', () => {
   it('is only ever proposed for a drop, never anything harsher', async () => {
     const result = await diff([]);
 
-    const forStudent = result.changes.filter((c) => c.kind !== 'add' && c.userId === ids.student);
+    const forStudent = result.changes.filter(
+      (c) => 'userId' in c && c.userId === ids.student,
+    );
     expect(forStudent).toHaveLength(1);
     expect(forStudent[0]?.kind).toBe('drop');
   });
@@ -188,6 +190,42 @@ describe('somebody the LMS no longer lists', () => {
  * about, and removing a colleague mid-term because a Canvas section does not list them would
  * be worse than a stale row.
  */
+/**
+ * NRPS does not promise an email address, and AFCT cannot create an account without one.
+ * Queuing an `add` for them threw inside the apply transaction and rolled back every other
+ * change in the same sync.
+ */
+describe('somebody the LMS will not name', () => {
+  it('is reported as impossible to import rather than queued for creation', async () => {
+    const result = await diff([member({ ltiUserId: 'no-email-person', email: null })]);
+
+    expect(result.changes).toContainEqual(
+      expect.objectContaining({ kind: 'cannot-import', reason: 'no-email' }),
+    );
+    // And no attempt to create an account that would throw when applied.
+    expect(result.changes.filter((c) => c.kind === 'add')).toHaveLength(0);
+  });
+
+  it('does not stop the valid changes in the same sync', async () => {
+    const result = await diff([
+      member({ ltiUserId: 'no-email-person', email: null }),
+      member({ ltiUserId: 'newcomer', email: 'newcomer@example.test' }),
+    ]);
+
+    expect(result.changes.filter((c) => c.kind === 'add')).toHaveLength(1);
+    expect(result.changes.filter((c) => c.kind === 'cannot-import')).toHaveLength(1);
+  });
+
+  /** Already in AFCT, so there is nothing to create and no reason to skip them. */
+  it('is imported normally when AFCT already knows the person', async () => {
+    await linkIdentity(ids.student, 'known-person');
+
+    const result = await diff([member({ ltiUserId: 'known-person', email: null })]);
+
+    expect(result.changes.filter((c) => c.kind === 'cannot-import')).toHaveLength(0);
+  });
+});
+
 describe('course staff the LMS does not list', () => {
   it('are kept, not dropped', async () => {
     const result = await diff([]);
@@ -249,6 +287,133 @@ describe('a course connected to more than one LMS course', () => {
     await prisma.ltiContextLink.deleteMany({ where: { platformId: SECOND_PLATFORM } });
     await prisma.ltiPlatform.deleteMany({ where: { id: SECOND_PLATFORM } });
     await prisma.linkedIdentity.deleteMany({ where: { issuer: SECOND_ISSUER } });
+  });
+
+  /**
+   * The case that made this an aggregate rather than a loop.
+   *
+   * A student finishes one section and stays in another: the LMS lists them inactive in the
+   * first and active in the second. Deciding per source dropped them the moment the first said
+   * so, and the second saying otherwise arrived too late to matter.
+   */
+  it('keeps somebody who is inactive in one LMS course and active in another', async () => {
+    await linkIdentity(ids.student, 'lms-first');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        {
+          ...SOURCE,
+          members: [member({ ltiUserId: 'lms-first', active: false })],
+        },
+        {
+          ...secondSource,
+          members: [member({ ltiUserId: 'lms-second', email: 'student@example.test' })],
+        },
+      ],
+    });
+
+    expect(result.changes.filter((c) => c.kind === 'drop')).toHaveLength(0);
+  });
+
+  it('drops somebody only when no LMS course lists them active', async () => {
+    await linkIdentity(ids.student, 'lms-first');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-first', active: false })] },
+        {
+          ...secondSource,
+          members: [member({ ltiUserId: 'lms-second', email: 'student@example.test', active: false })],
+        },
+      ],
+    });
+
+    expect(result.changes.filter((c) => c.kind === 'drop')).toHaveLength(1);
+  });
+
+  /** The order the sources arrive in must not change the answer. */
+  it('reaches the same answer whichever source is read first', async () => {
+    await linkIdentity(ids.student, 'lms-first');
+
+    const inactive = { ...SOURCE, members: [member({ ltiUserId: 'lms-first', active: false })] };
+    const active = {
+      ...secondSource,
+      members: [member({ ltiUserId: 'lms-second', email: 'student@example.test' })],
+    };
+
+    const oneWay = await diffRoster({ courseId: COURSE, sources: [inactive, active] });
+    const other = await diffRoster({ courseId: COURSE, sources: [active, inactive] });
+
+    expect(oneWay.changes.filter((c) => c.kind === 'drop')).toHaveLength(0);
+    expect(other.changes.filter((c) => c.kind === 'drop')).toHaveLength(0);
+  });
+
+  it('adds a person new to AFCT once, however many LMS courses hold them', async () => {
+    const newcomer = { email: 'newcomer@example.test', firstName: 'New', lastName: 'Comer' };
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-a', ...newcomer })] },
+        { ...secondSource, members: [member({ ltiUserId: 'lms-b', ...newcomer })] },
+      ],
+    });
+
+    expect(result.changes.filter((c) => c.kind === 'add')).toHaveLength(1);
+  });
+
+  it('gives somebody the more privileged of two roles, whichever order they arrive in', async () => {
+    const person = { email: 'both@example.test' };
+
+    const asStudentFirst = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-a', ...person })] },
+        {
+          ...secondSource,
+          members: [member({ ltiUserId: 'lms-b', ...person, roles: [`${R}#Instructor`] })],
+        },
+      ],
+    });
+    const asStaffFirst = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        {
+          ...secondSource,
+          members: [member({ ltiUserId: 'lms-b', ...person, roles: [`${R}#Instructor`] })],
+        },
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-a', ...person })] },
+      ],
+    });
+
+    const roleOf = (d: typeof asStudentFirst) =>
+      d.changes.find((c): c is Extract<typeof c, { kind: 'add' }> => c.kind === 'add')?.role;
+    expect(roleOf(asStudentFirst)).toBe('FACULTY');
+    expect(roleOf(asStaffFirst)).toBe('FACULTY');
+  });
+
+  /**
+   * The same id string from two platforms is two different people. Identities are keyed by
+   * issuer as well as subject, and this is what proves it stays that way.
+   */
+  it('treats one subject string from two issuers as two people', async () => {
+    await linkIdentity(ids.student, 'shared-id');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'shared-id' })] },
+        {
+          ...secondSource,
+          members: [member({ ltiUserId: 'shared-id', email: 'other@example.test' })],
+        },
+      ],
+    });
+
+    // The second is a stranger with their own address, so they are an addition, not the same row.
+    expect(result.changes.filter((c) => c.kind === 'add')).toHaveLength(1);
   });
 
   it('takes the roster as the union of them, dropping nobody who is in the other', async () => {

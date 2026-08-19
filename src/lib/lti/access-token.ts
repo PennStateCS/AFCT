@@ -16,11 +16,22 @@ import { getSigningKey, LTI_SIGNING_ALG } from '@/lib/lti/keys';
 import { authorisedFetch, authorisedFetchFailureDetail } from '@/lib/lti/authorised-fetch';
 import { prisma } from '@/lib/prisma';
 
-/** The AGS scopes AFCT asks for. Only what grade passback needs. */
-export const AGS_SCOPES = [
+/**
+ * The AGS scopes, kept apart because the operations are.
+ *
+ * AGS grants them separately: `lineitem` manages gradebook columns, `score` posts grades. A
+ * platform that made the column itself may grant only `score`, and asking for both then has the
+ * whole token request refused, so no grade is sent at all. Each operation asks for what it
+ * needs; the cache is keyed by scope, so the two live side by side.
+ */
+export const AGS_LINE_ITEM_SCOPES = [
   'https://purl.imsglobal.org/spec/lti-ags/scope/lineitem',
-  'https://purl.imsglobal.org/spec/lti-ags/scope/score',
 ] as const;
+
+export const AGS_SCORE_SCOPES = ['https://purl.imsglobal.org/spec/lti-ags/scope/score'] as const;
+
+/** Both, for the places that genuinely do both in one breath. */
+export const AGS_SCOPES = [...AGS_LINE_ITEM_SCOPES, ...AGS_SCORE_SCOPES] as const;
 
 /** How long an assertion is good for. Short: it is used once, immediately. */
 const ASSERTION_TTL_S = 60;
@@ -49,6 +60,25 @@ type CacheEntry = { token: string; expiresAt: number };
  * freshness of. Losing the cache costs one extra request.
  */
 const cache = new Map<string, CacheEntry>();
+
+/**
+ * Forget every cached token, or one platform's.
+ *
+ * Tokens are minted for a particular client id, audience and endpoint, so editing a
+ * registration leaves entries that were valid for the registration as it used to be. They are
+ * short-lived and the platform would refuse them anyway, but a refusal reads as "your LMS
+ * rejected the grade", which sends an administrator looking in the wrong place after a change
+ * they just made. Called when a registration changes, and by tests that need a cold cache.
+ */
+export function clearAccessTokenCache(platformId?: string): void {
+  if (!platformId) {
+    cache.clear();
+    return;
+  }
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${platformId}:`)) cache.delete(key);
+  }
+}
 
 /**
  * The signed assertion AFCT presents instead of a client secret.
@@ -163,7 +193,10 @@ export async function getAccessToken(opts: {
       ok: false,
       // A platform that redirects its own token endpoint has misconfigured itself, which is a
       // setup problem rather than an outage, so it is reported as a refusal with the detail.
-      reason: attempt.failure.kind === 'redirected' ? 'rejected' : 'unreachable',
+      reason:
+        attempt.failure.kind === 'redirected' || attempt.failure.kind === 'insecure'
+          ? 'rejected'
+          : 'unreachable',
       detail: authorisedFetchFailureDetail(attempt.failure),
     };
   }
@@ -179,14 +212,40 @@ export async function getAccessToken(opts: {
   const body = (await response.json().catch(() => null)) as {
     access_token?: unknown;
     expires_in?: unknown;
+    token_type?: unknown;
   } | null;
 
   const token = typeof body?.access_token === 'string' ? body.access_token : null;
   if (!token) return { ok: false, reason: 'rejected', detail: 'no access_token in the response' };
 
+  /**
+   * The type has to be one AFCT can actually use.
+   *
+   * Every LTI service call sends `Authorization: Bearer`, so a platform answering with another
+   * type would have AFCT present the token in a way it was not issued for, and the refusal
+   * would arrive later as an unexplained rejection of a grade. Compared case-insensitively:
+   * OAuth says the value is case-insensitive, and platforms spell it both ways. An absent
+   * `token_type` is accepted, since platforms in the field omit it and the assertion flow has
+   * no other type to mean.
+   */
+  const tokenType = typeof body?.token_type === 'string' ? body.token_type.toLowerCase() : null;
+  if (tokenType !== null && tokenType !== 'bearer') {
+    return {
+      ok: false,
+      reason: 'rejected',
+      detail: `your LMS issued a ${body?.token_type as string} token, which AFCT cannot use`,
+    };
+  }
+
   // Platforms may omit `expires_in`. An hour is the usual default and erring short only costs
   // an extra request.
-  const lifetimeS = typeof body?.expires_in === 'number' ? body.expires_in : 3600;
+  /**
+   * Platforms may omit it, and some send it as a string. A value that is not a positive number
+   * is treated as absent rather than believed: zero or a negative would expire the token before
+   * it was used, and every call would mint a new one.
+   */
+  const statedLifetime = Number(body?.expires_in);
+  const lifetimeS = Number.isFinite(statedLifetime) && statedLifetime > 0 ? statedLifetime : 3600;
   cache.set(cacheKey, { token, expiresAt: now + lifetimeS * 1000 });
 
   return { ok: true, token };

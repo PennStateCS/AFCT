@@ -79,6 +79,15 @@ const PlatformConfigurationSchema = z.object({
   registration_endpoint: platformUrl,
   /** What the platform is prepared to grant. Absent means it did not say. */
   scopes_supported: z.array(z.string()).optional(),
+  /**
+   * Where the client assertion should be addressed, when that is not the token endpoint.
+   *
+   * Brightspace is the platform this exists for: it issues tokens from one address and expects
+   * the assertion's audience to be another, and getting it wrong fails every service call with
+   * an unhelpful refusal. AFCT already supports it as a setting somebody types in; taking it
+   * from the platform's own configuration means an automatic registration arrives working.
+   */
+  authorization_server: z.string().trim().min(1).optional(),
   [PLATFORM_CONFIGURATION_CLAIM]: z
     .object({
       product_family_code: z.string().optional(),
@@ -280,6 +289,8 @@ export type RegistrationResult = {
     authLoginUrl: string;
     tokenUrl: string;
     keysetUrl: string;
+    /** Where the client assertion is addressed, when the platform names somewhere else. */
+    tokenAudience: string | null;
   };
   /** Things the administrator should know but which did not stop the registration. */
   notes: string[];
@@ -406,12 +417,18 @@ export async function requestRegistration(opts: {
       'Your LMS granted no service permissions, so grade passback and roster sync will not work until they are turned on in the LMS.',
     );
   }
+  /**
+   * Where the client assertion is addressed, when the platform says it differs from the token
+   * endpoint. Taken from the configuration rather than typed in afterwards.
+   */
+  const tokenAudience = opts.config.authorization_server?.trim() || null;
+
   const family = opts.config[PLATFORM_CONFIGURATION_CLAIM]?.product_family_code?.toLowerCase();
-  if (family === 'desire2learn' || family === 'd2l') {
-    // The one field dynamic registration cannot carry: Brightspace expects an audience of its
-    // own in the client assertion, and hands it out on its own registration screen.
+  if ((family === 'desire2learn' || family === 'd2l') && !tokenAudience) {
+    // Brightspace expects an audience of its own in the client assertion. It publishes it as
+    // `authorization_server` when it can; older versions do not, and then it has to be typed in.
     notes.push(
-      'Brightspace also needs its OAuth2 Audience, which is not part of an automatic registration. Add the LMS by hand as well if grades fail to send.',
+      'Brightspace also needs its OAuth2 Audience, which this registration did not include. Add it to the registration by hand if grades fail to send.',
     );
   }
 
@@ -425,6 +442,7 @@ export async function requestRegistration(opts: {
       authLoginUrl: opts.config.authorization_endpoint,
       tokenUrl: opts.config.token_endpoint,
       keysetUrl: opts.config.jwks_uri,
+      tokenAudience,
     },
     notes,
   };

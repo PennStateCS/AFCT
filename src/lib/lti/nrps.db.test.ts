@@ -362,3 +362,76 @@ describe('a membership container AFCT cannot read', () => {
     expect(message).toContain('nothing has been changed');
   });
 });
+
+/**
+ * The container names the course it answered for, and it has to be the one that was asked
+ * about. A roster applied to the wrong AFCT course enrols that class here and drops the one
+ * that belongs.
+ */
+describe('a roster that is for another course', () => {
+  it('is refused rather than applied', async () => {
+    platformServing([{ body: {
+      context: { id: 'some-other-course' },
+      members: [
+        {
+          user_id: 'lms-1',
+          email: 'someone@example.test',
+          roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
+          status: 'Active',
+        },
+      ],
+    } }]);
+
+    const result = await fetchMembership({
+      platform: PLATFORM,
+      membershipsUrl: `${ISSUER}/memberships`,
+      expectedContextId: 'ctx-1',
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: 'rejected' });
+  });
+
+  it('is accepted when the course matches', async () => {
+    platformServing([{ body: {
+      context: { id: 'ctx-1' },
+      members: [
+        {
+          user_id: 'lms-1',
+          email: 'someone@example.test',
+          roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
+          status: 'Active',
+        },
+      ],
+    } }]);
+
+    const result = await fetchMembership({
+      platform: PLATFORM,
+      membershipsUrl: `${ISSUER}/memberships`,
+      expectedContextId: 'ctx-1',
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  /** A platform that states no context is not evidence of the wrong one. */
+  it('is accepted when the platform states no context at all', async () => {
+    platformServing([{ body: {
+      members: [
+        {
+          user_id: 'lms-1',
+          email: 'someone@example.test',
+          roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Learner'],
+          status: 'Active',
+        },
+      ],
+    } }]);
+
+    const result = await fetchMembership({
+      platform: PLATFORM,
+      membershipsUrl: `${ISSUER}/memberships`,
+      expectedContextId: 'ctx-1',
+    });
+
+    expect(result.ok).toBe(true);
+  });
+});

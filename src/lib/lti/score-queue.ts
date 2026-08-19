@@ -6,6 +6,7 @@
  * visible rather than lost in a log.
  */
 
+import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
@@ -40,6 +41,14 @@ export async function queueScore(opts: {
     lastError: null,
     nextAttemptAt: new Date(),
     sentAt: null,
+    /**
+     * Clearing the claim is what fences a sender that is already running.
+     *
+     * The row is reused for the new grade, so without this the in-flight send would come back
+     * and record its own outcome against a score it never sent: the new grade marked SENT and
+     * logged as delivered, the LMS still holding the old one, and nothing left to send.
+     */
+    claimToken: null,
   };
 
   const row = await prisma.ltiScoreQueue.upsert({
@@ -105,6 +114,7 @@ export async function claimNextScore(now = new Date()) {
   });
   if (!candidate) return null;
 
+  const claimToken = randomUUID();
   const { count } = await prisma.ltiScoreQueue.updateMany({
     // Both guards matter: `attempts` catches a simultaneous claim, and `nextAttemptAt` is what
     // the winner moves, so a loser arriving afterwards matches nothing.
@@ -117,6 +127,8 @@ export async function claimNextScore(now = new Date()) {
     data: {
       attempts: candidate.attempts + 1,
       nextAttemptAt: new Date(now.getTime() + CLAIM_LEASE_MS),
+      // Stamped here so the outcome of this send can only ever be recorded against this send.
+      claimToken,
     },
   });
   if (count !== 1) return null;
@@ -131,18 +143,39 @@ export async function claimNextScore(now = new Date()) {
 }
 
 /** Mark a queued grade as delivered. */
-export async function markSent(id: string, now = new Date()): Promise<void> {
-  const row = await prisma.ltiScoreQueue.update({
-    where: { id },
-    data: { state: 'SENT', sentAt: now, lastError: null },
+export async function markSent(opts: {
+  id: string;
+  /** The claim this send holds. A send with none is a send whose grade has been superseded. */
+  claimToken: string | null;
+  /** What actually reached the LMS, which is what the log must say. */
+  scoreGiven: number;
+  scoreMaximum: number;
+  now?: Date;
+}): Promise<'sent' | 'stale'> {
+  const now = opts.now ?? new Date();
+  if (!opts.claimToken) return 'stale';
+
+  /**
+   * Conditioned on the claim, so a send that finished after its grade was replaced records
+   * nothing. Marking the row SENT by id alone meant the *new* grade was recorded as delivered
+   * while the LMS held the old one, and nothing ever sent the new one: the queue and the audit
+   * log agreed with each other and both were wrong.
+   */
+  const { count } = await prisma.ltiScoreQueue.updateMany({
+    where: { id: opts.id, claimToken: opts.claimToken },
+    data: { state: 'SENT', sentAt: now, lastError: null, claimToken: null },
+  });
+  if (count === 0) return 'stale';
+
+  const row = await prisma.ltiScoreQueue.findUnique({
+    where: { id: opts.id },
     select: {
       userId: true,
       assignmentId: true,
-      scoreGiven: true,
-      scoreMaximum: true,
       assignment: { select: { courseId: true } },
     },
   });
+  if (!row) return 'sent';
 
   /**
    * A grade arriving is worth recording, not only a grade failing.
@@ -164,12 +197,16 @@ export async function markSent(id: string, now = new Date()): Promise<void> {
       category: 'SUBMISSION',
       courseId: row.assignment?.courseId ?? null,
       assignmentId: row.assignmentId,
-      metadata: { scoreGiven: row.scoreGiven, scoreMaximum: row.scoreMaximum },
+      // The numbers this send carried, not the ones the row holds now: they are the same
+      // unless the grade changed mid-send, and that is exactly the case worth being right about.
+      metadata: { scoreGiven: opts.scoreGiven, scoreMaximum: opts.scoreMaximum },
     });
   } catch (err) {
     // The grade is delivered either way; failing to note it must not undo that.
     console.error('[lti] could not log a delivered score', err);
   }
+
+  return 'sent';
 }
 
 /**
@@ -181,6 +218,8 @@ export async function markSent(id: string, now = new Date()): Promise<void> {
  */
 export async function markFailed(opts: {
   id: string;
+  /** The claim this send holds; without it the outcome belongs to a grade that is gone. */
+  claimToken: string | null;
   attempts: number;
   error: string;
   retryable: boolean;
@@ -192,17 +231,32 @@ export async function markFailed(opts: {
 
   const minutes = BACKOFF_MINUTES[Math.min(opts.attempts - 1, BACKOFF_MINUTES.length - 1)] ?? 1;
 
-  const row = await prisma.ltiScoreQueue.update({
-    where: { id: opts.id },
+  /**
+   * Only this send's failure, for the same reason as {@link markSent}: a send that finished
+   * after its grade was replaced must not mark the replacement FAILED, nor push its next
+   * attempt into the future.
+   */
+  if (!opts.claimToken) return { state: 'PENDING' };
+
+  const { count } = await prisma.ltiScoreQueue.updateMany({
+    where: { id: opts.id, claimToken: opts.claimToken },
     data: {
       state: giveUp ? 'FAILED' : 'PENDING',
       lastError: opts.error.slice(0, 500),
       nextAttemptAt: new Date(now.getTime() + minutes * 60_000),
+      // Released either way: a retry claims it again, and a failure has nothing left to hold.
+      claimToken: null,
     },
+  });
+  if (count === 0) return { state: 'PENDING' };
+
+  const row = await prisma.ltiScoreQueue.findUnique({
+    where: { id: opts.id },
     // The course comes from the assignment: the queue row does not carry one, and an entry
     // that cannot be filtered by course is one faculty cannot find.
     select: { assignmentId: true, userId: true, assignment: { select: { courseId: true } } },
   });
+  if (!row) return { state: giveUp ? 'FAILED' : 'PENDING' };
 
   /**
    * A grade that will never reach the LMS is worth an entry in the log.
