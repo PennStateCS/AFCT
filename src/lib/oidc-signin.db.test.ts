@@ -207,3 +207,44 @@ describe('two first sign-ins racing', () => {
     expect(await prisma.linkedIdentity.count({ where: { subject: 'racing-subject' } })).toBe(1);
   });
 });
+
+/**
+ * Two *different* people signing in for the first time, whose provider asserts the same trusted
+ * address. That is a real situation (a shared alias, or one person arriving through two
+ * providers), and it used to be answered with a refusal for whichever request lost: the account
+ * existed by then, so the identity was never attached and the sign-in failed with no conflict
+ * behind it.
+ */
+describe('two identities racing on one trusted address', () => {
+  it('attaches the second identity to the account the first created', async () => {
+    const email = `shared-${SUFFIX}@example.test`;
+
+    const [first, second] = await Promise.all([
+      resolve({ subject: 'shared-a', email }, true),
+      resolve({ subject: 'shared-b', email }, true),
+    ]);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+
+    // One account, both identities on it: the same answer either order would have produced.
+    expect(first.userId).toBe(second.userId);
+    expect(await prisma.user.count({ where: { email } })).toBe(1);
+    expect(
+      await prisma.linkedIdentity.count({
+        where: { subject: { in: ['shared-a', 'shared-b'] } },
+      }),
+    ).toBe(2);
+  });
+
+  /**
+   * The guardrails still hold on the recovery path: an administrator is never attached
+   * automatically, however the timing falls.
+   */
+  it('still refuses to attach an administrator automatically', async () => {
+    const outcome = await resolve({ subject: 'race-admin', email: ADMIN_EMAIL }, true);
+
+    expect(outcome).toMatchObject({ ok: false, reason: 'admin-requires-deliberate-link' });
+  });
+});

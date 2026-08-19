@@ -134,9 +134,43 @@ export async function linkIdentity(opts: {
     return refuse('admin-requires-deliberate-link');
   }
 
-  await client.linkedIdentity.create({
-    data: { kind, issuer, subject, userId: opts.userId, linkedVia: opts.via },
-  });
+  try {
+    await client.linkedIdentity.create({
+      data: { kind, issuer, subject, userId: opts.userId, linkedVia: opts.via },
+    });
+  } catch (error) {
+    /**
+     * Another request attached this identity while this one was deciding to.
+     *
+     * Two sign-ins for the same person arrive together often enough to matter: a link opened
+     * twice, a double-clicked button, a launch and a sign-in side by side. Both read nothing,
+     * both create, and the loser used to reach the browser as a failed sign-in for an identity
+     * that had in fact just been attached correctly.
+     *
+     * Settled by reading the row the winner wrote and answering as this function would have
+     * answered had it read it a moment earlier: ours is a repeat, somebody else's is a refusal.
+     * Nothing new is decided here, which is what makes it safe after the fact.
+     */
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+      throw error;
+    }
+
+    /**
+     * Not recoverable inside somebody else's transaction: Postgres has already aborted it, so
+     * the read below would fail too. The caller owning the transaction owns the recovery.
+     */
+    if (opts.tx) throw error;
+
+    const settled = await prisma.linkedIdentity.findUnique({
+      where: { issuer_subject: { issuer, subject } },
+      select: { userId: true },
+    });
+    // The constraint said the row exists. If it does not, something else is wrong, and
+    // answering "already linked" would describe a state that is not there.
+    if (!settled) throw error;
+    if (settled.userId !== opts.userId) return refuse('already-linked-elsewhere');
+    return { ok: true, created: false };
+  }
 
   // Linking changes who can sign in as this account, and for a student account that is who can
   // reach their records. The subject is recorded because it, with the issuer, is the identity;

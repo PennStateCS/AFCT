@@ -58,6 +58,8 @@ export type SystemSettingsResponse = {
   oidcEnabled: boolean;
   oidcIssuer: string;
   oidcClientId: string;
+  /** Whether this deployment can decrypt the stored secret, not merely that one is stored. */
+  oidcClientSecretReadable?: boolean;
   oidcClientSecretConfigured: boolean;
   oidcButtonLabel: string;
   oidcTrustEmail: boolean;

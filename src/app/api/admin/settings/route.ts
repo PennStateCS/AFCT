@@ -5,7 +5,7 @@ import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
-import { encryptSecret, SecretKeyError } from '@/lib/secret-encryption';
+import { encryptSecret, readStoredSecret, SecretKeyError } from '@/lib/secret-encryption';
 import { SMTP_AUTH_NEEDS_TLS } from '@/lib/mailer';
 import {
   DEFAULT_LOGIN_MAX_ATTEMPTS,
@@ -109,6 +109,17 @@ function diffSettings(
  *             configuredUrl: { type: string, description: Read-only NEXTAUTH_URL (the app public address); set at the server level and not editable here }
  *   403: { description: Caller is not a system administrator. }
  */
+/** Whether the stored client secret can be decrypted with the key this deployment holds. */
+function oidcSecretReadable(stored: string | null): boolean {
+  if (!stored) return false;
+  try {
+    return readStoredSecret(stored) !== null;
+  } catch {
+    // A missing or wrong key. Reported as "cannot be read"; the reason stays in the log.
+    return false;
+  }
+}
+
 export const GET = withAdminAuth(
   async () => {
     // The whole row on purpose, unlike the public endpoint's narrowed read. This handler
@@ -165,6 +176,16 @@ export const GET = withAdminAuth(
       oidcIssuer: settings?.oidcIssuer ?? '',
       oidcClientId: settings?.oidcClientId ?? '',
       oidcClientSecretConfigured: Boolean(settings?.oidcClientSecret),
+      /**
+       * Whether the stored secret can actually be read, which is not the same as one being
+       * stored. A missing or rotated `SECRET_ENCRYPTION_KEY` leaves the ciphertext in place and
+       * `getOidcConfig` returning null: the button quietly disappears from the sign-in page
+       * while this screen goes on saying "Enabled", and nothing tells the administrator why.
+       *
+       * Local only. Whether the provider is reachable is a different question and not one a
+       * settings page should block on. Nothing about the secret or the failure is returned.
+       */
+      oidcClientSecretReadable: oidcSecretReadable(settings?.oidcClientSecret ?? null),
       oidcButtonLabel: settings?.oidcButtonLabel ?? '',
       oidcTrustEmail: settings?.oidcTrustEmail ?? false,
     });
