@@ -378,6 +378,9 @@ describe('where a launch lands', () => {
 
     expect(next.pathname).toBe('/dashboard');
     expect(next.searchParams.get('lms')).toBe('course-missing');
+    // And nobody is enrolled on the way past. Enrolling first meant a course nobody could
+    // reach quietly gained members, with nothing to undo them.
+    expect(await prisma.roster.count({ where: { courseId: COURSE } })).toBe(0);
   });
 
   /**

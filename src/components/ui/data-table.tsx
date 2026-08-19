@@ -299,16 +299,38 @@ export function DataTable<TData, TValue>({
     getFacetedUniqueValues: manualFiltering ? undefined : getFacetedUniqueValues(),
   });
 
-  // Safety net for client-owned pagination: with autoResetPageIndex off, a shrinking row
-  // set (a delete, or filtering by other means) could strand the user on a now-empty page
-  // past the end. Pull back to the last page that still has rows instead of a blank table.
-  const clientPageCount = manualPagination ? 0 : table.getPageCount();
+  /**
+   * Nobody is left on a page that no longer exists.
+   *
+   * With `autoResetPageIndex` off, a shrinking row set (a delete, a filter, a log prune) can
+   * strand somebody past the end, where the table looks empty and the data looks lost. The
+   * pull-back belongs here rather than in each screen: server-paginated tables are the ones
+   * most likely to shrink under somebody, and there are six of them, so leaving it to the
+   * parents means six chances to forget and two implementations to keep in step.
+   *
+   * The page count comes from whoever owns it: react-table for a client table, the `pageCount`
+   * prop for a server one. A server table that has not said yet (`undefined`, or the `-1`
+   * react-table uses for "unknown") is left alone, since a page cannot be judged too high
+   * against a total nobody has stated.
+   */
+  const knownPageCount = manualPagination
+    ? typeof pageCount === 'number' && pageCount >= 0
+      ? pageCount
+      : null
+    : table.getPageCount();
+
   useEffect(() => {
-    if (manualPagination || onPaginationChange) return;
-    if (pagination.pageIndex > 0 && pagination.pageIndex > clientPageCount - 1) {
-      setInternalPagination((prev) => ({ ...prev, pageIndex: Math.max(0, clientPageCount - 1) }));
-    }
-  }, [clientPageCount, pagination.pageIndex, manualPagination, onPaginationChange]);
+    if (knownPageCount === null) return;
+    const lastPage = Math.max(0, knownPageCount - 1);
+    if (pagination.pageIndex <= lastPage || pagination.pageIndex === 0) return;
+
+    const next = { ...pagination, pageIndex: lastPage };
+    // Controlled tables are told; uncontrolled ones move themselves.
+    if (onPaginationChange) onPaginationChange(next);
+    else setInternalPagination(next);
+    // `pagination` is read whole here, so the effect must not re-run on its identity alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [knownPageCount, pagination.pageIndex, pagination.pageSize, onPaginationChange]);
 
   const exportToCSV = () => {
     // Pre-pagination on purpose: getRowModel() is the *current page*, so this used to

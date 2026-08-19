@@ -36,7 +36,7 @@ describe('GET /api/logging', () => {
     expect((await GET(request(), routeCtx())).status).toBe(403);
   });
 
-  it('returns a page of logs with total and userId resolved to a name', async () => {
+  it('returns a page of logs, the author named alongside the id rather than instead of it', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.activityLog.count.mockResolvedValue(2);
     prismaMock.activityLog.findMany.mockResolvedValue([
@@ -55,8 +55,15 @@ describe('GET /api/logging', () => {
     expect(body.page).toBe(1);
     expect(body.pageSize).toBe(50);
     expect(body.totalPages).toBe(1);
-    expect(body.rows[0].userId).toBe('Ada Lovelace');
+    /**
+     * The id survives. Copy JSON serialises this row into bug reports and disclosure records,
+     * and a name is not an identifier: two people share one, and a deleted account leaves it
+     * pointing at nothing.
+     */
+    expect(body.rows[0].userId).toBe('u1');
+    expect(body.rows[0].userDisplayName).toBe('Ada Lovelace');
     expect(body.rows[1].userId).toBeNull();
+    expect(body.rows[1].userDisplayName).toBeNull();
   });
 
   it('applies page and pageSize as skip/take', async () => {
@@ -104,7 +111,8 @@ describe('GET /api/logging', () => {
     expect(orClause).toHaveLength(3);
     expect(orClause).toContainEqual({ userId: { in: ['u1'] } });
     const body = await res.json();
-    expect(body.rows[0].userId).toBe('Ada Lovelace');
+    expect(body.rows[0].userId).toBe('u1');
+    expect(body.rows[0].userDisplayName).toBe('Ada Lovelace');
   });
 
   it('scopes the search to a single field (action) without a user lookup', async () => {
@@ -226,7 +234,8 @@ describe('GET /api/logging', () => {
 
     const res = await GET(request(), routeCtx());
     const body = await res.json();
-    expect(body.rows[0].userId).toBe('nameless@x.edu');
+    expect(body.rows[0].userDisplayName).toBe('nameless@x.edu');
+    expect(body.rows[0].userId).toBe('u1');
   });
 
   it('leaves the raw id when the author is not found', async () => {

@@ -57,7 +57,7 @@ export interface paths {
         };
         /**
          * List activity (audit) logs
-         * @description A single page of activity (audit) logs, newest first, with `userId` resolved to  the author's display name. Search, severity filter, and sort all run server-side.
+         * @description A single page of activity (audit) logs, newest first, with the author's name resolved  alongside the id rather than in place of it. `userId` is the real id; see the mapping to  the author's display name. Search, severity filter, and sort all run server-side.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/logs/route.ts)
          */
