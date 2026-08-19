@@ -12,7 +12,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { PAGE_SIZE_OPTIONS } from '@/components/ui/data-table-shared';
+import { PAGE_SIZE_OPTIONS, rowRangeLabel } from '@/components/ui/data-table-shared';
 
 /** Prev/next paging, an optional total, and a page-size select. Presentation only,
  *  so it can render inside the desktop table footer or below the mobile cards. */
@@ -27,22 +27,33 @@ export function PaginationControls<TData>({
 }) {
   const pageLabel = `Page ${table.getState().pagination.pageIndex + 1} of ${Math.max(1, table.getPageCount())}`;
 
-  // Row total: server mode is handed an authoritative count; client mode derives one. When
-  // a search or filter is narrowing the rows we show "12 of 240" so it's obvious how much
-  // is being hidden. In server mode without a rowCount there is nothing honest to show --
-  // the core row model is only the current page, so counting it would claim "10 total".
-  //
-  // Grouped in the viewer's locale, like the dates elsewhere in the app: a bare "1204393"
-  // has to be counted digit by digit before it means anything.
-  const count = (n: number) => n.toLocaleString();
+  /**
+   * Which rows these are, and how many there are altogether.
+   *
+   * Server mode is handed an authoritative count; client mode derives one, and says what a
+   * search is hiding. In server mode without a rowCount there is nothing honest to show at
+   * all: the core row model holds only the current page, so counting it would claim the whole
+   * table is ten rows long.
+   *
+   * The rows on screen are counted rather than calculated from the page size, which is what
+   * makes the last page read "Showing 2,201-2,206" instead of running past the end.
+   */
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const rowsOnPage = table.getRowModel().rows.length;
+  const firstRow = rowsOnPage === 0 ? 0 : pageIndex * pageSize + 1;
+
   let totalLabel: string | null = null;
   if (typeof rowCount === 'number') {
-    totalLabel = `${count(rowCount)} total`;
+    totalLabel = rowRangeLabel({ firstRow, rowsOnPage, total: rowCount });
   } else if (!manualPagination) {
     const filtered = table.getFilteredRowModel().rows.length;
     const total = table.getCoreRowModel().rows.length;
-    totalLabel =
-      filtered === total ? `${count(total)} total` : `${count(filtered)} of ${count(total)}`;
+    totalLabel = rowRangeLabel({
+      firstRow,
+      rowsOnPage,
+      total: filtered,
+      ...(filtered === total ? {} : { filteredFrom: total }),
+    });
   }
 
   return (

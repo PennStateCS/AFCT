@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { responsiveClass } from './data-table-shared';
+import { responsiveClass, rowRangeLabel } from './data-table-shared';
 
 describe('responsiveClass', () => {
   // Priority 1 and "no priority" are always visible; higher priorities drop at
@@ -14,5 +14,38 @@ describe('responsiveClass', () => {
     expect(responsiveClass(2)).toBe('hidden md:table-cell');
     expect(responsiveClass(3)).toBe('hidden lg:table-cell');
     expect(responsiveClass(4)).toBe('hidden xl:table-cell');
+  });
+});
+
+describe('rowRangeLabel', () => {
+  it('says which rows these are and how many there are', () => {
+    expect(rowRangeLabel({ firstRow: 1, rowsOnPage: 10, total: 2206 })).toBe(
+      'Showing 1-10 of 2,206 records',
+    );
+  });
+
+  /** The reason the rows on screen are counted rather than derived from the page size. */
+  it('does not run past the end on the last page', () => {
+    expect(rowRangeLabel({ firstRow: 2201, rowsOnPage: 6, total: 2206 })).toBe(
+      'Showing 2,201-2,206 of 2,206 records',
+    );
+  });
+
+  it('reads as one row rather than a range when there is only one', () => {
+    expect(rowRangeLabel({ firstRow: 7, rowsOnPage: 1, total: 9 })).toBe('Showing 7 of 9 records');
+    expect(rowRangeLabel({ firstRow: 1, rowsOnPage: 1, total: 1 })).toBe('Showing 1 of 1 record');
+  });
+
+  it('says what a search is hiding, which a bare count would not', () => {
+    expect(rowRangeLabel({ firstRow: 1, rowsOnPage: 10, total: 12, filteredFrom: 2206 })).toBe(
+      'Showing 1-10 of 12 records, filtered from 2,206',
+    );
+  });
+
+  it('has something sensible to say when there is nothing', () => {
+    expect(rowRangeLabel({ firstRow: 0, rowsOnPage: 0, total: 0 })).toBe('No records');
+    expect(rowRangeLabel({ firstRow: 0, rowsOnPage: 0, total: 0, filteredFrom: 40 })).toBe(
+      'No matching records',
+    );
   });
 });
