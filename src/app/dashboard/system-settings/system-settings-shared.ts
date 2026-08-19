@@ -60,6 +60,8 @@ export type SystemSettingsResponse = {
   oidcClientId: string;
   /** Whether this deployment can decrypt the stored secret, not merely that one is stored. */
   oidcClientSecretReadable?: boolean;
+  /** The same question for the mail password: a rotated key leaves mail unable to send. */
+  smtpPasswordReadable?: boolean;
   oidcClientSecretConfigured: boolean;
   oidcButtonLabel: string;
   oidcTrustEmail: boolean;

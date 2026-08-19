@@ -35,6 +35,7 @@ export function EmailTab({
   password,
   setPassword,
   passwordConfigured,
+  passwordReadable,
   passwordClear,
   setPasswordClear,
   savedHost,
@@ -52,6 +53,11 @@ export function EmailTab({
   password: string;
   setPassword: (value: string) => void;
   passwordConfigured: boolean;
+  /**
+   * Whether the stored password can be decrypted here. A password this deployment cannot read
+   * leaves mail switched on and unable to send, and nothing else on the page would say so.
+   */
+  passwordReadable: boolean;
   passwordClear: boolean;
   setPasswordClear: (value: boolean) => void;
   /** The saved (server) host, so the test offer reflects what is stored rather than typed. */
@@ -88,13 +94,18 @@ export function EmailTab({
       <div className="mb-5 space-y-2">
         <h2 className="text-sm font-medium">Current status</h2>
         <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
-          <Badge variant={enabled ? 'success' : 'warning'} className="w-fit">
-            {enabled ? 'Enabled' : 'Disabled'}
+          <Badge
+            variant={!enabled ? 'warning' : passwordReadable ? 'success' : 'destructive'}
+            className="w-fit"
+          >
+            {!enabled ? 'Disabled' : passwordReadable ? 'Enabled' : 'Enabled, but unavailable'}
           </Badge>
           <p className="text-muted-foreground">
-            {enabled
-              ? 'AFCT can send email. People who forget their password can request a reset link.'
-              : 'AFCT sends no email. Passwords can only be reset by an administrator.'}
+            {!enabled
+              ? 'AFCT sends no email. Passwords can only be reset by an administrator.'
+              : passwordReadable
+                ? 'AFCT is set up to send email. Send a test message below to check that it arrives; a reset request that cannot be delivered fails quietly, because the sign-in page must not say whether an account exists.'
+                : 'The saved mail password cannot be read, so nothing can be sent and reset requests will fail quietly. This usually means the encryption key this AFCT was set up with has changed. Enter the password again, or restore the key.'}
           </p>
         </div>
       </div>

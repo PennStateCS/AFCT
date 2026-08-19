@@ -109,8 +109,8 @@ function diffSettings(
  *             configuredUrl: { type: string, description: Read-only NEXTAUTH_URL (the app public address); set at the server level and not editable here }
  *   403: { description: Caller is not a system administrator. }
  */
-/** Whether the stored client secret can be decrypted with the key this deployment holds. */
-function oidcSecretReadable(stored: string | null): boolean {
+/** Whether a stored secret can be decrypted with the key this deployment holds. */
+function storedSecretReadable(stored: string | null): boolean {
   if (!stored) return false;
   try {
     return readStoredSecret(stored) !== null;
@@ -175,6 +175,9 @@ export const GET = withAdminAuth(
       oidcEnabled: settings?.oidcEnabled ?? false,
       oidcIssuer: settings?.oidcIssuer ?? '',
       oidcClientId: settings?.oidcClientId ?? '',
+      // Whether the stored mail password can be decrypted here, not merely that one is stored:
+      // a rotated encryption key leaves mail switched on and unable to send.
+      smtpPasswordReadable: storedSecretReadable(settings?.smtpPassword ?? null),
       oidcClientSecretConfigured: Boolean(settings?.oidcClientSecret),
       /**
        * Whether the stored secret can actually be read, which is not the same as one being
@@ -185,7 +188,7 @@ export const GET = withAdminAuth(
        * Local only. Whether the provider is reachable is a different question and not one a
        * settings page should block on. Nothing about the secret or the failure is returned.
        */
-      oidcClientSecretReadable: oidcSecretReadable(settings?.oidcClientSecret ?? null),
+      oidcClientSecretReadable: storedSecretReadable(settings?.oidcClientSecret ?? null),
       oidcButtonLabel: settings?.oidcButtonLabel ?? '',
       oidcTrustEmail: settings?.oidcTrustEmail ?? false,
     });
@@ -373,6 +376,11 @@ export const PUT = withAdminAuth(
         smtpSecurity: true,
         smtpUsername: true,
         smtpPassword: true,
+        // Read for the completeness rule below, which is judged on what this save would leave.
+        smtpEnabled: true,
+        smtpHost: true,
+        smtpPort: true,
+        smtpFromAddress: true,
         // Read in the same breath, for the same reason: the institutional sign-in rule below
         // is judged on what this save would leave behind, not on what the form happened to send.
         oidcEnabled: true,
@@ -391,6 +399,45 @@ export const PUT = withAdminAuth(
 
     if (resultingSecurity === 'NONE' && (resultingUsername || resultingPassword)) {
       return NextResponse.json({ error: SMTP_AUTH_NEEDS_TLS }, { status: 400 });
+    }
+
+    /**
+     * Enabled has to mean AFCT could send, which is not the same as the switch being on.
+     *
+     * `getSmtpConfig` refuses a configuration with no host, no port or no from-address, so mail
+     * was silently unavailable while this screen said "AFCT can send email" and a student's
+     * reset request disappeared into a queue nobody was watching. Judged on the settings this
+     * save would leave behind, so changing one field does not require resending the others.
+     *
+     * Credentials are deliberately not required: an unauthenticated relay on the local network
+     * is a normal way for a university to send mail.
+     */
+    const resultingSmtpEnabled =
+      'smtpEnabled' in smtpData ? smtpData.smtpEnabled : (storedSmtp?.smtpEnabled ?? false);
+    if (resultingSmtpEnabled) {
+      const resultingHost =
+        'smtpHost' in smtpData ? smtpData.smtpHost : (storedSmtp?.smtpHost ?? null);
+      const resultingPort =
+        'smtpPort' in smtpData ? smtpData.smtpPort : (storedSmtp?.smtpPort ?? null);
+      const resultingFrom =
+        'smtpFromAddress' in smtpData
+          ? smtpData.smtpFromAddress
+          : (storedSmtp?.smtpFromAddress ?? null);
+
+      const missing = [
+        resultingHost ? null : 'the server address',
+        resultingPort ? null : 'the port',
+        resultingFrom ? null : 'the from address',
+      ].filter((part): part is string => part !== null);
+
+      if (missing.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Sending email needs ${missing.join(', ')} before it can be turned on. Add ${missing.length === 1 ? 'it' : 'them'}, or leave email off.`,
+          },
+          { status: 400 },
+        );
+      }
     }
 
     // Institutional sign-in, same write-only rule for the secret as the two above.
@@ -547,7 +594,9 @@ export const PUT = withAdminAuth(
     const smtpPasswordUpdated =
       !smtpPasswordCleared &&
       typeof body.smtpPassword === 'string' &&
-      body.smtpPassword.trim() !== '';
+      // The same test storage uses. Deciding this on a trimmed value meant a password of
+      // spaces was stored while the log said nothing had changed.
+      body.smtpPassword !== '';
     if (
       Object.keys(changes).length ||
       hcaptchaSecretUpdated ||

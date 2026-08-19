@@ -79,6 +79,7 @@ describe('GET /api/system-settings', () => {
       smtpSecurity: 'STARTTLS',
       smtpUsername: '',
       smtpPasswordConfigured: false,
+      smtpPasswordReadable: false,
       smtpFromAddress: '',
       smtpFromName: '',
       // Institutional sign-in is off until an admin configures a provider, and the client
@@ -144,6 +145,7 @@ describe('GET /api/system-settings', () => {
       smtpSecurity: 'STARTTLS',
       smtpUsername: '',
       smtpPasswordConfigured: false,
+      smtpPasswordReadable: false,
       smtpFromAddress: '',
       smtpFromName: '',
       // Institutional sign-in is off until an admin configures a provider, and the client
@@ -1088,5 +1090,95 @@ describe('GET /api/system-settings, whether the client secret can be read', () =
 
     expect(body.oidcClientSecretConfigured).toBe(false);
     expect(body.oidcClientSecretReadable).toBe(false);
+  });
+});
+
+/**
+ * Sending email, where "enabled" has to mean AFCT could actually send.
+ *
+ * `getSmtpConfig` refuses a configuration without a host, a port or a from address, so the
+ * switch could be on while nothing could be sent: the settings screen said "AFCT can send
+ * email" and a student's reset request went quietly into a queue nobody watches.
+ */
+describe('PUT /api/system-settings, turning email on', () => {
+  const save = (body: Record<string, unknown>) =>
+    PUT(
+      new Request('http://localhost/api/system-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: 'UTC', maxUploadSizeMb: 50, ...body }),
+      }),
+      routeCtx(),
+    );
+
+  const stored = (over: Record<string, unknown> = {}) => {
+    prismaMock.systemSettings.findUnique.mockResolvedValue({
+      smtpSecurity: 'STARTTLS',
+      smtpUsername: null,
+      smtpPassword: null,
+      smtpEnabled: false,
+      smtpHost: null,
+      smtpPort: null,
+      smtpFromAddress: null,
+      oidcEnabled: false,
+      oidcIssuer: null,
+      oidcClientId: null,
+      oidcClientSecret: null,
+      ...over,
+    });
+    prismaMock.systemSettings.upsert.mockResolvedValue({ id: 1 });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+  });
+
+  it('refuses to turn it on with nothing configured, and says what is missing', async () => {
+    stored();
+
+    const res = await save({ smtpEnabled: true });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('server address');
+    expect(body.error).toContain('port');
+    expect(body.error).toContain('from address');
+  });
+
+  it('refuses to turn it on without a from address', async () => {
+    stored({ smtpHost: 'smtp.example.edu', smtpPort: 587 });
+
+    expect((await save({ smtpEnabled: true })).status).toBe(400);
+  });
+
+  /** Credentials are not required: an unauthenticated relay is a normal way to send mail. */
+  it('accepts a complete configuration with no username or password', async () => {
+    stored({
+      smtpHost: 'smtp.example.edu',
+      smtpPort: 587,
+      smtpFromAddress: 'afct@example.edu',
+    });
+
+    expect((await save({ smtpEnabled: true })).status).toBe(200);
+  });
+
+  /** The same test storage uses: a password of spaces is a password, and is logged as one. */
+  it('records a whitespace-only password as an update', async () => {
+    stored({
+      smtpEnabled: true,
+      smtpHost: 'smtp.example.edu',
+      smtpPort: 587,
+      smtpFromAddress: 'afct@example.edu',
+    });
+
+    await save({ smtpPassword: '   ' });
+
+    const logged = auditMock.mock.calls.find(
+      ([, , entry]) => (entry as { action?: string })?.action === 'SYSTEM_SETTINGS_UPDATED',
+    );
+    expect((logged?.[2] as { metadata?: Record<string, unknown> })?.metadata).toMatchObject({
+      smtpPasswordUpdated: true,
+    });
   });
 });

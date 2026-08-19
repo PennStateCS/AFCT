@@ -578,3 +578,82 @@ describe('SystemSettingsClient — backups', () => {
     await waitFor(() => expect(showToast.error).toHaveBeenCalled());
   });
 });
+
+/**
+ * The write-only secrets, which live outside the form snapshot because the browser is never
+ * sent the stored value. That is exactly why they were missed: a snapshot comparison cannot see
+ * them, so typing only a mail password left the page looking saved, and a save left the
+ * plaintext sitting in the field.
+ */
+describe('SystemSettingsClient — mail password', () => {
+  const openEmailTab = async (user: ReturnType<typeof userEvent.setup>) => {
+    await waitFor(() => expect(screen.getByLabelText(/Max upload size/)).toBeInTheDocument());
+    await user.click(screen.getByRole('tab', { name: 'Email' }));
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('sends the password exactly as typed, spaces and all', async () => {
+    const user = userEvent.setup();
+    const { fetchMock, putCalls } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<SystemSettingsClient />);
+    await openEmailTab(user);
+
+    await user.type(screen.getByLabelText('Password', { exact: true }), '  spaced secret  ');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(putCalls.length).toBeGreaterThan(0));
+    const sent = putCalls[putCalls.length - 1]?.body as Record<string, unknown> | undefined;
+    expect(sent?.smtpPassword).toBe('  spaced secret  ');
+  });
+
+  it('counts a password-only edit as an unsaved change', async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<SystemSettingsClient />);
+    await openEmailTab(user);
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Password', { exact: true }), 'hunter2');
+
+    expect(await screen.findByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  it('drops an unsaved password when the form is reset', async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<SystemSettingsClient />);
+    await openEmailTab(user);
+
+    const field = screen.getByLabelText('Password', { exact: true });
+    await user.type(field, 'hunter2');
+    await user.click(await screen.findByRole('button', { name: /reset/i }));
+
+    await waitFor(() => expect(field).toHaveValue(''));
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument();
+  });
+
+  it('does not leave the plaintext in the field after saving it', async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<SystemSettingsClient />);
+    await openEmailTab(user);
+
+    const field = screen.getByLabelText('Password', { exact: true });
+    await user.type(field, 'hunter2');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(field).toHaveValue(''));
+  });
+});
