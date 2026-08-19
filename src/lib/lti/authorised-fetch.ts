@@ -18,11 +18,23 @@
  */
 
 /** What a call failed on, when it did not reach the endpoint at all. */
+/**
+ * A URL that would carry credentials in clear.
+ *
+ * The last boundary before a bearer token leaves AFCT. Service addresses arrive in signed
+ * launches (`lineitems`, `lineitem`, `context_memberships_url`) and a signature proves who sent
+ * an address, not that the address is safe to send a token to: a platform advertising
+ * `http://` gets its own token read off the wire by anyone on the path. The scheme upgrade in
+ * `preferPlatformScheme` is a courtesy for platforms that advertise the wrong scheme on the
+ * right host; this refuses everything it could not rescue.
+ */
 export type AuthorisedFetchFailure =
   | { kind: 'redirected'; from: string; to: string }
   | { kind: 'network'; detail: string }
   /** The platform accepted the connection and then said nothing for long enough to matter. */
-  | { kind: 'timeout'; ms: number };
+  | { kind: 'timeout'; ms: number }
+  /** The address is not https, so the credentials were never sent. */
+  | { kind: 'insecure'; url: string };
 
 /**
  * How long an LMS gets to answer.
@@ -81,16 +93,34 @@ export function preferPlatformScheme(endpoint: string, reference: string): strin
 export function samePageOrigin(candidate: string, origin: string): string | null {
   try {
     const url = new URL(candidate);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    // https only, and the same origin the read started on: a `Link` header is the platform's
+    // to write, so it can name any address it likes, and this one carries a bearer token.
+    if (url.protocol !== 'https:') return null;
     return url.origin === origin ? url.toString() : null;
   } catch {
     return null;
   }
 }
 
+/** Whether an address may carry credentials at all. */
+export function isHttps(candidate: string): boolean {
+  try {
+    return new URL(candidate).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 /** A message for the person reading it, not for the developer who wrote the call. */
 export function authorisedFetchFailureDetail(failure: AuthorisedFetchFailure): string {
   if (failure.kind === 'network') return failure.detail;
+  if (failure.kind === 'insecure') {
+    return (
+      `your LMS gave AFCT an address that is not secure (${failure.url}), and AFCT will not ` +
+      'send the credentials this request needs over an unencrypted connection. The address ' +
+      'your LMS advertises for this service should begin with https://.'
+    );
+  }
   if (failure.kind === 'timeout') {
     return `your LMS did not answer within ${Math.round(failure.ms / 1000)} seconds`;
   }
@@ -111,7 +141,30 @@ export async function authorisedFetch(
   url: string,
   init: RequestInit & { headers: Record<string, string>; timeoutMs?: number },
 ): Promise<AuthorisedFetchResult> {
+  // Checked here rather than at each call site, because every call site sends a token and one
+  // of them will eventually be added without remembering to check. The Security Framework
+  // requires TLS for every LTI request and response.
+  if (!isHttps(url)) {
+    return { ok: false, failure: { kind: 'insecure', url } };
+  }
+
+  return sendWithoutFollowingRedirects(url, init);
+}
+
+/**
+ * The transport half: a request that refuses to be redirected, with a timeout.
+ *
+ * Split out so the redirect and timeout behaviour can be tested against real servers, which a
+ * test cannot serve over https without a certificate. **Production code calls
+ * {@link authorisedFetch}**, which is this plus the rule that credentials never leave AFCT
+ * over plaintext; nothing else should call this directly.
+ */
+export async function sendWithoutFollowingRedirects(
+  url: string,
+  init: RequestInit & { headers: Record<string, string>; timeoutMs?: number },
+): Promise<AuthorisedFetchResult> {
   const { timeoutMs = LTI_REQUEST_TIMEOUT_MS, ...request } = init;
+
   let response: Response;
   try {
     response = await fetch(url, {

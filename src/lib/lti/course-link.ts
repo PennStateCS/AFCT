@@ -15,13 +15,32 @@ import type { LaunchIdentity } from '@/lib/lti/launch';
 import type { AuditContext } from '@/lib/linked-identity';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
-/** LTI role URIs, which are long and repetitive, matched on their last segment. */
+/**
+ * LTI role URIs, matched on their last segment.
+ *
+ * The vocabulary spells one role several ways: a context role is
+ * `…/membership#Instructor`, an institution role `…/institution/person#Instructor`, and the
+ * legacy form `urn:lti:role:ims/lis/Instructor` uses slashes throughout. Taking the last
+ * segment covers all three, which is why matching is by suffix rather than by whole URI.
+ *
+ * Sub-roles arrive as `Instructor#TeachingAssistant`, so the segment after a `#` is what a
+ * platform means most specifically; splitting on both separators reads that.
+ */
 const ROLE_SUFFIX: Record<string, CourseRole> = {
   Instructor: 'FACULTY',
   TeachingAssistant: 'TA',
   ContentDeveloper: 'FACULTY',
   Learner: 'STUDENT',
   Student: 'STUDENT',
+  // Seen from real platforms and previously unrecognised, so they fell to STUDENT. A course
+  // designer builds the course; a mentor or observer watches somebody else's work and is not
+  // course staff, so it stays the least privileged reading.
+  ContentDeveloper_ContentExpert: 'FACULTY',
+  Administrator: 'FACULTY',
+  Manager: 'FACULTY',
+  Member: 'STUDENT',
+  Mentor: 'STUDENT',
+  Observer: 'STUDENT',
 };
 
 /**
@@ -36,7 +55,9 @@ const ROLE_SUFFIX: Record<string, CourseRole> = {
  */
 export function mapLtiRoles(roles: string[]): CourseRole {
   const mapped = roles
-    .map((role) => ROLE_SUFFIX[role.split('#').pop() ?? ''])
+    // The most specific segment of the URI, whichever separator the platform used: `#` for a
+    // sub-role or a vocabulary term, `/` for the legacy `urn:lti:role:ims/lis/Instructor`.
+    .map((role) => ROLE_SUFFIX[role.split(/[#/]/).pop() ?? ''])
     .filter((role): role is CourseRole => Boolean(role));
 
   if (mapped.includes('FACULTY')) return 'FACULTY';

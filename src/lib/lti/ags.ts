@@ -13,7 +13,7 @@ import {
   authorisedFetchFailureDetail,
   preferPlatformScheme,
 } from '@/lib/lti/authorised-fetch';
-import { getAccessToken } from '@/lib/lti/access-token';
+import { AGS_LINE_ITEM_SCOPES, AGS_SCORE_SCOPES, getAccessToken } from '@/lib/lti/access-token';
 
 /** Content types AGS defines for its two endpoints. */
 const LINE_ITEM_TYPE = 'application/vnd.ims.lis.v2.lineitem+json';
@@ -63,11 +63,20 @@ export type AgsResult<T> =
 
 type PlatformRef = { id: string; clientId: string; tokenUrl: string };
 
-async function authorised(platform: PlatformRef) {
+/**
+ * A token for one operation, asking only for what that operation needs.
+ *
+ * AGS defines the scopes separately: `score` posts a grade, `lineitem` manages columns. Asking
+ * for both every time means a platform that granted only `score`, because it made the column
+ * itself, refuses the whole request and no grade is sent at all. The token cache is keyed by
+ * scope, so the two are cached apart rather than one evicting the other.
+ */
+async function authorised(platform: PlatformRef, scopes: readonly string[]) {
   const token = await getAccessToken({
     platformId: platform.id,
     clientId: platform.clientId,
     tokenUrl: platform.tokenUrl,
+    scopes,
   });
   return token;
 }
@@ -92,7 +101,10 @@ async function call(
     if (!attempt.ok) {
       return {
         ok: false,
-        reason: attempt.failure.kind === 'redirected' ? 'redirected' : 'unreachable',
+        reason:
+          attempt.failure.kind === 'redirected' || attempt.failure.kind === 'insecure'
+            ? 'redirected'
+            : 'unreachable',
         detail: authorisedFetchFailureDetail(attempt.failure),
       };
     }
@@ -295,7 +307,7 @@ export async function ensureLineItem(opts: {
   // respect. Anything else is left exactly as the platform signed it.
   const lineItemsUrl = preferPlatformScheme(opts.lineItemsUrl, opts.platform.tokenUrl);
 
-  const token = await authorised(opts.platform);
+  const token = await authorised(opts.platform, AGS_LINE_ITEM_SCOPES);
   if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
   const already = await findLineItem(lineItemsUrl, token.token, opts.assignmentId);
@@ -392,7 +404,7 @@ async function updateLineItem(
     scoreMaximum: number;
   },
 ): Promise<AgsResult<null>> {
-  const token = await authorised(opts.platform);
+  const token = await authorised(opts.platform, AGS_LINE_ITEM_SCOPES);
   if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
   const current = await readLineItem(url, token.token);
@@ -415,7 +427,10 @@ async function updateLineItem(
     if (!attempt.ok) {
       return {
         ok: false,
-        reason: attempt.failure.kind === 'redirected' ? 'redirected' : 'unreachable',
+        reason:
+          attempt.failure.kind === 'redirected' || attempt.failure.kind === 'insecure'
+            ? 'redirected'
+            : 'unreachable',
         detail: authorisedFetchFailureDetail(attempt.failure),
       };
     }
@@ -468,7 +483,10 @@ async function readLineItem(
     if (!attempt.ok) {
       return {
         ok: false,
-        reason: attempt.failure.kind === 'redirected' ? 'redirected' : 'unreachable',
+        reason:
+          attempt.failure.kind === 'redirected' || attempt.failure.kind === 'insecure'
+            ? 'redirected'
+            : 'unreachable',
         detail: authorisedFetchFailureDetail(attempt.failure),
       };
     }
@@ -564,7 +582,7 @@ export async function postScore(opts: {
   timestamp?: Date;
   comment?: string | null;
 }): Promise<AgsResult<null>> {
-  const token = await authorised(opts.platform);
+  const token = await authorised(opts.platform, AGS_SCORE_SCOPES);
   if (!token.ok) return { ok: false, reason: 'no-token', detail: token.reason };
 
   // Scores go to the line item's own `/scores` sub-resource, keeping any query string the

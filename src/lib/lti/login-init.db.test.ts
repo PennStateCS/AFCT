@@ -172,6 +172,23 @@ describe('picking the registration', () => {
     expect(await begin()).toEqual({ ok: false, reason: 'unregistered-platform' });
   });
 
+  /**
+   * Both are required parameters of a third-party initiated login. Forwarding an empty
+   * `login_hint` produced a launch that failed at the platform instead, with nothing pointing
+   * back to the request that caused it.
+   */
+  it('refuses a request that does not say who is launching', async () => {
+    const result = await begin({ login_hint: '' });
+
+    expect(result).toEqual({ ok: false, reason: 'missing-login-hint' });
+  });
+
+  it('refuses a request that does not say what it is opening', async () => {
+    const result = await begin({ target_link_uri: '   ' });
+
+    expect(result).toEqual({ ok: false, reason: 'missing-target-link-uri' });
+  });
+
   it('refuses a request that does not say where it came from', async () => {
     const result = await beginLaunch({ params: { iss: null }, redirectUri: REDIRECT });
 

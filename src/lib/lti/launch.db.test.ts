@@ -1371,6 +1371,17 @@ describe('which party a launch was issued for', () => {
     expect(result.ok).toBe(true);
   });
 
+  /**
+   * The ordering that used to pass. The registration lookup reads `azp` and falls back to the
+   * first audience, so a token listing AFCT first with no `azp` matched a registration and was
+   * never asked which application it was issued for.
+   */
+  it('refuses several audiences with no azp, even when AFCT is named first', async () => {
+    const result = await launchWith({}, [CLIENT_ID, 'some-other-tool']);
+
+    expect(result).toMatchObject({ ok: false, reason: 'wrong-authorized-party' });
+  });
+
   it('refuses a token issued for another application', async () => {
     const result = await launchWith({ azp: 'some-other-tool' }, [CLIENT_ID, 'some-other-tool']);
 

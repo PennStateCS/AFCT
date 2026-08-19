@@ -99,6 +99,15 @@ function readMember(raw: unknown): Member | null {
 export async function fetchMembership(opts: {
   platform: { id: string; clientId: string; tokenUrl: string };
   membershipsUrl: string | null;
+  /**
+   * The LMS course this roster is supposed to describe.
+   *
+   * NRPS answers with the context it read, and a roster applied to the wrong AFCT course
+   * enrols a class into somebody else's and drops the ones who belong there. The address is
+   * the platform's, so this checks the answer rather than assuming the address was right.
+   * Optional only so an older caller cannot silently skip it: pass it.
+   */
+  expectedContextId?: string | null;
 }): Promise<NrpsResult> {
   if (!opts.membershipsUrl) return { ok: false, reason: 'no-endpoint' };
 
@@ -138,7 +147,12 @@ export async function fetchMembership(opts: {
     if (!attempt.ok) {
       return {
         ok: false,
-        reason: attempt.failure.kind === 'redirected' ? 'rejected' : 'unreachable',
+        // An insecure address is a configuration fault like a redirect, not a platform that is
+        // temporarily down: retrying it for a day would never help.
+        reason:
+          attempt.failure.kind === 'redirected' || attempt.failure.kind === 'insecure'
+            ? 'rejected'
+            : 'unreachable',
         detail: authorisedFetchFailureDetail(attempt.failure),
       };
     }
@@ -156,9 +170,32 @@ export async function fetchMembership(opts: {
      * answer as far as the caller can tell, and it proposes dropping every student in the
      * course. `{}`, `{"members": "nope"}` and `null` are all this case.
      */
-    const body = (await response.json().catch(() => null)) as { members?: unknown } | null;
+    const body = (await response.json().catch(() => null)) as {
+      members?: unknown;
+      context?: { id?: unknown } | null;
+    } | null;
     if (!body || typeof body !== 'object' || !Array.isArray(body.members)) {
       return { ok: false, reason: 'malformed', detail: 'the membership list was missing' };
+    }
+
+    /**
+     * The container says which course it is, and it has to be the one that was asked about.
+     *
+     * A platform answering for another context, whether by fault or by a mistyped address,
+     * would otherwise have its members applied to this AFCT course: everyone in the answer
+     * enrolled here, and everyone who actually belongs here dropped for not appearing in it.
+     * Only checked when the platform states a context, since it is the container's field and
+     * an absent one is not evidence of the wrong course.
+     */
+    const statedContext = typeof body.context?.id === 'string' ? body.context.id : null;
+    if (opts.expectedContextId && statedContext && statedContext !== opts.expectedContextId) {
+      return {
+        ok: false,
+        reason: 'rejected',
+        detail:
+          `your LMS answered with the roster for a different course ` +
+          `(${statedContext} rather than ${opts.expectedContextId}), so AFCT did not apply it`,
+      };
     }
 
     for (const raw of body.members) {

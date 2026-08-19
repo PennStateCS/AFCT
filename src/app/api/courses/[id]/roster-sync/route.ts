@@ -55,6 +55,9 @@ async function preview(
     const membership = await fetchMembership({
       platform: link.platform,
       membershipsUrl: link.membershipsUrl,
+      // The roster has to be for the LMS course this link opens, or it would be applied to the
+      // wrong AFCT course: everyone in the answer enrolled, everyone who belongs here dropped.
+      expectedContextId: link.contextId,
     });
     /**
      * One unreadable LMS course fails the whole sync.

@@ -22,6 +22,7 @@
 import { decodeJwt, jwtVerify, createRemoteJWKSet, errors as joseErrors } from 'jose';
 import type { JWTPayload } from 'jose';
 import { prisma } from '@/lib/prisma';
+import { isHttps } from '@/lib/lti/authorised-fetch';
 import { consumeLaunch, findLaunch, nonceMatches } from '@/lib/lti/launch-transaction';
 
 /** LTI puts its claims under this prefix. Spelled out once rather than inline everywhere. */
@@ -283,7 +284,15 @@ function readDeepLinkSettings(
   const acceptTypes = strictStringList(settings.accept_types);
   const targets = strictStringList(settings.accept_presentation_document_targets);
 
-  if (!returnUrl || acceptTypes === null || targets === null) {
+  /**
+   * The address the signed response is posted back to, which has to be https.
+   *
+   * The claim is signed, so this is not about who sent it; it is that the answer AFCT posts
+   * there is a JWT identifying a member of staff and the assignment they chose, and the
+   * Security Framework requires TLS for every LTI message. A platform advertising `http://`
+   * here would have that posted in clear from the browser.
+   */
+  if (!returnUrl || !isHttps(returnUrl) || acceptTypes === null || targets === null) {
     return { ok: false, reason: 'deep-link-settings' };
   }
 
@@ -417,6 +426,15 @@ export async function validateLaunch(opts: {
        * further down rather than by the verifier.
        */
       requiredClaims: ['exp', 'iat', 'nonce'],
+      /**
+       * Pinned, rather than accepting whatever the key advertises.
+       *
+       * Leaving it open means the algorithm is chosen by the token, which is the shape of
+       * every JWT confusion attack. LTI platforms sign launches RS256, which is what AFCT
+       * publishes and what every platform AFCT has met uses; a platform that genuinely needed
+       * another would fail here loudly rather than quietly widening what AFCT accepts.
+       */
+      algorithms: ['RS256'],
     }));
   } catch (error) {
     if (error instanceof joseErrors.JWTExpired) return { ok: false, reason: 'expired' };
@@ -463,6 +481,21 @@ export async function validateLaunch(opts: {
    */
   const authorizedParty = claimString(payload.azp);
   if (authorizedParty !== null && authorizedParty !== platform.clientId) {
+    return { ok: false, reason: 'wrong-authorized-party' };
+  }
+
+  /**
+   * A token naming audiences other than AFCT must say, through `azp`, that it was issued for
+   * AFCT.
+   *
+   * `jwtVerify` proves AFCT is *among* the audiences, which is not the same as the token being
+   * meant for AFCT: a platform can issue one token for several tools, and without `azp` there
+   * is nothing saying this one is ours to act on. OpenID Connect requires `azp` exactly when
+   * there is more than one audience, so its absence here is a malformed token rather than a
+   * judgement call.
+   */
+  const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (audiences.length > 1 && authorizedParty === null) {
     return { ok: false, reason: 'wrong-authorized-party' };
   }
 

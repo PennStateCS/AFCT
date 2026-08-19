@@ -54,6 +54,12 @@ export async function buildDeepLinkResponse(opts: {
    * did not say. Null is not permission, so it is treated like false here.
    */
   acceptLineItem: boolean | null;
+  /**
+   * The presentations the platform said it accepts, or null when it listed none. Deep Linking
+   * 2.0 requires the platform to send this, and a tool answering with a target that is not on
+   * the list is answering a question it was not asked.
+   */
+  acceptPresentationDocumentTargets?: string[] | null;
 }): Promise<DeepLinkResponse> {
   /**
    * The platform states what it will accept and the tool is expected to honour it. AFCT has
@@ -115,10 +121,34 @@ export async function buildDeepLinkResponse(opts: {
      * this, and Canvas honours it by ticking "Load this tool in a new tab" on the assignment
      * it creates, so the person adding the link no longer has to know to do it.
      */
-    window: { targetName: '_blank' },
+    /**
+     * Asked for, not assumed.
+     *
+     * AFCT is a whole application: a student works through an automaton, submits, and reads
+     * feedback, which is cramped inside the panel an LMS gives a tool, and the browser's back
+     * button belongs to the LMS page rather than to their work. So a new tab is what AFCT
+     * wants, and Canvas honours it by ticking "load in a new tab" on the link it creates.
+     *
+     * Only when the platform listed `window` among the targets it accepts, though. The request
+     * says what the platform will take, and answering with something else is the tool ignoring
+     * the question. Platforms that offer no list are sent the preference as before, since there
+     * is nothing to contradict. Moodle takes the setting from its own tool configuration and
+     * ignores this either way (since 4.3), which is documented for administrators.
+     */
+    ...(!opts.acceptPresentationDocumentTargets ||
+    opts.acceptPresentationDocumentTargets.includes('window')
+      ? { window: { targetName: '_blank' } }
+      : {}),
   }));
 
   const jwt = await new SignJWT({
+    /**
+     * Not required by Deep Linking 2.0, which lists `aud`, message type, version and deployment
+     * id. It is sent because the 1EdTech reference tools send one and some platforms check for
+     * it, and because a message that cannot be replayed costs nothing to produce. `jti` stays:
+     * it identifies this response, where the nonce is a value the platform may remember.
+     */
+    nonce: crypto.randomUUID(),
     [`${CLAIM}/message_type`]: 'LtiDeepLinkingResponse',
     [`${CLAIM}/version`]: '1.3.0',
     [`${CLAIM}/deployment_id`]: opts.platform.deploymentId,

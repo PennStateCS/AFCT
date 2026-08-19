@@ -59,6 +59,7 @@ export async function resolveIdentityFromRoster(opts: {
   const roster = await fetchMembership({
     platform: opts.link.platform,
     membershipsUrl: opts.link.membershipsUrl,
+    expectedContextId: opts.link.contextId,
   });
   if (!roster.ok) {
     // `no-endpoint` means the platform never granted the scope, which no amount of retrying

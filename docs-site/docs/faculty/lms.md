@@ -63,6 +63,12 @@ Students who have no AFCT account get one, and students who already have an acco
 
 Syncing is always something you ask for. AFCT does not quietly change your roster in the background.
 
+### Cross-listed courses, and people the LMS will not name
+
+If several LMS courses open the same AFCT course, the roster is all of them together. Somebody is only marked as dropped when **none** of those LMS courses still lists them, so finishing one section does not remove you from another, and somebody who is staff in one and a student in another keeps the higher role.
+
+A member your LMS gives no email address for cannot be given an AFCT account, so the sync lists them as skipped and carries on with everyone else. Ask your administrator to let AFCT see email addresses in the LMS if you see people skipped.
+
 ## Link straight to one assignment
 
 Some LMSs let you pick the AFCT assignment while adding the link, so students land on that assignment rather than on the AFCT course. If yours supports it, choosing AFCT while adding an assignment or module item offers two ways to go:

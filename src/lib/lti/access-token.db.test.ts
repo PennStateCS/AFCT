@@ -348,3 +348,60 @@ describe('the token request itself', () => {
     ).toMatchObject({ ok: true });
   });
 });
+
+/**
+ * What the platform hands back, checked before it is used. Every service call presents the
+ * token as a bearer credential, so a token issued as something else would be refused later, at
+ * the service, as an unexplained rejection of a grade.
+ */
+describe('the answer from the token endpoint', () => {
+  // A signing key, since the assertion is signed before the answer is read at all.
+  beforeEach(async () => {
+    await createKeyPair();
+  });
+
+  // Each test uses its own platform id, so the cache cannot answer for it.
+  const ask = () =>
+    getAccessToken({ platformId: nextPlatform(), clientId: CLIENT_ID, tokenUrl: TOKEN_URL });
+
+  it('refuses a token that is not a bearer token', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => okResponse({ access_token: 'tok', token_type: 'mac', expires_in: 3600 })),
+    );
+
+    const result = await ask();
+
+    expect(result).toMatchObject({ ok: false, reason: 'rejected' });
+  });
+
+  it('accepts Bearer however the platform spells it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => okResponse({ access_token: 'tok', token_type: 'Bearer', expires_in: 3600 })),
+    );
+
+    expect((await ask()).ok).toBe(true);
+  });
+
+  it('accepts a platform that says nothing about the type', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => okResponse({ access_token: 'tok', expires_in: 3600 })));
+
+    expect((await ask()).ok).toBe(true);
+  });
+
+  /** A lifetime that is not a usable number is treated as absent, not believed. */
+  it('does not take an expiry that would make the token already dead', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => okResponse({ access_token: 'tok', expires_in: 0 })));
+
+    const platformId = nextPlatform();
+    const first = await getAccessToken({ platformId, clientId: CLIENT_ID, tokenUrl: TOKEN_URL });
+    expect(first.ok).toBe(true);
+
+    // Cached, rather than re-requested on every call because it expired the instant it arrived.
+    const fetchMock = vi.fn(async () => okResponse({ access_token: 'second', expires_in: 3600 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await getAccessToken({ platformId, clientId: CLIENT_ID, tokenUrl: TOKEN_URL });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
