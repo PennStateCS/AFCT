@@ -52,10 +52,7 @@ export async function buildJwtToken({
   // Sign-in only. This is the one place the database is read here; ordinary reads of an
   // existing token do no query at all.
   if (user) {
-    token.isAdmin = user.isAdmin;
     token.id = user.id;
-    token.avatar = user.avatar;
-    token.mustChangePassword = Boolean(user.mustChangePassword);
     /**
      * Read by id, not by the address the provider sent.
      *
@@ -69,10 +66,35 @@ export async function buildJwtToken({
     if (user.id) {
       const fullUser = await prisma.user.findUnique({
         where: { id: user.id },
-        select: { firstName: true, lastName: true, passwordChangedAt: true },
+        select: {
+          firstName: true,
+          lastName: true,
+          passwordChangedAt: true,
+          /**
+           * What the account is, taken from the account.
+           *
+           * These used to be copied from the object the provider handed back, which works for
+           * the password form (its `authorize` reads them from the database) and not at all for
+           * institutional sign-in, where the object is built from the provider's profile and
+           * has no notion of any of them. An administrator signing in through their institution
+           * arrived with `isAdmin` undefined and was refused every administration page.
+           *
+           * They belong here regardless: what somebody may do is AFCT's to say, never a claim
+           * an identity provider supplies.
+           */
+          isAdmin: true,
+          avatar: true,
+          // The column behind "must change password": an administrator-issued temporary one.
+          temporaryPassword: true,
+        },
       });
       token.firstName = fullUser?.firstName || undefined;
       token.lastName = fullUser?.lastName || undefined;
+      // Absent only if the account went away mid sign-in, in which case granting nothing is
+      // the safe reading.
+      token.isAdmin = fullUser?.isAdmin ?? false;
+      token.avatar = fullUser?.avatar ?? undefined;
+      token.mustChangePassword = Boolean(fullUser?.temporaryPassword);
       // Snapshot the password-change instant so a later change/reset revokes this
       // token (see buildSession).
       token.pwChangedAt = fullUser?.passwordChangedAt

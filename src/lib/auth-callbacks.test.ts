@@ -80,6 +80,9 @@ describe('buildJwtToken', () => {
       firstName: 'Ada',
       lastName: 'Lovelace',
       passwordChangedAt: new Date('2026-01-01T00:00:00Z'),
+      isAdmin: true,
+      avatar: null,
+      temporaryPassword: true,
     });
 
     const token = await buildJwtToken({
@@ -345,5 +348,66 @@ describe('buildSession', () => {
     const session = await buildSession({ session: makeSession(), token: null });
     expect(session.user.id).toBe('');
     expect(getSessionUserMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * What somebody may do comes from their AFCT account, never from the provider that signed them
+ * in. These fields used to be copied off the object the provider handed back, which the password
+ * form fills in from the database and an institutional sign-in does not fill in at all: an
+ * administrator arriving through their institution had `isAdmin` undefined and was refused every
+ * administration page, with a session that was otherwise perfectly valid.
+ */
+describe('privileges on a session', () => {
+  it('reads them from the account when the provider says nothing', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      passwordChangedAt: null,
+      isAdmin: true,
+      avatar: 'ada.png',
+      temporaryPassword: false,
+    });
+
+    // What Auth.js builds from an OIDC profile: an id and an address, nothing else.
+    const token = await buildJwtToken({
+      token: {} as JWT,
+      user: { id: 'user-1', email: 'ada@example.com' } as never,
+    });
+
+    expect(token.isAdmin).toBe(true);
+    expect(token.avatar).toBe('ada.png');
+    expect(token.mustChangePassword).toBe(false);
+  });
+
+  it('does not take the provider at its word', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+      passwordChangedAt: null,
+      isAdmin: false,
+      avatar: null,
+      temporaryPassword: false,
+    });
+
+    const token = await buildJwtToken({
+      token: {} as JWT,
+      // A profile claiming to be an administrator. The account says otherwise, and the account
+      // is the authority.
+      user: { id: 'user-1', email: 'ada@example.com', isAdmin: true } as never,
+    });
+
+    expect(token.isAdmin).toBe(false);
+  });
+
+  it('grants nothing when the account has gone', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+
+    const token = await buildJwtToken({
+      token: {} as JWT,
+      user: { id: 'user-1', email: 'ada@example.com', isAdmin: true } as never,
+    });
+
+    expect(token.isAdmin).toBe(false);
   });
 });
