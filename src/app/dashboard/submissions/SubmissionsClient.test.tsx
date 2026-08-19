@@ -265,7 +265,7 @@ describe('SubmissionsClient', () => {
     // than the single row the browser is holding. (The text appears twice: once visibly and
     // once in the table's live region.)
     expect(screen.getAllByText(/Page 1 of 5/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/42 total/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/of 42 records/).length).toBeGreaterThan(0);
   });
 
   it('keeps the current page on screen while the next one loads', async () => {

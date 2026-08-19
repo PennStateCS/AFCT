@@ -92,3 +92,40 @@ export const columnLabel = <TData>(column: TanstackColumn<TData, unknown>): stri
   if (typeof header === 'string' && header.trim().length > 0) return header;
   return column.id;
 };
+
+/**
+ * "Showing 1-10 of 2,206 records", the line under a table.
+ *
+ * A bare total answers "how much is there" and leaves "where am I" to be worked out from the
+ * page number and the page size, which is arithmetic nobody should be doing to read a table.
+ * The range says both.
+ *
+ * Numbers are grouped in the viewer's locale, like the dates elsewhere: a bare 1204393 has to
+ * be counted digit by digit before it means anything.
+ */
+export function rowRangeLabel(opts: {
+  /** 1-based position of the first row on screen; 0 when there are none. */
+  firstRow: number;
+  /** How many rows are actually on screen, which is what makes the last page right. */
+  rowsOnPage: number;
+  /** Rows after any filter. */
+  total: number;
+  /** The whole set, when a filter is narrowing it. Omitted when nothing is being hidden. */
+  filteredFrom?: number;
+}): string {
+  const count = (n: number) => n.toLocaleString();
+  const noun = opts.total === 1 ? 'record' : 'records';
+
+  if (opts.total === 0 || opts.rowsOnPage === 0) {
+    return opts.filteredFrom !== undefined ? 'No matching records' : 'No records';
+  }
+
+  const last = opts.firstRow + opts.rowsOnPage - 1;
+  // "Showing 7 of 7" rather than "Showing 7-7 of 7", which reads as a typo.
+  const range = opts.firstRow === last ? `${count(opts.firstRow)}` : `${count(opts.firstRow)}-${count(last)}`;
+  const shown = `Showing ${range} of ${count(opts.total)} ${noun}`;
+
+  return opts.filteredFrom !== undefined
+    ? `${shown}, filtered from ${count(opts.filteredFrom)}`
+    : shown;
+}

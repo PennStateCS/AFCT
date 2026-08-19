@@ -134,15 +134,15 @@ describe('DataTable', () => {
     expect(csv.trim().split('\n')).toHaveLength(13); // header + 12 rows
   });
 
-  it('shows the row total, and a filtered count while searching', async () => {
+  it('says which rows are on screen, and what a search is hiding', async () => {
     const user = userEvent.setup();
     render(<DataTable columns={columns} data={data} />);
 
-    expect(screen.getByText('3 total')).toBeInTheDocument();
+    expect(screen.getByText('Showing 1-3 of 3 records')).toBeInTheDocument();
 
     await user.type(screen.getByPlaceholderText('Search...'), 'Bob');
 
-    expect(await screen.findByText('1 of 3')).toBeInTheDocument();
+    expect(await screen.findByText('Showing 1 of 1 record, filtered from 3')).toBeInTheDocument();
   });
 
   it('restores a saved rows-per-page preference', async () => {
@@ -222,7 +222,7 @@ describe('DataTable', () => {
     // separate announcements.
     const live = container.querySelectorAll('[aria-live], [role="status"]');
     expect(live).toHaveLength(1);
-    expect(live[0]).toHaveTextContent('Page 1 of 1, 3 total');
+    expect(live[0]).toHaveTextContent('Page 1 of 1, Showing 1-3 of 3 records');
   });
 
   it('only makes the header sticky when asked', () => {
@@ -428,7 +428,7 @@ describe('DataTable', () => {
       // the suite runs instead of hard-coding a comma. On any grouping locale (which is
       // to say, in practice) it fails if the label goes back to raw digits.
       const grouped = (1204393).toLocaleString();
-      expect(screen.getAllByText(new RegExp(`${grouped} total`)).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(new RegExp(`of ${grouped} records`)).length).toBeGreaterThan(0);
     });
 
     it('counts pages from pageCount/rowCount rather than the rows it holds', () => {
@@ -446,7 +446,7 @@ describe('DataTable', () => {
 
       // Three rows on screen, 42 in the result set.
       expect(screen.getAllByText(/Page 1 of 5/).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/42 total/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Showing 1-3 of 42 records/).length).toBeGreaterThan(0);
     });
 
     it('reports a page change to the parent instead of paging itself', () => {
