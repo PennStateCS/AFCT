@@ -11,8 +11,13 @@ const prismaMock = vi.hoisted(() => ({
   },
   roster: { findMany: vi.fn() },
   activityLog: { deleteMany: vi.fn() },
-  // Promotion clears automatically-attached sign-ins in the same transaction as the update.
-  linkedIdentity: { deleteMany: vi.fn(async () => ({ count: 0 })) },
+  // Promotion clears automatically-attached sign-ins in the same transaction as the update, and
+  // switching an account off reads them in the same transaction as its own (see the route: that
+  // read is what makes the two conflict rather than both committing).
+  linkedIdentity: {
+    deleteMany: vi.fn(async () => ({ count: 0 })),
+    count: vi.fn(async () => 0),
+  },
   // The last-administrator rule counts and updates in one serializable transaction, so the
   // pair conflicts in Postgres rather than both succeeding. Here it simply runs the callback.
   $transaction: vi.fn(),
@@ -577,6 +582,85 @@ describe('PATCH /api/users/[id]', () => {
     const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
 
     expect(res.status).toBe(200);
+  });
+
+  /**
+   * Switching an account off has to be one decision with automatic identity linking, or a
+   * sign-in arriving at that moment attaches an identity to an account that is disabled by the
+   * time the identity exists. The read of the identities is what makes the two conflict in
+   * Postgres rather than both committing, so it is asserted here as well as in the DB test.
+   */
+  it('switches an account off in one serializable decision, reading its identities', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false, inactive: false });
+    prismaMock.roster.findMany.mockResolvedValue([]);
+    prismaMock.user.update.mockResolvedValue({ id: 'u1', email: 'u1@example.com', inactive: true });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ inactive: true }),
+    });
+
+    const res = await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaMock.$transaction.mock.calls[0][1]).toEqual({ isolationLevel: 'Serializable' });
+    expect(prismaMock.linkedIdentity.count).toHaveBeenCalledWith({ where: { userId: 'u1' } });
+  });
+
+  it('records how many ways in the account had when it was switched off', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false, inactive: false });
+    prismaMock.roster.findMany.mockResolvedValue([]);
+    prismaMock.user.update.mockResolvedValue({ id: 'u1', email: 'u1@example.com', inactive: true });
+    prismaMock.linkedIdentity.count.mockResolvedValueOnce(2);
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ inactive: true }),
+    });
+
+    await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    const entry = activityLogMock.mock.calls.find(
+      (call) => call[2]?.action === 'UPDATE_USER',
+    )?.[2];
+    expect(entry?.metadata).toMatchObject({ identitiesWhenDisabled: 2 });
+  });
+
+  /** An ordinary edit touches none of this, and should not pay for a transaction. */
+  it('does not open a transaction for an edit that changes no account state', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false, inactive: false });
+    prismaMock.roster.findMany.mockResolvedValue([]);
+    prismaMock.user.update.mockResolvedValue({ id: 'u1', email: 'u1@example.com' });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ firstName: 'Renamed' }),
+    });
+
+    await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  /** Already off, so there is no transition for anything to race with. */
+  it('does not coordinate when the account was already switched off', async () => {
+    authMock.mockResolvedValue({ user: { id: 'admin', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: null, isAdmin: false, inactive: true });
+    prismaMock.roster.findMany.mockResolvedValue([]);
+    prismaMock.user.update.mockResolvedValue({ id: 'u1', email: 'u1@example.com', inactive: true });
+
+    const req = new NextRequest('http://localhost/api/users/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ inactive: true }),
+    });
+
+    await PATCH(req, { params: Promise.resolve({ id: 'u1' }) });
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it('allows setting user inactive when in archived courses', async () => {

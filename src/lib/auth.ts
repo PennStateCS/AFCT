@@ -13,7 +13,7 @@ import { requireAuthSecret } from '@/lib/auth-secret';
 import { buildJwtToken, buildSession } from '@/lib/auth-callbacks';
 import { buildOidcProvider, getOidcConfig, OIDC_PROVIDER_ID } from '@/lib/oidc-provider';
 import { resolveOidcSignIn } from '@/lib/oidc-signin';
-import { linkIdentity } from '@/lib/linked-identity';
+import { linkIdentity, isWriteConflict } from '@/lib/linked-identity';
 
 /**
  * The config is a function rather than an object because institutional sign-in is configured by
@@ -152,18 +152,32 @@ export async function buildAuthConfig(): Promise<NextAuthConfig> {
             : `/dashboard/account?error=${linked.reason}`;
         }
 
-        const outcome = await resolveOidcSignIn({
-          claims: {
-            issuer: config.issuer,
-            subject,
-            email: (claims?.email as string | undefined) ?? user?.email ?? null,
-            emailVerified: claims?.email_verified === true,
-            firstName: (claims?.given_name as string | undefined) ?? null,
-            lastName: (claims?.family_name as string | undefined) ?? null,
-          },
-          trustEmail: config.trustEmail,
-          context: { ipAddress, userAgent },
-        });
+        let outcome;
+        try {
+          outcome = await resolveOidcSignIn({
+            claims: {
+              issuer: config.issuer,
+              subject,
+              email: (claims?.email as string | undefined) ?? user?.email ?? null,
+              emailVerified: claims?.email_verified === true,
+              firstName: (claims?.given_name as string | undefined) ?? null,
+              lastName: (claims?.family_name as string | undefined) ?? null,
+            },
+            trustEmail: config.trustEmail,
+            context: { ipAddress, userAgent },
+          });
+        } catch (error) {
+          /**
+           * The account was being changed while this sign-in was deciding, twice over, so
+           * linking gave up rather than guessing. Nothing was established about the account, so
+           * the reason deliberately names none: it falls to the generic "try again, or use your
+           * AFCT password" message. This used to arrive as `account-inactive`, which sent people
+           * to an administrator for an account that was perfectly fine.
+           */
+          if (!isWriteConflict(error)) throw error;
+          console.error('[oidc] sign-in could not be settled:', error);
+          return `/login?error=oidc&reason=try-again`;
+        }
 
         if (!outcome.ok) {
           await createEnhancedActivityLog(

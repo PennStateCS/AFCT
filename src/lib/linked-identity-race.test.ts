@@ -33,6 +33,12 @@ const duplicate = () =>
     clientVersion: 'test',
   });
 
+const conflict = () =>
+  new Prisma.PrismaClientKnownRequestError('write conflict', {
+    code: 'P2034',
+    clientVersion: 'test',
+  });
+
 const link = (userId = 'u-1') =>
   linkIdentity({ ref: REF, userId, via: 'AUTO_VERIFIED_EMAIL', actorUserId: userId, context: CONTEXT });
 
@@ -107,5 +113,60 @@ describe('when another request attached the identity first', () => {
     ).rejects.toMatchObject({ code: 'P2002' });
     // One read, the one before the insert: no recovery was attempted.
     expect(tx.linkedIdentity.findUnique).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A serialization conflict is not a fact about the account.
+ *
+ * This used to answer `account-inactive` once the retry was spent, which is a claim nothing
+ * here established: the conflict can come from a promotion, a deactivation, or another sign-in
+ * for the same person. Somebody whose account was perfectly fine was told to go and find an
+ * administrator.
+ */
+describe('when the account is being written to at the same moment', () => {
+  it('tries again, and succeeds if the second attempt gets through', async () => {
+    prismaStub.$transaction
+      .mockRejectedValueOnce(conflict())
+      .mockImplementationOnce(async (fn: (tx: unknown) => unknown) => fn(prismaStub));
+
+    await expect(link()).resolves.toEqual({ ok: true, created: true });
+  });
+
+  it('gives up rather than inventing a reason when it conflicts twice', async () => {
+    prismaStub.$transaction.mockRejectedValue(conflict());
+
+    await expect(link()).rejects.toMatchObject({ code: 'P2034' });
+  });
+
+  it('attaches nothing when it gives up', async () => {
+    prismaStub.$transaction.mockRejectedValue(conflict());
+
+    await expect(link()).rejects.toThrow();
+    expect(prismaStub.linkedIdentity.create).not.toHaveBeenCalled();
+  });
+
+  // Retrying twice and then stopping, rather than going round forever against a busy account.
+  it('does not retry more than once', async () => {
+    prismaStub.$transaction.mockRejectedValue(conflict());
+
+    await expect(link()).rejects.toThrow();
+    expect(prismaStub.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  // The pg driver adapter reports the same failure under a different name before Prisma maps it.
+  it('recognises the conflict by the adapter spelling used by the pg driver', async () => {
+    prismaStub.$transaction.mockRejectedValue(new Error('TransactionWriteConflict'));
+
+    await expect(link()).rejects.toThrow(/TransactionWriteConflict/);
+    expect(prismaStub.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  // A fault that is not a conflict is not retried at all: it is not going to settle.
+  it('does not retry something that is not a conflict', async () => {
+    prismaStub.$transaction.mockRejectedValue(new Error('connection refused'));
+
+    await expect(link()).rejects.toThrow(/connection refused/);
+    expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
   });
 });
