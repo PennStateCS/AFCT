@@ -125,11 +125,26 @@ async function handle(request: Request, params: LoginInitParams) {
 /**
  * @openapi
  * summary: Start an LTI launch (platforms that initiate with GET)
+ * description: >-
+ *   The third-party initiated login of LTI 1.3. The LMS sends the browser here to say somebody
+ *   wants to open AFCT; the answer is a redirect to the LMS's own authorization endpoint, which
+ *   later posts a signed token to the launch endpoint. Nothing here is authenticated: the
+ *   request only picks a registration and mints the launch's state and nonce. Not for direct
+ *   use; the LMS calls it as part of every launch.
  * security: []
+ * parameters:
+ *   - { in: query, name: iss, required: true, schema: { type: string }, description: The platform's issuer identifier. }
+ *   - { in: query, name: login_hint, required: true, schema: { type: string }, description: "The platform's handle for the person launching, passed back to it unchanged." }
+ *   - { in: query, name: target_link_uri, required: true, schema: { type: string }, description: "What is being opened. The launch token is checked against it when it returns." }
+ *   - { in: query, name: client_id, schema: { type: string }, description: "Narrows the registration when one issuer has several." }
+ *   - { in: query, name: lti_deployment_id, schema: { type: string }, description: Narrows the registration further. }
+ *   - { in: query, name: lti_message_hint, schema: { type: string }, description: "Opaque platform state, echoed back to it." }
+ *   - { in: query, name: lti_storage_target, schema: { type: string }, description: "The frame that holds launch state for browsers that block third-party cookies." }
  * responses:
- *   302: { description: Redirect to the platform's authorization endpoint. }
- *   400: { description: The request did not say which LMS it came from. }
- *   404: { description: "No registration matches, or more than one does." }
+ *   302: { description: "Redirect to the platform's authorization endpoint, with the state cookie set." }
+ *   400: { description: "A required parameter (issuer, login hint or target link) was missing." }
+ *   404: { description: "No registration matches, or more than one does and the request did not say which." }
+ *   429: { description: Too many launches from this address. }
  */
 export async function GET(request: Request) {
   return handle(request, paramsFrom(new URL(request.url).searchParams));
@@ -138,11 +153,31 @@ export async function GET(request: Request) {
 /**
  * @openapi
  * summary: Start an LTI launch (platforms that initiate with POST)
+ * description: >-
+ *   Identical to the GET form; the same parameters arrive as a form body instead. Canvas
+ *   initiates with POST, the 1EdTech reference implementation with GET, and the spec allows
+ *   both.
  * security: []
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/x-www-form-urlencoded:
+ *       schema:
+ *         type: object
+ *         required: [iss, login_hint, target_link_uri]
+ *         properties:
+ *           iss: { type: string, description: The platform's issuer identifier. }
+ *           login_hint: { type: string, description: "The platform's handle for the person launching, passed back to it unchanged." }
+ *           target_link_uri: { type: string, description: "What is being opened. The launch token is checked against it when it returns." }
+ *           client_id: { type: string, description: Narrows the registration when one issuer has several. }
+ *           lti_deployment_id: { type: string, description: Narrows the registration further. }
+ *           lti_message_hint: { type: string, description: "Opaque platform state, echoed back to it." }
+ *           lti_storage_target: { type: string, description: "The frame that holds launch state for browsers that block third-party cookies." }
  * responses:
- *   302: { description: Redirect to the platform's authorization endpoint. }
- *   400: { description: The request did not say which LMS it came from. }
- *   404: { description: "No registration matches, or more than one does." }
+ *   302: { description: "Redirect to the platform's authorization endpoint, with the state cookie set." }
+ *   400: { description: "A required parameter (issuer, login hint or target link) was missing." }
+ *   404: { description: "No registration matches, or more than one does and the request did not say which." }
+ *   429: { description: Too many launches from this address. }
  */
 export async function POST(request: Request) {
   return handle(request, paramsFrom(await request.formData()));

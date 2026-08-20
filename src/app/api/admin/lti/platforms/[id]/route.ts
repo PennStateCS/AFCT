@@ -15,7 +15,7 @@ import { clearAccessTokenCache } from '@/lib/lti/access-token';
  * @openapi
  * summary: Remove a registered LMS platform
  * responses:
- *   200: { description: Removed. }
+ *   200: { description: "Removed, with its course links and remembered gradebook columns. Launches from that LMS are refused from now on; grades already in the LMS stay there. The LMS's own developer key is untouched, so re-registering the same values restores service." }
  *   403: { description: Not an administrator. }
  *   404: { description: No such registration. }
  */

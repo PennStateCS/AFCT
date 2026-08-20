@@ -54,11 +54,29 @@ function refuse(message: string, status: number) {
 /**
  * @openapi
  * summary: Receive a signed LTI launch from an LMS
+ * description: >-
+ *   The redirect URI of the launch flow. The platform posts its signed id_token here with the
+ *   state minted at login initiation; the token is verified against the registration, the
+ *   person is matched or created, and the browser is sent on with a one-minute single-use
+ *   ticket that becomes the session. A refused launch is logged and answered with a plain-text
+ *   page saying what to do, since a person inside an LMS frame is reading it. Not for direct
+ *   use; the LMS posts here as part of every launch.
  * security: []
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/x-www-form-urlencoded:
+ *       schema:
+ *         type: object
+ *         required: [id_token, state]
+ *         properties:
+ *           id_token: { type: string, description: "The launch JWT, signed by the platform." }
+ *           state: { type: string, description: "The value minted at login initiation, tying the launch to this browser." }
  * responses:
- *   302: { description: Verified. Redirects to complete sign-in. }
- *   400: { description: "The launch was missing its state, or the state did not match." }
- *   403: { description: The launch could not be verified. }
+ *   303: { description: "Verified: on to complete sign-in. Without the state cookie, on to the platform-storage state check instead." }
+ *   400: { description: "The launch was missing its token or state, or the state could not be matched to this browser." }
+ *   403: { description: "The token failed verification (signature, timing, replay, registration or identity), with a message naming what to check." }
+ *   503: { description: The account was being changed mid-launch; opening the link again resolves it. }
  */
 export async function POST(request: Request) {
   const form = await request.formData();

@@ -19,10 +19,27 @@ const LinkSchema = z.object({
  * LMS course and capture its launches.
  * @openapi
  * summary: Link the LMS course from a pending launch to an AFCT course
+ * description: >-
+ *   Where the course picker a first launch lands on posts its choice. The LMS course comes from
+ *   the pending record the launch stored, never from this request, so a caller cannot name a
+ *   different LMS course and capture its launches; only the AFCT course is chosen here. The
+ *   grade and roster endpoints the launch advertised are stored on the link, which is what
+ *   makes grade passback and roster sync possible later.
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [pendingId, courseId]
+ *         properties:
+ *           pendingId: { type: string, description: The pending link the launch created. }
+ *           courseId: { type: string, description: The AFCT course this LMS course should open. }
  * responses:
- *   200: { description: Linked. }
+ *   200: { description: Linked. Launches from that LMS course now open the chosen course. }
  *   400: { description: The pending launch has expired or is not yours. }
- *   403: { description: You do not run that course. }
+ *   401: { description: Not signed in. }
+ *   403: { description: You can only connect a course you teach. }
  *   409: { description: That LMS course is already linked to another AFCT course. }
  */
 export async function POST(request: Request) {

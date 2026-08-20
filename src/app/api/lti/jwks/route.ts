@@ -17,9 +17,31 @@ import { listPublicJwks } from '@/lib/lti/keys';
  * an empty set gets the same answer as one reading a set with no key it recognises.
  * @openapi
  * summary: AFCT's public keys, for an LMS to verify tokens AFCT signed
+ * description: >-
+ *   The JWKS the platform verifies AFCT's token requests and deep-linking responses against.
+ *   Fetched by the LMS's own servers, not a browser, so an AFCT instance the LMS cannot reach
+ *   looks healthy until the first grade fails to post. Registered in the LMS as the tool's
+ *   public keyset URL.
  * security: []
  * responses:
- *   200: { description: A JWKS document. Empty when no key has been created yet. }
+ *   200:
+ *     description: "A JWKS document. Empty when no key has been created yet, which is the normal state of an install that has never registered an LMS."
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             keys:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   kty: { type: string, enum: [RSA] }
+ *                   use: { type: string, enum: [sig] }
+ *                   alg: { type: string, enum: [RS256] }
+ *                   kid: { type: string, description: RFC 7638 thumbprint of the key. }
+ *                   n: { type: string }
+ *                   e: { type: string }
  */
 export async function GET() {
   const keys = await listPublicJwks();

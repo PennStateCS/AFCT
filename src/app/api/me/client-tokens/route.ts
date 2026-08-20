@@ -15,7 +15,23 @@ import { IssueClientTokenSchema } from '@/schemas/client';
  * @openapi
  * summary: List my client tokens
  * responses:
- *   200: { description: "The caller's tokens. The token values themselves are never returned." }
+ *   200:
+ *     description: "The caller's unrevoked tokens. The token values themselves are never returned; only the metadata needed to recognise and revoke one."
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             tokens:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id: { type: string }
+ *                   label: { type: string, nullable: true }
+ *                   createdAt: { type: string }
+ *                   expiresAt: { type: string }
+ *                   lastUsedAt: { type: string, nullable: true }
  *   401: { description: Not signed in. }
  */
 export async function GET() {

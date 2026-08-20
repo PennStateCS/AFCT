@@ -106,10 +106,33 @@ async function createAssignment(opts: {
 /**
  * @openapi
  * summary: Return a chosen assignment to the LMS as a deep link
+ * description: >-
+ *   Where the deep-linking picker posts its choice. The return address and the platform's own
+ *   state come from the pending request the launch stored, never from this form; only which
+ *   assignment was chosen (or the fields of a new one) is taken from the browser. The answer is
+ *   a small page that posts the signed deep-linking response back to the LMS.
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/x-www-form-urlencoded:
+ *       schema:
+ *         type: object
+ *         required: [pendingId]
+ *         properties:
+ *           pendingId: { type: string, description: The pending deep-linking request the launch stored. }
+ *           mode: { type: string, enum: [connect, create], description: "Link an existing assignment, or create one to link. Defaults to connect." }
+ *           assignmentId: { type: string, description: The assignment to link (connect mode). }
+ *           title: { type: string, description: The new assignment's title (create mode). }
+ *           dueDate: { type: string, description: "The new assignment's due date, a date in the course's timezone (create mode)." }
+ *           unlockAt: { type: string, description: When the new assignment opens (create mode). }
+ *           isPublished: { type: string, enum: ['on'], description: Publish the new assignment immediately (create mode). }
  * responses:
  *   200: { description: A page that posts the signed response back to the LMS. }
- *   400: { description: The request has expired or is not yours. }
- *   403: { description: You do not run that course. }
+ *   303: { description: "Back to the picker with something to fix: a missing title, bad dates, or an assignment already linked." }
+ *   400: { description: "The pending request has expired, the course is not connected, or the placement does not accept assignment links." }
+ *   401: { description: Not signed in. }
+ *   403: { description: "You do not run that course, or the assignment belongs to a different one." }
+ *   500: { description: AFCT has no signing key. }
  */
 export async function POST(request: Request) {
   const session = await auth();

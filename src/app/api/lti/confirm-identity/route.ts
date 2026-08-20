@@ -40,8 +40,24 @@ function expired(request: Request) {
 /**
  * @openapi
  * summary: Confirm an administrator's password and attach their LMS account
+ * description: >-
+ *   Where the pause an administrator's launch lands on is answered. The account and the LMS
+ *   identity come from the pending record the launch wrote; this form supplies only the
+ *   password, the one thing an LMS cannot assert, checked through the same path as the login
+ *   form so it inherits its rate limiting and lockout. On success the identity is linked, the
+ *   confirmation is spent, and the launch completes.
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/x-www-form-urlencoded:
+ *       schema:
+ *         type: object
+ *         required: [pendingId, password]
+ *         properties:
+ *           pendingId: { type: string, description: The pending confirmation the launch created. }
+ *           password: { type: string, description: The administrator's AFCT password. }
  * responses:
- *   303: { description: "Signed in and sent on, or back to the form when the password was refused." }
+ *   303: { description: "Signed in and sent on; back to the form when the password was refused; back to a bare form when the confirmation has expired." }
  */
 export async function POST(request: Request) {
   const form = await request.formData();

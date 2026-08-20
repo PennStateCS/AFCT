@@ -63,6 +63,9 @@ const TAG_DESCRIPTIONS = {
   admin: 'Admin-only user, submission, log, and system tools.',
   'system-settings': 'System configuration, TLS certificates, and backups.',
   session: 'Session keep-alive.',
+  lti: 'LTI 1.3: launches from an LMS, automatic registration, and the public keyset.',
+  client: 'The native student client API, authenticated by a bearer client token.',
+  'evaluator-trials': 'The admin sandbox for trying the grading engine against a problem.',
   health: 'Liveness probe for the container healthcheck.',
   public: 'Public credential verification.',
 };

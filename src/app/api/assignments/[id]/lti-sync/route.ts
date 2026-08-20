@@ -34,8 +34,30 @@ async function staffFor(assignmentId: string) {
  * parameters:
  *   - { in: query, name: userId, schema: { type: string }, description: "Also report this student's own grade." }
  * responses:
- *   200: { description: Sync state for the assignment. }
+ *   200:
+ *     description: Sync state for the assignment, and for the one student when asked.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             linked: { type: boolean, description: Whether the course opens from any LMS. }
+ *             autoSync: { type: boolean }
+ *             pending: { type: number }
+ *             sent: { type: number }
+ *             failed: { type: number }
+ *             lastSentAt: { type: string, nullable: true }
+ *             student:
+ *               type: object
+ *               nullable: true
+ *               description: "Where the named student's own grade has got to, with the reason it failed when it did."
+ *               properties:
+ *                 state: { type: string, enum: [PENDING, SENT, FAILED] }
+ *                 sentAt: { type: string, nullable: true }
+ *                 lastError: { type: string, nullable: true }
+ *   401: { description: Not signed in. }
  *   403: { description: You do not manage this course. }
+ *   404: { description: No such assignment. }
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -54,9 +76,20 @@ const PatchSchema = z.object({ autoSync: z.boolean() });
 /**
  * @openapi
  * summary: Turn automatic grade sync on or off for this assignment
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [autoSync]
+ *         properties:
+ *           autoSync: { type: boolean, description: "On: grades go to the LMS as they change. Off: nothing is sent until asked." }
  * responses:
  *   200: { description: Saved. }
+ *   401: { description: Not signed in. }
  *   403: { description: You do not manage this course. }
+ *   404: { description: No such assignment. }
  */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -87,10 +120,27 @@ const PostSchema = z.object({ userId: z.string().trim().min(1).optional() });
  * LMS outage.
  * @openapi
  * summary: Send this assignment's grades to the LMS
+ * description: >-
+ *   Queues rather than sends, so a slow LMS cannot make the request hang: the background sender
+ *   delivers what is queued. This is also the one place a grade that has given up is retried.
+ * requestBody:
+ *   required: false
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         properties:
+ *           userId: { type: string, description: "Send only this student's grade. Without a body, every outstanding grade for the assignment goes." }
  * responses:
- *   200: { description: How many grades were queued. }
+ *   200:
+ *     description: How many grades were queued.
+ *     content:
+ *       application/json:
+ *         schema: { type: object, properties: { queued: { type: number } } }
  *   400: { description: The body was malformed. }
+ *   401: { description: Not signed in. }
  *   403: { description: You do not manage this course. }
+ *   404: { description: No such assignment. }
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -25,6 +25,9 @@ import { invalidateSessionUser } from '@/lib/session-user-cache';
 // Avatars are stored here; the client-supplied name is never used to build a path.
 const pfpsDir = path.join('/private', 'uploads', 'pfps');
 
+/** Thrown inside the transaction so the rejection unwinds it rather than committing. */
+class LastAdminError extends Error {}
+
 /**
  * Updates a user: names, admin flag, active status, timezone, and avatar. Accepts
  * either JSON or multipart/form-data (the latter carries the avatar file). A user
@@ -68,9 +71,6 @@ const pfpsDir = path.join('/private', 'uploads', 'pfps');
  *   413: { description: Avatar exceeds the system upload limit. }
  *   500: { description: Server error. }
  */
-/** Thrown inside the transaction so the rejection unwinds it rather than committing. */
-class LastAdminError extends Error {}
-
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const userId = id;

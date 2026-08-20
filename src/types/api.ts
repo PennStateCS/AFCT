@@ -109,7 +109,9 @@ export interface paths {
         put?: never;
         /**
          * Register an LMS platform
-         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/lti/platforms/route.ts)
+         * @description The manual half of registration: every value comes from the LMS's own developer-key screen. A launch is matched on the issuer, client ID and deployment ID together, so the triple has to agree exactly with what the LMS sends. Registering also makes sure AFCT has a signing keypair, since the LMS fetches the keyset while being set up. Prefer the one-time registration link where the LMS supports automatic registration.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/lti/platforms/route.ts)
          */
         post: operations["postAdminLtiPlatforms"];
         delete?: never;
@@ -129,7 +131,7 @@ export interface paths {
         put?: never;
         /**
          * Create a one-time link for registering an LMS automatically
-         * @description A link an administrator pastes into their LMS to register AFCT automatically.   The link is the whole of the authorisation for the registration that follows. It has to be,  because the LMS opens AFCT from another site and no AFCT cookie travels with that request, so  there is no session on the other end to check. Hence: minted only by an administrator, spent  exactly once, valid for an hour, and stored as a hash like every other single-use token.
+         * @description The link is pasted into the LMS's own registration screen and is the whole authorisation for what follows, since the LMS calls back without any AFCT session. It works exactly once, expires after an hour, and is spent even by a failed attempt, so a link can never register two platforms. Minting one is logged as a security-relevant event.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/lti/registration-token/route.ts)
          */
@@ -602,8 +604,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Wrapped rather than passed directly: collectWorkers takes an injectable clock for tests,  and statusGet hands its collector a Request.
-         * @description Wrapped rather than passed directly: collectWorkers takes an injectable clock for tests,  and statusGet hands its collector a Request.
+         * Evaluator worker status
+         * @description Workers tab: the evaluator's grading slots, their health, and what each is working on.   Slots rather than machines: the worker runs one process with as many concurrent loops as  `submissionMaxConcurrent`. Reports the problem type and elapsed time for work in flight, never  the student, so an operational page does not become somewhere grade data leaks out.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/status/workers/route.ts)
          */
@@ -751,9 +753,7 @@ export interface paths {
         put?: never;
         /**
          * Send this assignment's grades to the LMS
-         * @description Queue every grade that has changed since it was last sent, or one student's.   Queues rather than sends: the sender delivers them, so a slow LMS cannot make this request  hang or fail.   `userId` is what the panel beside one student's work sends. Without it every outstanding  grade for the assignment goes, which is the retry-everything button faculty need after an  LMS outage.
-         *
-         *     **Auth:** required
+         * @description Queues rather than sends, so a slow LMS cannot make the request hang: the background sender delivers what is queued. This is also the one place a grade that has given up is retried.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/assignments/[id]/lti-sync/route.ts)
          */
@@ -2741,7 +2741,9 @@ export interface paths {
         put?: never;
         /**
          * Confirm an administrator's password and attach their LMS account
-         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/confirm-identity/route.ts)
+         * @description Where the pause an administrator's launch lands on is answered. The account and the LMS identity come from the pending record the launch wrote; this form supplies only the password, the one thing an LMS cannot assert, checked through the same path as the login form so it inherits its rate limiting and lockout. On success the identity is linked, the confirmation is spent, and the launch completes.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/confirm-identity/route.ts)
          */
         post: operations["postLtiConfirmIdentity"];
         delete?: never;
@@ -2761,7 +2763,7 @@ export interface paths {
         put?: never;
         /**
          * Return a chosen assignment to the LMS as a deep link
-         * @description **Auth:** required
+         * @description Where the deep-linking picker posts its choice. The return address and the platform's own state come from the pending request the launch stored, never from this form; only which assignment was chosen (or the fields of a new one) is taken from the browser. The answer is a small page that posts the signed deep-linking response back to the LMS.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/deep-link/route.ts)
          */
@@ -2781,7 +2783,7 @@ export interface paths {
         };
         /**
          * AFCT's public keys, for an LMS to verify tokens AFCT signed
-         * @description AFCT's public keyset, for platforms to verify the tokens AFCT signs.   Deliberately public and unauthenticated: a public key is public, and the platform fetching it  is a server that has no AFCT session and never will. This is one of the few routes past the  edge net, and it is safe because it exposes only the half of each keypair that is meant to be  handed out.   **Reached from the platform's servers, not a browser.** Nothing in a launch touches it, so an  instance the LMS cannot reach looks entirely healthy until the first grade fails to post.   Returns an empty key list rather than an error when no key exists. That is a real state, not a  fault: an install that has never registered an LMS has never needed a key. A platform reading  an empty set gets the same answer as one reading a set with no key it recognises.
+         * @description The JWKS the platform verifies AFCT's token requests and deep-linking responses against. Fetched by the LMS's own servers, not a browser, so an AFCT instance the LMS cannot reach looks healthy until the first grade fails to post. Registered in the LMS as the tool's public keyset URL.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/jwks/route.ts)
          */
@@ -2805,7 +2807,9 @@ export interface paths {
         put?: never;
         /**
          * Receive a signed LTI launch from an LMS
-         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/launch/route.ts)
+         * @description The redirect URI of the launch flow. The platform posts its signed id_token here with the state minted at login initiation; the token is verified against the registration, the person is matched or created, and the browser is sent on with a one-minute single-use ticket that becomes the session. A refused launch is logged and answered with a plain-text page saying what to do, since a person inside an LMS frame is reading it. Not for direct use; the LMS posts here as part of every launch.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/launch/route.ts)
          */
         post: operations["postLtiLaunch"];
         delete?: never;
@@ -2847,9 +2851,7 @@ export interface paths {
         put?: never;
         /**
          * Link the LMS course from a pending launch to an AFCT course
-         * @description Say which AFCT course an LMS course opens.   The LMS course identifier comes from the stored pending link, never from the request. That is  the whole point of storing it: if the caller supplied it, somebody could name a *different*  LMS course and capture its launches.
-         *
-         *     **Auth:** required
+         * @description Where the course picker a first launch lands on posts its choice. The LMS course comes from the pending record the launch stored, never from this request, so a caller cannot name a different LMS course and capture its launches; only the AFCT course is chosen here. The grade and roster endpoints the launch advertised are stored on the link, which is what makes grade passback and roster sync possible later.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/link/route.ts)
          */
@@ -2869,13 +2871,17 @@ export interface paths {
         };
         /**
          * Start an LTI launch (platforms that initiate with GET)
-         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/login/route.ts)
+         * @description The third-party initiated login of LTI 1.3. The LMS sends the browser here to say somebody wants to open AFCT; the answer is a redirect to the LMS's own authorization endpoint, which later posts a signed token to the launch endpoint. Nothing here is authenticated: the request only picks a registration and mints the launch's state and nonce. Not for direct use; the LMS calls it as part of every launch.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/login/route.ts)
          */
         get: operations["getLtiLogin"];
         put?: never;
         /**
          * Start an LTI launch (platforms that initiate with POST)
-         * @description [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/login/route.ts)
+         * @description Identical to the GET form; the same parameters arrive as a form body instead. Canvas initiates with POST, the 1EdTech reference implementation with GET, and the spec allows both.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/login/route.ts)
          */
         post: operations["postLtiLogin"];
         delete?: never;
@@ -2895,7 +2901,7 @@ export interface paths {
         put?: never;
         /**
          * Complete an automatic LMS registration
-         * @description Register AFCT with an LMS, on the LMS's own instruction.   Unauthenticated by necessity: the request comes from a page the LMS framed, and no AFCT  cookie survives that. The one-time token stands in for the session, and **it is spent before  anything else happens**. That ordering is the security of this route, not a detail: until the  token is proven good, AFCT makes no outbound request at all, so a stranger who guesses this  URL cannot use it to make the server fetch an address of their choosing.   Spending first also means a failed registration burns the link. That is deliberate. The  alternative, spending it on success, would let one link register two different platforms,  and a registration grants an LMS the ability to assert who somebody is. Minting another link  costs an administrator one click.
+         * @description The server half of LTI Dynamic Registration, called by the page the LMS frames. The one-time token from the registration link stands in for a session and is spent before any outbound request is made; AFCT then reads the platform's OpenID configuration, posts its own description to the platform's registration endpoint, and saves the registration the platform answers with. A failed attempt burns the link, so one link can never register two platforms.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/lti/register/route.ts)
          */
@@ -3318,8 +3324,10 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * PATCH /api/users/{id}
-         * @description **Auth:** required
+         * Update a user
+         * @description Updates a user: names, admin flag, active status, timezone, and avatar. Accepts  either JSON or multipart/form-data (the latter carries the avatar file). A user  may edit themselves; only admins may edit others or change the admin flag.  Deactivation is blocked while the user is still on a published, unarchived  course. Field-level changes are recorded (before → after) in the audit log.
+         *
+         *     **Auth:** required
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/users/[id]/route.ts)
          */
@@ -3500,7 +3508,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Removed. */
+            /** @description Removed, with its course links and remembered gradebook columns. Launches from that LMS are refused from now on; grades already in the LMS stay there. The LMS's own developer key is untouched, so re-registering the same values restores service. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3536,12 +3544,27 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The registered platforms. */
+            /** @description Every registered platform, with the endpoints a launch and a grade use. There is nothing secret here: LTI 1.3 has no client secret, and AFCT's private key is never in a registration. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        platforms?: {
+                            id?: string;
+                            name?: string;
+                            issuer?: string;
+                            clientId?: string;
+                            deploymentId?: string;
+                            authLoginUrl?: string;
+                            tokenUrl?: string;
+                            tokenAudience?: string | null;
+                            keysetUrl?: string;
+                            createdAt?: string;
+                        }[];
+                    };
+                };
             };
             /** @description Not an administrator. */
             403: {
@@ -3561,16 +3584,37 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description A label to recognise this LMS by. Nothing is matched on it. */
+                    name: string;
+                    /** @description The platform's issuer identifier. Usually a URL, not required to be. */
+                    issuer: string;
+                    /** @description The client ID the LMS assigned to AFCT. */
+                    clientId: string;
+                    /** @description The deployment ID the LMS assigned. */
+                    deploymentId: string;
+                    /** @description The platform's authorization endpoint (https). */
+                    authLoginUrl: string;
+                    /** @description The platform's token endpoint (https). */
+                    tokenUrl: string;
+                    /** @description Where the client assertion is addressed when that differs from the token URL. Only D2L Brightspace needs it. */
+                    tokenAudience?: string | null;
+                    /** @description The platform's public keyset URL (https). */
+                    keysetUrl: string;
+                };
+            };
+        };
         responses: {
-            /** @description Registered. */
+            /** @description Registered. Launches from this platform will now verify. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description A value was missing or malformed. */
+            /** @description A value was missing or malformed. The message names the field. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3608,12 +3652,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The link, and when it expires. */
+            /** @description The link, and when it expires. Shown once; a new one costs a click. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        url?: string;
+                        expiresAt?: string;
+                    };
+                };
             };
             /** @description Not an administrator. */
             403: {
@@ -4813,12 +4862,30 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Success */
+            /** @description Slot health, what each slot is grading, and queue depth. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not a system administrator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };
@@ -5227,15 +5294,50 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Sync state for the assignment. */
+            /** @description Sync state for the assignment, and for the one student when asked. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @description Whether the course opens from any LMS. */
+                        linked?: boolean;
+                        autoSync?: boolean;
+                        pending?: number;
+                        sent?: number;
+                        failed?: number;
+                        lastSentAt?: string | null;
+                        /** @description Where the named student's own grade has got to, with the reason it failed when it did. */
+                        student?: {
+                            /** @enum {string} */
+                            state?: "PENDING" | "SENT" | "FAILED";
+                            sentAt?: string | null;
+                            lastError?: string | null;
+                        } | null;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description You do not manage this course. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such assignment. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5254,14 +5356,25 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Send only this student's grade. Without a body, every outstanding grade for the assignment goes. */
+                    userId?: string;
+                };
+            };
+        };
         responses: {
             /** @description How many grades were queued. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        queued?: number;
+                    };
+                };
             };
             /** @description The body was malformed. */
             400: {
@@ -5272,8 +5385,26 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description You do not manage this course. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such assignment. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5292,7 +5423,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description On: grades go to the LMS as they change. Off: nothing is sent until asked. */
+                    autoSync: boolean;
+                };
+            };
+        };
         responses: {
             /** @description Saved. */
             200: {
@@ -5301,8 +5439,26 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description You do not manage this course. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such assignment. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10021,12 +10177,38 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The links, empty when none. */
+            /** @description The links, empty when none. `lineItemsUrl` says whether the LMS granted grade services for that course. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        links?: {
+                            id?: string;
+                            /** @description The LMS course's own name. */
+                            contextTitle?: string | null;
+                            /** @description The LMS's identifier for the course. */
+                            contextId?: string;
+                            createdAt?: string;
+                            lineItemsUrl?: string | null;
+                            platform?: {
+                                name?: string;
+                            };
+                            /** @description Who connected it. */
+                            linkedBy?: string | null;
+                        }[];
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description You do not manage this course. */
             403: {
@@ -10041,21 +10223,40 @@ export interface operations {
     };
     deleteCoursesByIdLtiLink: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
+            query: {
+                /** @description Which link to remove. */
+                linkId: string;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Disconnected. */
+            /** @description Disconnected. Grades already sent stay in the LMS; a later launch from that LMS course asks which AFCT course it is, as if for the first time. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description No linkId was given. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             /** @description You do not manage this course. */
             403: {
@@ -12349,9 +12550,18 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    /** @description The pending confirmation the launch created. */
+                    pendingId: string;
+                    /** @description The administrator's AFCT password. */
+                    password: string;
+                };
+            };
+        };
         responses: {
-            /** @description Signed in and sent on, or back to the form when the password was refused. */
+            /** @description Signed in and sent on; back to the form when the password was refused; back to a bare form when the confirmation has expired. */
             303: {
                 headers: {
                     [name: string]: unknown;
@@ -12367,7 +12577,32 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    /** @description The pending deep-linking request the launch stored. */
+                    pendingId: string;
+                    /**
+                     * @description Link an existing assignment, or create one to link. Defaults to connect.
+                     * @enum {string}
+                     */
+                    mode?: "connect" | "create";
+                    /** @description The assignment to link (connect mode). */
+                    assignmentId?: string;
+                    /** @description The new assignment's title (create mode). */
+                    title?: string;
+                    /** @description The new assignment's due date, a date in the course's timezone (create mode). */
+                    dueDate?: string;
+                    /** @description When the new assignment opens (create mode). */
+                    unlockAt?: string;
+                    /**
+                     * @description Publish the new assignment immediately (create mode).
+                     * @enum {string}
+                     */
+                    isPublished?: "on";
+                };
+            };
+        };
         responses: {
             /** @description A page that posts the signed response back to the LMS. */
             200: {
@@ -12376,7 +12611,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description The request has expired or is not yours. */
+            /** @description Back to the picker with something to fix: a missing title, bad dates, or an assignment already linked. */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The pending request has expired, the course is not connected, or the placement does not accept assignment links. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12385,8 +12627,26 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description You do not run that course. */
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description You do not run that course, or the assignment belongs to a different one. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description AFCT has no signing key. */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12405,12 +12665,27 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A JWKS document. Empty when no key has been created yet. */
+            /** @description A JWKS document. Empty when no key has been created yet, which is the normal state of an install that has never registered an LMS. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        keys?: {
+                            /** @enum {string} */
+                            kty?: "RSA";
+                            /** @enum {string} */
+                            use?: "sig";
+                            /** @enum {string} */
+                            alg?: "RS256";
+                            /** @description RFC 7638 thumbprint of the key. */
+                            kid?: string;
+                            n?: string;
+                            e?: string;
+                        }[];
+                    };
+                };
             };
         };
     };
@@ -12421,16 +12696,25 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    /** @description The launch JWT, signed by the platform. */
+                    id_token: string;
+                    /** @description The value minted at login initiation, tying the launch to this browser. */
+                    state: string;
+                };
+            };
+        };
         responses: {
-            /** @description Verified. Redirects to complete sign-in. */
-            302: {
+            /** @description Verified: on to complete sign-in. Without the state cookie, on to the platform-storage state check instead. */
+            303: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description The launch was missing its state, or the state did not match. */
+            /** @description The launch was missing its token or state, or the state could not be matched to this browser. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12439,8 +12723,17 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description The launch could not be verified. */
+            /** @description The token failed verification (signature, timing, replay, registration or identity), with a message naming what to check. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The account was being changed mid-launch; opening the link again resolves it. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12492,9 +12785,18 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The pending link the launch created. */
+                    pendingId: string;
+                    /** @description The AFCT course this LMS course should open. */
+                    courseId: string;
+                };
+            };
+        };
         responses: {
-            /** @description Linked. */
+            /** @description Linked. Launches from that LMS course now open the chosen course. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -12510,7 +12812,16 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description You do not run that course. */
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description You can only connect a course you teach. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -12532,21 +12843,36 @@ export interface operations {
     };
     getLtiLogin: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description The platform's issuer identifier. */
+                iss: string;
+                /** @description The platform's handle for the person launching, passed back to it unchanged. */
+                login_hint: string;
+                /** @description What is being opened. The launch token is checked against it when it returns. */
+                target_link_uri: string;
+                /** @description Narrows the registration when one issuer has several. */
+                client_id?: string;
+                /** @description Narrows the registration further. */
+                lti_deployment_id?: string;
+                /** @description Opaque platform state, echoed back to it. */
+                lti_message_hint?: string;
+                /** @description The frame that holds launch state for browsers that block third-party cookies. */
+                lti_storage_target?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to the platform's authorization endpoint. */
+            /** @description Redirect to the platform's authorization endpoint, with the state cookie set. */
             302: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description The request did not say which LMS it came from. */
+            /** @description A required parameter (issuer, login hint or target link) was missing. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12555,8 +12881,17 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description No registration matches, or more than one does. */
+            /** @description No registration matches, or more than one does and the request did not say which. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many launches from this address. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12573,16 +12908,35 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    /** @description The platform's issuer identifier. */
+                    iss: string;
+                    /** @description The platform's handle for the person launching, passed back to it unchanged. */
+                    login_hint: string;
+                    /** @description What is being opened. The launch token is checked against it when it returns. */
+                    target_link_uri: string;
+                    /** @description Narrows the registration when one issuer has several. */
+                    client_id?: string;
+                    /** @description Narrows the registration further. */
+                    lti_deployment_id?: string;
+                    /** @description Opaque platform state, echoed back to it. */
+                    lti_message_hint?: string;
+                    /** @description The frame that holds launch state for browsers that block third-party cookies. */
+                    lti_storage_target?: string;
+                };
+            };
+        };
         responses: {
-            /** @description Redirect to the platform's authorization endpoint. */
+            /** @description Redirect to the platform's authorization endpoint, with the state cookie set. */
             302: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description The request did not say which LMS it came from. */
+            /** @description A required parameter (issuer, login hint or target link) was missing. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12591,8 +12945,17 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description No registration matches, or more than one does. */
+            /** @description No registration matches, or more than one does and the request did not say which. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many launches from this address. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12609,16 +12972,37 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The one-time token out of the registration link an administrator minted. */
+                    token: string;
+                    /** @description Where the LMS says its own settings can be read; must be https. */
+                    openidConfiguration: string;
+                    /** @description The LMS's short-lived credential for its registration endpoint, when it sent one. */
+                    registrationToken?: string | null;
+                };
+            };
+        };
         responses: {
-            /** @description Registered. Returns what was saved, and anything worth knowing. */
+            /** @description Registered. Returns what was saved, plus notes worth reading (for example, that the LMS granted no service permissions). */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        platform?: {
+                            name?: string;
+                            issuer?: string;
+                            clientId?: string;
+                            deploymentId?: string;
+                        };
+                        notes?: string[];
+                    };
+                };
             };
-            /** @description The link was expired, already used, or the LMS could not be registered. */
+            /** @description The link was expired or already used, or the LMS's settings could not be read, or its answer was missing what a registration needs. The message says which. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12741,12 +13125,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's tokens. The token values themselves are never returned. */
+            /** @description The caller's unrevoked tokens. The token values themselves are never returned; only the metadata needed to recognise and revoke one. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        tokens?: {
+                            id?: string;
+                            label?: string | null;
+                            createdAt?: string;
+                            expiresAt?: string;
+                            lastUsedAt?: string | null;
+                        }[];
+                    };
+                };
             };
             /** @description Not signed in. */
             401: {
@@ -13619,14 +14013,92 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    firstName?: string;
+                    lastName?: string;
+                    /** @description Global admin flag (only writable by admins) */
+                    isAdmin?: boolean;
+                    inactive?: boolean;
+                    /** @description New login email (admins only; must be unused) */
+                    email?: string;
+                    timezone?: string;
+                };
+                "multipart/form-data": {
+                    firstName?: string;
+                    lastName?: string;
+                    /** @enum {string} */
+                    inactive?: "true" | "false";
+                    timezone?: string;
+                    /** Format: binary */
+                    avatar?: string;
+                    /** @enum {string} */
+                    deleteAvatar?: "true";
+                };
+            };
+        };
         responses: {
-            /** @description Success */
+            /** @description The updated user. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Invalid timezone. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not allowed to edit this user, or deactivating an actively-enrolled user. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The change would remove the last active administrator, or the new email is already in use. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Avatar exceeds the system upload limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
         };
     };

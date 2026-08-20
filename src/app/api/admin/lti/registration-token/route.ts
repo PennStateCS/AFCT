@@ -17,8 +17,21 @@ import { REGISTRATION_LINK_TTL_MS } from '@/lib/lti/dynamic-registration';
  *
  * @openapi
  * summary: Create a one-time link for registering an LMS automatically
+ * description: >-
+ *   The link is pasted into the LMS's own registration screen and is the whole authorisation
+ *   for what follows, since the LMS calls back without any AFCT session. It works exactly once,
+ *   expires after an hour, and is spent even by a failed attempt, so a link can never register
+ *   two platforms. Minting one is logged as a security-relevant event.
  * responses:
- *   201: { description: "The link, and when it expires." }
+ *   201:
+ *     description: "The link, and when it expires. Shown once; a new one costs a click."
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             url: { type: string }
+ *             expiresAt: { type: string }
  *   403: { description: Not an administrator. }
  */
 export const POST = withAdminAuth(
