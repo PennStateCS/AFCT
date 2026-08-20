@@ -115,8 +115,14 @@ async function settleDuplicate(opts: {
  * A serialization failure here means the account's standing changed while this was deciding,
  * which is exactly the case this exists for. Running it again re-reads that standing and
  * answers on what is true now: an account that has just become an administrator is refused, and
- * an ordinary one is linked. One retry is enough; a second conflict means something is writing
- * to that account continuously, and answering "refused" then is both honest and safe.
+ * an ordinary one is linked.
+ *
+ * One retry is enough. A second conflict means something is writing to that account
+ * continuously, and the honest answer is that this did not get to decide, so the error is
+ * rethrown. It used to report `account-inactive`, which is a claim about the account that
+ * nothing here established: a conflict can come from a promotion, a deactivation, or another
+ * sign-in, and telling somebody their account is disabled when it is not sends them to an
+ * administrator for a problem they do not have.
  */
 async function linkWithinSerializable(
   opts: Parameters<typeof linkIdentity>[0],
@@ -145,7 +151,7 @@ async function linkWithinSerializable(
       (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') ||
       (error instanceof Error && error.message.includes('TransactionWriteConflict'));
     if (!conflict) throw error;
-    if (attempt >= 2) return { ok: false, reason: 'account-inactive' };
+    if (attempt >= 2) throw error;
     return linkWithinSerializable(opts, attempt + 1);
   }
 }
@@ -333,8 +339,14 @@ export async function listIdentitiesForUser(userId: string) {
  */
 export type UnlinkOutcome = 'removed' | 'not-found' | 'last-way-in';
 
-/** A serializable transaction that lost, however the layer beneath happens to spell it. */
-function isWriteConflict(error: unknown): boolean {
+/**
+ * A serializable transaction that lost, however the layer beneath happens to spell it.
+ *
+ * Exported because the sign-in surfaces need it too: an automatic link that conflicts twice
+ * rethrows, and a launch or a callback has to tell that transient case apart from a real fault
+ * so it can say "try again" instead of showing an error with nothing to act on.
+ */
+export function isWriteConflict(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') return true;
   const name = error instanceof Error ? error.message : String(error);
   return name.includes('TransactionWriteConflict') || name.includes('could not serialize');

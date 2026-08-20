@@ -242,3 +242,81 @@ describe('createEnhancedActivityLog', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * That this never throws is a contract, not an implementation detail.
+ *
+ * Sign-in depends on it. `linkIdentity` commits the identity in a serializable transaction and
+ * then writes its audit entry afterwards, outside the transaction, so that a rolled-back
+ * attempt cannot leave "identity linked" in the record. If that write threw, a sign-in whose
+ * identity had already been committed would reach the browser as a failed sign-in, and the
+ * person would be told to try again for something that had in fact worked. The just-in-time
+ * account path has the same shape.
+ *
+ * So: once the authoritative state is committed, logging is best effort. These pin that, in
+ * this module rather than in each caller, because the callers do not guard it themselves.
+ */
+describe('what happens when the log itself cannot be written', () => {
+  const failingPrisma = (error: unknown) =>
+    ({
+      user: { findUnique: vi.fn().mockResolvedValue(null) },
+      course: { findUnique: vi.fn().mockResolvedValue(null) },
+      assignment: { findUnique: vi.fn().mockResolvedValue(null) },
+      problem: { findUnique: vi.fn().mockResolvedValue(null) },
+      submission: { findUnique: vi.fn().mockResolvedValue(null) },
+      activityLog: { create: vi.fn().mockRejectedValue(error) },
+    }) as unknown as PrismaClient;
+
+  const ctx = { ipAddress: '1.2.3.4', userAgent: 'agent' };
+  const entry = {
+    action: 'IDENTITY_LINKED',
+    category: 'USER' as const,
+    severity: 'INFO' as const,
+    metadata: { targetUserId: 'u-1' },
+  };
+
+  it('does not throw when the write fails outright', async () => {
+    await expect(
+      createEnhancedActivityLog(failingPrisma(new Error('database is gone')), ctx, entry),
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not throw on a foreign key race', async () => {
+    const fk = new Prisma.PrismaClientKnownRequestError('fk', {
+      code: 'P2003',
+      clientVersion: 'test',
+    });
+
+    await expect(createEnhancedActivityLog(failingPrisma(fk), ctx, entry)).resolves.toBeUndefined();
+  });
+
+  it('does not throw when looking up the actor fails', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn().mockRejectedValue(new Error('read failed')) },
+      course: { findUnique: vi.fn().mockResolvedValue(null) },
+      assignment: { findUnique: vi.fn().mockResolvedValue(null) },
+      problem: { findUnique: vi.fn().mockResolvedValue(null) },
+      submission: { findUnique: vi.fn().mockResolvedValue(null) },
+      activityLog: { create: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as PrismaClient;
+
+    await expect(
+      createEnhancedActivityLog(prisma, ctx, { ...entry, userId: 'u-1' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not throw when the display lookups fail', async () => {
+    const prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(null) },
+      course: { findUnique: vi.fn().mockRejectedValue(new Error('read failed')) },
+      assignment: { findUnique: vi.fn().mockResolvedValue(null) },
+      problem: { findUnique: vi.fn().mockResolvedValue(null) },
+      submission: { findUnique: vi.fn().mockResolvedValue(null) },
+      activityLog: { create: vi.fn().mockResolvedValue(undefined) },
+    } as unknown as PrismaClient;
+
+    await expect(
+      createEnhancedActivityLog(prisma, ctx, { ...entry, courseId: 'c-1' }),
+    ).resolves.toBeUndefined();
+  });
+});

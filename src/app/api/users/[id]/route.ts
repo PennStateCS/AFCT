@@ -316,6 +316,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     // Reported in the audit entry below: removing somebody's way of signing in is worth a record
     // even when it happens as a consequence of something else.
     let automaticLinksRemoved = 0;
+    // How many ways in the account had when it was switched off. Recorded, and load-bearing:
+    // see the comment on `becomesInactive`.
+    let identitiesWhenDisabled: number | null = null;
     try {
       const write = (client: Prisma.TransactionClient | typeof prisma) =>
         client.user.update({
@@ -361,6 +364,28 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
        */
       const gainsAdmin = dataToUpdate.isAdmin === true && !userRecord?.isAdmin;
 
+      /**
+       * Switching an account off is one decision with automatic identity linking, for the same
+       * reason promotion is. A sign-in arriving at that moment reads "active, not an
+       * administrator", decides it may link, and its insert lands on an account that is
+       * disabled by the time the identity exists. Nothing may be attached automatically to a
+       * disabled account, and "not if it was disabled a moment ago" is not that rule.
+       *
+       * **The count inside the transaction is what makes this work. Do not remove it because
+       * the number looks incidental.** Serializable on its own is not enough here. PostgreSQL
+       * reports a serialization failure only when the transactions form a cycle of read/write
+       * dependencies, and this transaction writing the User row against the linking transaction
+       * reading it is a single edge, which commits happily. Reading the identities supplies the
+       * second edge, because that is the table the other transaction inserts into, and the pair
+       * then conflicts so one of them is rejected. There is a DB test that fails without it.
+       *
+       * Not needed on the `losesAdmin` path, which covers disabling an account that is currently
+       * an administrator: an automatic link to an administrator is refused outright, so there is
+       * no automatic link for that transition to race with.
+       */
+      const becomesInactive =
+        dataToUpdate.inactive === true && !userRecord?.inactive && !losesAdmin;
+
       updatedUser = gainsAdmin
         ? await prisma.$transaction(
             async (tx) => {
@@ -379,6 +404,14 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
                 where: { isAdmin: true, inactive: false, NOT: { id: userId } },
               });
               if (otherActiveAdmins === 0) throw new LastAdminError();
+              return write(tx);
+            },
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          )
+        : becomesInactive
+        ? await prisma.$transaction(
+            async (tx) => {
+              identitiesWhenDisabled = await tx.linkedIdentity.count({ where: { userId } });
               return write(tx);
             },
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -471,6 +504,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         // Promotion removes automatically-attached sign-ins. Recorded because it takes a way
         // into the account away, and somebody reading this later needs to know why it went.
         ...(automaticLinksRemoved > 0 ? { automaticLinksRemoved } : {}),
+        // How many ways in the account still had when it was switched off, which is what
+        // somebody re-enabling it later is going to want to know.
+        ...(identitiesWhenDisabled !== null ? { identitiesWhenDisabled } : {}),
       },
     });
 

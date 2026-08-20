@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { validateLaunch, launchRefusalMessage } from '@/lib/lti/launch';
 import type { LaunchIdentity } from '@/lib/lti/launch';
 import { resolveLaunchSignIn, launchSignInRefusalMessage } from '@/lib/lti/lti-signin';
+import { isWriteConflict } from '@/lib/linked-identity';
 import { stateCookieName } from '@/lib/lti/login-init';
 import { findLaunch, parkIdToken } from '@/lib/lti/launch-transaction';
 import { issueSingleUseToken } from '@/lib/single-use-token';
@@ -146,7 +147,20 @@ export async function completeLaunch(request: Request, idToken: string, state: s
     return refuse(launchRefusalMessage(verified.reason), 403);
   }
 
-  const signIn = await resolveLaunchSignIn({ identity: verified.identity, context: request });
+  let signIn;
+  try {
+    signIn = await resolveLaunchSignIn({ identity: verified.identity, context: request });
+  } catch (error) {
+    /**
+     * The account was being changed while this launch was deciding, twice over, so linking gave
+     * up rather than guessing. Transient, and the person is reading this inside an LMS frame, so
+     * say what to do rather than letting it become an error page with nothing on it. Only this
+     * case is caught: a real fault should still surface as one.
+     */
+    if (!isWriteConflict(error)) throw error;
+    console.error('[lti-launch] sign-in could not be settled:', error);
+    return refuse('AFCT could not sign you in just now. Open the link again in a moment.', 503);
+  }
   if (!signIn.ok) {
     await createEnhancedActivityLog(prisma, request, {
       userId: null,

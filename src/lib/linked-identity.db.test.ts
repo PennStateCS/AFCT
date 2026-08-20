@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { AUTOMATIC, findUserByIdentity, linkIdentity, listIdentitiesForUser, recordIdentitySignIn, unlinkIdentity } from './linked-identity';
+import { AUTOMATIC, findUserByIdentity, isWriteConflict, linkIdentity, listIdentitiesForUser, recordIdentitySignIn, unlinkIdentity } from './linked-identity';
 
 /**
  * Linked identities, against a real Postgres.
@@ -474,5 +474,145 @@ describe('an account that becomes an administrator', () => {
     const result = await automatic('ordinary-account');
 
     expect(result).toEqual({ ok: true, created: true });
+  });
+});
+
+/**
+ * Switching an account off, against automatic linking.
+ *
+ * The rule is that nothing is ever attached automatically to a disabled account. Enforcing it
+ * needs the two to be one decision, and getting there took more than marking the deactivation
+ * serializable: PostgreSQL reports a serialization failure only when the transactions form a
+ * cycle of read/write dependencies. Writing the User row against a read of it is one edge and
+ * commits happily. The deactivation reads the identities as well, which is the second edge,
+ * and only then does one of the pair lose.
+ *
+ * These run the real thing rather than a mock, because what is being tested is what Postgres
+ * does, and a mock would agree to whichever answer it was told to give.
+ */
+describe('an account that is switched off', () => {
+  const automatic = (subject: string) =>
+    linkIdentity({
+      ref: { kind: 'OIDC', issuer: ISSUER, subject },
+      userId: ids.user,
+      via: 'AUTO_VERIFIED_EMAIL',
+      actorUserId: ids.user,
+      context: CONTEXT,
+    });
+
+  /** What the user update route does for an active account becoming inactive, in the same shape. */
+  const deactivate = () =>
+    prisma.$transaction(
+      async (tx) => {
+        await tx.linkedIdentity.count({ where: { userId: ids.user } });
+        await tx.user.update({ where: { id: ids.user }, data: { inactive: true } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+  /**
+   * CASE A, with the interleaving pinned rather than left to chance.
+   *
+   * The order in the finding is: the linking transaction reads the account and sees it active,
+   * the deactivation commits, and only then does the link insert. Driving it by hand is what
+   * makes this test mean something. Left to `Promise.all` the two can land either way round,
+   * and the half that proves nothing (the deactivation losing, so the account is still active
+   * and there was never anything wrong with linking) passes just as quietly.
+   *
+   * Remove the `count` from `deactivate` above and this fails: without that read the two
+   * transactions share no cycle, the commit below succeeds, and an automatically attached
+   * identity is left on an account that is switched off.
+   *
+   * The inner call runs on its own connection from the pool, which is what makes it a genuinely
+   * separate transaction rather than part of the outer one.
+   */
+  it('cannot attach when the account is switched off mid-decision', async () => {
+    const attach = prisma.$transaction(
+      async (tx) => {
+        // What linkIdentity reads before it decides.
+        await tx.user.findUnique({
+          where: { id: ids.user },
+          select: { isAdmin: true, inactive: true },
+        });
+        // The whole deactivation, committed, while this transaction is still open.
+        await deactivate();
+        await tx.linkedIdentity.create({
+          data: {
+            kind: 'OIDC',
+            issuer: ISSUER,
+            subject: 'attached-across-the-transition',
+            userId: ids.user,
+            linkedVia: 'AUTO_VERIFIED_EMAIL',
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    // Rejected as a serialization failure specifically, which is the mechanism being relied on
+    // here, not merely "something went wrong".
+    await expect(attach).rejects.toSatisfy(isWriteConflict);
+
+    const attached = await prisma.linkedIdentity.count({
+      where: { userId: ids.user, linkedVia: { in: AUTOMATIC } },
+    });
+    expect(attached).toBe(0);
+    const account = await prisma.user.findUniqueOrThrow({
+      where: { id: ids.user },
+      select: { inactive: true },
+    });
+    expect(account.inactive).toBe(true);
+  });
+
+  /**
+   * The same race left to itself, as a check that the pinned version above is not describing
+   * something only the hand-driven ordering can produce. Whichever way round they land, a
+   * disabled account holds nothing that was attached automatically.
+   */
+  it('holds the rule when a deactivation and an automatic link race', async () => {
+    await Promise.all([
+      automatic('auto-during-deactivation').catch(() => null),
+      deactivate().catch(() => null),
+    ]);
+
+    const account = await prisma.user.findUniqueOrThrow({
+      where: { id: ids.user },
+      select: { inactive: true },
+    });
+    const automaticLeft = await prisma.linkedIdentity.count({
+      where: { userId: ids.user, linkedVia: { in: AUTOMATIC } },
+    });
+
+    if (account.inactive) expect(automaticLeft).toBe(0);
+  });
+
+  /** CASE B. Nothing competing, so the ordinary link is untouched by any of this. */
+  it('still links an active account when nothing else is happening', async () => {
+    const result = await automatic('no-competition');
+
+    expect(result).toEqual({ ok: true, created: true });
+  });
+
+  /** CASE C. The identity that already exists still cannot sign in once the account is off. */
+  it('refuses a known identity on a disabled account', async () => {
+    await automatic('known-then-disabled');
+    await prisma.user.update({ where: { id: ids.user }, data: { inactive: true } });
+
+    const found = await findUserByIdentity({ issuer: ISSUER, subject: 'known-then-disabled' });
+
+    expect(found?.user.inactive).toBe(true);
+  });
+
+  /**
+   * Disabling does not take away what is already attached. Somebody switched back on gets their
+   * sign-ins back; the rule is about what crosses the transition, not about erasing history.
+   */
+  it('leaves an identity attached before the account was switched off', async () => {
+    await automatic('attached-before');
+    await deactivate();
+
+    const left = await listIdentitiesForUser(ids.user);
+
+    expect(left.map((row) => row.subject)).toEqual(['attached-before']);
   });
 });
