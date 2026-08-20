@@ -24,6 +24,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatTimeInTimeZone } from '@/lib/date-format';
 import type { SummaryStatus } from '@/lib/status/types';
+import { hostNotices } from './host-notices';
 import { Skel, TrendBadge } from './status-ui';
 import { formatUptime, formatDbSize } from './status-format';
 import { useTrends, type HistoryPoint } from './use-trends';
@@ -98,6 +99,11 @@ export default function SystemStatusClient() {
   const { windowHours, setHours, trends } = useTrends(sample);
 
   const dbOk = summary?.db.ok ?? false;
+  // Only the things worth acting on: a pending restart, waiting security updates, a clock
+  // that has drifted. Nothing appears when AFCT has no report, since it cannot say either way.
+  const hostWarnings = summary?.host
+    ? hostNotices(summary.host).filter((n) => n.tone === 'warn').length
+    : 0;
   const provider = summary?.db.provider ?? 'unknown';
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
@@ -140,6 +146,14 @@ export default function SystemStatusClient() {
               <span className="sr-only">Database provider: </span>
               {provider.toUpperCase()}
             </Badge>
+            {hostWarnings > 0 && (
+              <Badge
+                variant="danger"
+                title="The server itself needs attention. See the Server tab."
+              >
+                Server needs attention
+              </Badge>
+            )}
             {typeof summary?.latencyMs === 'number' && (
               <Badge variant="warning" title="Summary latency">
                 <span className="sr-only">Summary latency: </span>

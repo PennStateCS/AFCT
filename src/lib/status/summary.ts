@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { probeFailed } from './probe';
 import { collectSystem } from '@/lib/status/server';
+import { collectHost } from '@/lib/status/host';
 import { detectProvider } from '@/lib/status/database';
 import type { SummaryStatus } from '@/lib/status/types';
 
@@ -123,5 +124,8 @@ export async function collectSummary(): Promise<SummaryStatus> {
     dbSizeBytes: db.sizeBytes,
     sessions24h: sessions.total24h,
     uniqueUsers24h: sessions.uniqueUsers24h,
+    // Carried whole rather than reduced to a flag, so the header badge and the Server tab
+    // say the same thing from the same source instead of two rules that can disagree.
+    host: collectHost(),
   };
 }

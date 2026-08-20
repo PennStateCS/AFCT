@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { probeFailed } from './probe';
+import { collectHost } from './host';
 import path from 'path';
 import { execSync } from 'child_process';
 import { cached, STATUS_TTL } from '@/lib/status/cache';
@@ -245,5 +246,5 @@ export async function collectSoftware(): Promise<SoftwareBlock> {
 
 export async function collectServer(): Promise<ServerStatusResponse> {
   const [system, software] = await Promise.all([collectSystem(), collectSoftware()]);
-  return { system, software };
+  return { system, software, host: collectHost() };
 }

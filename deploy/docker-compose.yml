@@ -380,6 +380,15 @@ services:
       # Request a pre-upgrade backup and confirm it landed before swapping images.
       - backup_triggers:/backup-triggers
       - db_backups:/backups:ro
+      # Read-only windows onto the host, so Admin -> System Status can say the server needs
+      # restarting or has security updates waiting. This container already drives the Docker
+      # socket, so it gains no reach it did not have; the app container is deliberately kept
+      # away from all of it because that is where untrusted submissions are graded. On a
+      # Windows install these resolve inside Docker's own Linux VM and match nothing, which
+      # is reported as "cannot tell" rather than as an all-clear.
+      - /run:/host/run:ro
+      - /etc/os-release:/host/etc/os-release:ro
+      - /var/lib/update-notifier:/host/var/lib/update-notifier:ro
 
     # Liveness only: the watch loop stamps a heartbeat each poll and throughout the
     # long upgrade waits, so an in-progress upgrade stays healthy; only a hung loop

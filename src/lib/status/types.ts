@@ -48,9 +48,27 @@ export type SoftwareBlock = {
   imageTag?: string;
 };
 
+/**
+ * What the server underneath AFCT needs: a pending restart, waiting security updates, a
+ * clock that has drifted. Collected by the updater sidecar, since this process has no view
+ * of the host. `available: false` means AFCT cannot tell, never that there is nothing to do.
+ */
+export type HostBlock = {
+  available: boolean;
+  reason?: 'no-report' | 'stale' | 'unsupported';
+  checkedAt?: string;
+  osName?: string;
+  rebootRequired?: boolean;
+  rebootPackages?: string[];
+  updatesAvailable?: number | null;
+  securityUpdatesAvailable?: number | null;
+  timeSynchronised?: boolean | null;
+};
+
 export type ServerStatusResponse = {
   system: SystemBlock;
   software: SoftwareBlock;
+  host: HostBlock;
 };
 
 /* ---------------- Database ---------------- */
@@ -331,6 +349,7 @@ export type RateLimitsStatusResponse = {
 /* ---------------- Summary (top cards) ---------------- */
 export type SummaryStatus = {
   db: { ok: boolean; message: string; provider: 'sqlite' | 'postgres' | 'unknown' };
+  host?: HostBlock;
   uptime?: number;
   procCpuPct?: number;
   procMemPct?: number;

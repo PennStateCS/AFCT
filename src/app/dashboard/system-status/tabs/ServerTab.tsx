@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useMemo } from 'react';
+import { CheckCircle2, Info, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import pkg from '../../../../../package.json';
 import type { ServerStatusResponse, IpAddr } from '@/lib/status/types';
 import { Loading, Stat, Meter, Section, Sparkline, useStatusQuery, copy } from '../status-ui';
-import { formatBytes, formatUptime, toTitleCase } from '../status-format';
+import { formatBytes, formatRelative, formatUptime, toTitleCase } from '../status-format';
+import { hostNotices, hostUnavailableMessage } from '../host-notices';
 import { readHistory } from '../use-trends';
 
 export default function ServerTab({
@@ -28,6 +30,8 @@ export default function ServerTab({
 
   const system = data?.system;
   const software = data?.software;
+  // Absent entirely on an older payload, which reads the same as a server AFCT cannot see.
+  const host = data?.host ?? { available: false as const };
   const s = system?.stats;
 
   // Sparklines are read from the shared trend history the summary card persists.
@@ -44,6 +48,11 @@ export default function ServerTab({
   if (isLoading || !system) {
     return <Loading />;
   }
+
+  const formatCheckedAt = (at?: string) => {
+    const ms = at ? Date.parse(at) : Number.NaN;
+    return Number.isFinite(ms) ? formatRelative(ms, Date.now()) : '—';
+  };
 
   return (
     <div className="max-w-xl space-y-8">
@@ -109,6 +118,44 @@ export default function ServerTab({
             <Sparkline points={sparklines.latency} />
           </div>
         </div>
+      </Section>
+
+      <Section title="This server">
+        {host.available ? (
+          <ul className="space-y-2">
+            {hostNotices(host).map((notice) => (
+              <li
+                key={notice.id}
+                role={notice.tone === 'warn' ? 'alert' : undefined}
+                className={
+                  notice.tone === 'warn'
+                    ? 'border-destructive/40 bg-destructive/5 space-y-1 rounded border p-4'
+                    : 'space-y-1 rounded border p-4'
+                }
+              >
+                <div className="flex items-center gap-2 font-medium">
+                  {notice.tone === 'warn' ? (
+                    <TriangleAlert className="size-4" aria-hidden />
+                  ) : notice.tone === 'ok' ? (
+                    <CheckCircle2 className="size-4" aria-hidden />
+                  ) : (
+                    <Info className="size-4" aria-hidden />
+                  )}
+                  {notice.title}
+                </div>
+                <p className="text-muted-foreground text-sm">{notice.detail}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-muted-foreground text-sm">{hostUnavailableMessage(host)}</p>
+        )}
+        {host.available && (
+          <div className="space-y-2">
+            <Stat label="Operating system" value={host.osName ?? '—'} />
+            <Stat label="Last checked" value={formatCheckedAt(host.checkedAt)} />
+          </div>
+        )}
       </Section>
 
       <Section title="Software">

@@ -936,3 +936,105 @@ supending() { printf '%s' "$1" > "$TESTDIR/triggers/.self-update-pending.json"; 
   run grep -q 'BACKUP_ENCRYPTION_KEY' "$TESTDIR/.env.production"
   [ "$status" -ne 0 ]
 }
+
+# --------------------------------------------------------------------------- #
+# Host facts
+#
+# What the updater can see of the machine it runs on, written for Admin -> System
+# Status. The rule throughout: absence is reported as "cannot tell", never as an
+# all-clear, because an operator acting on a false all-clear is the failure here.
+# --------------------------------------------------------------------------- #
+
+# Build a fake host tree and point the updater at it.
+host_root() {
+  mkdir -p "$TESTDIR/host/run" "$TESTDIR/host/etc" "$TESTDIR/host/var/lib/update-notifier"
+  export UPDATER_HOST_ROOT="$TESTDIR/host"
+}
+
+ubuntu_host() {
+  host_root
+  printf 'ID=ubuntu\nID_LIKE=debian\nPRETTY_NAME="Ubuntu 24.04.1 LTS"\n' > "$TESTDIR/host/etc/os-release"
+}
+
+facts() { jq -r "$1" "$TESTDIR/triggers/host.json"; }
+
+@test "host facts report a recognised server" {
+  ubuntu_host
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ "$(facts .supported)" = "true" ]
+  [ "$(facts .osName)" = "Ubuntu 24.04.1 LTS" ]
+  [ "$(facts .rebootRequired)" = "false" ]
+}
+
+@test "host facts see a pending restart and the packages behind it" {
+  ubuntu_host
+  : > "$TESTDIR/host/run/reboot-required"
+  printf 'linux-image-generic\nlibc6\nlibc6\n' > "$TESTDIR/host/run/reboot-required.pkgs"
+
+  run sh updater.sh
+  [ "$(facts .rebootRequired)" = "true" ]
+  # De-duplicated, because apt lists a package once per trigger.
+  [ "$(facts '.rebootPackages | length')" -eq 2 ]
+  run jq -e '.rebootPackages | index("libc6")' "$TESTDIR/triggers/host.json"; [ "$status" -eq 0 ]
+}
+
+@test "host facts count waiting updates from the notice the host writes" {
+  ubuntu_host
+  cat > "$TESTDIR/host/var/lib/update-notifier/updates-available" <<'EOF'
+
+28 updates can be applied immediately.
+5 of these updates are standard security updates.
+
+EOF
+
+  run sh updater.sh
+  [ "$(facts .updatesAvailable)" -eq 28 ]
+  [ "$(facts .securityUpdatesAvailable)" -eq 5 ]
+}
+
+# Zero waiting updates and "AFCT could not find out" are different answers, and the
+# screen prints them differently.
+@test "host facts report unknown counts as null, not zero" {
+  ubuntu_host
+  run sh updater.sh
+  [ "$(facts .updatesAvailable)" = "null" ]
+  [ "$(facts .securityUpdatesAvailable)" = "null" ]
+}
+
+@test "host facts report a clock only when the host says whether it is in sync" {
+  ubuntu_host
+  run sh updater.sh
+  # No timesyncd on this host: unknown, not wrong.
+  [ "$(facts .timeSynchronised)" = "null" ]
+
+  mkdir -p "$TESTDIR/host/run/systemd/timesync"
+  run sh updater.sh
+  [ "$(facts .timeSynchronised)" = "false" ]
+
+  : > "$TESTDIR/host/run/systemd/timesync/synchronized"
+  run sh updater.sh
+  [ "$(facts .timeSynchronised)" = "true" ]
+}
+
+# A Windows install mounts Docker's own Linux VM here, and any other distribution is a
+# host whose conventions these checks do not describe. Both must come back unsupported.
+@test "host facts refuse to guess about an unrecognised host" {
+  host_root
+  printf 'ID=alpine\nPRETTY_NAME="Docker Desktop"\n' > "$TESTDIR/host/etc/os-release"
+  : > "$TESTDIR/host/run/reboot-required"
+
+  run sh updater.sh
+  [ "$(facts .supported)" = "false" ]
+  # And it does not pass on what it saw in there.
+  [ "$(facts .rebootRequired)" = "false" ]
+}
+
+@test "host facts are written even with no host mounts at all" {
+  export UPDATER_HOST_ROOT="$TESTDIR/nowhere"
+  run sh updater.sh
+  [ "$status" -eq 0 ]
+  [ -s "$TESTDIR/triggers/host.json" ]
+  [ "$(facts .supported)" = "false" ]
+  [ -n "$(facts .checkedAt)" ]
+}
