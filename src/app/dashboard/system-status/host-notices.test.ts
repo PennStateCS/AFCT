@@ -52,6 +52,22 @@ describe('what the Host section says', () => {
     expect(ordinary?.tone).toBe('info');
   });
 
+  /**
+   * Ubuntu prints the security line only when it has one, so a notice reading "16 updates
+   * can be applied immediately" and nothing else means the security count is unknown. This
+   * is what the production server actually looks like, and the first version of this text
+   * turned it into "none of them are security updates", which nobody had established.
+   */
+  it('does not claim none are security updates when it could not count them', () => {
+    const unknown = hostNotices(host({ updatesAvailable: 16, securityUpdatesAvailable: null }))[0];
+    expect(unknown?.id).toBe('updates');
+    expect(unknown?.detail).not.toMatch(/none of them/i);
+    expect(unknown?.detail).toMatch(/not something AFCT can see/i);
+
+    const none = hostNotices(host({ updatesAvailable: 16, securityUpdatesAvailable: 0 }))[0];
+    expect(none?.detail).toMatch(/none of them/i);
+  });
+
   it('says nothing about updates it could not count', () => {
     expect(ids(host({ updatesAvailable: null, securityUpdatesAvailable: null }))).toEqual(['all-clear']);
   });

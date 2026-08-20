@@ -50,6 +50,9 @@ export function hostNotices(host: HostBlock): HostNotice[] {
 
   const security = host.securityUpdatesAvailable ?? 0;
   const total = host.updatesAvailable ?? 0;
+  // Ubuntu leaves the security line out of its notice entirely when it has nothing to say
+  // about them, which is not the same as saying there are none. Prod hits this case.
+  const securityUnknown = host.securityUpdatesAvailable == null;
 
   if (security > 0) {
     notices.push({
@@ -63,7 +66,9 @@ export function hostNotices(host: HostBlock): HostNotice[] {
       id: 'updates',
       tone: 'info',
       title: `${total} system ${plural(total, 'update is', 'updates are')} waiting`,
-      detail: 'None of them are security updates, so there is no hurry. They are installed on the server itself, not through AFCT.',
+      detail: securityUnknown
+        ? 'Whether any of them are security updates is not something AFCT can see from here. They are installed on the server itself, not through AFCT.'
+        : 'None of them are security updates, so there is no hurry. They are installed on the server itself, not through AFCT.',
     });
   }
 
