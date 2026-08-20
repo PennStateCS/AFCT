@@ -365,12 +365,24 @@ export async function unlinkIdentity(opts: {
         });
         const remaining = await tx.linkedIdentity.count({ where: { userId: opts.userId } });
 
-        if (!owner?.password && remaining <= 1) return 'last-way-in' as const;
+        if (!owner?.password && remaining <= 1) return { result: 'last-way-in' as const };
+
+        // Read before the delete, inside the same transaction: the audit entry should say
+        // which way in was taken away, and afterwards there is no row left to ask.
+        const identity = await tx.linkedIdentity.findFirst({
+          where: { id: opts.id, userId: opts.userId },
+          select: { issuer: true, kind: true },
+        });
 
         const { count } = await tx.linkedIdentity.deleteMany({
           where: { id: opts.id, userId: opts.userId },
         });
-        return count === 0 ? ('not-found' as const) : ('removed' as const);
+        if (count === 0) return { result: 'not-found' as const };
+        return {
+          result: 'removed' as const,
+          issuer: identity?.issuer ?? null,
+          kind: identity?.kind ?? null,
+        };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     )
@@ -385,18 +397,23 @@ export async function unlinkIdentity(opts: {
        * `TransactionWriteConflict` before Prisma maps it, which a check for the code alone
        * misses entirely.
        */
-      if (isWriteConflict(error)) return 'last-way-in' as const;
+      if (isWriteConflict(error)) return { result: 'last-way-in' as const };
       throw error;
     });
 
-  if (outcome !== 'removed') return outcome;
+  if (outcome.result !== 'removed') return outcome.result;
 
   await createEnhancedActivityLog(prisma, opts.context, {
     userId: opts.actorUserId,
     action: 'IDENTITY_UNLINKED',
     severity: 'INFO',
     category: 'USER',
-    metadata: { targetUserId: opts.userId, identityId: opts.id },
+    metadata: {
+      targetUserId: opts.userId,
+      identityId: opts.id,
+      issuer: outcome.issuer,
+      kind: outcome.kind,
+    },
   });
   return 'removed';
 }
