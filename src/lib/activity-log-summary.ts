@@ -64,6 +64,13 @@ const SIGN_IN: Record<string, string> = {
   oidc: 'with institutional sign-in',
 };
 
+/** The same three ways in, said as the session that ended rather than the way it began. */
+const SIGN_OUT: Record<string, string> = {
+  credentials: 'ended a password session',
+  'lti-launch': 'ended a session that came from an LMS',
+  oidc: 'ended an institutional sign-in session',
+};
+
 /** Where a look at somebody's work came from, in words rather than the code's own labels. */
 const VIEW_SOURCE: Record<string, string> = {
   web: 'the web app',
@@ -258,11 +265,13 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       return temporary ? `${how}, temporary password` : how;
     }
 
-    case 'LOGOUT': {
-      // Which session ended. Recorded from the token, so it is there for a sign-out that
-      // followed an institutional or LMS sign-in as well as a password one.
+    case 'LOGOUT':
+    case 'CLIENT_LOGOUT': {
+      // Which session ended. The provider is carried on the token from sign-in, so it is there
+      // for a sign-out that followed an institutional or LMS sign-in as well as a password one.
+      // Sessions started before that was recorded have none, and still say that they ended.
       const how = str(metadata, 'provider');
-      return how ? (SIGN_IN[how] ?? null) : null;
+      return (how ? SIGN_OUT[how] : null) ?? 'signed out';
     }
 
     case 'LTI_DEEP_LINK_RETURNED': {
@@ -283,8 +292,14 @@ export function describeActivity(action: string, metadata: Metadata): string | n
     case 'IDENTITY_LINK_DENIED':
       return str(metadata, 'reason');
 
-    case 'IDENTITY_UNLINKED':
-      return str(metadata, 'issuer');
+    case 'IDENTITY_UNLINKED': {
+      // Entries written before the issuer was recorded have only the two ids, and say the
+      // plain fact rather than nothing: somebody's way in was removed either way.
+      const issuer = str(metadata, 'issuer');
+      const kind = str(metadata, 'kind');
+      const what = [kind, issuer].filter(Boolean).join(' at ');
+      return what ? `${what} removed` : 'a way in was removed';
+    }
 
     /**
      * Somebody looked at a student's work.
@@ -614,6 +629,23 @@ export function describeActivity(action: string, metadata: Metadata): string | n
 
     case 'SYSTEM_UPDATER_SELF_UPDATE_REQUESTED':
       return str(metadata, 'tag');
+
+    /**
+     * How a finished run ended. `SYSTEM_UPDATE_FAILED` is not here: it ends in _FAILED, so the
+     * pattern at the bottom already reports its reason.
+     */
+    case 'SYSTEM_UPDATE_COMPLETED':
+    case 'SYSTEM_UPDATE_ROLLED_BACK': {
+      const from = str(metadata, 'fromTag');
+      const to = str(metadata, 'toTag');
+      if (action === 'SYSTEM_UPDATE_ROLLED_BACK') {
+        // The version it ended on is the one an administrator needs, and on a rollback that is
+        // the one it started from.
+        return from ? `${to ? `${to} failed, ` : ''}back on ${from}` : 'put back as it was';
+      }
+      if (from && to) return `${from} to ${to}`;
+      return to ? `now on ${to}` : null;
+    }
 
     case 'SYSTEM_RESTORE_POINT_DELETE_REQUESTED':
       return firstStr(metadata, 'version', 'restorePoint');

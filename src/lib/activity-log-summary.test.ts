@@ -643,12 +643,9 @@ describe('the system itself', () => {
  */
 describe('what deliberately has no summary', () => {
   it.each([
-    'LOGOUT',
-    'CLIENT_LOGOUT',
     'VIEW_USERS',
     'VIEW_ASSIGNMENT_PROBLEMS',
     'SYSTEM_BACKUP_REQUESTED',
-    'SYSTEM_UPDATE_COMPLETED',
   ])('%s says nothing, because there is nothing to add', (action) => {
     expect(describeActivity(action, { userId: 'u-1' })).toBeNull();
   });
@@ -665,19 +662,52 @@ describe('what deliberately has no summary', () => {
   });
 });
 
-/**
- * Signing out used to say nothing at all, so a reader could see that a session ended and not
- * what kind of session it was. The provider is carried on the token from sign-in for this.
- */
-describe('LOGOUT', () => {
-  it('says which way in the session came from', () => {
-    expect(describeActivity('LOGOUT', { provider: 'oidc' })).toBe('with institutional sign-in');
-    expect(describeActivity('LOGOUT', { provider: 'lti-launch' })).toBe('from an LMS');
-    expect(describeActivity('LOGOUT', { provider: 'credentials' })).toBe('with an AFCT password');
+describe('the entries an administrator reads after the fact', () => {
+  it('says which versions a finished update moved between', () => {
+    expect(
+      describeActivity('SYSTEM_UPDATE_COMPLETED', { fromTag: 'v0.8.3', toTag: 'v0.8.4' }),
+    ).toBe('v0.8.3 to v0.8.4');
   });
 
-  it('stays quiet for a session that predates the provider being recorded', () => {
-    expect(describeActivity('LOGOUT', {})).toBeNull();
-    expect(describeActivity('LOGOUT', { provider: 'something-new' })).toBeNull();
+  it('reports the version a rollback ended on, not the one it was trying for', () => {
+    expect(
+      describeActivity('SYSTEM_UPDATE_ROLLED_BACK', { fromTag: 'v0.8.3', toTag: 'v0.8.4' }),
+    ).toBe('v0.8.4 failed, back on v0.8.3');
+  });
+
+  it('still names the version when only one end of the move was recorded', () => {
+    expect(describeActivity('SYSTEM_UPDATE_COMPLETED', { toTag: 'v0.8.4' })).toBe('now on v0.8.4');
+    expect(describeActivity('SYSTEM_UPDATE_COMPLETED', { requestId: 'r-1' })).toBeNull();
+  });
+
+  it('says which kind of session a sign-out ended', () => {
+    expect(describeActivity('LOGOUT', { provider: 'oidc' })).toBe(
+      'ended an institutional sign-in session',
+    );
+    expect(describeActivity('LOGOUT', { provider: 'credentials' })).toBe(
+      'ended a password session',
+    );
+    expect(describeActivity('CLIENT_LOGOUT', { provider: 'lti-launch' })).toBe(
+      'ended a session that came from an LMS',
+    );
+  });
+
+  // Sessions started before the provider was carried on the token, which is most of what is
+  // in the log on the machine this was written for.
+  it('still records a sign-out whose session never said where it came from', () => {
+    expect(describeActivity('LOGOUT', { userId: 'u-1' })).toBe('signed out');
+    expect(describeActivity('LOGOUT', { provider: 'something-new' })).toBe('signed out');
+  });
+
+  it('names the way in that an unlink took away', () => {
+    expect(
+      describeActivity('IDENTITY_UNLINKED', { kind: 'OIDC', issuer: 'https://idp.example.edu' }),
+    ).toBe('OIDC at https://idp.example.edu removed');
+  });
+
+  it('still reports an unlink recorded before the issuer was kept', () => {
+    expect(describeActivity('IDENTITY_UNLINKED', { targetUserId: 'u-1', identityId: 'li-1' })).toBe(
+      'a way in was removed',
+    );
   });
 });
