@@ -34,10 +34,42 @@ const BodySchema = z.object({
  *
  * @openapi
  * summary: Complete an automatic LMS registration
+ * description: >-
+ *   The server half of LTI Dynamic Registration, called by the page the LMS frames. The
+ *   one-time token from the registration link stands in for a session and is spent before any
+ *   outbound request is made; AFCT then reads the platform's OpenID configuration, posts its
+ *   own description to the platform's registration endpoint, and saves the registration the
+ *   platform answers with. A failed attempt burns the link, so one link can never register two
+ *   platforms.
+ * requestBody:
+ *   required: true
+ *   content:
+ *     application/json:
+ *       schema:
+ *         type: object
+ *         required: [token, openidConfiguration]
+ *         properties:
+ *           token: { type: string, description: The one-time token out of the registration link an administrator minted. }
+ *           openidConfiguration: { type: string, description: "Where the LMS says its own settings can be read; must be https." }
+ *           registrationToken: { type: string, nullable: true, description: "The LMS's short-lived credential for its registration endpoint, when it sent one." }
  * responses:
- *   201: { description: "Registered. Returns what was saved, and anything worth knowing." }
- *   400: { description: "The link was expired, already used, or the LMS could not be registered." }
- *   409: { description: "That LMS is already registered." }
+ *   201:
+ *     description: "Registered. Returns what was saved, plus notes worth reading (for example, that the LMS granted no service permissions)."
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             platform:
+ *               type: object
+ *               properties:
+ *                 name: { type: string }
+ *                 issuer: { type: string }
+ *                 clientId: { type: string }
+ *                 deploymentId: { type: string }
+ *             notes: { type: array, items: { type: string } }
+ *   400: { description: "The link was expired or already used, or the LMS's settings could not be read, or its answer was missing what a registration needs. The message says which." }
+ *   409: { description: That LMS is already registered. }
  */
 export async function POST(req: Request) {
   const body = await readJson(req, BodySchema);

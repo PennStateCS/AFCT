@@ -21,7 +21,26 @@ async function staffFor(courseId: string) {
  * @openapi
  * summary: The LMS courses linked to this course
  * responses:
- *   200: { description: "The links, empty when none." }
+ *   200:
+ *     description: "The links, empty when none. `lineItemsUrl` says whether the LMS granted grade services for that course."
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             links:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id: { type: string }
+ *                   contextTitle: { type: string, nullable: true, description: The LMS course's own name. }
+ *                   contextId: { type: string, description: The LMS's identifier for the course. }
+ *                   createdAt: { type: string }
+ *                   lineItemsUrl: { type: string, nullable: true }
+ *                   platform: { type: object, properties: { name: { type: string } } }
+ *                   linkedBy: { type: string, nullable: true, description: Who connected it. }
+ *   401: { description: Not signed in. }
  *   403: { description: You do not manage this course. }
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -67,8 +86,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
  * later launch from that LMS course asks which AFCT course it is, as if for the first time.
  * @openapi
  * summary: Disconnect an LMS course from this course
+ * parameters:
+ *   - { in: query, name: linkId, required: true, schema: { type: string }, description: Which link to remove. }
  * responses:
- *   200: { description: Disconnected. }
+ *   200: { description: "Disconnected. Grades already sent stay in the LMS; a later launch from that LMS course asks which AFCT course it is, as if for the first time." }
+ *   400: { description: No linkId was given. }
+ *   401: { description: Not signed in. }
  *   403: { description: You do not manage this course. }
  *   404: { description: No such link on this course. }
  */
