@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { AUTOMATIC, findUserByIdentity, linkIdentity, listIdentitiesForUser, recordIdentitySignIn, unlinkIdentity } from './linked-identity';
+import { AUTOMATIC, findUserByIdentity, isWriteConflict, linkIdentity, listIdentitiesForUser, recordIdentitySignIn, unlinkIdentity } from './linked-identity';
 
 /**
  * Linked identities, against a real Postgres.
@@ -511,10 +511,63 @@ describe('an account that is switched off', () => {
     );
 
   /**
-   * CASE A. Whichever order the two land in, the invariant is the same: a disabled account
-   * holds no identity that was attached automatically.
+   * CASE A, with the interleaving pinned rather than left to chance.
    *
-   * Remove the `count` from `deactivate` above and this fails, which is the whole point of it.
+   * The order in the finding is: the linking transaction reads the account and sees it active,
+   * the deactivation commits, and only then does the link insert. Driving it by hand is what
+   * makes this test mean something. Left to `Promise.all` the two can land either way round,
+   * and the half that proves nothing (the deactivation losing, so the account is still active
+   * and there was never anything wrong with linking) passes just as quietly.
+   *
+   * Remove the `count` from `deactivate` above and this fails: without that read the two
+   * transactions share no cycle, the commit below succeeds, and an automatically attached
+   * identity is left on an account that is switched off.
+   *
+   * The inner call runs on its own connection from the pool, which is what makes it a genuinely
+   * separate transaction rather than part of the outer one.
+   */
+  it('cannot attach when the account is switched off mid-decision', async () => {
+    const attach = prisma.$transaction(
+      async (tx) => {
+        // What linkIdentity reads before it decides.
+        await tx.user.findUnique({
+          where: { id: ids.user },
+          select: { isAdmin: true, inactive: true },
+        });
+        // The whole deactivation, committed, while this transaction is still open.
+        await deactivate();
+        await tx.linkedIdentity.create({
+          data: {
+            kind: 'OIDC',
+            issuer: ISSUER,
+            subject: 'attached-across-the-transition',
+            userId: ids.user,
+            linkedVia: 'AUTO_VERIFIED_EMAIL',
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    // Rejected as a serialization failure specifically, which is the mechanism being relied on
+    // here, not merely "something went wrong".
+    await expect(attach).rejects.toSatisfy(isWriteConflict);
+
+    const attached = await prisma.linkedIdentity.count({
+      where: { userId: ids.user, linkedVia: { in: AUTOMATIC } },
+    });
+    expect(attached).toBe(0);
+    const account = await prisma.user.findUniqueOrThrow({
+      where: { id: ids.user },
+      select: { inactive: true },
+    });
+    expect(account.inactive).toBe(true);
+  });
+
+  /**
+   * The same race left to itself, as a check that the pinned version above is not describing
+   * something only the hand-driven ordering can produce. Whichever way round they land, a
+   * disabled account holds nothing that was attached automatically.
    */
   it('holds the rule when a deactivation and an automatic link race', async () => {
     await Promise.all([
