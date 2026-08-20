@@ -504,7 +504,6 @@ describe('an account that is switched off', () => {
   const deactivate = () =>
     prisma.$transaction(
       async (tx) => {
-        await tx.linkedIdentity.count({ where: { userId: ids.user } });
         await tx.user.update({ where: { id: ids.user }, data: { inactive: true } });
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
