@@ -27,6 +27,7 @@ vi.mock('@/lib/session-timeout.server', () => ({ getServerIdleTimeoutMs: idleTim
 // using the real ones keeps these tests about real expiry/revocation decisions rather
 // than about whether we called a stub.
 import { buildJwtToken, buildSession } from './auth-callbacks';
+import { ABSOLUTE_SESSION_MAX_AGE_MS } from './session-timeout';
 
 const IDLE_MS = 30 * 60 * 1000;
 
@@ -53,6 +54,7 @@ const makeToken = (over: Partial<JWT> = {}): JWT =>
     lastName: 'Lovelace',
     lastActivity: Date.now(),
     idleTimeoutMs: IDLE_MS,
+    authTime: Date.now(),
     pwChangedAt: null,
     ...over,
   }) as JWT;
@@ -276,6 +278,38 @@ describe('buildSession', () => {
     expect(session.user.inactive).toBe(true);
     expect(session.user.isAdmin).toBe(false);
     expect(getSessionUserMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The cap the idle check cannot enforce. `lastActivity` is deliberately now, so the only
+   * thing that can end this session is its age, which is the whole point of stamping
+   * `authTime` at sign-in and never moving it afterwards.
+   */
+  it('rejects a session older than the absolute limit however active it is', async () => {
+    const session = await runSession({
+      authTime: Date.now() - (ABSOLUTE_SESSION_MAX_AGE_MS + 60_000),
+      lastActivity: Date.now(),
+      isAdmin: true,
+    });
+
+    expect(session.user.inactive).toBe(true);
+    expect(session.user.isAdmin).toBe(false);
+  });
+
+  it('keeps a session that is still inside the absolute limit', async () => {
+    const session = await runSession({
+      authTime: Date.now() - (ABSOLUTE_SESSION_MAX_AGE_MS - 60_000),
+    });
+
+    expect(session.user.inactive).toBe(false);
+    expect(session.user.id).toBe('user-1');
+  });
+
+  // A token issued before this existed carries no authTime, and a deploy must not sign
+  // everyone out.
+  it('keeps a token that predates absolute-limit tracking', async () => {
+    const session = await runSession({ authTime: undefined });
+    expect(session.user.inactive).toBe(false);
   });
 
   describe('when the database read fails', () => {

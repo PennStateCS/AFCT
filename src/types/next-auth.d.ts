@@ -74,6 +74,12 @@ declare module 'next-auth/jwt' {
     /** The idle limit (ms) the server enforces against {@link lastActivity}. */
     idleTimeoutMs?: number;
     /**
+     * When the session began (ms), stamped once at sign-in and never moved by a refresh.
+     * Enforced against `ABSOLUTE_SESSION_MAX_AGE_MS`, which is what bounds a session that stays
+     * active rather than one that goes idle.
+     */
+    authTime?: number;
+    /**
      * The account's `passwordChangedAt` (ms) captured at sign-in. Compared to the
      * live value on every request to revoke a session issued before a password
      * change/reset. `null` when the account had never changed its password.

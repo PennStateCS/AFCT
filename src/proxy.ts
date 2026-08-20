@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { isSessionIdleExpired } from '@/lib/session-timeout';
+import { isSessionIdleExpired, isSessionPastAbsoluteLimit } from '@/lib/session-timeout';
 import { requireAuthSecret } from '@/lib/auth-secret';
 // Next 16 runs Proxy on the Node.js runtime, so the database is reachable here. It is read
 // once a minute at most, and only for the LTI routes.
@@ -331,7 +331,13 @@ export async function proxy(req: NextRequest) {
   // that aren't running (locked, suspended, JS disabled, tampered). Sign-out and
   // the activity heartbeat go through `/api/auth/*`, which is allowlisted above,
   // so an expired session can still end itself.
-  if (token && isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, Date.now())) {
+  if (
+    token &&
+    (isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, Date.now()) ||
+      // The absolute cap, mirrored here for the same reason the idle check is: the edge should
+      // not hand a page to a session the app is about to reject.
+      isSessionPastAbsoluteLimit(token.authTime, Date.now()))
+  ) {
     if (isApi) {
       return withCsp(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
     }

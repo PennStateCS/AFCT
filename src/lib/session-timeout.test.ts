@@ -6,6 +6,8 @@ import {
   computeServerIdleGraceMs,
   serverIdleTimeoutMs,
   isSessionIdleExpired,
+  isSessionPastAbsoluteLimit,
+  ABSOLUTE_SESSION_MAX_AGE_MS,
 } from './session-timeout';
 
 describe('sessionTimeoutMs', () => {
@@ -73,5 +75,39 @@ describe('isSessionIdleExpired', () => {
     expect(isSessionIdleExpired(undefined, limit, now)).toBe(false);
     expect(isSessionIdleExpired(now, undefined, now)).toBe(false);
     expect(isSessionIdleExpired(now, 0, now)).toBe(false);
+  });
+});
+
+describe('isSessionPastAbsoluteLimit', () => {
+  const now = 1_000_000_000_000;
+
+  it('is false within the window', () => {
+    expect(isSessionPastAbsoluteLimit(now - ABSOLUTE_SESSION_MAX_AGE_MS + 1, now)).toBe(false);
+  });
+
+  it('is true past the window', () => {
+    expect(isSessionPastAbsoluteLimit(now - ABSOLUTE_SESSION_MAX_AGE_MS - 1, now)).toBe(true);
+  });
+
+  /**
+   * The point of the whole thing: activity moves `lastActivity`, never this. A session that has
+   * been used continuously for longer than the cap still ends.
+   */
+  it('ignores activity, unlike the idle check', () => {
+    const signedInAt = now - ABSOLUTE_SESSION_MAX_AGE_MS - 60_000;
+    const idleLimit = 20 * 60_000;
+    // Active a second ago, so the idle check is perfectly happy.
+    expect(isSessionIdleExpired(now - 1_000, idleLimit, now)).toBe(false);
+    expect(isSessionPastAbsoluteLimit(signedInAt, now)).toBe(true);
+  });
+
+  it('treats a token with no authTime as live, so a deploy signs nobody out', () => {
+    expect(isSessionPastAbsoluteLimit(undefined, now)).toBe(false);
+    expect(isSessionPastAbsoluteLimit(null, now)).toBe(false);
+    expect(isSessionPastAbsoluteLimit(Number.NaN, now)).toBe(false);
+  });
+
+  it('is twelve hours', () => {
+    expect(ABSOLUTE_SESSION_MAX_AGE_MS).toBe(12 * 60 * 60 * 1000);
   });
 });
