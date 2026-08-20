@@ -64,12 +64,14 @@ export async function queueChangedGrades(
   let count = 0;
   for (const total of totals) {
     /**
-     * Held to the range the column accepts. Extra credit can push a total past the maximum and
-     * a correction can leave it negative; platforms reject the whole request for either, which
-     * would strand every grade in the batch rather than the one odd score.
+     * Only the floor is enforced. AGS requires a scoreGiven of zero or more, so a correction
+     * that leaves a total negative is sent as 0; but it also requires platforms to accept a
+     * scoreGiven above scoreMaximum, which is how extra credit is expressed. Capping at the
+     * maximum here silently reported 100/100 for a student who had earned 105, and a wrong
+     * grade is the one failure this system must not produce quietly.
      */
     const raw = total._sum.grade ?? 0;
-    const scoreGiven = Math.min(Math.max(raw, 0), scoreMaximum);
+    const scoreGiven = Math.max(raw, 0);
     const existing = known.get(total.studentId);
 
     /**

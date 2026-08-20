@@ -166,14 +166,14 @@ describe('queueing what has changed', () => {
   });
 
   /**
-   * Extra credit can push a total past the maximum and a correction can leave it negative.
-   * Platforms reject the whole request for either, which would strand every grade in the batch
-   * rather than the one odd score.
+   * Extra credit goes through as earned: AGS requires platforms to accept a scoreGiven above
+   * scoreMaximum, and capping it here reported a lower grade than the student had. A negative
+   * total is the one value the spec forbids, so a correction below zero is sent as 0.
    */
-  it('holds a score to the range the LMS will accept', async () => {
+  it('sends extra credit above the maximum, and floors a negative total at zero', async () => {
     await grade(130);
     await queueChangedGrades(ASSIGNMENT);
-    expect((await prisma.ltiScoreQueue.findFirstOrThrow()).scoreGiven).toBe(100);
+    expect((await prisma.ltiScoreQueue.findFirstOrThrow()).scoreGiven).toBe(130);
 
     await grade(-5);
     await queueChangedGrades(ASSIGNMENT);

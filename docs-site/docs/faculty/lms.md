@@ -42,7 +42,7 @@ A few things worth knowing:
 - **A grade that fails to send is retried**, several times with a growing gap. Both buttons also retry a grade that had given up, so they are what to use once the cause is fixed.
 - **Regrading replaces a queued grade** rather than sending two. The LMS sees the final figure.
 - **A student who has never opened AFCT from the LMS still gets their grade**, as long as their LMS identity is known. Running a roster sync is what connects the rest.
-- **Grades are clamped to the assignment's points.** If you change what an assignment is worth after linking it, AFCT updates the LMS column to match.
+- **Extra credit carries over.** A total above the assignment's points is sent as it stands, and the LMS records it against the column's maximum. If you change what an assignment is worth after linking it, AFCT updates the LMS column to match.
 
 If **Send grades automatically** is off, nothing goes to your LMS for that assignment until you send it yourself.
 
