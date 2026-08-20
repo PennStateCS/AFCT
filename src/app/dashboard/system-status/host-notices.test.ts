@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hostNotices, hostUnavailableMessage } from './host-notices';
+import { hostCheckedMessage, hostNotices, hostUnavailableMessage } from './host-notices';
 import type { HostBlock } from '@/lib/status/types';
 
 const host = (extra: Partial<HostBlock> = {}): HostBlock => ({
@@ -102,4 +102,30 @@ describe('what the Host section says', () => {
       expect(message).not.toMatch(/up to date|nothing needs doing/i);
     },
   );
+});
+
+describe('how fresh the Host section says it is', () => {
+  const now = Date.parse('2026-08-19T12:01:00Z');
+
+  it('says when it was checked and how often it looks again', () => {
+    const message = hostCheckedMessage(host(), now);
+
+    expect(message).toContain('Checked 3 minutes ago');
+    expect(message).toMatch(/every 5 minutes/);
+  });
+
+  // The reason this exists: someone installed the updates, saw them still listed, and
+  // reasonably concluded the run had not worked.
+  it('explains why something just installed is still listed', () => {
+    expect(hostCheckedMessage(host(), now)).toMatch(/takes a few minutes to drop off/i);
+  });
+
+  it('still gives the cadence when there is no usable timestamp', () => {
+    for (const checkedAt of [undefined, 'not a date']) {
+      const message = hostCheckedMessage(host({ checkedAt }), now);
+
+      expect(message).not.toContain('Checked');
+      expect(message).toMatch(/every 5 minutes/);
+    }
+  });
 });

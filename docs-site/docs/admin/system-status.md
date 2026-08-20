@@ -30,6 +30,8 @@ The **This server** section on the Server tab reports on the machine AFCT runs o
 
 When something needs attention, a **Server needs attention** badge also appears beside the page title.
 
+The section says when it was last checked. AFCT looks again every five minutes, so updates installed on the server are still listed for a few minutes afterwards. That is the report being out of date, not the installation having failed.
+
 This information comes from the update service, which is the only part of AFCT allowed to see the machine (the application itself is deliberately walled off from it, because that is where submissions are graded). If that service is not running, or the server does not run Ubuntu or Debian, the section says AFCT cannot tell rather than reporting that everything is fine. Installing the updates themselves is always done on the server, never through AFCT.
 
 ## Remove an abandoned file

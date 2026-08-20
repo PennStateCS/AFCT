@@ -1,4 +1,12 @@
 import type { HostBlock } from '@/lib/status/types';
+import { formatRelative } from './status-format';
+
+/**
+ * How often the updater rewrites its report, mirroring its own UPDATER_HOST_FACTS_INTERVAL
+ * default of 300 seconds. Declared here rather than imported from lib/status/host, because
+ * this module is pulled into the client bundle and that one reads the filesystem.
+ */
+export const HOST_FACTS_REFRESH_MINUTES = 5;
 
 /**
  * The Host section's contents, as plain sentences.
@@ -27,6 +35,21 @@ export function hostUnavailableMessage(host: HostBlock): string {
     default:
       return 'The update service is not running, so AFCT cannot report on the server itself.';
   }
+}
+
+/**
+ * When this was last looked at, and how often it is looked at again.
+ *
+ * Both halves earn their place. The notices above are written in the present tense, but the
+ * updater only rereads the server every few minutes, so an operator who has just installed
+ * updates sees them still listed and concludes the run failed. That happened the first time
+ * this section was used in anger.
+ */
+export function hostCheckedMessage(host: HostBlock, now: number): string {
+  const cadence = `AFCT checks again every ${HOST_FACTS_REFRESH_MINUTES} minutes, so anything just installed on the server takes a few minutes to drop off this list.`;
+  const at = host.checkedAt ? Date.parse(host.checkedAt) : Number.NaN;
+  if (!Number.isFinite(at)) return cadence;
+  return `Checked ${formatRelative(at, now)}. ${cadence}`;
 }
 
 export function hostNotices(host: HostBlock): HostNotice[] {

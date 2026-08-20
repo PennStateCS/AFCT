@@ -5,11 +5,10 @@ import { CheckCircle2, Info, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
-import pkg from '../../../../../package.json';
 import type { ServerStatusResponse, IpAddr } from '@/lib/status/types';
 import { Loading, Stat, Meter, Section, Sparkline, useStatusQuery, copy } from '../status-ui';
-import { formatBytes, formatRelative, formatUptime, toTitleCase } from '../status-format';
-import { hostNotices, hostUnavailableMessage } from '../host-notices';
+import { formatBytes, formatUptime, toTitleCase } from '../status-format';
+import { hostCheckedMessage, hostNotices, hostUnavailableMessage } from '../host-notices';
 import { readHistory } from '../use-trends';
 
 export default function ServerTab({
@@ -48,11 +47,6 @@ export default function ServerTab({
   if (isLoading || !system) {
     return <Loading />;
   }
-
-  const formatCheckedAt = (at?: string) => {
-    const ms = at ? Date.parse(at) : Number.NaN;
-    return Number.isFinite(ms) ? formatRelative(ms, Date.now()) : '—';
-  };
 
   return (
     <div className="max-w-xl space-y-8">
@@ -153,14 +147,15 @@ export default function ServerTab({
         {host.available && (
           <div className="space-y-2">
             <Stat label="Operating system" value={host.osName ?? '—'} />
-            <Stat label="Last checked" value={formatCheckedAt(host.checkedAt)} />
+            <p className="text-muted-foreground text-sm">
+              {hostCheckedMessage(host, Date.now())}
+            </p>
           </div>
         )}
       </Section>
 
       <Section title="Software">
         <div className="space-y-2">
-          <Stat label="AFCT Dashboard" value={pkg.version} />
           <Stat label="Deployment Environment" value={toTitleCase(software?.deployEnv)} />
           <Stat label="Next.js" value={software?.nextVersion ?? '—'} />
           <Stat
