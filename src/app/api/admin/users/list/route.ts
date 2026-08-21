@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getUsersPage, type UsersSearchField } from '@/lib/users-list';
+import { getUsersPage, type PasswordStatus, type UsersSearchField } from '@/lib/users-list';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { parsePageParams } from '@/lib/api/request';
 
@@ -12,6 +12,22 @@ function boolSet(values: string[]): boolean[] {
   const out: boolean[] = [];
   if (set.has('true')) out.push(true);
   if (set.has('false')) out.push(false);
+  return out;
+}
+
+/**
+ * Map the repeatable `temp` param to the Password Status states.
+ *
+ * The column used to be a boolean, so `true` and `false` are still accepted and mean what they
+ * always did: a link somebody bookmarked, or a saved column state, must not silently start
+ * filtering on something else.
+ */
+function passwordStatusSet(values: string[]): PasswordStatus[] {
+  const set = new Set(values.map((v) => v.trim().toLowerCase()));
+  const out: PasswordStatus[] = [];
+  if (set.has('temporary') || set.has('true')) out.push('temporary');
+  if (set.has('normal') || set.has('false')) out.push('normal');
+  if (set.has('none')) out.push('none');
   return out;
 }
 
@@ -64,7 +80,12 @@ export const GET = withAdminAuth(
 
       // Multi-select filters (repeatable params).
       const admin = boolSet(url.searchParams.getAll('admin'));
-      const temporaryPassword = boolSet(url.searchParams.getAll('temp'));
+      /**
+       * Password Status, three values now rather than a boolean: an account may have a
+       * password it chose, one an administrator issued, or none at all. The old `temp=true`
+       * and `temp=false` are still understood, so a bookmarked filter keeps working.
+       */
+      const passwordStatus = passwordStatusSet(url.searchParams.getAll('temp'));
       // Status uses active/inactive tokens; inactive === true.
       const statusValues = new Set(
         url.searchParams.getAll('status').map((v) => v.trim().toLowerCase()),
@@ -87,7 +108,7 @@ export const GET = withAdminAuth(
         field,
         admin,
         inactive,
-        temporaryPassword,
+        passwordStatus,
         lock,
         sortBy,
         sortDir,

@@ -227,13 +227,30 @@ export function getUserColumns(
         filterVariant: 'multiselect',
         filterLabel: 'Password Status',
         filterOptions: [
-          { label: 'Temporary', value: 'true' },
-          { label: 'Normal', value: 'false' },
+          { label: 'Temporary', value: 'temporary' },
+          { label: 'Normal', value: 'normal' },
+          { label: 'No password', value: 'none' },
         ],
       },
+      /**
+       * Three states, not two.
+       *
+       * This used to read `temporaryPassword` alone, so an account with no AFCT password at all
+       * showed as **Normal**, which is the one answer that is definitely wrong: those accounts
+       * sign in through an institution or an LMS and have nothing to be normal about. The flag
+       * cannot say so by itself, because it is false for them exactly as it is for an ordinary
+       * account.
+       */
       cell: ({ row }) => {
-        const temporaryPassword = row.getValue<boolean>('temporaryPassword');
-        return temporaryPassword ? (
+        const user = row.original;
+        if (!user.hasPassword) {
+          return (
+            <StatusBadge variant="neutral">
+              <span title="Signs in through an institution or an LMS">No password</span>
+            </StatusBadge>
+          );
+        }
+        return user.temporaryPassword ? (
           <StatusBadge variant="warning">Temporary</StatusBadge>
         ) : (
           <StatusBadge variant="neutral">Normal</StatusBadge>
@@ -487,6 +504,7 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
           setOpen={setResetOpen}
           onResetPassword={handlePasswordReset}
           targetUserName={fullName}
+          hasPassword={user.hasPassword}
         />
       )}
 

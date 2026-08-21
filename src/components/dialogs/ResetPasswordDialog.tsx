@@ -22,9 +22,23 @@ type Props = {
   setOpen: (open: boolean) => void;
   onResetPassword: (newPassword: string, isTemporary: boolean) => Promise<void>;
   targetUserName?: string;
+  /**
+   * Whether this account has an AFCT password at all.
+   *
+   * There is nothing to *reset* on an account created by an institutional sign-in or an LMS
+   * launch, so the dialog says it is setting a first one instead. Defaults true, which is what
+   * every caller meant before this existed.
+   */
+  hasPassword?: boolean;
 };
 
-export function ResetPasswordDialog({ open, setOpen, onResetPassword, targetUserName }: Props) {
+export function ResetPasswordDialog({
+  open,
+  setOpen,
+  onResetPassword,
+  targetUserName,
+  hasPassword = true,
+}: Props) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -60,10 +74,15 @@ export function ResetPasswordDialog({ open, setOpen, onResetPassword, targetUser
     setLoading(true);
     try {
       await onResetPassword(parsed.data.newPassword, isTemporary);
-      showToast.success('Password reset');
+      showToast.success(hasPassword ? 'Password reset' : 'Password set');
       setOpen(false);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to reset password';
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : hasPassword
+            ? 'Failed to reset password'
+            : 'Failed to set the password';
       showToast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -74,11 +93,15 @@ export function ResetPasswordDialog({ open, setOpen, onResetPassword, targetUser
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
-          <DialogTitle>Reset Password</DialogTitle>
+          <DialogTitle>{hasPassword ? 'Reset Password' : 'Set a Password'}</DialogTitle>
           <DialogDescription>
-            {targetUserName
-              ? `Set a new password for ${targetUserName}.`
-              : 'Set a new password for this user.'}
+            {hasPassword
+              ? targetUserName
+                ? `Set a new password for ${targetUserName}. This signs them out of AFCT everywhere, including the desktop client.`
+                : 'Set a new password for this user. This signs them out of AFCT everywhere, including the desktop client.'
+              : targetUserName
+                ? `${targetUserName} signs in through an institution or an LMS and has no AFCT password. This gives them one; they can carry on signing in as they do now.`
+                : 'This user signs in through an institution or an LMS and has no AFCT password. This gives them one; they can carry on signing in as they do now.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -55,11 +55,32 @@ describe('GET /api/admin/users/list', () => {
         field: 'email',
         admin: [true],
         inactive: [true], // status=inactive → inactive true
-        temporaryPassword: [false],
+        // `temp=false` is the old boolean spelling, still understood so a bookmarked filter
+        // keeps working; it means the same thing the "Normal" option now selects.
+        passwordStatus: ['normal'],
         lock: ['locked'],
         sortBy: 'email',
         sortDir: 'desc',
       }),
+    );
+  });
+
+  /**
+   * Password Status has three values now. The old `temp=true`/`temp=false` links have to keep
+   * meaning what they did, or a saved column state silently starts filtering on something else.
+   */
+  it('reads the three password-status values, and the old boolean spellings', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+
+    await GET(req('?temp=none&temp=temporary'), routeCtx());
+    expect(getUsersPageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ passwordStatus: ['temporary', 'none'] }),
+    );
+
+    getUsersPageMock.mockClear();
+    await GET(req('?temp=true'), routeCtx());
+    expect(getUsersPageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ passwordStatus: ['temporary'] }),
     );
   });
 

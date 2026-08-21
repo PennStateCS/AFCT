@@ -51,6 +51,7 @@ const baseUser = {
   isAdmin: false,
   inactive: false,
   temporaryPassword: false,
+  hasPassword: true,
   createdAt: new Date('2026-01-01T00:00:00Z'),
 };
 
@@ -87,6 +88,31 @@ describe('user-columns display cells', () => {
 
     renderCell('temporaryPassword', { ...baseUser, temporaryPassword: false });
     expect(screen.getByText('Normal')).toBeInTheDocument();
+  });
+
+  /**
+   * The bug this column change exists to fix. An account created by an institutional sign-in or
+   * an LMS launch has no password, and `temporaryPassword` is false for it exactly as it is for
+   * an ordinary account, so it used to read "Normal": the one answer that is plainly wrong.
+   */
+  it('says so when there is no password at all, rather than calling it Normal', () => {
+    renderCell('temporaryPassword', {
+      ...baseUser,
+      temporaryPassword: false,
+      hasPassword: false,
+    });
+
+    expect(screen.getByText('No password')).toBeInTheDocument();
+    expect(screen.queryByText('Normal')).not.toBeInTheDocument();
+  });
+
+  // A temporary password cannot exist without a password, but the row is server data and the
+  // display should not contradict itself if the two ever disagree.
+  it('prefers "No password" over "Temporary" if a row claims both', () => {
+    renderCell('temporaryPassword', { ...baseUser, temporaryPassword: true, hasPassword: false });
+
+    expect(screen.getByText('No password')).toBeInTheDocument();
+    expect(screen.queryByText('Temporary')).not.toBeInTheDocument();
   });
 
   it('falls back to initials when the user has no avatar image', () => {
