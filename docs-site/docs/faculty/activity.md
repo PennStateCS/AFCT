@@ -21,8 +21,8 @@ Select the information button in the **Metadata** column to see the related IDs 
 The log loads a page at a time, and searching, sorting and filtering all cover the **whole** log rather than the page on screen. The count beside the **Activity** heading is the total number of matching events.
 
 - **Search** matches the activity name, the category, or the person who performed it. Pick a field in the box beside it to search just one of those.
-- **Filters** holds Category, Assignment and Problem as separate lists. Ticking several values in one list widens (any of them), while picking from two different lists narrows (both must be true). The Assignment and Problem lists show everything in the course, including items that have no activity yet.
-- Sort by most column headings. **Assignment** and **Problem** cannot be sorted, because what they display is assembled from several sources rather than stored as one value; filter by them instead.
+- **Filters** holds Category, Assignment and Problem as separate lists. Tick two values in one list and you see both. Pick from two different lists and you see only the entries that match both. The Assignment and Problem lists show everything in the course, including items that have no activity yet.
+- Sort by most column headings. **Assignment** and **Problem** cannot be sorted. Filter by them instead.
 
 Activity is shown newest first by default. Select the refresh button near the **Activity** heading to check for new events.
 

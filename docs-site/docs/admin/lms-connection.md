@@ -27,7 +27,7 @@ If your LMS is one that issues a deployment separately from the registration, fi
 
 Two things automatic registration cannot do, both rare:
 
-- **Brightspace** hands out an OAuth2 Audience of its own, which is not part of the exchange. If grades fail to send, register the LMS by hand as well and fill that field in.
+- **Brightspace** hands out an OAuth2 Audience of its own, which is not part of the exchange. If grades fail to send, register the LMS by hand as well and put it in **Token audience**.
 - If your LMS does not send a **deployment ID** back, AFCT will say so and quote the client ID it was given. Register by hand using the steps below, which is the only case that still needs them.
 
 Then set AFCT to open in a new tab, below.
@@ -36,7 +36,7 @@ Then set AFCT to open in a new tab, below.
 
 Use this if your LMS does not offer automatic registration, or if it did and something above sent you here.
 
-Registration is mutual: your LMS needs four values from AFCT, and AFCT needs six back. Doing it means going back and forth between two screens, so collect one set before starting the other.
+Registration is mutual: your LMS needs four values from AFCT, and AFCT needs seven back. Doing it means going back and forth between two screens, so collect one set before starting the other.
 
 1. In AFCT, go to **System Settings** and open the **LTI** tab.
 2. Copy the four values under **Or give these to your LMS by hand**:
@@ -62,6 +62,7 @@ Registration is mutual: your LMS needs four values from AFCT, and AFCT needs six
    | **Authorization URL** | OIDC Authorization Endpoint, or Authorization Redirect URL |
    | **Token URL** | Token Endpoint, or OAuth2 Token URL |
    | **Public keyset URL** | Public Keyset URL, or JWKS URL |
+   | **Token audience (optional)** | Leave blank unless your LMS documents a different audience for token requests. D2L Brightspace is the one that does. |
 
 5. Select **Register**.
 
@@ -144,7 +145,7 @@ connect on the first launch with no prompt.
 
 Removing an LMS from the **LTI** tab stops every launch from it immediately, for every course. Existing AFCT accounts, courses, submissions and grades are untouched, but people who signed in only through that LMS will not be able to get in until they have another way to sign in.
 
-To disconnect a single course instead, leave the registration alone; faculty can disconnect their own course from the **Course status** card on the course **Settings** tab.
+To disconnect a single course instead, leave the registration alone; faculty can disconnect their own course from the **Course Status** card on the course **Settings** tab.
 
 ## When a student has not opened AFCT from your LMS
 
