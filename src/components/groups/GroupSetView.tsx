@@ -617,8 +617,18 @@ export function GroupSetView({
           <section className="lg:col-span-1" aria-label="Unassigned students">
             <DropZone id={UNASSIGNED_ZONE} className="rounded-md border">
               <div className="border-b p-3">
-                <p className="flex items-center gap-2 text-sm font-medium">
-                  <Users className="h-4 w-4" /> Unassigned ({unassigned.length})
+                {/*
+                  The count is the answer to the search below it, so it announces.
+                  Typing a name narrows this list and nothing said whether it had matched
+                  anybody. `aria-atomic` so the number is read with the word it counts.
+                */}
+                <p
+                  className="flex items-center gap-2 text-sm font-medium"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" /> Unassigned ({unassigned.length})
                 </p>
                 <Input
                   value={search}

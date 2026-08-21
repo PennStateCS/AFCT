@@ -580,8 +580,13 @@ export default function ProblemWorkspace({
           </button>
         </div>
         <div id="problem-discussion" hidden={!discussionOpen}>
+          {/* Kept across both branches. It used to be mounted with "Loading discussion..." and
+              then replaced wholesale by the panel, so neither the wait nor its end announced. */}
+          <span role="status" aria-live="polite" className="sr-only">
+            {commentsLoading ? 'Loading the discussion.' : 'Discussion loaded.'}
+          </span>
           {commentsLoading ? (
-            <div role="status" className="text-muted-foreground text-sm">
+            <div className="text-muted-foreground text-sm" aria-hidden="true">
               Loading discussion...
             </div>
           ) : (

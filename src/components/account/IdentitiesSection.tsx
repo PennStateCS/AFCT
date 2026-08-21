@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { Link2, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -137,15 +137,28 @@ export function IdentitiesSection({
   // Removing the last one would lock them out, and the refusal belongs where the button is
   // rather than as a surprise after the click.
   const isOnlyWayIn = !hasPassword && (identities?.length ?? 0) <= 1;
+  /**
+   * Where focus lands once a connection is removed.
+   *
+   * The Disconnect button is inside the row the removal deletes, and the confirm is awaited, so
+   * by the time the dialog closes Radix's restore target is gone and focus falls to the body.
+   */
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   if (identities === null) {
-    return <p className="text-muted-foreground text-sm">Loading your connected accounts...</p>;
+    return (
+      <p role="status" aria-live="polite" className="text-muted-foreground text-sm">
+        Loading your connected accounts...
+      </p>
+    );
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-medium">Connected accounts</h2>
+        <h2 ref={headingRef} tabIndex={-1} className="text-lg font-medium">
+          Connected accounts
+        </h2>
         <p className="text-muted-foreground mt-1 text-sm">
           Sign in to AFCT with your institution instead of an AFCT password. You can connect one and
           still keep your password.
@@ -181,11 +194,7 @@ export function IdentitiesSection({
                 size="sm"
                 onClick={() => setUnlinking(identity)}
                 disabled={isOnlyWayIn}
-                title={
-                  isOnlyWayIn
-                    ? 'This is the only way to sign in to your account.'
-                    : undefined
-                }
+                title={isOnlyWayIn ? 'This is the only way to sign in to your account.' : undefined}
               >
                 <Unlink className="mr-2 h-4 w-4" aria-hidden="true" />
                 Disconnect
@@ -222,6 +231,10 @@ export function IdentitiesSection({
       <ConfirmDialog
         open={unlinking !== null}
         onCancel={() => setUnlinking(null)}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          headingRef.current?.focus();
+        }}
         title="Disconnect this account?"
         /**
          * Written from the row being removed, not from the configured provider.

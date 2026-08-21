@@ -184,3 +184,30 @@ describe('what a screen reader is told about the latest attempt', () => {
     expect(region()).toHaveTextContent('Attempt 1: Pending');
   });
 });
+
+/**
+ * The discussion's wait, and its end.
+ *
+ * The loading notice carried `role="status"` but was mounted with its own text and then
+ * replaced wholesale by the panel, so a live region that announces changes had nothing to
+ * change: neither the wait nor its end was ever spoken.
+ */
+describe('loading the discussion', () => {
+  const regions = () => Array.from(document.querySelectorAll('[role="status"]'));
+  const textOf = () =>
+    regions()
+      .map((n) => n.textContent)
+      .join(' | ');
+
+  it('says it is loading', () => {
+    render(<ProblemWorkspace {...baseProps} commentsLoading />);
+
+    expect(textOf()).toContain('Loading the discussion.');
+  });
+
+  it('says so once it has arrived, rather than falling silent', () => {
+    render(<ProblemWorkspace {...baseProps} commentsLoading={false} />);
+
+    expect(textOf()).toContain('Discussion loaded.');
+  });
+});
