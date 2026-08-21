@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
@@ -38,6 +38,8 @@ export function TokensSection() {
   const [justIssued, setJustIssued] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [revoking, setRevoking] = useState<ClientToken | null>(null);
+  /** Where focus lands after a revoke: the row that held the button is gone by then. */
+  const tokensHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const load = async () => {
     try {
@@ -161,7 +163,9 @@ export function TokensSection() {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-medium">Your tokens</h2>
+        <h2 ref={tokensHeadingRef} tabIndex={-1} className="mb-2 text-sm font-medium">
+          Your tokens
+        </h2>
         {tokens === null ? (
           <p className="text-muted-foreground text-sm">Loading…</p>
         ) : tokens.length === 0 ? (
@@ -220,17 +224,25 @@ export function TokensSection() {
         )}
       </div>
 
-      {revoking ? (
-        <ConfirmDialog
-          open
-          variant="destructive"
-          title="Revoke this token?"
-          description={`The client using ${revoking.label || 'this token'} will stop working immediately and will need a new one.`}
-          confirmText="Revoke token"
-          onConfirm={() => revoke(revoking)}
-          onCancel={() => setRevoking(null)}
-        />
-      ) : null}
+      {/*
+        `open={...}` rather than mounting the dialog conditionally. Unmounting an open Radix
+        dialog tears it out of the tree instead of closing it, so the close transition and the
+        focus restore are both skipped. The handler then sends focus to the section heading,
+        because the button that opened this was in the row the revoke has just removed.
+      */}
+      <ConfirmDialog
+        open={!!revoking}
+        variant="destructive"
+        title="Revoke this token?"
+        description={`The client using ${revoking?.label || 'this token'} will stop working immediately and will need a new one.`}
+        confirmText="Revoke token"
+        onConfirm={() => (revoking ? revoke(revoking) : undefined)}
+        onCancel={() => setRevoking(null)}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          tokensHeadingRef.current?.focus();
+        }}
+      />
     </div>
   );
 }

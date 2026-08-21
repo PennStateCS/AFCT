@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toastMock, resetToastMock } from '@/test/mocks/toast';
 import { AssignmentLmsLinksCard, type AssignmentLmsLink } from './AssignmentLmsLinksCard';
@@ -183,5 +183,31 @@ describe('a link nobody has opened yet', () => {
     show([neverOpened]);
 
     expect(screen.getByRole('button', { name: 'Remove' })).toBeEnabled();
+  });
+});
+
+/**
+ * Focus after a removal.
+ *
+ * The Remove button lives inside the row the removal deletes, and Radix restores focus to
+ * whatever opened the dialog. Restoring to a node that has gone drops focus to the body, so a
+ * keyboard user was thrown back to the top of the page after every removal.
+ */
+describe('where focus goes after removing a link', () => {
+  it('lands on the card heading rather than on the body', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) })),
+    );
+    const onRemoved = show([link]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove link' }));
+
+    await waitFor(() => expect(onRemoved).toHaveBeenCalledWith('link-1'));
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement).toHaveTextContent('In your LMS');
+    });
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -178,6 +178,8 @@ export function GroupSetView({
   const [deleteSetOpen, setDeleteSetOpen] = useState(false);
   const [renameGroup, setRenameGroup] = useState<{ id: string; name: string } | null>(null);
   const [deleteGroup, setDeleteGroup] = useState<{ id: string; name: string } | null>(null);
+  /** Where focus goes after a delete: the card holding the trigger is gone by then. */
+  const setHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const disabled = courseIsArchived || !!detail?.locked;
 
@@ -460,7 +462,11 @@ export function GroupSetView({
     <div className="space-y-4">
       {/* Header + set actions */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-xl font-semibold">
+        <h3
+          ref={setHeadingRef}
+          tabIndex={-1}
+          className="flex items-center gap-2 text-xl font-semibold"
+        >
           {detail.name}
           {detail.locked && <Badge variant="secondary">Locked</Badge>}
         </h3>
@@ -759,6 +765,12 @@ export function GroupSetView({
         confirmText="Delete group"
         onConfirm={confirmDeleteGroup}
         onCancel={() => setDeleteGroup(null)}
+        onCloseAutoFocus={(event) => {
+          // The menu that opened this sat inside the group card the delete has just removed,
+          // so restoring focus to it would drop focus to the body.
+          event.preventDefault();
+          setHeadingRef.current?.focus();
+        }}
       />
     </div>
   );

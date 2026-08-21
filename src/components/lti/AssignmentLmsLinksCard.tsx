@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +42,14 @@ export function AssignmentLmsLinksCard({
 }) {
   const { timezone, hour12 } = useEffectiveTimezone();
   const [toRemove, setToRemove] = useState<AssignmentLmsLink | null>(null);
+  /**
+   * Where focus goes once a link is removed.
+   *
+   * Radix restores focus to whatever opened the dialog, and that was the Remove button inside
+   * the row the removal has just deleted. Restoring to a node that no longer exists drops focus
+   * to the document body, so a keyboard user was returned to the top of the page.
+   */
+  const headingRef = useRef<HTMLDivElement>(null);
 
   const remove = async (link: AssignmentLmsLink) => {
     try {
@@ -61,7 +69,7 @@ export function AssignmentLmsLinksCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-base">
           <Link2 className="h-4 w-4" aria-hidden="true" />
           In your LMS
         </CardTitle>
@@ -144,6 +152,10 @@ export function AssignmentLmsLinksCard({
         confirmText="Remove link"
         onConfirm={() => (toRemove ? remove(toRemove) : undefined)}
         onCancel={() => setToRemove(null)}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          headingRef.current?.focus();
+        }}
       />
     </Card>
   );
