@@ -123,7 +123,8 @@ All three are described in [Grades and rosters from your LMS](../faculty/lms.md)
 
 When somebody opens AFCT from the LMS and has no AFCT account, one is created for them, and their LMS identity is attached to it so later launches find the same account. If an account with that email address already exists, the launch attaches to it rather than making a second one.
 
-You can see what is attached to any account from [User Accounts](user-accounts.md): open the account's menu and choose **Sign-in Methods**. This is also where you detach one, for example when somebody's LMS identity has changed. An account with no AFCT password and only one connected sign-in method cannot have it detached, because that would leave the person unable to sign in at all; give them a password first.
+To see or detach what is attached to a particular account, use **Sign-in Methods** on
+[User Accounts](user-accounts.md#sign-in-methods).
 
 ## Opening AFCT from your LMS as an administrator
 
