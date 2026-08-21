@@ -36,8 +36,8 @@ export function ReviewShortcutsDialog({
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>
-            These work anywhere on this tab, except while you are typing in a field such as the
-            comment box or a grade.
+            These work while you are somewhere in the review panel, and not while you are typing in
+            a field such as the comment box or a grade.
           </DialogDescription>
         </DialogHeader>
         <dl className="space-y-1.5">
