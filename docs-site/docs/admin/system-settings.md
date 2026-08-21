@@ -19,7 +19,7 @@
 
 Session timeout covers inactivity only. Separately, every session ends 12 hours after sign-in however busy it has been, so a browser left signed in cannot stay signed in indefinitely. That limit is fixed and is not a setting.
 
-The configured URL cannot be edited in the browser. On an installed server, use `sh install.sh --reconfigure` or set the correct `APP_URL` through the installer workflow.
+The configured URL cannot be edited in the browser. To change it, run `sudo afctctl install --reconfigure` on the server, or set `APP_URL` in `.env.production` and restart.
 
 ### Public signup
 

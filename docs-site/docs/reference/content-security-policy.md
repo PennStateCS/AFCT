@@ -51,7 +51,7 @@ If part of the site stops working after a change and you suspect the CSP:
    The message names the exact resource and the directive that blocked it.
 2. To confirm the CSP is the cause without breaking the site for users, set
    `CSP_ENFORCE="false"` in `.env.production` and restart the application
-   (`sh install.sh restart`). The same violations now appear as reports rather than
+   (`sudo afctctl restart`). The same violations now appear as reports rather than
    blocks. If the problem disappears, the CSP was the cause.
 3. Add the required source to the appropriate directive in `buildCsp` (`src/proxy.ts`),
    or nonce the script, then re-enable enforcement.

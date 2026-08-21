@@ -47,12 +47,12 @@ Important shared files include:
 next to its siblings in any listing, so you get the grouping without having to decide
 where the file belongs.
 
-`api/`, `security/`, and `status/` are the only folders. If your module is not part of
-one of those three, it goes flat. **Adding a fourth folder is a decision to argue for in
-review**, not something to do while naming a file.
+`api/`, `security/`, `status/`, `lti/`, `rich-description/` and `similarity/` are the only
+folders. If your module is not part of one of those, it goes flat. **Adding another folder is a
+decision to argue for in review**, not something to do while naming a file.
 
-Those three exist for two reasons, recorded here so a proposal for a fourth has something
-to be measured against:
+They exist for two reasons, recorded here so a proposal for a new one has something to be
+measured against:
 
 - **It has internals**, at least one module that should not be imported from outside the
   folder. `status/` qualifies: `status/cache.ts` and `status/ip-classify.ts` are used only
@@ -320,13 +320,17 @@ See [Contributing changes](./contributing.md) for the full local-check sequence,
 
 ## CI and publishing
 
-- `ci.yml` runs lint, tests, and documentation checks on pull requests and pushes to `main`.
+- `ci.yml` runs the checks below. Some of them, `lint` and `docs-check` among them, run on pull requests only.
 - `docs.yml` publishes the generated API reference to GitHub Pages.
 - `publish-ghcr.yml` builds and publishes the GHCR image after CI succeeds on `main`.
 - The publish workflow pins the production Compose file to the published image digest.
 
-Required status checks are:
+Seven checks are required before a pull request can merge, named by their job:
 
-- `CI / lint`
-- `CI / test`
-- `CI / docs-check`
+- `lint`
+- `typecheck`
+- `test`
+- `test-db`
+- `build`
+- `docs-check`
+- `evaluator`

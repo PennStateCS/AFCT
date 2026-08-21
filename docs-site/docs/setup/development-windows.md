@@ -142,16 +142,6 @@ cp .env.development.example .env.development && nano .env.development
 
 The example file documents each variable. See [Development setup](./development.md) for what to change.
 
-Two other files are worth copying the same way if your old checkout has them, since neither is in the repository:
-
-```bash
-cp /mnt/c/Users/yourname/Desktop/afct/CLAUDE.md ~/afct/CLAUDE.md
-```
-
-```bash
-cp -r /mnt/c/Users/yourname/Desktop/afct/docs ~/afct/docs
-```
-
 ## Step 7: Start the stack
 
 ```bash
