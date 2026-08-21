@@ -296,3 +296,43 @@ describe('ChartDataTable', () => {
     expect(screen.queryAllByRole('rowheader')).toHaveLength(0);
   });
 });
+
+/**
+ * WCAG 1.4.13 requires that content appearing on hover or focus can be dismissed without
+ * moving the pointer or the focus. The chart tooltips had no way out but to move one of them,
+ * which a magnifier user reading around the tooltip does not have comfortably available.
+ */
+describe('dismissing a chart tooltip', () => {
+  function Probe() {
+    const { state, showAtEvent } = useChartTooltip();
+    return (
+      <div>
+        <span data-testid="state">{state ? String(state.content) : 'none'}</span>
+        <button onClick={() => showAtEvent({ clientX: 10, clientY: 20 }, 'shown')}>show</button>
+      </div>
+    );
+  }
+
+  it('closes on Escape, without the pointer or focus moving', () => {
+    render(<Probe />);
+    act(() => screen.getByText('show').click());
+    expect(screen.getByTestId('state')).toHaveTextContent('shown');
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+
+    expect(screen.getByTestId('state')).toHaveTextContent('none');
+  });
+
+  it('ignores other keys, so typing elsewhere does not close it', () => {
+    render(<Probe />);
+    act(() => screen.getByText('show').click());
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+    });
+
+    expect(screen.getByTestId('state')).toHaveTextContent('shown');
+  });
+});

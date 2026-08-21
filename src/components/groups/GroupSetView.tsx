@@ -364,21 +364,35 @@ export function GroupSetView({
       : (nameById.get(activeDrag) ?? 'Student')
     : '';
 
+  /**
+   * What is being dragged, in words.
+   *
+   * Dragging a selected student carries the whole selection, so naming only the one under the
+   * pointer told a keyboard user "Picked up Ada Lovelace" and then moved five people. The
+   * visible drag overlay already said "5 students"; the announcements did not.
+   */
+  const dragDescription = useCallback(
+    (activeId: string) => {
+      const count = draggedIdsFor(activeId).length;
+      return count > 1 ? `${count} students` : (nameById.get(activeId) ?? 'student');
+    },
+    [draggedIdsFor, nameById],
+  );
+
   const announcements: Announcements = useMemo(
     () => ({
-      onDragStart: ({ active }) => `Picked up ${nameById.get(String(active.id)) ?? 'student'}.`,
+      onDragStart: ({ active }) => `Picked up ${dragDescription(String(active.id))}.`,
       onDragOver: ({ active, over }) =>
         over
-          ? `${nameById.get(String(active.id)) ?? 'Student'} is over ${zoneName(String(over.id))}.`
+          ? `${dragDescription(String(active.id))} over ${zoneName(String(over.id))}.`
           : undefined,
       onDragEnd: ({ active, over }) =>
         over
-          ? `Dropped ${nameById.get(String(active.id)) ?? 'student'} on ${zoneName(String(over.id))}.`
-          : `Dropped ${nameById.get(String(active.id)) ?? 'student'}.`,
-      onDragCancel: ({ active }) =>
-        `Dragging ${nameById.get(String(active.id)) ?? 'student'} cancelled.`,
+          ? `Dropped ${dragDescription(String(active.id))} on ${zoneName(String(over.id))}.`
+          : `Dropped ${dragDescription(String(active.id))}.`,
+      onDragCancel: ({ active }) => `Dragging ${dragDescription(String(active.id))} cancelled.`,
     }),
-    [nameById, zoneName],
+    [dragDescription, zoneName],
   );
 
   const screenReaderInstructions: ScreenReaderInstructions = {

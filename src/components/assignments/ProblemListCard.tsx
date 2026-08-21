@@ -69,7 +69,8 @@ export function ProblemListCard({
     ...gradeLabels.map((s) => s.length),
     ...(showTotal ? [totalLabel.length] : []),
   );
-  const badgeClass = 'justify-center border border-border bg-background text-xs font-medium tabular-nums text-foreground';
+  const badgeClass =
+    'justify-center border border-border bg-background text-xs font-medium tabular-nums text-foreground';
   const badgeStyle = badgeChars > 0 ? { minWidth: `${badgeChars}ch` } : undefined;
 
   return (
@@ -93,6 +94,10 @@ export function ProblemListCard({
                     className={badgeClass}
                     style={badgeStyle}
                   >
+                    {/* `title` is the only thing telling these two fractions apart, and a
+                        title on a non-interactive span is not a reliable description: the
+                        list read as "8/10, 2/3" with nothing saying which was which. */}
+                    <span className="sr-only">Grade </span>
                     {problem.grade !== null && problem.grade !== undefined ? problem.grade : '-'}/
                     {problem.maxGrade}
                   </Badge>
@@ -100,20 +105,28 @@ export function ProblemListCard({
               const submissionsCount = problem.submissionsCount ?? 0;
               const hasMaxSubmissions =
                 problem.maxSubmissions !== undefined && problem.maxSubmissions !== null;
-              const submissionLabel = hasMaxSubmissions
-                ? problem.maxSubmissions === -1
-                  ? `${submissionsCount}/∞`
-                  : `${submissionsCount}/${problem.maxSubmissions}`
-                : `${submissionsCount}/∞`;
+              const unlimited = !hasMaxSubmissions || problem.maxSubmissions === -1;
+              const submissionLabel = unlimited
+                ? `${submissionsCount}/∞`
+                : `${submissionsCount}/${problem.maxSubmissions}`;
+              /**
+               * The same fact in words, for assistive tech. This badge is the web app's only
+               * view of the attempt limit, and "∞" is read inconsistently: some screen readers
+               * say "infinity", some say nothing at all.
+               */
+              const submissionSpoken = unlimited
+                ? `${submissionsCount} attempts used, unlimited allowed`
+                : `${submissionsCount} of ${problem.maxSubmissions} attempts used`;
               const usageBadge =
                 showSubmissionUsage && (hasMaxSubmissions || submissionsCount > 0) ? (
                   <Badge
                     key="usage"
                     variant="secondary"
                     title="Submissions Used / Submissions Allowed"
-                    className="border border-border bg-background text-xs font-medium text-foreground"
+                    className="border-border bg-background text-foreground border text-xs font-medium"
                   >
-                    {submissionLabel}
+                    <span className="sr-only">{submissionSpoken}</span>
+                    <span aria-hidden="true">{submissionLabel}</span>
                   </Badge>
                 ) : null;
 
@@ -135,9 +148,7 @@ export function ProblemListCard({
                     aria-keyshortcuts={shortcut}
                     title={shortcut ? `Press ${shortcut} to select` : undefined}
                     className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
-                      isActive
-                        ? 'bg-secondary text-secondary-foreground'
-                        : 'hover:bg-accent'
+                      isActive ? 'bg-secondary text-secondary-foreground' : 'hover:bg-accent'
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2">

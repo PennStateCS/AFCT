@@ -187,59 +187,63 @@ export function GradeSyncCard({
             <span className="sr-only">{open ? 'Collapse LMS sync' : 'Expand LMS sync'}</span>
           </button>
         </div>
-        {open && (
-          <div id="lms-sync" className="flex flex-col gap-2">
-            {/* One live region for this panel, so a send is announced once. */}
-            <p className="text-muted-foreground text-xs" role="status">
-              {scoped ? studentText : assignmentText}
+        {/*
+          Rendered whether or not it is open, and hidden with the `hidden` attribute.
+          `aria-controls` above pointed at an id that only existed while the panel was open, so
+          collapsing it left a dangling reference. Keeping it mounted also keeps the live region
+          inside alive, so a grade sent while the panel is collapsed is still announced.
+        */}
+        <div id="lms-sync" hidden={!open} className="flex flex-col gap-2">
+          {/* One live region for this panel, so a send is announced once. */}
+          <p className="text-muted-foreground text-xs" role="status">
+            {scoped ? studentText : assignmentText}
+          </p>
+          {(scoped ? state.student?.sentAt : state.lastSentAt) && (
+            <p className="text-muted-foreground text-xs">
+              Last sent{' '}
+              {formatDateTimeInTimeZone(
+                (scoped ? state.student?.sentAt : state.lastSentAt) as string,
+                timezone,
+                hour12,
+              )}
             </p>
-            {(scoped ? state.student?.sentAt : state.lastSentAt) && (
-              <p className="text-muted-foreground text-xs">
-                Last sent{' '}
-                {formatDateTimeInTimeZone(
-                  (scoped ? state.student?.sentAt : state.lastSentAt) as string,
-                  timezone,
-                  hour12,
-                )}
-              </p>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-fit"
-              onClick={() => void sendNow(scoped ? (studentId as string) : null)}
-              disabled={busy !== null}
-            >
-              <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-              {busy === 'student' || (busy === 'all' && !scoped)
-                ? 'Sending...'
-                : scoped
-                  ? 'Send this grade now'
-                  : 'Send grades now'}
-            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => void sendNow(scoped ? (studentId as string) : null)}
+            disabled={busy !== null}
+          >
+            <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+            {busy === 'student' || (busy === 'all' && !scoped)
+              ? 'Sending...'
+              : scoped
+                ? 'Send this grade now'
+                : 'Send grades now'}
+          </Button>
 
-            {/* The rest of the class, which the button above deliberately leaves alone. Shown
+          {/* The rest of the class, which the button above deliberately leaves alone. Shown
                 only when there is something to do, so the usual case stays one line and one
                 button. */}
-            {othersOutstanding > 0 && (
-              <div className="mt-1 flex flex-col gap-2 border-t pt-2">
-                <p className="text-muted-foreground text-xs">
-                  {othersOutstanding} other {othersOutstanding === 1 ? 'grade' : 'grades'} on this
-                  assignment {othersOutstanding === 1 ? 'is' : 'are'} waiting or failed.
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-fit"
-                  onClick={() => void sendNow(null)}
-                  disabled={busy !== null}
-                >
-                  {busy === 'all' ? 'Sending...' : 'Send all outstanding grades'}
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+          {othersOutstanding > 0 && (
+            <div className="mt-1 flex flex-col gap-2 border-t pt-2">
+              <p className="text-muted-foreground text-xs">
+                {othersOutstanding} other {othersOutstanding === 1 ? 'grade' : 'grades'} on this
+                assignment {othersOutstanding === 1 ? 'is' : 'are'} waiting or failed.
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-fit"
+                onClick={() => void sendNow(null)}
+                disabled={busy !== null}
+              >
+                {busy === 'all' ? 'Sending...' : 'Send all outstanding grades'}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }

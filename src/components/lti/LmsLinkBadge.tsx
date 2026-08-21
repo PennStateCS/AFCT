@@ -30,10 +30,16 @@ export function LmsLinkBadge({
       variant="outline"
       className={`bg-status-info-bg border-status-info-border text-status-info shrink-0 gap-1.5 text-xs font-normal ${className ?? ''}`}
       title={description}
-      aria-label={description}
     >
       <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
       {label}
+      {/*
+        The detail as real text rather than an `aria-label`.
+        A Badge is a plain span with no role, and ARIA does not allow a label on a generic
+        element: some assistive tech ignores it, dropping the LMS course names this badge
+        exists to carry, and some honours it and suppresses the visible wording instead.
+      */}
+      {detail.length > 0 ? <span className="sr-only">: {detail.join(', ')}</span> : null}
     </Badge>
   );
 }
