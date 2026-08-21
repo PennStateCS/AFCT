@@ -91,12 +91,12 @@ open and close dates. Both have to be set, and today has to fall between them.
 
 ## 6. Submit something
 
-There are two ways in, and your students will mostly use the second.
+Submitting happens in JFLAP, not on the website. Sign in as your test student in the
+[AFCT Submission Center](../student/client.md), pick the course, assignment and problem, and
+send an automaton.
 
-**From the browser**, open the assignment, choose the problem, and upload a `.jff` file.
-
-**From JFLAP**, use the [AFCT Submission Center](../student/client.md), which is what the
-native client is for: students build the automaton and submit it without leaving the editor.
+The AFCT website has no upload button. It is where the student reads the result afterwards, and
+where you review and grade it.
 
 Submit a **wrong** answer first, on purpose. Watching a wrong answer come back is more
 informative than watching a right one.

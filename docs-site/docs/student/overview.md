@@ -24,13 +24,19 @@ Assignment pages show deadlines in your effective timezone. When the course uses
 
 ## Submit work
 
-Open an assignment, choose a problem, and upload the requested file.
+**You submit from JFLAP, not from this website.** Open the **AFCT** menu in JFLAP, choose
+**Submission Center**, and send your work from there. The
+[AFCT Submission Center](client.md) guide covers it step by step.
+
+The website is where you read the result afterwards: your attempts, the grade, the feedback, and
+the deadlines. It has no upload button, so if you are looking for one, you are on the wrong
+screen.
 
 A few things to know before you submit:
 
-- A problem can allow unlimited attempts or set a maximum, and each accepted upload counts as an attempt. Submitted attempts cannot be edited or deleted, so check the file before uploading it. To correct your work, submit another attempt if the problem still allows one.
+- A problem can allow unlimited attempts or set a maximum, and each accepted upload counts as an attempt. Submitted attempts cannot be edited or deleted, so check your work before you send it. To correct it, submit another attempt if the problem still allows one.
 - After the due date, AFCT accepts work only when late submissions are enabled and any late cutoff has not passed. The server enforces deadlines, so changing a device clock or timezone does not change the result.
-- AFCT may also require a short cooldown between attempts on the same problem. The page tells you when to try again.
+- AFCT may also require a short cooldown between attempts on the same problem. The Submission Center tells you when to try again.
 
 ## Review results and comments
 
