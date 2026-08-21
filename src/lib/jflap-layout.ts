@@ -76,6 +76,79 @@ const COMPASS_FROM_WEST = Array.from({ length: 8 }, (_, i) => {
 export const START_MARKER_SIZE = NODE_DIAMETER;
 
 /**
+ * How wide a note is allowed to get before its text wraps, in viewer pixels.
+ *
+ * A note is free text a student typed, so it has no natural bound: one long paragraph would
+ * otherwise stretch the canvas until the machine itself was a speck after `fit`. Roughly four
+ * states wide, which is enough for a sentence without dominating a diagram.
+ */
+export const NOTE_MAX_WIDTH = NODE_DIAMETER * 4;
+
+/** Font size a note is drawn at, a little under the 16px used for edge labels. */
+export const NOTE_FONT_SIZE = 14;
+
+/** Line box for wrapped note text at {@link NOTE_FONT_SIZE}. */
+export const NOTE_LINE_HEIGHT = 18;
+
+/** Padding inside a note's box, so its text does not touch the border. */
+export const NOTE_PADDING = 6;
+
+/**
+ * Average character width at {@link NOTE_FONT_SIZE}, for estimating how text wraps.
+ *
+ * An estimate on purpose. The viewer already sizes ELK's spacing from a per-character figure
+ * (`useJffCytoscape`, ~8px at the 16px edge font) rather than measuring, because the geometry
+ * has to be computable without a canvas: `toElements` is pure and is unit tested in jsdom,
+ * where real text metrics do not exist. Being a few pixels out moves a note slightly; being
+ * unable to place it at all would be worse.
+ */
+const NOTE_CHAR_WIDTH = 7.5;
+
+/**
+ * The box a note's text needs once wrapped at {@link NOTE_MAX_WIDTH}.
+ *
+ * Explicit line breaks are honoured, because JFLAP notes are multi-line text areas, and each
+ * of those lines then wraps on its own.
+ */
+export function noteBox(text: string): { width: number; height: number } {
+  const charsPerLine = Math.max(1, Math.floor(NOTE_MAX_WIDTH / NOTE_CHAR_WIDTH));
+  const hardLines = text.split('\n');
+
+  let widestChars = 0;
+  let lineCount = 0;
+  for (const line of hardLines) {
+    // An empty line is still a line: a blank line between paragraphs takes vertical space.
+    const wrapped = Math.max(1, Math.ceil(line.length / charsPerLine));
+    lineCount += wrapped;
+    widestChars = Math.max(widestChars, Math.min(line.length, charsPerLine));
+  }
+
+  return {
+    width: Math.round(widestChars * NOTE_CHAR_WIDTH) + NOTE_PADDING * 2,
+    height: Math.round(lineCount * NOTE_LINE_HEIGHT) + NOTE_PADDING * 2,
+  };
+}
+
+/**
+ * Where to put a note's centre, given the top-left corner JFLAP saved and the box its text
+ * turned out to need.
+ *
+ * JFLAP's note is a Swing `JTextArea` positioned with `setLocation`, which places a component by
+ * its **top-left**. A state is a circle drawn centred on its point. Cytoscape positions every
+ * node by its centre, so a note passed straight through lands half its own width and height
+ * down and to the right of where the student put it, which is most of a state's width out.
+ *
+ * Sizes are measured from the text rather than read from the file, because JFLAP does not
+ * persist them: `automata/Note` writes only the text and the point.
+ */
+export function noteCentre(topLeft: Point, size: { width: number; height: number }): Point {
+  return {
+    x: topLeft.x + size.width / 2,
+    y: topLeft.y + size.height / 2,
+  };
+}
+
+/**
  * The marker itself, as JFLAP draws it: an unfilled triangle lying on its side with its
  * point against the state, as wide as the state's radius and as tall as its diameter.
  * Given in the -1..1 box `shape-polygon-points` uses, pointing due east, which is the

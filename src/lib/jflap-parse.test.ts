@@ -112,8 +112,7 @@ describe('toElements', () => {
   it('includes positions only when honorPositions is set', () => {
     const parsed = parseJflap(faXml);
     const withPos = toElements(parsed, 'ε', true).find((e) => 'position' in e) as
-      | { position?: { x: number; y: number } }
-      | undefined;
+      { position?: { x: number; y: number } } | undefined;
     // Opened out from the coordinates in the file, which were laid out around JFLAP's
     // smaller states; see POSITION_SCALE.
     expect(withPos?.position).toEqual({ x: 10 * POSITION_SCALE, y: 20 * POSITION_SCALE });
@@ -141,5 +140,127 @@ describe('toElements', () => {
       expect(p.x).toBeCloseTo(state.xPos * POSITION_SCALE);
       expect(p.y).toBeCloseTo(state.yPos * POSITION_SCALE);
     }
+  });
+});
+
+/**
+ * Notes are the text a student wrote on the canvas. JFLAP writes them as
+ * `<note><text>..</text><x>..</x><y>..</y></note>` and nothing else: `automata/Note` in the
+ * evaluator jar persists no id, size or colour, so text plus a point is the whole of it.
+ */
+describe('notes', () => {
+  const withNote = (inner: string) => `
+<structure>
+  <type>fa</type>
+  <automaton>
+    <state id="0" name="q0"><x>10</x><y>20</y><initial/></state>
+    ${inner}
+  </automaton>
+</structure>`;
+
+  it('reads the text and the position', () => {
+    const parsed = parseJflap(
+      withNote('<note><text>watch the loop</text><x>12.5</x><y>40</y></note>'),
+    );
+    expect(parsed.notes).toEqual([{ text: 'watch the loop', xPos: 12.5, yPos: 40 }]);
+  });
+
+  // JFLAP writes coordinates as floats. parseInt would truncate 12.5 to 12 by accident.
+  it('keeps fractional coordinates', () => {
+    const parsed = parseJflap(withNote('<note><text>x</text><x>0.5</x><y>0.25</y></note>'));
+    expect(parsed.notes[0]).toMatchObject({ xPos: 0.5, yPos: 0.25 });
+  });
+
+  // A JFLAP note is a JTextArea, and its line breaks are written as `&#13;` carriage returns.
+  it('normalises carriage returns to newlines', () => {
+    const parsed = parseJflap(
+      withNote('<note><text>first&#13;second</text><x>0</x><y>0</y></note>'),
+    );
+    expect(parsed.notes[0]?.text).toBe('first\nsecond');
+  });
+
+  it('drops a note the student opened and never wrote in', () => {
+    const parsed = parseJflap(withNote('<note><text>   </text><x>0</x><y>0</y></note>'));
+    expect(parsed.notes).toEqual([]);
+  });
+
+  /**
+   * Better to lose a note than to draw it at the origin, where it would sit on top of whatever
+   * is there and look like the student put it beside that state deliberately.
+   */
+  it('drops a note with no usable position rather than placing it at the origin', () => {
+    const parsed = parseJflap(withNote('<note><text>somewhere</text></note>'));
+    expect(parsed.notes).toEqual([]);
+  });
+
+  it('reads a file that holds notes and no states', () => {
+    const parsed = parseJflap(`
+<structure>
+  <type>fa</type>
+  <automaton><note><text>Hi</text><x>0.0</x><y>0.0</y></note></automaton>
+</structure>`);
+    expect(parsed.states).toEqual([]);
+    expect(parsed.notes).toEqual([{ text: 'Hi', xPos: 0, yPos: 0 }]);
+  });
+
+  describe('as cytoscape elements', () => {
+    const parsed = () =>
+      parseJflap(withNote('<note><text>look here</text><x>100</x><y>200</y></note>'));
+
+    it('appears only when the saved positions are being used', () => {
+      const drawn = toElements(parsed(), 'ε', true) as Array<{ classes?: string }>;
+      expect(drawn.filter((e) => e.classes === 'note')).toHaveLength(1);
+
+      // Auto-arranged: every state has moved, so a note left where the student put it would
+      // annotate whatever it happened to land on.
+      const arranged = toElements(parsed(), 'ε', false) as Array<{ classes?: string }>;
+      expect(arranged.some((e) => e.classes === 'note')).toBe(false);
+    });
+
+    it('is scaled and offset from its top-left corner to its centre', () => {
+      const note = (
+        toElements(parsed(), 'ε', true) as Array<{
+          classes?: string;
+          position?: Point;
+          data: { width: number; height: number };
+        }>
+      ).find((e) => e.classes === 'note')!;
+
+      // JFLAP saves a note's top-left, because it is a Swing component positioned by
+      // `setLocation`; cytoscape positions by centre. Half the box is the difference.
+      expect(note.position?.x).toBeCloseTo(100 * POSITION_SCALE + note.data.width / 2, 5);
+      expect(note.position?.y).toBeCloseTo(200 * POSITION_SCALE + note.data.height / 2, 5);
+    });
+
+    it('cannot be selected, dragged, or tapped', () => {
+      const note = (
+        toElements(parsed(), 'ε', true) as Array<{
+          classes?: string;
+          selectable?: boolean;
+          grabbable?: boolean;
+        }>
+      ).find((e) => e.classes === 'note')!;
+      expect(note.selectable).toBe(false);
+      expect(note.grabbable).toBe(false);
+    });
+
+    /**
+     * State ids come out of the file, so a student can name a state `note-0`. Cytoscape drops a
+     * duplicate id without saying anything, which would silently lose an element.
+     */
+    it('does not collide with a state a student named like a note', () => {
+      const xml = `
+<structure>
+  <type>fa</type>
+  <automaton>
+    <state id="jff-note-0" name="sneaky"><x>0</x><y>0</y><initial/></state>
+    <note><text>mine</text><x>5</x><y>5</y></note>
+  </automaton>
+</structure>`;
+      const ids = (toElements(parseJflap(xml), 'ε', true) as Array<{ data: { id: string } }>).map(
+        (e) => e.data.id,
+      );
+      expect(new Set(ids).size).toBe(ids.length);
+    });
   });
 });

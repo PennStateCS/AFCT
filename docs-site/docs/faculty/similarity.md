@@ -86,7 +86,7 @@ The **Common threshold** control at the top sets where that quarter falls. It is
 
 ### Comparing the files
 
-**Compare submissions** opens two files side by side, drawn the way that problem type is normally read: two automata, two grammars, two expressions. Node positions are kept as the students left them, because where somebody placed their states is exactly what separates a copied file from the same answer worked out twice. When a group involves more than two students, either side can be switched to any of the others, and each relationship inside the group has its own **Compare** so you can go straight to the two files a given line is about.
+**Compare submissions** opens two files side by side, drawn the way that problem type is normally read: two automata, two grammars, two expressions. Node positions are kept as the students left them, because where somebody placed their states is exactly what separates a copied file from the same answer worked out twice. Any notes a student wrote on the JFLAP canvas are drawn too, which is what lets you read the text behind a line about writing that matches word for word. When a group involves more than two students, either side can be switched to any of the others, and each relationship inside the group has its own **Compare** so you can go straight to the two files a given line is about.
 
 Individual files can also be opened from the chronology. Opening or downloading a student's submission is recorded in the system log, as it is everywhere else in AFCT.
 

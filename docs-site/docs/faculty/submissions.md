@@ -21,7 +21,7 @@ Submissions are listed newest first. Each row shows when the file was submitted,
 Use the status filters to focus on the results you need. For each submission, you can:
 
 - View autograder feedback when feedback is available
-- Open the submitted file in AFCT's viewer
+- Open the submitted file in AFCT's viewer, which draws the machine and any notes the student wrote on the JFLAP canvas
 - Download the original submitted file
 - Rerun the submission through the autograder
 
