@@ -218,6 +218,16 @@ describe('notes', () => {
    */
   it('reads notes out of a file saved by JFLAP', () => {
     const xml = readFileSync(join(__dirname, '__fixtures__', 'jflap-notes-from-jflap.jff'), 'utf8');
+    /**
+     * The fixture still has its CRLF.
+     *
+     * Not a tautology: git normalizes line endings by default, and it silently stripped these
+     * the first time the file was committed. With LF the parse below produces the same answer,
+     * so every other assertion here would go on passing while no longer testing the CRLF path
+     * at all. `.gitattributes` pins the file; this is what notices if that pin is ever lost.
+     */
+    expect(xml).toContain('flip on 0\r\nAnother line');
+
     const parsed = parseJflap(xml);
 
     expect(parsed.notes).toHaveLength(2);
