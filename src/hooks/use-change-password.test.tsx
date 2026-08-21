@@ -53,7 +53,7 @@ describe('useChangePassword', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const { result } = renderHook(() => useChangePassword());
-    await expect(result.current('x', 'y')).rejects.toThrow('Failed to change password');
+    await expect(result.current('x', 'y')).rejects.toThrow('Failed to save your password');
     expect(updateMock).not.toHaveBeenCalled();
   });
 });

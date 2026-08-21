@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   // for one address and not another would leak the thing this endpoint exists to protect.
   if (decision.status !== 'blocked') {
     try {
-      const { sent } = await requestPasswordReset(email);
+      const { sent, kind } = await requestPasswordReset(email);
       await createEnhancedActivityLog(prisma, req, {
         userId: null,
         action: 'PASSWORD_RESET_REQUESTED',
@@ -76,7 +76,10 @@ export async function POST(req: Request) {
         // where an administrator would look after one. `queued` says whether a link was made
         // for it, which is what distinguishes a real request from a probe. It is not whether
         // the message was *delivered*: that happens later, and the mail queue records it.
-        metadata: { email, queued: sent },
+        // `kind` distinguishes the two messages that can go out: a reset link, or an
+        // explanation for an account that has no password to reset. The response is identical
+        // either way, so the log is the only place the difference is visible.
+        metadata: { email, queued: sent, kind: kind ?? null },
       });
     } catch (error) {
       // A mail failure is ours, not the caller's, and telling them would also tell them the

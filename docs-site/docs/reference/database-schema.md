@@ -1443,6 +1443,7 @@ erDiagram
   String oidcClientSecret "nullable"
   String oidcButtonLabel "nullable"
   Boolean oidcTrustEmail
+  Boolean allowLinkedAccountPasswords
   Boolean smtpEnabled
   String smtpHost "nullable"
   Int smtpPort "nullable"
@@ -1673,6 +1674,16 @@ Properties as follows:
   > silently never fire at those institutions; with it on for a provider that lets people
   > choose their own address, an email becomes a way to reach somebody else's account. Hence
   > an explicit, logged decision by an administrator rather than a default either way.
+- `allowLinkedAccountPasswords`
+  > Whether somebody who signs in through an institution or an LMS may also set an AFCT
+  > password for themselves.
+  >
+  > On by default, which is what every install does today. An institution that requires its
+  > own sign-in (and the multi-factor rules that come with it) can turn it off, so a second
+  > way into an account cannot be added without them. Deliberately narrow: it governs
+  > self-service only, never an administrator or a faculty member setting a password for
+  > somebody, because that is the way back in when nothing else works and an install must not
+  > be able to configure itself into having none.
 - `smtpEnabled`
   > Whether AFCT may send email at all. Off until an admin configures a server and turns it
   > on, so an install that does not want mail behaves exactly as it did before.

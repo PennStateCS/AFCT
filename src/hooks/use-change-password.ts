@@ -14,15 +14,23 @@ import { apiPaths } from '@/lib/api-paths';
 export function useChangePassword() {
   const { update } = useSession();
 
-  return async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+  return async function changePassword(
+    /**
+     * Null when the account has no password yet, which is the one case the endpoint accepts
+     * without one. Sent as an absent field rather than an empty string: the server decides
+     * which mode it is in from the account, and an empty string would just fail validation.
+     */
+    oldPassword: string | null,
+    newPassword: string,
+  ): Promise<void> {
     const res = await fetch(apiPaths.myPassword(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oldPassword, newPassword }),
+      body: JSON.stringify(oldPassword === null ? { newPassword } : { oldPassword, newPassword }),
     });
 
     if (!res.ok) {
-      let message = 'Failed to change password';
+      let message = 'Failed to save your password';
       // The error body is usually JSON ({ error }), but tolerate a non-JSON response
       // (e.g. an HTML error page) instead of throwing an unhelpful parse error.
       try {

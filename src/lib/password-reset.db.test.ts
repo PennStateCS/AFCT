@@ -26,6 +26,7 @@ const NEW_PASSWORD = 'Str0ng!NewPass1';
 
 async function destroyFixtures() {
   await prisma.mailQueue.deleteMany({});
+  await prisma.linkedIdentity.deleteMany({ where: { userId: { in: [ids.user, ids.other] } } });
   await prisma.singleUseToken.deleteMany({ where: { userId: { in: [ids.user, ids.other] } } });
   await prisma.user.deleteMany({ where: { id: { in: [ids.user, ids.other] } } });
 }
@@ -152,6 +153,80 @@ describe('requesting a link', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.tokenHash).toBe(hashSingleUseToken(token));
     expect(rows[0]!.tokenHash).not.toBe(token);
+  });
+});
+
+/**
+ * An account with no password, which is what an institutional sign-in or an LMS launch creates.
+ *
+ * There is nothing to reset, and a link must not be sent: it would quietly add a second way
+ * into an account at an institution that chose its own sign-in precisely to avoid that. So the
+ * message explains how the account actually signs in instead.
+ */
+describe('requesting a link for an account with no password', () => {
+  const noPassword = () =>
+    prisma.user.update({ where: { id: ids.user }, data: { password: null } });
+
+  const linkLti = () =>
+    prisma.linkedIdentity.create({
+      data: {
+        userId: ids.user,
+        kind: 'LTI',
+        issuer: `https://lms-${SUFFIX}.example.test`,
+        subject: `s-${SUFFIX}`,
+        linkedVia: 'JUST_IN_TIME',
+      },
+    });
+
+  it('mints no reset token', async () => {
+    await noPassword();
+    await linkLti();
+
+    const { kind } = await requestPasswordReset(EMAIL);
+
+    expect(kind).toBe('explanation');
+    expect(await prisma.singleUseToken.findMany({ where: { userId: ids.user } })).toHaveLength(0);
+  });
+
+  it('sends a message that explains rather than one carrying a link', async () => {
+    await noPassword();
+    await linkLti();
+
+    await requestPasswordReset(EMAIL);
+    const body = bodyOf((await queuedMail()).at(-1)!);
+
+    expect(body).not.toMatch(/reset-password\?token=/);
+    expect(body).toMatch(/LMS/);
+    // Always, because somebody whose LMS access has ended cannot act on the line above.
+    expect(body).toMatch(/administrator/i);
+  });
+
+  // The whole point of putting the answer in the mail rather than on the page: the endpoint
+  // must not become a way to ask whether an address has an account, or what kind.
+  it('still reports as sent, so the caller cannot tell the two apart', async () => {
+    await noPassword();
+    await linkLti();
+
+    const withoutPassword = await requestPasswordReset(EMAIL);
+    await prisma.mailQueue.deleteMany({});
+    await prisma.user.update({
+      where: { id: ids.user },
+      data: { password: await bcrypt.hash('OldPassw0rd!', 10) },
+    });
+    const withPassword = await requestPasswordReset(EMAIL);
+
+    expect(withoutPassword.sent).toBe(true);
+    expect(withPassword.sent).toBe(true);
+  });
+
+  it('names no way in for an account that has none at all', async () => {
+    await noPassword();
+
+    await requestPasswordReset(EMAIL);
+    const body = bodyOf((await queuedMail()).at(-1)!);
+
+    expect(body).not.toMatch(/your LMS/);
+    expect(body).toMatch(/administrator/i);
   });
 });
 

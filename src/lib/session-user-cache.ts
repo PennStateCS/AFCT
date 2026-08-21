@@ -40,6 +40,14 @@ export type SessionUserRow = {
   isAdmin: boolean;
   avatar: string | null;
   temporaryPassword: boolean;
+  /**
+   * Whether a local password exists at all. Only the fact, never the hash.
+   *
+   * Needed because "must change a temporary password" is meaningless on an account that has no
+   * password to change, and forcing it there sends somebody to a form they cannot complete and
+   * cannot navigate away from.
+   */
+  hasPassword: boolean;
   inactive: boolean;
   passwordChangedAt: Date | null;
   cropX: number | null;
@@ -53,6 +61,8 @@ const SESSION_USER_SELECT = {
   isAdmin: true,
   avatar: true,
   temporaryPassword: true,
+  // Selected to be reduced to a boolean below; the hash never leaves this module.
+  password: true,
   inactive: true,
   passwordChangedAt: true,
   cropX: true,
@@ -109,7 +119,19 @@ export function getSessionUser(
 
   const promise = prisma.user
     .findUnique({ where: { id: userId }, select: SESSION_USER_SELECT })
-    .then((u) => u as SessionUserRow | null)
+    /**
+     * The hash is reduced to a boolean and then dropped, so the cached row never holds it.
+     *
+     * Destructured out rather than spread over: `{ ...u, hasPassword }` would leave the hash
+     * sitting on an object that is cached, shared by every request in the window, and handed
+     * to the session callback. Nothing reads it today, and that is exactly the kind of thing
+     * a later change carries into a response by accident.
+     */
+    .then((u) => {
+      if (!u) return null;
+      const { password, ...rest } = u;
+      return { ...rest, hasPassword: Boolean(password) } satisfies SessionUserRow;
+    })
     .catch((err) => {
       // Never cache a failure: the caller treats a throw as "cannot verify" and
       // degrades privileges, and the next request should get a real attempt.

@@ -22,6 +22,25 @@ export const ChangePasswordSchema = z
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 
 /**
+ * Setting a first password, on an account that has none.
+ *
+ * Same strength rules, no current password: there is not one to give. Kept separate from
+ * {@link ChangePasswordSchema} rather than making its `oldPassword` optional, so neither form
+ * can accidentally accept the other's shape.
+ */
+export const SetPasswordSchema = z
+  .object({
+    newPassword: StrongPassword,
+    confirmNewPassword: z.string().min(1, 'Please confirm your new password.'),
+  })
+  .refine((d) => d.newPassword === d.confirmNewPassword, {
+    path: ['confirmNewPassword'],
+    message: 'Passwords do not match.',
+  });
+
+export type SetPasswordInput = z.infer<typeof SetPasswordSchema>;
+
+/**
  * An admin setting another user's password (ResetPasswordDialog). Unlike
  * {@link ChangePasswordSchema} there's no old password to verify, just a strong
  * new password confirmed twice.

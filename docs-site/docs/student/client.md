@@ -24,6 +24,16 @@ The first time you open the Submission Center you are asked to sign in:
 
 Select **Login**. Messages appear below the button while it connects. Only active accounts can sign in.
 
+:::note If you usually open AFCT from your LMS
+The client needs an AFCT password, and you may not have one: opening AFCT from Canvas,
+Brightspace or Blackboard signs you in without one, and so does signing in with your university
+account. Open AFCT the way you normally do, go to **Account, Password**, and choose **Set
+password**. Then use that password here.
+
+If you see no **Set password** option, your institution has chosen not to allow AFCT passwords on
+accounts like yours; ask an administrator to set one for you.
+:::
+
 Use **Logout** (top right of the main window) when you are done, especially on a shared machine.
 
 ## Find your work

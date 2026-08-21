@@ -104,7 +104,27 @@ describe('session user cache', () => {
     expect(select.isAdmin).toBe(true);
     expect(select.inactive).toBe(true);
     expect(select.passwordChangedAt).toBe(true);
-    // Never widen this into the password hash.
-    expect(select.password).toBeUndefined();
+  });
+
+  /**
+   * The hash is read, because whether one exists decides whether a temporary password can be
+   * forced, and it is then dropped. Asserting on the row rather than on the select is the
+   * stronger test: it is the cached object that gets shared and handed around, so that is
+   * where the hash must not be.
+   */
+  it('never keeps the password hash on the cached row', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...row(), password: 'a-real-hash' });
+    const user = await getSessionUser('u1', 1_000_000);
+
+    expect(user).not.toHaveProperty('password');
+    expect(JSON.stringify(user)).not.toContain('a-real-hash');
+    expect(user?.hasPassword).toBe(true);
+  });
+
+  it('reports an account with no password as having none', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...row(), password: null });
+    const user = await getSessionUser('u1', 1_000_000);
+
+    expect(user?.hasPassword).toBe(false);
   });
 });

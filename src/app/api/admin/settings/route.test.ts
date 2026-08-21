@@ -53,6 +53,7 @@ describe('GET /api/system-settings', () => {
       timezone: 'UTC',
       maxUploadSizeMb: 25,
       allowSignup: true,
+      allowLinkedAccountPasswords: true,
       signupAllowedDomains: '',
       clock24Hour: false,
       sessionTimeoutMinutes: 60,
@@ -119,6 +120,9 @@ describe('GET /api/system-settings', () => {
       timezone: 'America/New_York',
       maxUploadSizeMb: 100,
       allowSignup: false,
+      // Absent from the stored row above, so this is the default filling in, which is what a
+      // settings row written before the column existed looks like.
+      allowLinkedAccountPasswords: true,
       signupAllowedDomains: '',
       clock24Hour: false,
       sessionTimeoutMinutes: 45,

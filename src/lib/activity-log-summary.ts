@@ -448,7 +448,19 @@ export function describeActivity(action: string, metadata: Metadata): string | n
     case 'CHANGE_PASSWORD':
       return metadata?.wasTemporaryPassword === true ? 'replaced a temporary password' : null;
 
+    // A first password on an account that had none, which is a way in being added rather than
+    // one being changed. Worth saying plainly, because that is the difference somebody
+    // reviewing this log is looking for.
+    case 'SET_PASSWORD':
+      return 'first password, set by the account holder';
+
+    case 'SET_PASSWORD_DENIED':
+      return 'this site does not allow it';
+
     case 'PASSWORD_RESET_REQUESTED':
+      // Which of the two messages went out. An account with no password gets an explanation
+      // rather than a link, and reading that as "a link was sent" would be wrong.
+      if (metadata?.kind === 'explanation') return 'no password to reset, told how to sign in';
       // Whether a link was actually made, which is what separates a real request from a probe
       // at an address with no account.
       return metadata?.queued === true || metadata?.sent === true

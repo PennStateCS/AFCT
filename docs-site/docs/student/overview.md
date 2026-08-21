@@ -46,8 +46,25 @@ You can update your name, avatar, and timezone. Choose **Automatic** to follow t
 
 Your account email address cannot be changed in AFCT. Contact an administrator if it is incorrect.
 
+## If you open AFCT from your LMS or your university login
+
+You may not have an AFCT password at all. If you reach AFCT by clicking a link in Canvas,
+Brightspace or Blackboard, or by signing in with your university account, that is what signs you
+in, and you never need one for the website.
+
+You do need one for the **desktop client**, which asks for an email and a password. To get one,
+open AFCT the way you normally do, go to **Account, Password**, and choose **Set password**. You
+can carry on signing in the way you do now; this only adds another way.
+
+If there is no **Set password** option, your institution has chosen not to allow AFCT passwords
+on accounts like yours. Ask an administrator, who can set one for you.
+
 ## Sign-in problems
 
 Too many failed attempts temporarily lock an account. The lock clears on its own after the lockout period; you can wait it out, or ask an administrator to unlock your account immediately or reset your password.
 
 An administrator can set a temporary password. When that option is used, AFCT asks you to choose a new password at your next sign-in.
+
+If you ask to reset a password on an account that has never had one, you are emailed an
+explanation of how that account signs in rather than a reset link. Not every AFCT site sends
+email at all; where it does not, an administrator sets passwords instead.

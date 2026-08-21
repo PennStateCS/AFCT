@@ -9,6 +9,14 @@ export const MIN_UPLOAD_SIZE_MB = 1;
 // avatars a few MB); the old 1024 let a single request stream ~1 GB into memory.
 export const MAX_UPLOAD_SIZE_MB = 50;
 export const DEFAULT_ALLOW_SIGNUP = true;
+/**
+ * Whether somebody who signs in through an institution or an LMS may also set an AFCT password.
+ *
+ * True, matching every install that exists today. Needed as a constant because the settings row
+ * can be absent (see `/api/system-settings/public`), and reading a missing row as "not allowed"
+ * would take the feature away exactly when nothing has been configured yet.
+ */
+export const DEFAULT_ALLOW_LINKED_ACCOUNT_PASSWORDS = true;
 /** Canonical comma-separated signup email-domain allow-list. Blank = any domain allowed. */
 export const DEFAULT_SIGNUP_ALLOWED_DOMAINS = '';
 /** App-wide clock: false = 12-hour (AM/PM), true = 24-hour. Display-only. */

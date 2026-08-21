@@ -130,6 +130,7 @@ export default function SystemSettingsClient() {
     oidcClientId,
     oidcButtonLabel,
     oidcTrustEmail,
+    allowLinkedAccountPasswords,
   } = form;
 
   // hCaptcha secret is write-only (we only know whether one is set), so it stays local
@@ -302,6 +303,7 @@ export default function SystemSettingsClient() {
       oidcClientId: oidcClientId.trim(),
       oidcButtonLabel: oidcButtonLabel.trim(),
       oidcTrustEmail,
+      allowLinkedAccountPasswords,
       ...(oidcClientSecretClear
         ? { oidcClientSecretClear: true }
         : // Sent exactly as typed: the secret is opaque, and its edges may be significant.
@@ -364,6 +366,7 @@ export default function SystemSettingsClient() {
         oidcClientId: oidcClientId.trim(),
         oidcButtonLabel: oidcButtonLabel.trim(),
         oidcTrustEmail,
+        allowLinkedAccountPasswords,
       };
       dispatchForm({ type: 'reset', snapshot: savedSnapshot });
       setBaseline(savedSnapshot);
@@ -385,11 +388,7 @@ export default function SystemSettingsClient() {
         : oidcClientSecret !== '' || oidcClientSecretConfigured;
       setOidcClientSecretConfigured(oidcSecretNowStored);
       setOidcClientSecretReadable(
-        oidcClientSecretClear
-          ? false
-          : oidcClientSecret !== ''
-            ? true
-            : oidcClientSecretReadable,
+        oidcClientSecretClear ? false : oidcClientSecret !== '' ? true : oidcClientSecretReadable,
       );
 
       const smtpPasswordNowStored = smtpPasswordClear
@@ -444,6 +443,7 @@ export default function SystemSettingsClient() {
               oidcClientId: oidcClientId.trim(),
               oidcButtonLabel: oidcButtonLabel.trim(),
               oidcTrustEmail,
+              allowLinkedAccountPasswords,
               // The same answers the component state took above, so a revisit served from
               // cache says what the screen says rather than the pre-save response.
               oidcClientSecretConfigured: oidcSecretNowStored,
@@ -611,6 +611,7 @@ export default function SystemSettingsClient() {
                 clientId={oidcClientId}
                 buttonLabel={oidcButtonLabel}
                 trustEmail={oidcTrustEmail}
+                allowLinkedAccountPasswords={allowLinkedAccountPasswords}
                 setField={setField}
                 disabled={disabled}
                 clientSecret={oidcClientSecret}
