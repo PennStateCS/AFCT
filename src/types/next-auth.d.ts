@@ -28,6 +28,13 @@ declare module 'next-auth' {
        */
       inactive?: boolean;
     } & DefaultSession['user'];
+    /**
+     * When this session ends for good (ms since epoch), from the absolute cap counted at
+     * sign-in. Unlike the idle limit, no amount of activity moves it, which is why the client
+     * needs to know it: the session watcher can only warn about an ending it can see coming.
+     * Absent on tokens issued before the cap existed, which are treated as uncapped.
+     */
+    sessionEndsAt?: number;
 
     ipAddress?: string;
     userAgent?: string;
