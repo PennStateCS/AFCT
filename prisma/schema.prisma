@@ -150,6 +150,7 @@ enum IdentityLinkMethod {
 /// @erd Courses
 /// @erd Submissions
 /// @erd System
+/// @erd LTI
 model User {
   /// Unique identifier.
   id                String  @id @default(cuid())
@@ -319,7 +320,7 @@ model LinkedIdentity {
 /// and each deployment is a distinct registration even though the issuer and client id repeat.
 /// Treating the issuer as the key is the classic way to make two deployments collide.
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiPlatform {
   /// Unique identifier.
   id           String @id @default(cuid())
@@ -385,7 +386,7 @@ model LtiPlatform {
 /// The private half is encrypted at rest like every other secret. The public half is not,
 /// because publishing it is the entire point.
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiKeyPair {
   /// Unique identifier.
   id         String  @id @default(cuid())
@@ -455,6 +456,7 @@ model SingleUseToken {
 /// @erd Identity
 /// @erd Submissions
 /// @erd System
+/// @erd LTI
 model Course {
   /// Unique identifier.
   id                  String    @id @default(cuid())
@@ -564,6 +566,7 @@ model Roster {
 /// @erd Identity
 /// @erd Submissions
 /// @erd System
+/// @erd LTI
 model Assignment {
   /// Unique identifier.
   id                 String            @id @default(cuid())
@@ -1415,7 +1418,7 @@ model SystemSettings {
 /// two. The reverse is refused by the unique constraint: one LMS course opening two AFCT courses
 /// has no answer to "which one did they mean".
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiContextLink {
   /// Unique identifier.
   id String @id @default(cuid())
@@ -1473,7 +1476,7 @@ model LtiContextLink {
 /// Short-lived, and scoped to the person the launch signed in: this is a step in a flow, not a
 /// record of anything.
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiPendingLink {
   /// Unique identifier, and what the browser is handed to name this pending link.
   id String @id @default(cuid())
@@ -1516,7 +1519,7 @@ model LtiPendingLink {
 /// Created on demand the first time a grade is sent, and remembered so later grades go to the
 /// same column instead of making a new one each time.
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiLineItem {
   /// Unique identifier.
   id String @id @default(cuid())
@@ -1565,7 +1568,7 @@ enum LtiScoreState {
 /// One row per assignment per student: a regrade replaces the pending row instead of queueing a
 /// second, so the LMS receives the current grade rather than a history of edits.
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiScoreQueue {
   /// Unique identifier.
   id String @id @default(cuid())
@@ -1621,7 +1624,7 @@ model LtiScoreQueue {
 /// browser. In a URL, somebody could change where AFCT posts its signed answer, and AFCT signs
 /// that answer with its own key.
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiPendingDeepLink {
   /// Unique identifier, and what the browser is handed to name this pending choice.
   id String @id @default(cuid())
@@ -1677,7 +1680,7 @@ model LtiPendingDeepLink {
 /// against the login that started it, which LTI Core requires and which two loose tokens
 /// cannot express. Consuming the row is also the single point at which a launch is spent.
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiLaunchTransaction {
   /// Unique identifier.
   id String @id @default(cuid())
@@ -1731,7 +1734,7 @@ model LtiLaunchTransaction {
 /// wherever the query happened to order first. Recorded on every launch and on every roster
 /// sync, which are the two moments the LMS tells AFCT who is in which course.
 ///
-/// @namespace Identity
+/// @namespace LTI
 model LtiContextMember {
   /// Unique identifier.
   id String @id @default(cuid())
@@ -1914,7 +1917,7 @@ model EvaluatorTrial {
 /// their AFCT password, which is the one thing an LMS cannot assert, and the link is then a
 /// deliberate act rather than an automatic one. Short-lived, single use, and useless to
 /// anybody who cannot also sign in as that account.
-/// @namespace Identity
+/// @namespace LTI
 model LtiPendingIdentityLink {
   /// Unique identifier, and what the browser is handed to name this pending confirmation.
   id String @id @default(cuid())
@@ -1948,7 +1951,7 @@ model LtiPendingIdentityLink {
 /// picker cannot tell what it has already offered, and the same assignment can be added twice
 /// under two names, which then disagree about which gradebook column is theirs.
 ///
-/// @namespace lti
+/// @namespace LTI
 model LtiDeepLink {
   /// Unique identifier.
   id String @id @default(cuid())
