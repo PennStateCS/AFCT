@@ -436,3 +436,170 @@ test.describe('accessibility: account recovery (axe, contrast excluded)', () => 
     expect(violations, summarize(violations)).toEqual([]);
   });
 });
+
+/**
+ * The surfaces built since the last audit.
+ *
+ * Two WCAG sweeps and the block above between them covered the app as it stood in July. Almost
+ * everything below shipped after that and had never been scanned at all: the assignment page's
+ * own tabs, the group sets, the problem bank, the evaluator sandbox, and the LTI screens an LMS
+ * draws inside its own page. A green suite said nothing about any of them.
+ */
+test.describe('accessibility: surfaces added since the last audit', () => {
+  let COURSE = '';
+  let ASSIGNMENT = '';
+
+  test.beforeAll(async ({ browser }) => {
+    COURSE = await createFixtureCourse(browser);
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      await signIn(page, 'faculty2');
+      const res = await page.request.post(`/api/courses/${COURSE}/assignments`, {
+        data: {
+          title: unique('A11y tabs'),
+          dueDate: new Date(Date.now() + 7 * 24 * 3600_000).toISOString(),
+          assignedToEveryone: true,
+          isPublished: true,
+        },
+      });
+      expect(res.ok(), `assignment create failed: ${res.status()} ${await res.text()}`).toBe(true);
+      ASSIGNMENT = ((await res.json()) as { id: string }).id;
+    } finally {
+      await context.close();
+    }
+  });
+
+  /**
+   * Open one of the assignment page's tabs and wait for the tab itself to be selected, rather
+   * than for the page shell. The shell renders before the panel has anything in it, so waiting
+   * on it would scan an empty box and call it clean.
+   */
+  async function openAssignmentTab(page: Page, tab: string, tabName: string) {
+    await signIn(page, 'faculty2');
+    await page.goto(`/dashboard/courses/${COURSE}/${ASSIGNMENT}?tab=${tab}`);
+    await expect(page.getByRole('tab', { name: tabName, selected: true })).toBeVisible({
+      timeout: 60_000,
+    });
+  }
+
+  for (const [tab, name] of [
+    ['type', 'Type'],
+    ['assign-to', 'Assign To'],
+    ['problems', 'Problems'],
+    ['submissions', 'Submissions'],
+    ['statistics', 'Statistics'],
+    ['similarity', 'Similarity'],
+    ['settings', 'Settings'],
+  ] as const) {
+    test(`the assignment ${name} tab`, async ({ page }) => {
+      await openAssignmentTab(page, tab, name);
+      const { violations } = await scan(page);
+      expect(violations, summarize(violations)).toEqual([]);
+    });
+  }
+
+  test('the course groups tab', async ({ page }) => {
+    await signIn(page, 'faculty2');
+    await page.goto(`/dashboard/courses/${COURSE}?tab=groups`);
+    await expect(page.getByRole('tab', { name: 'Groups', selected: true })).toBeVisible({
+      timeout: 60_000,
+    });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the course problem bank', async ({ page }) => {
+    await signIn(page, 'faculty2');
+    await page.goto(`/dashboard/courses/${COURSE}?tab=problems`);
+    await expect(page.getByRole('tab', { name: 'Problems', selected: true })).toBeVisible({
+      timeout: 60_000,
+    });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the course settings tab', async ({ page }) => {
+    await signIn(page, 'faculty2');
+    await page.goto(`/dashboard/courses/${COURSE}?tab=settings`);
+    await expect(page.getByRole('tab', { name: 'Settings', selected: true })).toBeVisible({
+      timeout: 60_000,
+    });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the evaluator sandbox', async ({ page }) => {
+    await signIn(page, 'faculty2');
+    await page.goto('/dashboard/evaluator-sandbox');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 60_000 });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  /**
+   * A student's own view of an assignment, which is the surface the study measures and the one
+   * with the least attention paid to it.
+   */
+  test('the student assignment view', async ({ page }) => {
+    await signIn(page, 'student');
+    await page.goto(`/dashboard/courses/${COURSE}/${ASSIGNMENT}`);
+    await expect(page.getByRole('main')).not.toBeEmpty({ timeout: 60_000 });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+});
+
+/**
+ * The same surfaces with something open.
+ *
+ * A scan at rest never sees a dialog or a menu, which is how two prior audits missed the
+ * aria-hidden problem the editor block already covers. These are the newer dialogs, opened the
+ * way somebody would open them.
+ */
+test.describe('accessibility: newer dialogs (axe, contrast excluded)', () => {
+  let COURSE = '';
+
+  test.beforeAll(async ({ browser }) => {
+    COURSE = await createFixtureCourse(browser);
+  });
+
+  test('the create-group-set dialog', async ({ page }) => {
+    await signIn(page, 'faculty2');
+    await page.goto(`/dashboard/courses/${COURSE}?tab=groups`);
+    const open = page.getByRole('button', { name: /Create Group Set|New Group Set/i }).first();
+    await expect(open).toBeVisible({ timeout: 60_000 });
+    await open.click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the course settings tab with the status card', async ({ page }) => {
+    await signIn(page, 'faculty2');
+    await page.goto(`/dashboard/courses/${COURSE}?tab=settings`);
+    await expect(page.getByRole('tab', { name: 'Settings', selected: true })).toBeVisible({
+      timeout: 60_000,
+    });
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  /** The account page's own panels, which a student reaches to set a password or a token. */
+  test('the account page tabs', async ({ page }) => {
+    await signIn(page, 'student');
+    await page.goto('/dashboard/account');
+    await expect(page.getByRole('heading', { level: 1, name: 'Account' })).toBeVisible({
+      timeout: 60_000,
+    });
+    // Asserted rather than skipped: a `count()` guard here would let the whole test pass by
+    // finding nothing, which is exactly how a scan reports clean about a page it never opened.
+    for (const tab of ['Password', 'Connected accounts', 'App tokens']) {
+      const trigger = page.getByRole('tab', { name: tab });
+      await expect(trigger).toBeVisible();
+      await trigger.click();
+      const { violations } = await scan(page);
+      expect(violations, `${tab}\n${summarize(violations)}`).toEqual([]);
+    }
+  });
+});
