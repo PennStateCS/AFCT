@@ -94,6 +94,8 @@ export async function buildJwtToken({
           avatar: true,
           // The column behind "must change password": an administrator-issued temporary one.
           temporaryPassword: true,
+          // Only to reduce to a boolean beside it: forcing a change needs something to change.
+          password: true,
         },
       });
       token.firstName = fullUser?.firstName || undefined;
@@ -102,7 +104,8 @@ export async function buildJwtToken({
       // the safe reading.
       token.isAdmin = fullUser?.isAdmin ?? false;
       token.avatar = fullUser?.avatar ?? undefined;
-      token.mustChangePassword = Boolean(fullUser?.temporaryPassword);
+      // Same rule as `buildSession`: nothing to change means nothing to force.
+      token.mustChangePassword = Boolean(fullUser?.temporaryPassword && fullUser?.password);
       // Snapshot the password-change instant so a later change/reset revokes this
       // token (see buildSession).
       token.pwChangedAt = fullUser?.passwordChangedAt
@@ -204,7 +207,15 @@ export async function buildSession({
     session.user.lastName = freshUser.lastName || undefined;
     session.user.isAdmin = freshUser.isAdmin;
     session.user.avatar = freshUser.avatar || undefined;
-    session.user.mustChangePassword = freshUser.temporaryPassword;
+    /**
+     * A temporary password can only be forced on an account that has one.
+     *
+     * `temporaryPassword` on an account with no password would send somebody to a form asking
+     * for a current password they do not have, and the dashboard bounces them straight back to
+     * it, so there is no way out. Nothing writes that combination today; this makes it
+     * impossible for it to trap anyone if something starts to.
+     */
+    session.user.mustChangePassword = freshUser.temporaryPassword && freshUser.hasPassword;
     session.user.inactive = false;
     session.user.cropX = freshUser.cropX ?? undefined;
     session.user.cropY = freshUser.cropY ?? undefined;

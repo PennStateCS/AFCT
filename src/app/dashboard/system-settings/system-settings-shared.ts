@@ -65,6 +65,7 @@ export type SystemSettingsResponse = {
   oidcClientSecretConfigured: boolean;
   oidcButtonLabel: string;
   oidcTrustEmail: boolean;
+  allowLinkedAccountPasswords: boolean;
 };
 
 // Fields covered by the main Save (used for unsaved-changes tracking).
@@ -100,6 +101,7 @@ export type FormSnapshot = {
   oidcClientId: string;
   oidcButtonLabel: string;
   oidcTrustEmail: boolean;
+  allowLinkedAccountPasswords: boolean;
 };
 
 /** Typed single-field updater the field JSX calls. */
@@ -372,6 +374,8 @@ export function buildSettingsSnapshot(data: SystemSettingsResponse): FormSnapsho
     oidcClientId: data.oidcClientId ?? '',
     oidcButtonLabel: data.oidcButtonLabel ?? '',
     oidcTrustEmail: data.oidcTrustEmail ?? false,
+    // Default true, matching the server: a missing value is an older payload, not a policy.
+    allowLinkedAccountPasswords: data.allowLinkedAccountPasswords ?? true,
   };
 }
 
@@ -422,6 +426,7 @@ export const EMPTY_FORM: FormSnapshot = {
   oidcClientId: '',
   oidcButtonLabel: '',
   oidcTrustEmail: false,
+  allowLinkedAccountPasswords: true,
 };
 
 /**

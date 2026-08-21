@@ -19,6 +19,7 @@ export function SignInTab({
   clientId,
   buttonLabel,
   trustEmail,
+  allowLinkedAccountPasswords,
   setField,
   disabled,
   clientSecret,
@@ -34,6 +35,8 @@ export function SignInTab({
   clientId: string;
   buttonLabel: string;
   trustEmail: boolean;
+  /** Whether somebody who signs in elsewhere may also set an AFCT password for themselves. */
+  allowLinkedAccountPasswords: boolean;
   setField: SetField;
   disabled: boolean;
   clientSecret: string;
@@ -187,6 +190,28 @@ export function SignInTab({
           without it, people are refused with &ldquo;your institution did not share an email
           address&rdquo; whatever this setting says.
         </p>
+      </div>
+      <div className="mt-6 space-y-2">
+        <h2 className="text-sm font-medium">AFCT passwords</h2>
+        <div className={SETTINGS_BOX_CLASS}>
+          <SwitchField
+            id="allow-linked-account-passwords"
+            name="allow-linked-account-passwords"
+            label="Let people who sign in through an institution or an LMS also set an AFCT password"
+            checked={allowLinkedAccountPasswords}
+            onCheckedChange={(v) => setField('allowLinkedAccountPasswords', v)}
+            disabled={disabled}
+            descriptionPlacement="inline"
+            description="They can set one from their own Account page. Turn this off if people must always sign in the way your institution requires."
+          />
+          <p className="text-muted-foreground mt-2 text-sm">
+            You can always set a password for someone yourself, whichever way this is set, so
+            turning it off cannot leave anybody with no way back in. Note that the AFCT desktop
+            client signs in with an email and a password, so a student who only ever opens AFCT from
+            your LMS needs one to use it. With this off, an administrator who signs in through your
+            institution also cannot confirm an LMS launch, which asks for an AFCT password.
+          </p>
+        </div>
       </div>
     </>
   );

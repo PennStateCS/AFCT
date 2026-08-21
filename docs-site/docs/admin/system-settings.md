@@ -84,6 +84,15 @@ recover their own accounts: they receive a link that works once and expires in a
 it signs them out everywhere else. Until email is configured that link is not shown, because it
 would lead to a page that could only apologise.
 
+**Without a mail server, you are the recovery channel.** Nobody can reset their own password by
+email, so an administrator sets one from [User Accounts](user-accounts.md), or a faculty member
+does it for a student on their own roster. People who sign in through your institution or your
+LMS are unaffected, and can set an AFCT password for themselves from their account page (see
+[AFCT passwords on accounts that sign in elsewhere](#afct-passwords-on-accounts-that-sign-in-elsewhere)).
+
+Somebody who asks to reset a password on an account that has none is not sent a link, because
+there is nothing to reset. They are told how that account signs in instead.
+
 The encryption that protects the stored password uses a key held on the server rather than in the
 database, so a copy of the database alone cannot reveal it. See
 [Backups and recovery](../operations/backups.md) for what that means when restoring onto a
@@ -122,6 +131,26 @@ the app registration or through the OpenID scope on v2.0 endpoints. If your peop
 setting can substitute for it. AFCT will not fall back to a username instead: Microsoft's own
 guidance is that those are neither durable nor guaranteed to be real addresses.
 :::
+
+### AFCT passwords on accounts that sign in elsewhere
+
+Somebody whose account was created by an institutional sign-in or an LMS launch has no AFCT
+password. **Let people who sign in through an institution or an LMS also set an AFCT password**
+controls whether they may give themselves one, from **Account, Password**. It is on to begin
+with.
+
+Leave it on unless your institution requires everyone to sign in its own way. Two things depend
+on it:
+
+- The **AFCT desktop client signs in with an email and a password.** A student who only ever
+  opens AFCT from your LMS needs an AFCT password to use it at all.
+- An administrator who signs in through your institution needs an AFCT password to confirm an
+  LMS launch, which asks for one deliberately.
+
+Turning it off never leaves anyone stranded: **you can always set a password for someone
+yourself** from [User Accounts](user-accounts.md), and faculty can do the same for students on
+their own roster. That is also the way in on a site with no mail server, where there is no
+reset link to send.
 
 ## LTI
 

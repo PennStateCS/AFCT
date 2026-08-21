@@ -54,6 +54,7 @@ export const SystemSettingsUpdateSchema = z.object({
 
   // Display / signup toggles.
   allowSignup: z.boolean().optional(),
+  allowLinkedAccountPasswords: z.boolean().optional(),
   clock24Hour: z.boolean().optional(),
 
   // Signup email-domain allow-list (validated + normalized further in the route).

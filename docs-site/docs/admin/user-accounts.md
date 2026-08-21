@@ -67,15 +67,34 @@ Deactivated accounts are never sent a reset link, so deactivating someone closes
 well as the sign-in page.
 :::
 
+## Accounts with no AFCT password
+
+An account created by an institutional sign-in or an LMS launch has no AFCT password: the
+institution or the LMS vouches for the person instead. The **Password Status** column shows
+those as **No password**, and you can filter on it.
+
+They can set one themselves from **Account, Password**, unless you have turned that off on the
+**Sign-in** tab of [System Settings](system-settings.md). You can always set one for them from
+the actions on this page, which is the only route on a site with no mail server. The dialog says
+**Set a password** rather than **Reset password** when there is nothing to reset.
+
+Worth knowing: **the AFCT desktop client signs in with an email and a password**, so a student
+who only ever opens AFCT from your LMS needs an AFCT password before they can submit with it.
+
 ## Desktop client tokens
 
-The AFCT desktop client signs in with a token rather than a password. Anyone can create their
-own from **Account → App tokens**, name it so they can tell their machines apart, and revoke it
-when they stop using one.
+Anyone can create an app token from **Account → App tokens**, name it so they can tell their
+machines apart, and revoke it when they stop using one.
 
 A token is shown once, when it is created. If someone loses it, they create another and revoke
 the old one; there is no way to look it up again. Changing or resetting a password revokes every
 token issued beforehand.
+
+:::note What the desktop client accepts today
+The client asks for a server, an email and a password, and gets its own token from those. There
+is no field to paste one of these tokens into yet, so they are for anything else that talks to
+the AFCT client API rather than for the shipped client.
+:::
 
 ## Sign-in methods
 

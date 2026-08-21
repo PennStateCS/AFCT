@@ -38,6 +38,7 @@ const freshUser = (over: Record<string, unknown> = {}) => ({
   temporaryPassword: false,
   inactive: false,
   passwordChangedAt: null,
+  hasPassword: true,
   cropX: null,
   cropY: null,
   zoom: null,
@@ -83,6 +84,10 @@ describe('buildJwtToken', () => {
       isAdmin: true,
       avatar: null,
       temporaryPassword: true,
+      // The whole surface the callback reads: a temporary password can only be forced on an
+      // account that actually has one, so leaving this out makes the assertion below pass or
+      // fail for the wrong reason.
+      password: 'hashed',
     });
 
     const token = await buildJwtToken({
@@ -265,6 +270,29 @@ describe('buildSession', () => {
     getSessionUserMock.mockResolvedValue(freshUser({ isAdmin: false }));
     const session = await runSession({ isAdmin: true });
     expect(session.user.isAdmin).toBe(false);
+  });
+
+  /**
+   * A temporary password can only be forced on an account that has one. Without this, an
+   * account with `temporaryPassword` and no password sends somebody to a form asking for a
+   * current password they do not have, and the dashboard bounces them straight back to it.
+   */
+  it('does not force a password change on an account that has no password', async () => {
+    getSessionUserMock.mockResolvedValue(
+      freshUser({ temporaryPassword: true, hasPassword: false }),
+    );
+
+    const session = await runSession();
+
+    expect(session.user.mustChangePassword).toBe(false);
+  });
+
+  it('still forces one when there is a password to change', async () => {
+    getSessionUserMock.mockResolvedValue(freshUser({ temporaryPassword: true, hasPassword: true }));
+
+    const session = await runSession();
+
+    expect(session.user.mustChangePassword).toBe(true);
   });
 
   it('rejects an idle-expired token without even reading the user', async () => {

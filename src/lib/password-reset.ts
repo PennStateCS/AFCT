@@ -24,6 +24,7 @@ import {
   PASSWORD_RESET_TTL_MS,
 } from '@/lib/single-use-token';
 import { invalidateSessionUser } from '@/lib/session-user-cache';
+import { describeHowToSignIn, linkedAccountPasswordsAllowed } from '@/lib/account-credentials';
 
 /**
  * How the reset link is built.
@@ -46,15 +47,58 @@ function minutes(ms: number): number {
  * The caller must answer identically regardless, so `sent` says only whether a message was
  * queued and is for the audit log, never for the response body.
  */
-export async function requestPasswordReset(email: string): Promise<{ sent: boolean }> {
+export async function requestPasswordReset(
+  email: string,
+): Promise<{ sent: boolean; kind?: 'reset' | 'explanation' }> {
   const user = await prisma.user.findUnique({
     where: { email: email.trim().toLowerCase() },
-    select: { id: true, email: true, firstName: true, inactive: true },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      inactive: true,
+      password: true,
+      linkedIdentities: { select: { kind: true } },
+    },
   });
 
   // No account, or a disabled one. A disabled account gets no mail at all: an administrator
   // turned it off, and a reset link would be a way back in.
   if (!user || user.inactive) return { sent: false };
+
+  /**
+   * An account with no password has nothing to reset, and must not be given one this way.
+   *
+   * Sending a reset link here would quietly add a second way into an account at an institution
+   * that chose its own sign-in precisely to avoid that: control of a mailbox would become
+   * control of the account, bypassing whatever the institution requires at its own login.
+   *
+   * So this explains instead. It costs somebody who has genuinely lost their way in, which is
+   * why every version of the message also names an administrator, and why the account page
+   * offers to set a password to anybody who can still get in at all.
+   */
+  if (!user.password) {
+    const greeting = user.firstName ? `Hello ${user.firstName},` : 'Hello,';
+    const kinds = [...new Set(user.linkedIdentities.map((identity) => identity.kind))];
+    const allowed = await linkedAccountPasswordsAllowed();
+
+    await queueMail({
+      to: user.email,
+      subject: 'How to sign in to AFCT',
+      text:
+        `${greeting}\n\n` +
+        'Someone asked to reset the AFCT password for this address. There is no password on ' +
+        'this account, so there is nothing to reset, and no password has been changed.\n\n' +
+        `${describeHowToSignIn(kinds).join('\n')}\n` +
+        (allowed
+          ? '\nOnce you are signed in, you can set an AFCT password on your Account page.\n'
+          : '') +
+        '\nIf you did not ask for this, you can ignore this message. Nothing about your ' +
+        'account has changed.\n',
+    });
+
+    return { sent: true, kind: 'explanation' };
+  }
 
   /**
    * Earlier links are deliberately left alone.
@@ -99,7 +143,7 @@ export async function requestPasswordReset(email: string): Promise<{ sent: boole
     return true;
   });
 
-  return { sent: issued };
+  return { sent: issued, kind: 'reset' };
 }
 
 export type ResetOutcome =

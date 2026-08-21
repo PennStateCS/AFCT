@@ -3122,10 +3122,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Change my password
-         * @description Lets a signed-in user change their own password. Requires the current password,  enforces the strength policy, and forbids reusing the existing one. A correct  change also clears the `temporaryPassword` flag (used after admin resets).
-         *
-         *     **Auth:** required
+         * Set or change my password
+         * @description Which mode runs is decided from the account, never from the body. With a password already set, `oldPassword` is required and verified, the new one must differ, and every session and app token issued beforehand is revoked. With no password set, `oldPassword` is not required and nothing is revoked, because no credential changed; this mode is refused when the site does not allow AFCT passwords on accounts that sign in through an institution or an LMS.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/me/password/route.ts)
          */
@@ -3931,6 +3929,7 @@ export interface operations {
                         timezone?: string;
                         maxUploadSizeMb?: number;
                         allowSignup?: boolean;
+                        allowLinkedAccountPasswords?: boolean;
                         /** @description Comma-separated email-domain allow-list; blank = any */
                         signupAllowedDomains?: string;
                         sessionTimeoutMinutes?: number;
@@ -3987,6 +3986,7 @@ export interface operations {
                     timezone?: string;
                     maxUploadSizeMb?: number;
                     allowSignup?: boolean;
+                    allowLinkedAccountPasswords?: boolean;
                     sessionTimeoutMinutes?: number;
                     submissionEvalTimeoutMs?: number;
                     submissionEvalMaxMemoryMb?: number;
@@ -13335,12 +13335,19 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's linked identities, and whether they have a password. */
+            /** @description The caller's linked identities, whether they have a password, and whether they may set one. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        identities?: Record<string, never>[];
+                        hasPassword?: boolean;
+                        /** @description True only when there is no password and the site allows one on an account that signs in elsewhere. */
+                        canSetPassword?: boolean;
+                    };
+                };
             };
             /** @description Not signed in. */
             401: {
@@ -13404,14 +13411,15 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    oldPassword: string;
+                    /** @description The current password. Required unless the account has none. */
+                    oldPassword?: string;
                     /** @description Must meet the strength policy and differ from the old one */
                     newPassword: string;
                 };
             };
         };
         responses: {
-            /** @description Password updated. */
+            /** @description Password set or updated. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13423,7 +13431,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Missing fields, weak password, wrong current password, or reused password. */
+            /** @description Weak password, missing current password, wrong current password, or reused password. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13441,8 +13449,26 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description This site does not allow AFCT passwords on accounts that sign in elsewhere. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description User record not found. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description A password was set by somebody else while this request was in flight. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

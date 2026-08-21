@@ -15,6 +15,41 @@ Relevant code: `src/lib/security/rate-limiter.ts` (the buckets), `src/lib/login-
 (the admin policy resolver), `src/lib/credentials.ts` (the login gate), and the
 `User.lockedUntil` column (the persisted lock).
 
+## Ways in, and ways back in
+
+Password guessing is only one half of the picture. The other is that **every account must have
+at least one way in, and every install at least one way to recover one**, whatever it has
+switched on. AFCT is meant to run with or without a mail server, with or without institutional
+sign-in, and with or without LTI, so neither can be assumed.
+
+An account signs in with any of:
+
+- an **AFCT password** (`User.password`, nullable: an account may have none),
+- an **institutional account** (a `LinkedIdentity` of kind `OIDC`),
+- an **LMS launch** (a `LinkedIdentity` of kind `LTI`).
+
+`unlinkIdentity` refuses to remove the last of these, so no account can be left unreachable.
+
+Recovery works through whichever of these the install has:
+
+| Channel | Needs | Notes |
+| --- | --- | --- |
+| Reset by email | A mail server | The link is hidden on the sign-in page when there is none. An account with **no** password is sent an explanation of how it signs in, never a link: a reset would quietly add a second way into an account at an institution that chose SSO to avoid exactly that. |
+| Setting a first password | Being signed in | For an account that has none. The session is the authority, so this works with no mail server. Governed by **allowLinkedAccountPasswords**; administrators are never governed by it. |
+| An administrator | Nothing | Always available, and the only channel on an install with no mail server. Faculty can do the same for plain students on their own roster. |
+
+Two consequences worth knowing:
+
+- **The desktop client signs in with an email and a password** (`/api/client/v1/auth/login`), and
+  `verifyCredentials` refuses an account with no password. A student who only ever launches from
+  an LMS therefore needs an AFCT password to submit with the client.
+- **`temporaryPassword` is only forced when a password exists.** Forcing it on an account with
+  none would send somebody to a form asking for a current password they do not have, which the
+  dashboard would then bounce them back to indefinitely.
+
+Relevant code: `src/lib/account-credentials.ts` (the shared answers), `src/lib/password-reset.ts`
+(which of the two emails goes out), `src/app/api/me/password/route.ts` (set versus change).
+
 ## Account lockout policy
 
 Failed sign-ins to one account are counted in a per-account bucket keyed on the email

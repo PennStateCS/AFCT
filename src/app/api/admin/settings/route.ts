@@ -8,6 +8,7 @@ import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import { encryptSecret, readStoredSecret, SecretKeyError } from '@/lib/secret-encryption';
 import { SMTP_AUTH_NEEDS_TLS } from '@/lib/mailer';
 import {
+  DEFAULT_ALLOW_LINKED_ACCOUNT_PASSWORDS,
   DEFAULT_LOGIN_MAX_ATTEMPTS,
   DEFAULT_LOGIN_LOCKOUT_MINUTES,
   DEFAULT_BACKUP_ENABLED,
@@ -36,6 +37,7 @@ const AUDITED_FIELDS = [
   'timezone',
   'maxUploadSizeMb',
   'allowSignup',
+  'allowLinkedAccountPasswords',
   'signupAllowedDomains',
   'clock24Hour',
   'sessionTimeoutMinutes',
@@ -101,6 +103,7 @@ function storedSecretReadable(stored: string | null): boolean {
  *             timezone: { type: string }
  *             maxUploadSizeMb: { type: integer }
  *             allowSignup: { type: boolean }
+ *             allowLinkedAccountPasswords: { type: boolean }
  *             signupAllowedDomains: { type: string, description: Comma-separated email-domain allow-list; blank = any }
  *             sessionTimeoutMinutes: { type: integer }
  *             submissionEvalTimeoutMs: { type: integer }
@@ -140,6 +143,8 @@ export const GET = withAdminAuth(
       timezone: settings?.timezone ?? DEFAULT_SYSTEM_TIMEZONE,
       maxUploadSizeMb: settings?.maxUploadSizeMb ?? DEFAULT_MAX_UPLOAD_SIZE_MB,
       allowSignup: settings?.allowSignup ?? DEFAULT_ALLOW_SIGNUP,
+      allowLinkedAccountPasswords:
+        settings?.allowLinkedAccountPasswords ?? DEFAULT_ALLOW_LINKED_ACCOUNT_PASSWORDS,
       signupAllowedDomains: settings?.signupAllowedDomains ?? DEFAULT_SIGNUP_ALLOWED_DOMAINS,
       clock24Hour: settings?.clock24Hour ?? DEFAULT_CLOCK_24_HOUR,
       sessionTimeoutMinutes: settings?.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT_MINUTES,
@@ -219,6 +224,7 @@ export const GET = withAdminAuth(
  *           timezone: { type: string }
  *           maxUploadSizeMb: { type: integer }
  *           allowSignup: { type: boolean }
+ *           allowLinkedAccountPasswords: { type: boolean }
  *           sessionTimeoutMinutes: { type: integer }
  *           submissionEvalTimeoutMs: { type: integer }
  *           submissionEvalMaxMemoryMb: { type: integer }
@@ -256,6 +262,7 @@ export const PUT = withAdminAuth(
     const maxUploadSizeMb = body.maxUploadSizeMb;
     const sessionTimeoutMinutes = body.sessionTimeoutMinutes;
     const hasAllowSignup = body.allowSignup !== undefined;
+    const hasAllowLinkedAccountPasswords = body.allowLinkedAccountPasswords !== undefined;
     const hasClock24Hour = body.clock24Hour !== undefined;
 
     // Signup email-domain allow-list: only persist when provided. Normalize to the
@@ -531,6 +538,9 @@ export const PUT = withAdminAuth(
       ...signupData,
     };
     if (hasAllowSignup) updateData.allowSignup = body.allowSignup;
+    if (hasAllowLinkedAccountPasswords) {
+      updateData.allowLinkedAccountPasswords = body.allowLinkedAccountPasswords;
+    }
     if (hasClock24Hour) updateData.clock24Hour = body.clock24Hour;
 
     const createData: {
@@ -553,6 +563,9 @@ export const PUT = withAdminAuth(
       ...signupData,
     };
     if (hasAllowSignup) createData.allowSignup = body.allowSignup;
+    if (hasAllowLinkedAccountPasswords) {
+      createData.allowLinkedAccountPasswords = body.allowLinkedAccountPasswords;
+    }
     if (hasClock24Hour) createData.clock24Hour = body.clock24Hour;
 
     // Snapshot the prior state so the audit log can report what actually changed.
@@ -629,6 +642,7 @@ export const PUT = withAdminAuth(
       timezone: settings.timezone,
       maxUploadSizeMb: settings.maxUploadSizeMb,
       allowSignup: settings.allowSignup,
+      allowLinkedAccountPasswords: settings.allowLinkedAccountPasswords,
       signupAllowedDomains: settings.signupAllowedDomains,
       clock24Hour: settings.clock24Hour,
       sessionTimeoutMinutes: settings.sessionTimeoutMinutes,
