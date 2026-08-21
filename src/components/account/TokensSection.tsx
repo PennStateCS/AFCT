@@ -103,9 +103,17 @@ export function TokensSection() {
 
   return (
     <div className="space-y-6">
+      {/* This used to say the desktop client signs in with a token pasted from here. It does
+          not: its login window asks for a server, an email and a password, and gets its own
+          token from those. Saying otherwise sent people looking for a field that is not there. */}
       <p className="text-muted-foreground max-w-prose text-sm">
-        The AFCT desktop client signs in with a token instead of your password. Create one here,
-        paste it into the client, and revoke it if you stop using that machine.
+        A token lets a program reach AFCT on your behalf, through the AFCT client API, without your
+        password. Create one here, name it so you can tell your machines apart, and revoke it when
+        you stop using one.
+      </p>
+      <p className="text-muted-foreground max-w-prose text-sm">
+        The AFCT desktop client does not use these: it asks for your email and password and signs in
+        with those.
       </p>
 
       {justIssued ? (
@@ -186,7 +194,9 @@ export function TokensSection() {
                     <th scope="row" className="py-2 pr-4 text-left font-normal">
                       {token.label || 'Unnamed token'}
                     </th>
-                    <td className="py-2 pr-4">{formatDateTimeInTimeZone(token.createdAt, timezone, hour12)}</td>
+                    <td className="py-2 pr-4">
+                      {formatDateTimeInTimeZone(token.createdAt, timezone, hour12)}
+                    </td>
                     <td className="text-muted-foreground py-2 pr-4">
                       {token.lastUsedAt
                         ? formatDateTimeInTimeZone(token.lastUsedAt, timezone, hour12)

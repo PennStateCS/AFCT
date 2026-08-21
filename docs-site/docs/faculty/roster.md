@@ -90,6 +90,13 @@ With **Temporary password** on, you hand the student a one-time password and the
 
 The reset takes effect immediately and signs the student out of every active session, so they must sign in again with the new password.
 
+:::note Students who open AFCT from your LMS
+A student whose account was created by an LMS launch has no AFCT password at all, so there is
+nothing to reset: they get in by opening AFCT from your course. **Reset Password** still works
+and gives them one, which they need for the AFCT desktop client, since that asks for an email
+and a password. They can also set one themselves from their own account page.
+:::
+
 **What you can and cannot reset.** This action is limited to students on your roster. You cannot change the password of another Faculty member, a TA, a site administrator, or anyone who is not in your course. Those resets are done by a site administrator on the **User Accounts** page. Every reset is recorded in the course [activity log](./activity.md).
 
 A password reset is not the same as a temporary sign-in lock. If a student is blocked after too many failed sign-in attempts, that lock clears on its own after a short wait, so a reset is only needed when the student has genuinely forgotten their password. If you are locked out of your **own** account, you cannot reset it yourself; ask a site administrator to reset it for you.

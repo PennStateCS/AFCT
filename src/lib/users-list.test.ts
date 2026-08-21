@@ -30,10 +30,23 @@ describe('getUsersList', () => {
     expect(args().orderBy).toEqual([{ lastName: 'asc' }]);
   });
 
-  it('passes through the query result', async () => {
-    const rows = [{ id: 'u1', email: 'a@b.com' }];
-    prismaMock.user.findMany.mockResolvedValue(rows);
-    await expect(getUsersList()).resolves.toBe(rows);
+  /**
+   * The rows are mapped now rather than passed straight through, because the hash has to be
+   * reduced to a boolean. That mapping is the only thing standing between an administrator's
+   * screen and every user's bcrypt hash, so it is asserted rather than assumed.
+   */
+  it('reports whether a password exists and never the hash itself', async () => {
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 'u1', email: 'a@b.com', password: '$2b$10$a-real-looking-hash' },
+      { id: 'u2', email: 'c@d.com', password: null },
+    ]);
+
+    const rows = await getUsersList();
+
+    expect(rows[0]).not.toHaveProperty('password');
+    expect(JSON.stringify(rows)).not.toContain('a-real-looking-hash');
+    expect(rows[0]?.hasPassword).toBe(true);
+    expect(rows[1]?.hasPassword).toBe(false);
   });
 });
 
@@ -57,8 +70,9 @@ describe('getUsersPage: paging and result shape', () => {
     prismaMock.user.findMany.mockResolvedValue([{ id: 'u1' }]);
     prismaMock.user.count.mockResolvedValue(97);
 
+    // `hasPassword` is derived on the way out, so the row is the queried one plus that.
     await expect(page({ skip: 50, take: 25 })).resolves.toEqual({
-      rows: [{ id: 'u1' }],
+      rows: [{ id: 'u1', hasPassword: false }],
       total: 97,
     });
     expect(findArgs()).toMatchObject({ skip: 50, take: 25 });
@@ -118,7 +132,6 @@ describe('getUsersPage: multi-select filters', () => {
   it.each([
     ['admin', 'isAdmin'],
     ['inactive', 'inactive'],
-    ['temporaryPassword', 'temporaryPassword'],
   ] as const)('constrains on %s when exactly one value is selected', async (param, column) => {
     await page({ [param]: [true] });
     expect(findArgs().where).toEqual({ AND: [{ [column]: true }] });
@@ -130,7 +143,7 @@ describe('getUsersPage: multi-select filters', () => {
     expect(findArgs().where).toEqual({ AND: [{ [column]: false }] });
   });
 
-  it.each(['admin', 'inactive', 'temporaryPassword', 'lock'] as const)(
+  it.each(['admin', 'inactive', 'lock'] as const)(
     'treats both values of %s as no constraint',
     async (param) => {
       const both = param === 'lock' ? (['locked', 'unlocked'] as const) : ([true, false] as const);
@@ -138,6 +151,52 @@ describe('getUsersPage: multi-select filters', () => {
       expect(findArgs().where).toEqual({});
     },
   );
+
+  /**
+   * Password Status is three mutually exclusive states rather than a boolean, so the rule
+   * differs from the other multi-selects: any strict subset constrains, and selecting all
+   * three is the same as selecting none.
+   */
+  describe('the Password Status filter', () => {
+    it('constrains on one state', async () => {
+      await page({ passwordStatus: ['none'] });
+      expect(findArgs().where).toEqual({ AND: [{ password: null }] });
+    });
+
+    it('ORs two states together', async () => {
+      await page({ passwordStatus: ['temporary', 'none'] });
+      expect(findArgs().where).toEqual({
+        AND: [
+          {
+            OR: [{ password: { not: null }, temporaryPassword: true }, { password: null }],
+          },
+        ],
+      });
+    });
+
+    it('treats all three, or none, as no constraint', async () => {
+      await page({ passwordStatus: ['temporary', 'normal', 'none'] });
+      expect(findArgs().where).toEqual({});
+
+      vi.clearAllMocks();
+      prismaMock.user.findMany.mockResolvedValue([]);
+      prismaMock.user.count.mockResolvedValue(0);
+      await page({ passwordStatus: [] });
+      expect(findArgs().where).toEqual({});
+    });
+
+    /**
+     * "Normal" must mean a password the person chose, not merely `temporaryPassword: false`.
+     * An account with no password has that flag false too, and lumping the two together is
+     * the bug this whole column change exists to fix.
+     */
+    it('does not count a password-less account as Normal', async () => {
+      await page({ passwordStatus: ['normal'] });
+      expect(findArgs().where).toEqual({
+        AND: [{ password: { not: null }, temporaryPassword: false }],
+      });
+    });
+  });
 
   it('reads "locked" as a lock that has not expired yet', async () => {
     const now = new Date('2026-07-31T12:00:00Z');
@@ -171,12 +230,18 @@ describe('getUsersPage: sort', () => {
     'email',
     'isAdmin',
     'inactive',
-    'temporaryPassword',
     'createdAt',
     'lastLogin',
   ])('sorts by %s', async (sortBy) => {
     await page({ sortBy, sortDir: 'desc' });
     expect(findArgs().orderBy).toEqual([{ [sortBy]: 'desc' }, { id: 'asc' }]);
+  });
+
+  // The column shows three states derived from two fields, so it sorts on the one that
+  // separates them: "No password" groups together instead of scattering through "Normal".
+  it('sorts the Password Status column by whether a password exists', async () => {
+    await page({ sortBy: 'temporaryPassword', sortDir: 'desc' });
+    expect(findArgs().orderBy).toEqual([{ password: 'desc' }, { id: 'asc' }]);
   });
 
   it('falls back to last name for an unknown column, keeping the requested direction', async () => {
