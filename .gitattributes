@@ -25,3 +25,8 @@ src/types/api.ts text eol=lf
 # matches the installed package byte for byte, so nothing here may be line-ending normalized.
 # The fonts are binary; the stylesheet ships with LF.
 public/katex/** -text
+
+# A file saved by JFLAP itself, kept as a golden case for the viewer's note parsing. JFLAP
+# writes a line break inside a note as a literal CRLF, which is the thing the fixture exists to
+# prove; normalizing it to LF would leave the test passing without exercising that path at all.
+src/lib/__fixtures__/*.jff -text
