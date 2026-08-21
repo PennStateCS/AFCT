@@ -37,7 +37,7 @@ These settings control submission processing:
 
 | Setting                          | Default |       Range | What it does                                                                      |
 | -------------------------------- | ------: | ----------: | --------------------------------------------------------------------------------- |
-| **Evaluation timeout (seconds)** |      30 |    1 to 600 | Stops an evaluation that runs too long.                                           |
+| **Evaluation timeout (seconds)** |      30 |    1 to 900 | Stops an evaluation that runs too long.                                           |
 | **Resubmit cooldown (seconds)**  |      10 |  0 to 3,600 | Sets the wait before another attempt. Zero disables the cooldown.                 |
 | **Evaluator memory cap (MB)**    |     256 | 64 to 8,192 | Limits JVM heap for one evaluation.                                               |
 | **Max concurrent evaluations**   |       5 |     1 to 20 | Controls how many evaluations run at once. Changes apply within about 30 seconds. |

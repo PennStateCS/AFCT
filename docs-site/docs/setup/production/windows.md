@@ -50,7 +50,7 @@ A domain name is not required for local testing. For a long-running public or pr
 
 AFCT normally starts with a self-signed certificate. It still encrypts the connection between the browser and AFCT; passwords, grades, and account information are not sent as plain text. The browser shows a warning because the certificate was created by the AFCT server rather than signed by an authority the browser already trusts. For a local test, confirm the address, continue past the warning, and sign in normally.
 
-After installation, an administrator can upload a trusted certificate or request one automatically from Let's Encrypt in **Admin Menu > System Settings**. Let's Encrypt generally requires a publicly reachable domain name and is not usually appropriate for a `localhost`-only installation.
+After installation, an administrator can upload a trusted certificate or request one automatically from Let's Encrypt in **Administration > System Settings**. Let's Encrypt generally requires a publicly reachable domain name and is not usually appropriate for a `localhost`-only installation.
 
 ## Step 1: Install Docker Desktop
 
@@ -212,7 +212,7 @@ This downloads the newest verified deployment bundle, publishes it as a new immu
 
 ## Optional: enable updates from the AFCT website
 
-AFCT can perform application upgrades and downgrades from **Admin Menu > System Settings > Updates**.
+AFCT can perform application upgrades and downgrades from **Administration > System Settings > Updates**.
 
 :::warning Experimental on Windows
 The in-app updater is experimental on Windows. It has not yet been validated on real Docker Desktop hardware, so the recommended way to update on Windows for now is the command line:

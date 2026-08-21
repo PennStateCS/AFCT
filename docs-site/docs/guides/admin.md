@@ -4,7 +4,7 @@
 
 Administrator access is controlled by the global administrator setting on a user account. It is separate from course roles. An administrator can also be enrolled as Faculty or a TA in a course, and both sets of permissions apply.
 
-The **Admin Menu** contains the platform-wide tools:
+The **Administration** menu contains the platform-wide tools:
 
 | Page                                               | What it is for                                                                   |
 | -------------------------------------------------- | -------------------------------------------------------------------------------- |

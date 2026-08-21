@@ -14,4 +14,4 @@ Use it after changing shared interface styles or notification behavior. Confirm 
 
 This page is not a server health check and does not test the evaluator, database, or submission queue. Use [System Status](system-status.md) for operational checks.
 
-**Development Tests** is hidden in production. Its absence from a production Admin Menu is expected.
+**Development Tests** is hidden in production. Its absence from a production Administration menu is expected.

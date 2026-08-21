@@ -4,7 +4,7 @@ slug: /
 
 # AFCT Dashboard
 
-AFCT (Automated Feedback for CS Theory) is a course dashboard for automata and formal-language coursework. Students submit finite automata, push-down automata, context-free grammars, and regular expressions built in JFLAP; the dashboard evaluates them automatically and gives immediate feedback, while faculty manage courses, assignments, and grades.
+AFCT (Automated Feedback for CS Theory) is a course dashboard for automata and formal-language coursework. Students submit finite automata, push-down automata, context-free grammars, regular expressions, and Turing machines built in JFLAP. AFCT grades them automatically and answers straight away, while faculty run their courses, assignments, and grades in the same place.
 
 ## Where to start
 

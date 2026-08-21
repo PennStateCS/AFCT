@@ -5,8 +5,8 @@ difference between finding a problem as you type and finding it when CI fails.
 
 The repository ships two files, so most of this is automatic:
 
-- `.vscode/extensions.json` — the recommended extensions.
-- `.vscode/settings.json` — settings that keep the editor agreeing with `npm run lint` and
+- `.vscode/extensions.json`: the recommended extensions.
+- `.vscode/settings.json`: settings that keep the editor agreeing with `npm run lint` and
   `npm run typecheck:all`.
 
 You do not need to copy anything. Open the folder and VS Code picks them up.

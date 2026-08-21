@@ -50,7 +50,7 @@ gpg --decrypt afct-20260101-020000.tar.gz.gpg | tar xzf - -C /tmp/restore
 
 ## Configure backups
 
-Sign in as an administrator and open **Admin Menu > System Settings > Backups**. You can enable or disable the daily schedule, select the UTC hour, set retention from 1 to 365 days, or choose **Back up now**.
+Sign in as an administrator and open **Administration > System Settings > Backups**. You can enable or disable the daily schedule, select the UTC hour, set retention from 1 to 365 days, or choose **Back up now**.
 
 The default schedule is enabled at 02:00 UTC with 14 days of retention. The backup service checks stored settings periodically, so a schedule change does not require a restart.
 

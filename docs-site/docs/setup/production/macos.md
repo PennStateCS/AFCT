@@ -420,7 +420,7 @@ This does not replace your database, uploads, or `.env.production` configuration
 AFCT can perform application upgrades and downgrades from:
 
 ```text
-Admin Menu > System Settings > Updates
+Administration > System Settings > Updates
 ```
 
 :::warning Experimental on macOS

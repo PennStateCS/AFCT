@@ -18,7 +18,9 @@ Creating an account does not enroll it in a course. Add the person from a course
 4. Review the parsed and invalid row counts.
 5. Select **Import Users**.
 
-The import processes valid rows and reports failed rows separately. Fix only the failed rows before trying again. The only size limit on the file is the configured **Max upload size**.
+The import processes valid rows and reports failed rows separately. Fix only the failed rows before trying again.
+
+**One import can carry at most 1,000 rows.** A larger file is rejected before it reaches the server, and the dialog reports only that the import failed, so split a bigger list into files of 1,000 or fewer and import them one after another. The configured **Max upload size** applies as well, though the row limit is normally what you meet first.
 
 ## Find and review an account
 

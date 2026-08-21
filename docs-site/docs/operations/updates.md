@@ -1,87 +1,93 @@
 # Update AFCT
 
-Create or confirm a current backup before applying an update.
+There are two ways to update: from the Updates tab in the browser, or from a terminal on the
+server. Most people should use the browser. Take or confirm a backup either way.
 
-## Guided-installer deployment
+## From the browser
 
-On Linux or macOS, open the directory that contains `docker-compose.yml` and run:
+This is the recommended path and it is covered in full under [In-app updates](#in-app-updates)
+below. It needs no terminal, it applies stack changes for you, and it rolls back on its own if
+the new version does not come up healthy.
 
-```bash
-sh install.sh update
-```
+## From a terminal on the server
 
-This records the currently deployed image versions, pulls the latest images, recreates the stack, and waits for the health check. If the new version does not become healthy, it automatically rolls back to the previous images and restores service.
-
-### Update the installer itself
-
-`sh install.sh update` uses the `docker-compose.yml` already on the host. Use `self-update` when you want to refresh the installer script itself:
+On Linux and macOS the deployment is managed by `afctctl`:
 
 ```bash
-sh install.sh self-update
-sh install.sh update
+sudo afctctl update
 ```
 
-`self-update` downloads the installer, `docker-compose.yml`, and the environment template from the repository, backing up the old copies first. It never touches `.env.production` or application data. It needs no Git checkout because the files come from the public repository over HTTPS.
+You can run it from any directory. It records the versions currently deployed, pulls the latest
+images, recreates the stack, and waits for the health check. If the new version does not become
+healthy it rolls back to the previous images by itself and puts the service back.
 
-A changed `docker-compose.yml` no longer has to be refreshed by hand before an update: an in-app upgrade applies the target release's compose file for you (see [In-app updates](#in-app-updates) below). This host-side path stays available for deployments that do not run the updater, or as a fallback.
+:::note
+Older instructions said to `cd` into the folder holding `docker-compose.yml` and run
+`sh install.sh update`. That still works, because `install.sh` now forwards whatever you give it
+to `afctctl`. `afctctl` is the current name and needs no particular working directory.
+:::
 
-The equivalent Docker commands work on any platform, including Windows PowerShell:
+On Windows, use the PowerShell installer documented in the
+[Windows guide](../setup/production/windows.md).
+
+### Updating the deployment tool itself
+
+`afctctl` is versioned separately from AFCT. `self-update` fetches the newest verified copy of
+the deployment tooling and switches to it. It does not touch `.env.production`, your data, or
+the application image:
 
 ```bash
-docker compose pull
-docker compose up -d
+sudo afctctl self-update
 ```
 
-`docker compose pull` downloads the images named in the Compose file. `docker compose up -d` recreates only the services whose image or configuration changed. Unlike `sh install.sh update`, these commands do not verify health or roll back automatically.
+You rarely need to run this yourself. `update`, `restart` and `install` all check for a newer
+tool first and offer it before they continue.
 
-## Git-based manual deployment
+### Checking the result
 
-Open the cloned AFCT repository and run:
+`sudo afctctl update` already waits for the health check. To look again at any time:
 
 ```bash
-git pull
-docker compose pull
-docker compose up -d
+sudo afctctl status
 ```
 
-The commands are the same on Linux, macOS, and Windows PowerShell.
+Every service should be running and the application should report healthy. Sign in and open an
+administration page to confirm.
 
-Named volumes preserve the database, uploaded files, backups, and certificates while containers are replaced.
+If something looks wrong, `sudo afctctl doctor` runs a longer read-only check, and
+`sudo afctctl logs` follows the application log. See
+[Troubleshooting](./troubleshooting.md).
 
-## Verify the update
+### Running Docker commands directly
 
-`sh install.sh update` already waits for the health check, but you can confirm at any time:
+Avoid this unless you know why you need it. The stack is not in your current directory, so a
+bare `docker compose ps` will find nothing. `afctctl` passes the project name, the environment
+file at `/opt/afct/shared/.env.production` and the compose file at
+`/opt/afct/shared/runtime/docker-compose.yml` on every call, which is why the wrapper exists.
+Plain `docker compose pull` and `up -d` also skip the health check and the automatic rollback.
 
-```bash
-sh install.sh status
-```
-
-Or with Docker directly:
-
-```bash
-docker compose ps
-docker compose logs --tail=100 app
-```
-
-Confirm that every service is running and the application reports healthy. Then sign in and open an administration page.
+Named volumes hold the database, uploaded files, backups, and certificates, so they survive
+whichever way the containers are replaced.
 
 ## In-app updates
 
-AFCT can upgrade and downgrade itself from **Admin Menu > System Settings > Updates** without a shell session. A separate privileged updater service handles the operation, so the application container never touches Docker directly. The updater holds the Docker socket and is therefore **off by default**.
+AFCT can upgrade and downgrade itself from **Administration > System Settings > Updates** without a shell session. A separate privileged updater service handles the operation, so the application container never touches Docker directly. The updater holds the Docker socket and is therefore **off by default**.
 
-Enable it once, on the host, in the directory that holds `docker-compose.yml`:
+Enable it once, from a terminal on the server:
 
 ```bash
-sh install.sh enable-updater
+sudo afctctl enable-updater
 ```
 
-(Or pass `--with-updater` during the initial `sh install.sh install`.) To turn it back off:
+(Or pass `--with-updater` when you first install.) To turn it back off:
 
 ```bash
-sh install.sh disable-updater
+sudo afctctl disable-updater
 ```
 
 Once enabled, the Updates tab lists the available versions from the project's release manifest. Pick a newer version to **upgrade**: the updater takes a database backup first, swaps to the new images, waits for the whole stack to become healthy, watches it briefly to be sure it stays healthy, and rolls back automatically if it does not. Each successful upgrade records a restore point for the version you left, so you can **downgrade** back to it later.
+
+If that pre-upgrade backup cannot be confirmed, the upgrade goes ahead anyway and says so in the log. Rolling back to the previous images does not depend on it, which is why it is not treated as fatal. Set `UPDATER_REQUIRE_BACKUP=true` if you would rather an upgrade stop than run without one. A downgrade is stricter and refuses, for the reason given below.
 
 :::warning
 Downgrading restores the database from the backup taken at that restore point, which discards database records created since. Uploaded files are not rolled back and may become unreferenced. Only downgrade when you accept that result. The Updates tab requires explicit confirmation.
@@ -93,7 +99,7 @@ Each restore point also has a **Delete** button. Removing one deletes its backup
 
 Only versions listed in the curated release manifest can be selected; the updater validates every request against it, so the app can never be pointed at an arbitrary image. Verification fails closed: if the manifest cannot be consulted at all (the server is offline and there is no local copy), the upgrade is refused rather than run unverified, unless the deployment has explicitly opted into allowing unlisted tags. When a release also changes the stack configuration, the compose file the updater downloads is checked against a checksum recorded in the manifest before it is applied, so a corrupted or tampered download is rejected and the current configuration is kept.
 
-Every upgrade, downgrade, and update-service change is recorded in **Admin Menu > System Settings > System Logs**: one entry when it is requested and one for the outcome (completed, rolled back, or failed), so you can review what happened after the fact even once the live progress has cleared.
+Every upgrade, downgrade, and update-service change is recorded in **Administration > System Logs**: one entry when it is requested and one for the outcome (completed, rolled back, or failed), so you can review what happened after the fact even once the live progress has cleared.
 
 ### What counts as a healthy upgrade
 
@@ -110,13 +116,13 @@ Some releases change more than the application image: they add a service, a heal
 - **Compose changes.** During an upgrade, the updater fetches that release's `docker-compose.yml` from the release's own tag, validates it, and installs it (keeping a backup) before recreating the stack. If the upgrade has to roll back, the previous compose file is restored with it. A release whose compose needs a setting your host does not provide is left in place and the upgrade proceeds on the current configuration, so a bad file can never take the stack down.
 - **The updater itself.** Because the updater cannot recreate its own container, it tracks the application version separately. When it falls behind, the Updates tab shows an **Update the update service** action that brings it up to the running version. The update service restarts itself as part of this: it downloads the new version, hands off the swap, and stays in an in-flight state until the replacement update service comes back up and confirms it is actually running the new version. Only then is it reported updated. If the replacement does not come back on the expected version, that is reported rather than a false success, so a failed swap is visible instead of silently "done". A brief unavailability during the swap is expected and is not an error.
 
-This means the console is normally not needed to keep a deployment current. The host-side `sh install.sh self-update` remains available as a manual path and as the way to update the installer script, but routine upgrades, including ones that change the stack layout, can be done entirely from the Updates tab.
+This means a terminal is normally not needed to keep a deployment current. `sudo afctctl update` remains available as a manual path, but routine upgrades, including ones that change the stack layout, can be done entirely from the Updates tab.
 
 ### "Not enough disk space"
 
 An upgrade downloads the new images before it replaces anything, and the previous ones stay on disk until the new version is confirmed healthy, so the machine has to hold both for a while. The updater checks for room before it starts and refuses the upgrade rather than running out halfway through, which would leave the stack in a state it could not roll back from.
 
-It wants about 12 GB free on the filesystem holding Docker's image store, and the installer applies the same figure when you update from the host. `UPDATER_DISK_MIN_MB` and `AFCT_UPDATE_MIN_FREE_MB` change it if your deployment genuinely needs a different number, but the requirement is real rather than cautious: the application image is a large one and an upgrade briefly holds two of them.
+It wants about 12 GB free on the filesystem holding Docker's image store, and `afctctl` applies the same figure when you update from a terminal. `UPDATER_DISK_MIN_MB` and `AFCT_UPDATE_MIN_FREE_MB` change it if your deployment genuinely needs a different number, but the requirement is real rather than cautious: the application image is a large one and an upgrade briefly holds two of them.
 
 Old images left by earlier upgrades are the usual cause. `docker image prune -af` removes anything no running container is using. Superseded images are cleaned up automatically once an upgrade is confirmed healthy, so a deployment that stays current should rarely need this, but one that has rolled back or been interrupted can collect them.
 
