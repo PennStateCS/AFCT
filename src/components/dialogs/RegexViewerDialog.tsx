@@ -38,24 +38,63 @@ function parseRegex(xmlText: string) {
  */
 export function RegexViewerContent({ src }: { src: string }) {
   const [data, setData] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       try {
         const res = await fetch(src);
         if (!res.ok) throw new Error(`Failed to Fetch : ${res.status} ${res.statusText}`);
         const text = await res.text();
-        setData(text);
+        if (!cancelled) {
+          setData(text);
+          setError(null);
+        }
       } catch (err) {
         console.error('Fetch error:', err);
+        // Recorded rather than swallowed: returning null left a dialog holding only its title.
+        if (!cancelled) setError('This expression could not be loaded.');
       }
     };
 
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [src]);
 
-  if (!data) return null;
-  return <div className="p-4 pt-2 text-center">{parseRegex(data).expression}</div>;
+  if (error) {
+    return (
+      <p role="alert" className="text-destructive p-4 pt-2 text-sm">
+        {error}
+      </p>
+    );
+  }
+
+  if (!data) {
+    return (
+      <p role="status" className="text-muted-foreground p-4 pt-2 text-sm">
+        Loading the expression...
+      </p>
+    );
+  }
+
+  // Parsed here rather than in an effect, but guarded: `parseRegex` throws on a file that is
+  // not a regular expression, and an exception during render blanks the page, not the dialog.
+  let expression: string;
+  try {
+    expression = parseRegex(data).expression;
+  } catch (err) {
+    console.error('Parse error:', err);
+    return (
+      <p role="alert" className="text-destructive p-4 pt-2 text-sm">
+        This expression could not be read. The file may be damaged.
+      </p>
+    );
+  }
+
+  return <div className="p-4 pt-2 text-center">{expression}</div>;
 }
 
 export function RegexViewerDialog({

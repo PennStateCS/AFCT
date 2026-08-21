@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
@@ -79,12 +79,44 @@ export default function WorkersTab({
     [],
   );
 
-  if (isLoading || !data) return <Loading label="Loading evaluator status…" />;
+  /**
+   * Announce the evaluator's state only when it changes.
+   *
+   * This tab refetches every fifteen seconds when auto-refresh is on. A region carrying the
+   * counts would therefore repeat itself all day, which is how a screen-reader user learns to
+   * switch live regions off. The health state is the thing worth interrupting for: grading has
+   * stopped, or it has started again.
+   */
+  const health = data ? HEALTH[data.health] : null;
+  const [announcement, setAnnouncement] = useState('');
+  const lastHealth = useRef<string | null>(null);
 
-  const health = HEALTH[data.health];
+  useEffect(() => {
+    if (!data) return;
+    if (lastHealth.current === data.health) return;
+    // The first reading is the state on arrival, not a change, so it is worth saying once.
+    lastHealth.current = data.health;
+    setAnnouncement(`Evaluator: ${HEALTH[data.health].text}.`);
+  }, [data]);
+
+  if (isLoading || !data || !health) {
+    return (
+      <>
+        <span role="status" aria-live="polite" className="sr-only">
+          Loading evaluator status.
+        </span>
+        <Loading label="Loading evaluator status…" />
+      </>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {/* Mounted for the life of the tab, so the message it is given is announced rather than
+          arriving with the element that carries it. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </span>
       <Section title="Evaluator">
         {/* Capped like every other status tab: full-width rows put each value an inch from
             the right edge of the display, a long way from the label it belongs to. */}
@@ -105,9 +137,9 @@ export default function WorkersTab({
 
         {data.health === 'stuck' ? (
           <p role="status" className="text-muted-foreground max-w-xl text-sm">
-            Work below is past the evaluator timeout. The worker returns overdue submissions to
-            the queue by itself, so this usually clears; the same submission appearing repeatedly
-            points at one the evaluator cannot finish.
+            Work below is past the evaluator timeout. The worker returns overdue submissions to the
+            queue by itself, so this usually clears; the same submission appearing repeatedly points
+            at one the evaluator cannot finish.
           </p>
         ) : null}
 
@@ -115,17 +147,16 @@ export default function WorkersTab({
           // Said carefully. An empty queue proves there is nothing to do; it says nothing about
           // whether anything is there to do it, and the page must not imply otherwise.
           <p className="text-muted-foreground max-w-xl text-sm">
-            Nothing is queued, so there is nothing for the evaluator to pick up. A quiet queue
-            does not confirm the evaluator is running: submit something to test it.
+            Nothing is queued, so there is nothing for the evaluator to pick up. A quiet queue does
+            not confirm the evaluator is running: submit something to test it.
           </p>
         ) : null}
       </Section>
 
       <Section title="Being graded now">
         <p className="text-muted-foreground max-w-3xl text-sm">
-          Slots are concurrent grading loops inside one evaluator container, not separate
-          machines. How many there are comes from the submission concurrency limit in System
-          Settings.
+          Slots are concurrent grading loops inside one evaluator container, not separate machines.
+          How many there are comes from the submission concurrency limit in System Settings.
         </p>
         <DataTable
           columns={columns}

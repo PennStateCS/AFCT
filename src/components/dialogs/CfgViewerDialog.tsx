@@ -57,24 +57,65 @@ export function CfgViewerContent({
   epsSymbol?: string;
 }) {
   const [data, setData] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    let cancelled = false;
     const load = async () => {
       try {
         const res = await fetch(src);
         if (!res.ok) throw new Error(`Failed to Fetch : ${res.status} ${res.statusText}`);
         const text = await res.text();
-        setData(text);
+        if (!cancelled) {
+          setData(text);
+          setError(null);
+        }
       } catch (err) {
         console.error('Fetch error:', err);
+        // Recorded rather than swallowed: returning null on failure left a dialog holding
+        // nothing but its title, which reads to a screen reader as an empty dialog and to
+        // everyone else as a bug.
+        if (!cancelled) setError('This grammar could not be loaded.');
       }
     };
 
     void load();
+    return () => {
+      cancelled = true;
+    };
   }, [src]);
 
-  if (!data) return null;
-  const parsed = parseCfg(data, epsSymbol);
+  if (error) {
+    return (
+      <p role="alert" className="text-destructive text-sm">
+        {error}
+      </p>
+    );
+  }
+
+  if (!data) {
+    return (
+      <p role="status" className="text-muted-foreground text-sm">
+        Loading the grammar...
+      </p>
+    );
+  }
+
+  /**
+   * Parsing happens here rather than in an effect, but a malformed file must not take the tree
+   * down with it: an exception during render blanks the page instead of the dialog.
+   */
+  let parsed: ReturnType<typeof parseCfg>;
+  try {
+    parsed = parseCfg(data, epsSymbol);
+  } catch (err) {
+    console.error('Parse error:', err);
+    return (
+      <p role="alert" className="text-destructive text-sm">
+        This grammar could not be read. The file may be damaged.
+      </p>
+    );
+  }
 
   return (
     <table className="w-full text-sm">

@@ -81,10 +81,29 @@ export function AssignmentStatisticsPanel() {
     </h2>
   );
 
+  /**
+   * One region that outlives every branch below.
+   *
+   * The spinner carried `role="status"`, but it was mounted with its message and then replaced
+   * wholesale by the charts: a live region inserted together with its text is not reliably
+   * announced, and swapping it out announces nothing at all. So somebody waiting on this tab
+   * heard neither the wait nor its end. Rendered in each branch so it is never unmounted.
+   */
+  const announcer = (
+    <span role="status" aria-live="polite" className="sr-only">
+      {query.isPending
+        ? 'Loading statistics.'
+        : query.isError || !query.data
+          ? 'Statistics could not be loaded.'
+          : 'Statistics loaded.'}
+    </span>
+  );
+
   if (query.isPending) {
     return (
       <div className="space-y-4">
         {heading}
+        {announcer}
         <LoadingSpinner label="Loading statistics" />
       </div>
     );
@@ -94,6 +113,8 @@ export function AssignmentStatisticsPanel() {
     return (
       <div className="space-y-4">
         {heading}
+        {/* No announcer here: the alert below announces on its own, and two regions covering
+            one status say it twice. */}
         <div
           role="alert"
           className="border-badge-danger-border bg-badge-danger-bg text-badge-danger flex items-center gap-2 rounded-lg border p-4 text-sm"
@@ -109,21 +130,24 @@ export function AssignmentStatisticsPanel() {
   const unitPlural = stats.unit === 'group' ? 'groups' : 'students';
   const statusTotal = stats.participantCount;
 
-  const dueText = `${formatDateTimeInTimeZone(stats.baseDueDate, stats.timezone, hour12)} ${zoneAbbrev(
-    stats.baseDueDate,
-    stats.timezone,
-  )}`.trim();
+  const dueText =
+    `${formatDateTimeInTimeZone(stats.baseDueDate, stats.timezone, hour12)} ${zoneAbbrev(
+      stats.baseDueDate,
+      stats.timezone,
+    )}`.trim();
   const exceptionText = `${stats.exceptionCount} due-date exception${stats.exceptionCount === 1 ? '' : 's'}`;
 
   return (
     <div className="space-y-4">
       {heading}
+      {announcer}
 
       {/* Context line: unit count, the normal due date, and how many participants have an
           exception. Uses the app's existing timezone-aware formatting. */}
       <p className="text-muted-foreground text-sm">
         <span className="text-foreground font-medium">
-          {stats.participantCount} {stats.participantCount === 1 ? unitPlural.slice(0, -1) : unitPlural}
+          {stats.participantCount}{' '}
+          {stats.participantCount === 1 ? unitPlural.slice(0, -1) : unitPlural}
         </span>{' '}
         &middot; Due {dueText} &middot; {exceptionText}
       </p>
@@ -145,8 +169,9 @@ export function AssignmentStatisticsPanel() {
               />
               {stats.histogram.excludedCount > 0 && (
                 <p className="text-muted-foreground mt-2 text-xs">
-                  {stats.histogram.excludedCount} {stats.histogram.excludedCount === 1 ? 'was' : 'were'}{' '}
-                  excluded as incomplete or ungraded.
+                  {stats.histogram.excludedCount}{' '}
+                  {stats.histogram.excludedCount === 1 ? 'was' : 'were'} excluded as incomplete or
+                  ungraded.
                 </p>
               )}
             </>
@@ -211,9 +236,7 @@ export function AssignmentStatisticsPanel() {
           title="Attempts to solve"
           description={`How many submissions ${unitPlural} needed before their first correct one, per problem.`}
         >
-          {stats.problems.some(
-            (p) => p.attempts.solvedCount + p.attempts.unsolvedCount > 0,
-          ) ? (
+          {stats.problems.some((p) => p.attempts.solvedCount + p.attempts.unsolvedCount > 0) ? (
             <AttemptsPerProblemChart
               problems={stats.problems.map((p) => ({
                 id: p.id,
