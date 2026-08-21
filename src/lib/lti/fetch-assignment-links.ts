@@ -2,7 +2,10 @@ import { apiPaths } from '@/lib/api-paths';
 import type { LmsLinkSummary } from '@/lib/lti/link-labels';
 
 /** One LMS link as it crosses the wire, where dates are strings. */
-export type AssignmentLmsLink = Omit<LmsLinkSummary, 'addedAt'> & { addedAt: string };
+export type AssignmentLmsLink = Omit<LmsLinkSummary, 'addedAt' | 'confirmedAt'> & {
+  addedAt: string;
+  confirmedAt: string | null;
+};
 
 /**
  * Read where an assignment appears in an LMS.

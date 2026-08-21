@@ -78,11 +78,15 @@ Some LMSs let you pick the AFCT assignment while adding the link, so students la
 
 **An assignment can only be linked once per LMS course.** Two links to the same work would give your gradebook two columns for it, and the grades would disagree about which is real.
 
+Some assignments appear in the list under **Added before, but never opened**. AFCT sent those to this LMS course already, but nobody has opened one from your LMS since, so it cannot tell whether the link arrived: your LMS may have refused it. Open it in your LMS to find out. Only add it again if it is genuinely not there.
+
 ## Seeing what is already in your LMS
 
 A course that an LMS opens carries an **In Canvas** badge (or whichever LMS it is) beside its name, and so does each assignment that has been added to an LMS course. Hover it to see which LMS course.
 
-The assignment's **Settings** tab lists the same thing in full, with the LMS course, who added it and when, and a **Remove** beside each one. Removing tells AFCT the assignment is no longer in that LMS course, which is what lets you add it again. **It changes nothing in your LMS:** the link there goes on opening the assignment until you delete it yourself. Use it when a link was never added successfully, or when you deleted it in the LMS and want to add it back.
+The assignment's **Settings** tab lists the same thing in full, with the LMS course, who added it and when, and a **Remove** beside each one. Removing tells AFCT the assignment is no longer in that LMS course, which is what lets you add it again. **It changes nothing in your LMS:** the link there goes on opening the assignment until you delete it yourself. Use it when you deleted a link in the LMS and want to add it back.
+
+A link nobody has opened yet says so here as well. That is the normal state for one added before term and not clicked since, so look in your LMS before removing it. The badge only counts links an LMS has actually opened, so an assignment whose only link is unopened carries no badge.
 
 The course has to be linked first, and you have to be the one who runs it. These links need to open in a new tab as well, so check that setting on the assignment or module item once it has been added. In Moodle that setting belongs to the AFCT tool rather than the link, so ask your administrator if AFCT opens inside the page. You pick one assignment at a time, even in an LMS that would let you select several at once.
 

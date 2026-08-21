@@ -28,6 +28,7 @@ const ids = {
 };
 const COURSE = 'c-cl-1';
 const OTHER_COURSE = 'c-cl-2';
+const ASSIGNMENT = 'a-cl-1';
 
 const R = 'http://purl.imsglobal.org/vocab/lis/v2/membership';
 const CTX = { ipAddress: '10.0.0.1', userAgent: 'test' };
@@ -54,7 +55,9 @@ const identity = (over: Partial<LaunchIdentity> = {}): LaunchIdentity => ({
 
 async function destroyFixtures() {
   await prisma.ltiPendingLink.deleteMany({ where: { platformId: PLATFORM } });
+  await prisma.ltiDeepLink.deleteMany({ where: { assignmentId: ASSIGNMENT } });
   await prisma.ltiContextLink.deleteMany({ where: { platformId: PLATFORM } });
+  await prisma.assignment.deleteMany({ where: { id: ASSIGNMENT } });
   await prisma.roster.deleteMany({ where: { courseId: { in: [COURSE, OTHER_COURSE] } } });
   await prisma.ltiPlatform.deleteMany({ where: { id: PLATFORM } });
   await prisma.course.deleteMany({ where: { id: { in: [COURSE, OTHER_COURSE] } } });
@@ -103,6 +106,15 @@ beforeEach(async () => {
       { courseId: COURSE, userId: ids.ta, role: 'TA' },
       { courseId: OTHER_COURSE, userId: ids.otherFaculty, role: 'FACULTY' },
     ],
+  });
+  await prisma.assignment.create({
+    data: {
+      id: ASSIGNMENT,
+      courseId: COURSE,
+      title: 'Regular languages',
+      dueDate: new Date('2026-10-01T00:00:00Z'),
+      isPublished: true,
+    },
   });
 });
 
@@ -522,5 +534,99 @@ describe('recording which LMS course somebody came through', () => {
 
     const member = await prisma.ltiContextMember.findFirst({ where: { userId: ids.student } });
     expect(member?.ltiUserId).toBe(identity().subject);
+  });
+});
+
+/**
+ * Confirming that the LMS really kept a link, which is the half of #697 the Remove button did
+ * not solve.
+ *
+ * AFCT writes the `LtiDeepLink` row when it hands the signed response to the browser and hears
+ * nothing afterwards, so a platform that refuses the response leaves a row nothing can open.
+ * A launch arriving through the link is the only evidence there is.
+ */
+describe('confirming a deep link on launch', () => {
+  const linked = () =>
+    linkLaunchCourse({ identity: identity(), courseId: COURSE, userId: ids.faculty, context: CTX });
+
+  const deepLink = async () => {
+    const contextLink = await prisma.ltiContextLink.findFirstOrThrow({
+      where: { platformId: PLATFORM },
+    });
+    return prisma.ltiDeepLink.create({
+      data: { contextLinkId: contextLink.id, assignmentId: ASSIGNMENT },
+    });
+  };
+
+  const launch = (over: Partial<LaunchIdentity> = {}) =>
+    resolveLaunchTarget({
+      identity: identity({ assignmentId: ASSIGNMENT, ...over }),
+      userId: ids.student,
+    });
+
+  const reread = (id: string) => prisma.ltiDeepLink.findUniqueOrThrow({ where: { id } });
+
+  it('marks the link the launch came through', async () => {
+    await linked();
+    const link = await deepLink();
+    expect(link.confirmedAt).toBeNull();
+
+    await launch();
+
+    expect((await reread(link.id)).confirmedAt).toBeInstanceOf(Date);
+  });
+
+  /** The first launch is the one that proves it, so a later one must not move the date. */
+  it('keeps the first launch, not the most recent', async () => {
+    await linked();
+    const link = await deepLink();
+
+    await launch();
+    const first = (await reread(link.id)).confirmedAt;
+    await launch();
+
+    expect((await reread(link.id)).confirmedAt).toEqual(first);
+  });
+
+  /**
+   * The claim travels through the platform and could name anything. A launch must only ever
+   * confirm a link the picker already wrote, never invent one.
+   */
+  it('creates nothing when there is no link to confirm', async () => {
+    await linked();
+
+    await launch();
+
+    expect(await prisma.ltiDeepLink.count({ where: { assignmentId: ASSIGNMENT } })).toBe(0);
+  });
+
+  it('leaves a link alone when the launch names no assignment', async () => {
+    await linked();
+    const link = await deepLink();
+
+    await resolveLaunchTarget({ identity: identity(), userId: ids.student });
+
+    expect((await reread(link.id)).confirmedAt).toBeNull();
+  });
+
+  /**
+   * Two LMS courses can open the same AFCT course, and each has its own link. Confirming by
+   * assignment alone would let a launch in one vouch for a link in the other.
+   */
+  it('does not confirm a link belonging to another LMS course', async () => {
+    await linked();
+    const link = await deepLink();
+
+    const otherContext = await prisma.ltiContextLink.create({
+      data: { platformId: PLATFORM, contextId: 'ctx-2', courseId: COURSE },
+    });
+    const otherLink = await prisma.ltiDeepLink.create({
+      data: { contextLinkId: otherContext.id, assignmentId: ASSIGNMENT },
+    });
+
+    await launch();
+
+    expect((await reread(link.id)).confirmedAt).toBeInstanceOf(Date);
+    expect((await reread(otherLink.id)).confirmedAt).toBeNull();
   });
 });

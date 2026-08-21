@@ -25,8 +25,12 @@ const link: AssignmentLmsLink = {
   platform: 'Canvas',
   context: 'CMPSC 464 Fall 2026',
   addedAt: '2026-08-18T14:00:00.000Z',
+  confirmedAt: '2026-08-18T14:05:00.000Z',
   addedBy: 'Ada Lovelace',
 };
+
+/** A link AFCT returned and has heard nothing about since. */
+const neverOpened: AssignmentLmsLink = { ...link, id: 'link-2', confirmedAt: null };
 
 function show(
   links: AssignmentLmsLink[],
@@ -134,7 +138,9 @@ describe('when the links cannot be read', () => {
     show([], vi.fn(), false, { failed: true });
 
     expect(screen.getByRole('alert')).toHaveTextContent(/could not check/i);
-    expect(screen.queryByText(/has not been added to a course in your LMS/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/has not been added to a course in your LMS/),
+    ).not.toBeInTheDocument();
   });
 
   it('offers a retry', async () => {
@@ -151,5 +157,31 @@ describe('when the links cannot be read', () => {
 
     expect(screen.getByText(/has not been added to a course in your LMS/)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The half of #697 this card cannot solve on its own. A link nobody has opened is usually a
+ * real one nobody has clicked, so the card has to say what it does not know without turning
+ * "remove it and add it again" into the obvious next step.
+ */
+describe('a link nobody has opened yet', () => {
+  it('says AFCT cannot tell whether the LMS kept it', () => {
+    show([neverOpened]);
+
+    expect(screen.getByText(/cannot tell whether your LMS kept it/)).toBeInTheDocument();
+  });
+
+  it('says nothing of the kind about a link that has been opened', () => {
+    show([link]);
+
+    expect(screen.queryByText(/cannot tell whether your LMS kept it/)).not.toBeInTheDocument();
+  });
+
+  /** Removing is still offered: a refused link is exactly what it is there for. */
+  it('can still be removed', () => {
+    show([neverOpened]);
+
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeEnabled();
   });
 });

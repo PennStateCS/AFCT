@@ -72,8 +72,8 @@ export function AssignmentLmsLinksCard({
         ) : failed ? (
           <div className="space-y-2">
             <p role="alert" className="text-status-danger">
-              AFCT could not check where this assignment appears in your LMS. This does not mean
-              it is not there.
+              AFCT could not check where this assignment appears in your LMS. This does not mean it
+              is not there.
             </p>
             {onRetry ? (
               <Button type="button" variant="outline" size="sm" onClick={onRetry}>
@@ -83,8 +83,8 @@ export function AssignmentLmsLinksCard({
           </div>
         ) : links.length === 0 ? (
           <p className="text-muted-foreground">
-            This assignment has not been added to a course in your LMS. Add it from the LMS
-            itself, where an AFCT link asks which assignment it should open.
+            This assignment has not been added to a course in your LMS. Add it from the LMS itself,
+            where an AFCT link asks which assignment it should open.
           </p>
         ) : (
           <>
@@ -99,6 +99,14 @@ export function AssignmentLmsLinksCard({
                       Added {formatDateTimeInTimeZone(link.addedAt, timezone, hour12)}
                       {link.addedBy ? ` by ${link.addedBy}` : ''}
                     </p>
+                    {/* Plain text inside the row rather than a badge beside it, so a screen
+                        reader hears it as part of the link it is about. */}
+                    {link.confirmedAt ? null : (
+                      <p className="text-muted-foreground text-xs">
+                        Nobody has opened this link yet, so AFCT cannot tell whether your LMS kept
+                        it. Open it there once to settle it.
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="button"
@@ -115,6 +123,8 @@ export function AssignmentLmsLinksCard({
             <p className="text-muted-foreground text-xs">
               Removing one here only tells AFCT the assignment is no longer in that course, which
               lets you add it again. The link in your LMS keeps working until you delete it there.
+              For a link nobody has opened yet, look in your LMS before removing it: it is usually
+              there and simply unvisited.
             </p>
           </>
         )}

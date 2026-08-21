@@ -81,19 +81,36 @@ export default async function DeepLinkPage({
   }
 
   /**
-   * Assignments not already opened by a link in this LMS course.
+   * What this LMS course may still be given, in two kinds.
    *
    * Adding the same assignment twice gives the LMS two links and two gradebook columns for one
-   * piece of work, and the grades then disagree. The links already added are counted rather
-   * than listed, because naming them would not help: they are visible in the LMS itself.
+   * piece of work, and the grades then disagree, so an assignment a link already opens is not
+   * offered. Those are counted rather than listed, because naming them would not help: they
+   * are visible in the LMS itself.
+   *
+   * An unconfirmed link is the awkward middle. AFCT wrote the row when it returned the
+   * response and has heard nothing since, so the assignment may be sitting in this LMS course
+   * or may have been refused on the way in. Hiding it means somebody whose link was refused can
+   * never add it again; offering it silently invites a second copy of one that is really there.
+   * So it is offered under its own heading, with the warning next to it.
    */
-  const [assignments, linkedCount] = await Promise.all([
+  const [assignments, unconfirmed, linkedCount] = await Promise.all([
     prisma.assignment.findMany({
       where: { courseId: link.courseId, ltiDeepLinks: { none: { contextLinkId: link.id } } },
       select: { id: true, title: true, problems: { select: { maxPoints: true } } },
       orderBy: { dueDate: 'asc' },
     }),
-    prisma.ltiDeepLink.count({ where: { contextLinkId: link.id } }),
+    prisma.assignment.findMany({
+      where: {
+        courseId: link.courseId,
+        ltiDeepLinks: { some: { contextLinkId: link.id, confirmedAt: null } },
+      },
+      select: { id: true, title: true, problems: { select: { maxPoints: true } } },
+      orderBy: { dueDate: 'asc' },
+    }),
+    prisma.ltiDeepLink.count({
+      where: { contextLinkId: link.id, confirmedAt: { not: null } },
+    }),
   ]);
 
   const failure = error ? MESSAGES[error] : null;
@@ -183,7 +200,7 @@ export default async function DeepLinkPage({
   }
 
   if (mode === 'connect') {
-    if (assignments.length === 0) {
+    if (assignments.length === 0 && unconfirmed.length === 0) {
       return (
         <Shell title="Nothing left to add">
           <p className="text-muted-foreground mb-4 text-sm">
@@ -209,6 +226,15 @@ export default async function DeepLinkPage({
             ? ` ${linkedCount} already added to this course ${linkedCount === 1 ? 'is' : 'are'} not listed.`
             : ''}
         </p>
+        {unconfirmed.length > 0 ? (
+          <p className="text-muted-foreground mb-4 text-sm">
+            The assignments under <strong>Added before, but never opened</strong> were sent to this
+            course already. Nobody has opened one from your LMS since, so AFCT cannot tell whether
+            it arrived. Open it in your LMS to find out, and add it here again only if it is
+            genuinely missing: adding a second one gives you two links and two gradebook columns for
+            the same work.
+          </p>
+        ) : null}
         {failure}
 
         <form method="POST" action="/api/lti/deep-link" className="space-y-4">
@@ -218,26 +244,39 @@ export default async function DeepLinkPage({
           {/* A select rather than a list of radios. A term's worth of assignments is easily
               thirty, which no longer fits the modal an LMS draws this in, and a native select
               stays keyboard and screen-reader friendly at any length while still working with
-              no JavaScript, which the rest of this flow depends on. */}
+              no JavaScript, which the rest of this flow depends on. Grouping is `optgroup` for
+              the same reason: the browser reads the heading out with the option, and nothing
+              here has to run for it to work. */}
           <Field label="Assignment" htmlFor="assignmentId">
             <select
               id="assignmentId"
               name="assignmentId"
               required
-              defaultValue={assignments[0]?.id}
+              defaultValue={assignments[0]?.id ?? unconfirmed[0]?.id}
               className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
             >
-              {assignments.map((assignment) => {
-                const points = assignment.problems.reduce(
-                  (sum, p) => sum + Number(p.maxPoints ?? 0),
-                  0,
-                );
-                return (
-                  <option key={assignment.id} value={assignment.id}>
-                    {assignment.title} {'—'} {points > 0 ? `${points} points` : 'not graded'}
-                  </option>
-                );
-              })}
+              {/* No headings at all in the ordinary case, where every assignment is one nobody
+                  has added yet and a heading would only say so. */}
+              {unconfirmed.length === 0 ? (
+                assignments.map((assignment) => (
+                  <AssignmentOption key={assignment.id} assignment={assignment} />
+                ))
+              ) : (
+                <>
+                  {assignments.length > 0 ? (
+                    <optgroup label="Not in this LMS course">
+                      {assignments.map((assignment) => (
+                        <AssignmentOption key={assignment.id} assignment={assignment} />
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  <optgroup label="Added before, but never opened">
+                    {unconfirmed.map((assignment) => (
+                      <AssignmentOption key={assignment.id} assignment={assignment} />
+                    ))}
+                  </optgroup>
+                </>
+              )}
             </select>
           </Field>
 
@@ -286,6 +325,25 @@ export default async function DeepLinkPage({
 }
 
 /** What went wrong last time, when the route sent them back here to fix it. */
+/**
+ * One assignment in the picker's select.
+ *
+ * The same markup in both groups on purpose: the heading says what is different about them,
+ * and an option that also said it would make the list harder to read, not easier.
+ */
+function AssignmentOption({
+  assignment,
+}: {
+  assignment: { id: string; title: string; problems: { maxPoints: number | null }[] };
+}) {
+  const points = assignment.problems.reduce((sum, p) => sum + Number(p.maxPoints ?? 0), 0);
+  return (
+    <option value={assignment.id}>
+      {assignment.title} {'—'} {points > 0 ? `${points} points` : 'not graded'}
+    </option>
+  );
+}
+
 const MESSAGES: Record<string, React.ReactNode> = {
   'already-linked': (
     <Notice>

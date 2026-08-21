@@ -54,10 +54,7 @@ import { buildProblemColumns } from './problem-columns';
 import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
 import { AssignmentLmsLinksCard } from '@/components/lti/AssignmentLmsLinksCard';
-import {
-  fetchAssignmentLmsLinks,
-  type AssignmentLmsLink,
-} from '@/lib/lti/fetch-assignment-links';
+import { fetchAssignmentLmsLinks, type AssignmentLmsLink } from '@/lib/lti/fetch-assignment-links';
 
 /**
  * The dialogs and the settings tab load on demand. Between them they were the only things
@@ -336,6 +333,13 @@ export default function AssignmentDashboardPage({
     staleTime: 30_000,
   });
   const lmsLinks = lmsLinksQuery.data ?? [];
+  /**
+   * The badge says an LMS opens this assignment, so it may only count links an LMS has opened.
+   * A link the platform refused would otherwise put "In Canvas" on the header, which is the
+   * same wrong claim in a smaller place. The card below gets all of them, because saying a link
+   * is unconfirmed is the one screen that should.
+   */
+  const confirmedLmsLinks = lmsLinks.filter((link) => link.confirmedAt);
 
   async function handleAddProblems(
     problemIds: string[],
@@ -493,7 +497,6 @@ export default function AssignmentDashboardPage({
       }
     : undefined;
 
-
   // Single source of truth for the assignment tab strip and its mobile select
   // fallback, so the two stay in sync.
   const assignmentTabs = [
@@ -564,7 +567,7 @@ export default function AssignmentDashboardPage({
               </Badge>
               {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
                   Settings holds the detail and the way to remove one. */}
-              <LmsLinkBadge links={lmsLinks} />
+              <LmsLinkBadge links={confirmedLmsLinks} />
               {/* Quick jump to another assignment in this course. */}
               <div className="ml-auto w-56 shrink-0">
                 <SearchableSelect

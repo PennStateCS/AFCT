@@ -336,6 +336,7 @@ erDiagram
   String assignmentId FK
   String createdByUserId FK "nullable"
   DateTime createdAt
+  DateTime confirmedAt "nullable"
 }
 "User" {
   String id PK
@@ -729,6 +730,8 @@ knows: from then on the link lives in the LMS and is never reported back. Withou
 picker cannot tell what it has already offered, and the same assignment can be added twice
 under two names, which then disagree about which gradebook column is theirs.
 
+A row written at that moment is a claim, not a fact, which is what `confirmedAt` records.
+
 Properties as follows:
 
 - `id`: Unique identifier.
@@ -736,6 +739,11 @@ Properties as follows:
 - `assignmentId`: The AFCT assignment it opens.
 - `createdByUserId`: Who added it. Null once that account is gone; the link outlives the person.
 - `createdAt`: When this record was created.
+- `confirmedAt`
+  > When the LMS first opened this link, and so the first proof it accepted the response.
+  > Null until then: AFCT signs a response and hands it to the browser, and whether the
+  > platform stored it is never reported back. A refused response leaves a row here that
+  > nothing in the LMS opens, which is why the picker treats these two states differently.
 
 ## Courses
 
