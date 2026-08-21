@@ -48,7 +48,7 @@ interface InputGroupProps extends Omit<
 const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function InputGroup(
   {
     label,
-	labelClassName = "",
+    labelClassName = '',
     name,
     fieldProps,
     error,
@@ -121,6 +121,10 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
   const describedByIds: Array<string | null> = [
     error ? `${inputId}-error` : null,
     description ? `${inputId}-desc` : null,
+    // The valid/invalid text beside the field. It was rendered as the text equivalent of the
+    // status icon and then pointed at by nothing, so somebody typing a password confirmation
+    // was never told it matched: the information was in the page and not on the control.
+    hasStatus ? `${inputId}-status` : null,
   ];
 
   if (additionalDescribedBy) {
@@ -186,6 +190,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           <>
             <div className="absolute inset-y-0 right-10 flex items-center pr-1">
               <StatusAdornment
+                id={`${inputId}-status`}
                 isChecking={isChecking}
                 isValid={isValid}
                 hasValue={String(currValue).length > 0}
@@ -215,6 +220,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
         {hasStatus && !hasEye && (
           <div className="absolute inset-y-0 right-3 flex items-center">
             <StatusAdornment
+              id={`${inputId}-status`}
               isChecking={isChecking}
               isValid={isValid}
               hasValue={String(currValue).length > 0}
@@ -245,7 +251,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
       )}
 
       {error && (
-        <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-destructive">
+        <p id={`${inputId}-error`} role="alert" className="text-destructive mt-1 text-xs">
           {error}
         </p>
       )}
@@ -256,31 +262,44 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
 /* ---------------- Status ---------------- */
 
 function StatusAdornment({
+  id,
   isChecking,
   isValid,
   hasValue,
 }: {
+  /** Referenced by the field's `aria-describedby`, so the status is read with the field. */
+  id: string;
   isChecking?: boolean | string;
   isValid?: boolean;
   hasValue: boolean;
 }) {
   if (isChecking) {
     const text = typeof isChecking === 'string' ? isChecking : 'Checking...';
-    return <span className="text-muted-foreground text-xs italic">{text}</span>;
+    return (
+      <span id={id} className="text-muted-foreground text-xs italic">
+        {text}
+      </span>
+    );
   }
 
-  if (!hasValue || isValid === undefined) return null;
+  // The id has to exist even with nothing to say, or `aria-describedby` points at a missing
+  // element for as long as the field is empty.
+  if (!hasValue || isValid === undefined) return <span id={id} className="sr-only" />;
 
   // Pair the color/shape-only status icon with a text equivalent for AT.
   return isValid ? (
     <>
       <CheckCircle size={18} className="text-status-success" aria-hidden="true" />
-      <span className="sr-only">valid</span>
+      <span id={id} className="sr-only">
+        valid
+      </span>
     </>
   ) : (
     <>
       <XCircle size={18} className="text-destructive" aria-hidden="true" />
-      <span className="sr-only">invalid</span>
+      <span id={id} className="sr-only">
+        invalid
+      </span>
     </>
   );
 }

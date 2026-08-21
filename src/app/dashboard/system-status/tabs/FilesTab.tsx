@@ -41,6 +41,17 @@ export default function FilesTab({
 
   const [pending, setPending] = useState<Pending | null>(null);
   const [status, setStatus] = useState('');
+  /**
+   * Bumped with every message so the live region is a fresh node each time.
+   *
+   * Without it, two identical messages in a row are one unchanged string, and a live region
+   * announces changes: the second delete of nothing said nothing at all.
+   */
+  const [statusKey, setStatusKey] = useState(0);
+  const announce = useCallback((message: string) => {
+    setStatus(message);
+    setStatusKey((n) => n + 1);
+  }, []);
 
   const {
     mutateAsync: remove,
@@ -55,13 +66,20 @@ export default function FilesTab({
       }),
     onSuccess: (result, vars) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.statusFiles() });
+      /**
+       * One announcement per delete.
+       *
+       * The toast announces through its own live region, so writing the same sentence into the
+       * region below read it out twice. The region keeps the detail, because a toast is gone in
+       * a few seconds and this is the record of what was removed; the toast keeps only the
+       * short confirmation.
+       */
       if (vars.all) {
         const freed = formatBytes(result?.freedBytes ?? 0);
-        const message = `Deleted ${result?.deleted ?? 0} files, freeing ${freed}.`;
-        setStatus(message);
-        showToast.success(message);
+        announce(`Deleted ${result?.deleted ?? 0} files, freeing ${freed}.`);
+        showToast.success('Files deleted');
       } else {
-        setStatus(`Deleted ${vars.fileName}.`);
+        announce(`Deleted ${vars.fileName}.`);
         showToast.deleted('File', { name: vars.fileName });
       }
     },
@@ -71,7 +89,8 @@ export default function FilesTab({
         err instanceof Error
           ? err.message
           : 'Could not delete the file. Check your connection and try again.';
-      setStatus(message);
+      // Only the toast. It is the visible feedback and it already announces assertively
+      // through its own live region, so also writing here read the failure out twice.
       showToast.error(message);
     },
   });
@@ -210,7 +229,10 @@ export default function FilesTab({
             problem, submission or account still uses it. Deleting one cannot be undone.
           </p>
 
-          <div aria-live="polite" className="sr-only">
+          {/* The key resets the node on each message, so repeating an action whose wording is
+              identical (deleting nothing twice, say) still announces rather than looking
+              unchanged and staying silent. */}
+          <div key={statusKey} aria-live="polite" className="sr-only">
             {status}
           </div>
 

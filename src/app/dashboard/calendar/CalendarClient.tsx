@@ -423,8 +423,8 @@ export default function CalendarClient({
               difference between a month grid that fits and one that has to be scrolled. */}
           <CardContent className="relative flex min-h-0 flex-1 flex-col px-2 pt-6 sm:px-6">
             {isError ? (
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2">
-                <p role="alert" className="text-sm text-status-danger">
+              <div className="border-status-danger-border bg-status-danger-bg mb-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                <p role="alert" className="text-status-danger text-sm">
                   Failed to load calendar assignments. Please try again.
                 </p>
                 <Button variant="outline" size="sm" onClick={refresh}>
@@ -432,14 +432,22 @@ export default function CalendarClient({
                 </Button>
               </div>
             ) : null}
-            {loading ? (
-              <div
-                role="status"
-                className="border-border bg-card pointer-events-none absolute top-3 right-3 z-10 rounded-md border px-2 py-1 shadow-sm"
-              >
+            {/* Mounted whether or not it is loading. Created together with its message, a
+                live region is not reliably announced, so changing month said nothing while
+                the fetch ran. */}
+            <div
+              role="status"
+              aria-live="polite"
+              className={
+                loading
+                  ? 'border-border bg-card pointer-events-none absolute top-3 right-3 z-10 rounded-md border px-2 py-1 shadow-sm'
+                  : 'sr-only'
+              }
+            >
+              {loading ? (
                 <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
             <div className="mx-auto mb-2 flex w-full max-w-6xl items-center justify-center gap-2 px-2">
               <Button
                 type="button"

@@ -75,8 +75,25 @@ export function AssignmentLmsLinksCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
+        {/* One region for the whole card, kept across every branch below, so the wait and
+            its outcome are both announced. "Loading…" used to be plain text. */}
+        <span role="status" aria-live="polite" className="sr-only">
+          {/* Deliberately not a copy of the visible wording below: a screen reader would then
+              read the same sentence twice, once announced and once in the page. Short enough
+              to be the answer, and different enough not to be an echo. */}
+          {loading
+            ? 'Checking your LMS.'
+            : failed
+              ? ''
+              : links.length === 0
+                ? 'No LMS links.'
+                : `In ${links.length} LMS ${links.length === 1 ? 'course' : 'courses'}.`}
+        </span>
+
         {loading ? (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className="text-muted-foreground" aria-hidden="true">
+            Loading…
+          </p>
         ) : failed ? (
           <div className="space-y-2">
             <p role="alert" className="text-status-danger">
