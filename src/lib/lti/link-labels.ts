@@ -16,6 +16,11 @@ export type LmsLinkSummary = {
   /** What the LMS calls the course it was added to, when the launch told us. */
   context: string | null;
   addedAt: Date;
+  /**
+   * When the LMS first opened this link. Null while AFCT has sent a response and heard nothing
+   * back, which is either a link waiting to be clicked or one the platform refused.
+   */
+  confirmedAt: Date | null;
   /** Who added it, when that account still exists. */
   addedBy: string | null;
 };

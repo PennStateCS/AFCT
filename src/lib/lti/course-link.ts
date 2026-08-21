@@ -108,8 +108,10 @@ export async function peekLaunchTarget(opts: {
  * Where a launch should land, for somebody already resolved to an AFCT account.
  *
  * Unlike {@link peekLaunchTarget} this records what the launch asserted: the service endpoints
- * the platform named this time, that this person is in this LMS course, and which gradebook
- * column the link is bound to. Only for a launch that has finished establishing who somebody is.
+ * the platform named this time, that this person is in this LMS course, which gradebook column
+ * the link is bound to, and that the link itself is real. Only for a launch that has finished
+ * establishing who somebody is, so an administrator held for a password confirms nothing on
+ * that first launch and confirms it on the next one instead.
  */
 export async function resolveLaunchTarget(opts: {
   identity: LaunchIdentity;
@@ -161,10 +163,56 @@ export async function resolveLaunchTarget(opts: {
       lineItemUrl: identity.lineItemUrl,
     });
 
+    await confirmDeepLink({
+      contextLinkId: link.id,
+      assignmentId: identity.assignmentId,
+    });
+
     return { status: 'linked', courseId: link.courseId };
   }
 
   return (await canLinkCourses(userId)) ? { status: 'needs-link' } : { status: 'not-set-up' };
+}
+
+/**
+ * Note that the LMS really did keep a link AFCT handed it.
+ *
+ * AFCT writes the `LtiDeepLink` row when it returns the deep linking response, which is the
+ * last moment it hears anything: the browser carries the signed response to the platform, and
+ * whether the platform stored it is never reported back. Moodle refused three in a row while
+ * its keyset fetch was broken, and AFCT went on believing three assignments were linked.
+ *
+ * A launch arriving through the link is the proof, and the only one there is. It is also the
+ * reason this is not a `create`: a launch must never invent a link, only confirm one that the
+ * picker already wrote and already checked belonged to this course.
+ *
+ * Best effort, like the two writes beside it. A confirm that fails costs nothing, because the
+ * next launch through the same link does it instead.
+ */
+async function confirmDeepLink(opts: {
+  contextLinkId: string;
+  assignmentId: string | null;
+}): Promise<void> {
+  // A plain course link names no assignment, so there is nothing here to confirm.
+  if (!opts.assignmentId) return;
+
+  try {
+    /**
+     * `confirmedAt: null` in the filter rather than in a read beforehand, so the first launch
+     * is the one recorded and a burst of them cannot overwrite each other. It also means this
+     * costs nothing on every later launch, which is almost all of them.
+     */
+    await prisma.ltiDeepLink.updateMany({
+      where: {
+        contextLinkId: opts.contextLinkId,
+        assignmentId: opts.assignmentId,
+        confirmedAt: null,
+      },
+      data: { confirmedAt: new Date() },
+    });
+  } catch (error) {
+    console.warn('[lti] could not confirm the link this launch came through', errMessage(error));
+  }
 }
 
 /**

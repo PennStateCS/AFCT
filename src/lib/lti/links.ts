@@ -31,6 +31,7 @@ export async function assignmentLmsLinks(assignmentId: string): Promise<LmsLinkS
     select: {
       id: true,
       createdAt: true,
+      confirmedAt: true,
       createdBy: { select: { firstName: true, lastName: true } },
       contextLink: {
         select: {
@@ -46,6 +47,7 @@ export async function assignmentLmsLinks(assignmentId: string): Promise<LmsLinkS
     platform: platformLabel(link.contextLink.platform),
     context: link.contextLink.contextTitle,
     addedAt: link.createdAt,
+    confirmedAt: link.confirmedAt,
     addedBy: link.createdBy
       ? `${link.createdBy.firstName ?? ''} ${link.createdBy.lastName ?? ''}`.trim() || null
       : null,

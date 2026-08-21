@@ -99,6 +99,14 @@ export function AssignmentLmsLinksCard({
                       Added {formatDateTimeInTimeZone(link.addedAt, timezone, hour12)}
                       {link.addedBy ? ` by ${link.addedBy}` : ''}
                     </p>
+                    {/* Plain text inside the row rather than a badge beside it, so a screen
+                        reader hears it as part of the link it is about. */}
+                    {link.confirmedAt ? null : (
+                      <p className="text-muted-foreground text-xs">
+                        Nobody has opened this link yet, so AFCT cannot tell whether your LMS
+                        kept it. Open it there once to settle it.
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="button"
@@ -115,6 +123,8 @@ export function AssignmentLmsLinksCard({
             <p className="text-muted-foreground text-xs">
               Removing one here only tells AFCT the assignment is no longer in that course, which
               lets you add it again. The link in your LMS keeps working until you delete it there.
+              For a link nobody has opened yet, look in your LMS before removing it: it is
+              usually there and simply unvisited.
             </p>
           </>
         )}

@@ -252,9 +252,17 @@ export async function POST(request: Request) {
 
   /**
    * One link per assignment per LMS course, enforced by the unique index rather than by a
-   * check: two submissions of the same form would both pass a check. A second attempt is not
-   * an error worth a dead end, so it goes back to the picker saying what happened.
+   * check: two submissions of the same form would both pass a check.
+   *
+   * Hitting that index is not always a mistake, which is why the second half of this is not a
+   * dead end. A row whose `confirmedAt` is still null was written for a response the LMS may
+   * never have kept, and re-picking the assignment is the only way to send another one. So a
+   * conflict with an unconfirmed row claims it and carries on to build the response, while a
+   * conflict with a confirmed one goes back to the picker as before: that link has proved it
+   * works, and answering with a second copy of it is how an LMS ends up with two links and two
+   * gradebook columns for one assignment.
    */
+  let retry = false;
   try {
     await prisma.ltiDeepLink.create({
       data: {
@@ -264,10 +272,32 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      return backToPicker('already-linked', 'connect');
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+      throw error;
     }
-    throw error;
+
+    /**
+     * `confirmedAt: null` in the filter, not in a read first. A launch can arrive between the
+     * two, and re-sending a response for a link that has just proved it works is the duplicate
+     * this whole branch exists to avoid. Nothing updated means the row was confirmed, or was
+     * removed from the assignment's Settings tab, and either way the picker should be the one
+     * to say so.
+     *
+     * The attempt that wrote the row never reached the LMS, so whoever is picking now is the
+     * sender of the only response that can still be accepted, and the card that names who
+     * added a link should name them. The earlier attempt stays in the activity log, which is
+     * written once per attempt.
+     */
+    const claimed = await prisma.ltiDeepLink.updateMany({
+      where: {
+        contextLinkId: contextLink.id,
+        assignmentId: assignment.id,
+        confirmedAt: null,
+      },
+      data: { createdAt: new Date(), createdByUserId: session.user.id },
+    });
+    if (claimed.count === 0) return backToPicker('already-linked', 'connect');
+    retry = true;
   }
 
   const scoreMaximum = assignment.problems.reduce((sum, p) => sum + Number(p.maxPoints ?? 0), 0);
@@ -325,7 +355,13 @@ export async function POST(request: Request) {
     action: 'LTI_DEEP_LINK_RETURNED',
     severity: 'INFO',
     category: 'COURSE',
-    metadata: { issuer: pending.platform.issuer, assignmentTitle: assignment.title },
+    metadata: {
+      issuer: pending.platform.issuer,
+      assignmentTitle: assignment.title,
+      // Present only when this replaced an unconfirmed link, so the log shows both attempts
+      // and which of them the LMS was given last.
+      ...(retry ? { retry: true } : {}),
+    },
   });
 
   // The nonce the edge set for this request, or the script that submits the form is blocked.
