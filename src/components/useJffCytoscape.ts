@@ -288,6 +288,8 @@ export function useJffCytoscape({
             {
               selector: 'node',
               style: {
+                // Above a note; see the note style below for why.
+                'z-index': 1,
                 'background-color': NODE_FILL,
                 'border-color': STATE_STROKE,
                 'border-width': STATE_BORDER_WIDTH,
@@ -330,6 +332,7 @@ export function useJffCytoscape({
             {
               selector: 'edge',
               style: {
+                'z-index': 1,
                 'curve-style': 'bezier',
                 'line-color': STROKE,
                 width: EDGE_WIDTH,
@@ -398,6 +401,17 @@ export function useJffCytoscape({
                 'text-valign': 'center',
                 'text-halign': 'center',
                 'text-justification': 'left',
+                /**
+                 * Behind the machine.
+                 *
+                 * A note sits wherever the student dropped it and nothing moves aside for it,
+                 * so it can overlap a state. When it does, the answer has to win: a note is
+                 * the student's aside, and losing sight of a state behind an opaque panel
+                 * would be a worse reading of the file than a note partly covered. JFLAP draws
+                 * its notes on top, because there they are live Swing components the student
+                 * is editing; here nobody is editing anything.
+                 */
+                'z-index': 0,
                 // Not part of the machine, so a tap must not pick it up and fade everything
                 // else out around it.
                 events: 'no',

@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   parseJflap,
   labelFor,
@@ -171,12 +173,24 @@ describe('notes', () => {
     expect(parsed.notes[0]).toMatchObject({ xPos: 0.5, yPos: 0.25 });
   });
 
-  // A JFLAP note is a JTextArea, and its line breaks are written as `&#13;` carriage returns.
-  it('normalises carriage returns to newlines', () => {
+  // A real break in a JFLAP note arrives as CRLF and is one line break.
+  it('reads a CRLF as a single line break', () => {
     const parsed = parseJflap(
-      withNote('<note><text>first&#13;second</text><x>0</x><y>0</y></note>'),
+      withNote('<note><text>first&#13;\nsecond</text><x>0</x><y>0</y></note>'),
     );
     expect(parsed.notes[0]?.text).toBe('first\nsecond');
+  });
+
+  /**
+   * A lone carriage return is not a line break to JFLAP: `properly&#13;and` renders as
+   * "properlyand" in its own editor, joined and with no space. Checked by opening the same
+   * file in JFLAP and in AFCT side by side, because nothing in the format says so.
+   */
+  it('drops a lone carriage return, as JFLAP does when it draws one', () => {
+    const parsed = parseJflap(
+      withNote('<note><text>properly&#13;and</text><x>0</x><y>0</y></note>'),
+    );
+    expect(parsed.notes[0]?.text).toBe('properlyand');
   });
 
   it('drops a note the student opened and never wrote in', () => {
@@ -191,6 +205,37 @@ describe('notes', () => {
   it('drops a note with no usable position rather than placing it at the origin', () => {
     const parsed = parseJflap(withNote('<note><text>somewhere</text></note>'));
     expect(parsed.notes).toEqual([]);
+  });
+
+  /**
+   * A file saved by JFLAP 7.1 itself, rather than XML written here to look like one.
+   *
+   * It is the only way to be sure how a real note is serialised, and it settled two questions
+   * that reading the format could not: a line break inside a note is written as a literal CRLF
+   * within `<text>`, and a `&#13;` entity is something else entirely, which JFLAP draws as
+   * nothing at all. The two appear side by side in this file, which is why it is kept whole
+   * instead of reduced to the interesting lines.
+   */
+  it('reads notes out of a file saved by JFLAP', () => {
+    const xml = readFileSync(join(__dirname, '__fixtures__', 'jflap-notes-from-jflap.jff'), 'utf8');
+    const parsed = parseJflap(xml);
+
+    expect(parsed.notes).toHaveLength(2);
+    // Typed as two lines in JFLAP, saved as a CRLF, and one break here.
+    expect(parsed.notes[0]).toMatchObject({
+      text: 'flip on 0\nAnother line',
+      xPos: 470,
+      yPos: 250,
+    });
+    // The first line of this one carries a literal `&#13;` entity, which JFLAP renders as
+    // "properlyand" with no break and no space.
+    expect(parsed.notes[1]?.text.split('\n')).toEqual([
+      'I am not sure this handles the empty string properlyand I ran out of time to check it before the deadline.',
+      'New Line Example',
+      'New Lines Example',
+      'Another new line',
+      'Yet another new line',
+    ]);
   });
 
   it('reads a file that holds notes and no states', () => {

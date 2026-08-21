@@ -123,8 +123,16 @@ export function parseJflap(xmlText: string): Parsed {
       // fallback for a file written by something else, and includes the coordinates, so it is
       // only reached when there is no `<text>` at all.
       const raw = n.querySelector('text')?.textContent ?? n.textContent ?? '';
-      // JFLAP writes the line breaks of a multi-line note as carriage returns (`&#13;`).
-      const text = raw.replace(/\r\n?/g, '\n').trim();
+      /**
+       * Line endings, matched to what JFLAP itself draws.
+       *
+       * A real break in a JFLAP note arrives as CRLF, and becomes one line break here. A
+       * **lone** carriage return is dropped rather than turned into a break, because that is
+       * what JFLAP does with it: a note written as `properly&#13;and` renders as "properlyand"
+       * in JFLAP's own editor, with no break and no space. Confirmed by opening the same file
+       * in both, which is the only way to settle it.
+       */
+      const text = raw.replace(/\r\n/g, '\n').replace(/\r/g, '').trim();
       const xPos = parseFloat(n.querySelector('x')?.textContent ?? '');
       const yPos = parseFloat(n.querySelector('y')?.textContent ?? '');
       return { text, xPos, yPos };

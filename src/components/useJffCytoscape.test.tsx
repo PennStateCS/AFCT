@@ -141,9 +141,15 @@ class FakeCy {
    * are the ones that say a note is not part of the machine.
    */
   rawElements: Array<Record<string, unknown>> = [];
+  /** The stylesheet as handed to cytoscape, so a rule can be asserted by its selector. */
+  styleSheet: Array<{ selector: string; style: Record<string, unknown> }> = [];
 
-  constructor(config: { elements?: Array<Record<string, unknown>> }) {
+  constructor(config: {
+    elements?: Array<Record<string, unknown>>;
+    style?: Array<{ selector: string; style: Record<string, unknown> }>;
+  }) {
     this.rawElements = config.elements ?? [];
+    this.styleSheet = config.style ?? [];
     for (const el of config.elements ?? []) {
       const data = el.data as Record<string, unknown>;
       const made = new FakeEl(
@@ -155,6 +161,11 @@ class FakeCy {
       if (data.source !== undefined) this.edgeList.push(made);
       else this.nodeList.push(made);
     }
+  }
+
+  /** The style block for one selector, exactly as the viewer declared it. */
+  styleFor(selector: string) {
+    return this.styleSheet.find((rule) => rule.selector === selector)?.style;
   }
 
   byId(id: string) {
@@ -318,13 +329,11 @@ describe('loading the machine', () => {
   });
 
   it('surfaces a failed fetch with its status, and builds no graph', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValue({
-        ok: false,
-        status: 404,
-        statusText: 'Not Found',
-      }) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    }) as unknown as typeof fetch;
 
     const { api } = renderViewer();
 
@@ -518,6 +527,21 @@ describe('rebuilding the graph', () => {
 
       await waitFor(() => expect(lastCy().rawElements.length).toBeGreaterThan(0));
       expect(noteElements()).toHaveLength(0);
+    });
+
+    /**
+     * A note sits where the student dropped it and nothing moves aside for it, so it can land
+     * on a state. When it does the machine has to stay readable, which means the note goes
+     * behind it rather than over it.
+     */
+    it('is drawn behind the machine, so it cannot hide a state', async () => {
+      global.fetch = fetchOk(noteXml) as unknown as typeof fetch;
+      renderViewer({ honorPositionsDefault: true });
+
+      await waitFor(() => expect(noteElements()).toHaveLength(1));
+      const style = lastCy().styleFor('node.note');
+      const stateStyle = lastCy().styleFor('node');
+      expect(Number(style?.['z-index'])).toBeLessThan(Number(stateStyle?.['z-index']));
     });
 
     it('is not something the reader can select or drag', async () => {
