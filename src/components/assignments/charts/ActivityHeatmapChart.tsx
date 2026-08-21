@@ -43,7 +43,7 @@ function hourRange(h: number): string {
 }
 
 export function ActivityHeatmapChart({ matrix, max, unitPlural }: Props) {
-  const { state, showAtEvent, showAtElement, hide } = useChartTooltip();
+  const { state, showAtEvent, hide } = useChartTooltip();
 
   return (
     <div
@@ -65,18 +65,25 @@ export function ActivityHeatmapChart({ matrix, max, unitPlural }: Props) {
                 const style = LEVEL_STYLE[level]!;
                 const label = `${DAYS_LONG[d]}, ${hourRange(h)}: ${count} submission${count === 1 ? '' : 's'}`;
                 return (
+                  /*
+                   * Not focusable, and not in the accessibility tree.
+                   *
+                   * This grid is 7 by 24. Making each cell a focus stop with a name of its own
+                   * meant 168 tab stops to cross the chart and 168 announced images to read
+                   * past it, which is a worse experience than no keyboard access at all. Every
+                   * value is already in the `ChartDataTable` below, laid out as a real table
+                   * with day and hour headers, so nothing is lost by leaving the picture to
+                   * the people who can see it. The other charts keep their focusable hit areas
+                   * because ten of them is a reasonable number; this one is not.
+                   */
                   <div
                     key={h}
-                    className="h-5 rounded-[2px] outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
+                    className="h-5 rounded-[2px]"
                     style={{ backgroundColor: style.bg, opacity: style.opacity }}
-                    tabIndex={0}
-                    role="img"
-                    aria-label={label}
+                    aria-hidden="true"
                     onMouseEnter={(e) => showAtEvent(e, label)}
                     onMouseMove={(e) => showAtEvent(e, label)}
                     onMouseLeave={hide}
-                    onFocus={(e) => showAtElement(e.currentTarget, label)}
-                    onBlur={hide}
                   />
                 );
               })}

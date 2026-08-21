@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { MessageSquare, Send, X } from 'lucide-react';
 import { Button } from './ui/button';
@@ -104,6 +104,9 @@ export default function DiscussionPanel({
   className = '',
   frameless = false,
 }: Props) {
+  /** Where focus lands after a comment is deleted: the row that held the button is gone. */
+  const sectionRef = useRef<HTMLElement>(null);
+
   /**
    * The visibility badge for one comment. Only meaningful on a group assignment: on an
    * individual one every comment is between staff and that student, so a badge on each
@@ -134,6 +137,8 @@ export default function DiscussionPanel({
   return (
     <>
       <section
+        ref={sectionRef}
+        tabIndex={-1}
         className={
           frameless ? className : `border-border overflow-hidden rounded-md border ${className}`
         }
@@ -149,9 +154,13 @@ export default function DiscussionPanel({
 
         <div className={frameless ? '' : 'bg-card p-3'}>
           {comments.length > 0 ? (
-            // Announce a newly-posted comment to screen readers when it appears.
-            <ul className="mb-3 space-y-3" aria-live="polite">
-
+            /*
+             * No `aria-live` here. It only existed once a comment did, so posting the first one
+             * mounted the region together with its content, which assistive tech does not
+             * reliably announce. When it did fire, the success toast had already said the same
+             * thing through its own region, so one action was read out twice.
+             */
+            <ul className="mb-3 space-y-3">
               {comments
                 .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
                 .map((comment) => {
@@ -201,7 +210,7 @@ export default function DiscussionPanel({
                             type="button"
                             aria-label="Delete comment"
                             onClick={() => setCommentToDelete(comment.id)}
-                            className="text-muted-foreground absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full text-xs opacity-70 transition-colors hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
+                            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full text-xs opacity-70 transition-colors hover:opacity-100"
                             title="Delete comment"
                             disabled={deletingComments[comment.id]}
                             hidden={
@@ -220,7 +229,7 @@ export default function DiscussionPanel({
                           {audienceLabel(comment) ? (
                             <Badge
                               variant="outline"
-                              className={`mr-6 mb-1 text-2xs font-normal ${
+                              className={`text-2xs mr-6 mb-1 font-normal ${
                                 comment.aboutGroupId
                                   ? 'bg-status-info-bg border-status-info-border text-status-info'
                                   : 'bg-status-warning-bg border-status-warning-border text-status-warning'
@@ -275,9 +284,7 @@ export default function DiscussionPanel({
                 left to be inferred from a default nobody read. */}
             {audience?.group && !courseIsArchived ? (
               <div className="flex flex-wrap items-center justify-end gap-2">
-                <span className="text-muted-foreground text-xs font-medium">
-                  Send comment to:
-                </span>
+                <span className="text-muted-foreground text-xs font-medium">Send comment to:</span>
                 <SegmentedControl
                   name="comment-audience"
                   value={audience.target}
@@ -318,6 +325,12 @@ export default function DiscussionPanel({
         confirmText="Delete comment"
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
+        onCloseAutoFocus={(event) => {
+          // The Delete button sat on the comment the confirm has just removed, so the default
+          // restore target is gone by the time the dialog closes.
+          event.preventDefault();
+          sectionRef.current?.focus();
+        }}
       />
     </>
   );
