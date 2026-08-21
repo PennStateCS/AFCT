@@ -173,3 +173,25 @@
   --ifm-color-primary-lightest: #4fddbf;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
 }
+
+/* Diagrams (Mermaid) at their natural size, in a box that scrolls.
+   
+   The theme caps a diagram's SVG at the width of the prose column. For a small flowchart that
+   is right; for the database-schema ERDs, which are a dozen tables wide, it shrank the type
+   until none of it could be read. Undoing the cap and scrolling instead keeps every diagram at
+   the size Mermaid drew it, which is the size its text was measured for.
+
+   `src/theme/Mermaid/index.tsx` supplies the container, and makes it keyboard-focusable so the
+   scrolling is not mouse-only. */
+.diagramScroll {
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+.diagramScroll .docusaurus-mermaid-container > svg {
+  max-width: none;
+}
+/* The focus ring belongs on the box, since the box is what receives focus. */
+.diagramScroll:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
