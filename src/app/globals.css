@@ -159,16 +159,16 @@
      label, a soft -bg surface, and a matching -border -- so a state can be recolored in
      one place for a UI refresh or a high-contrast theme. `neutral` stays badge-scoped
      below because a general neutral is already covered by --muted / --accent. */
-  --status-success: oklch(0.4204 0.1055 138.019); /* tint of --success */
+  --status-success: oklch(0.4204 0.1055 138.019);       /* tint of --success */
   --status-success-bg: oklch(0.9447 0.0228 128.733);
   --status-success-border: oklch(0.8347 0.0835 129.018);
-  --status-warning: oklch(0.5424 0.1381 45.828); /* = --tertiary */
+  --status-warning: oklch(0.5424 0.1381 45.828);       /* = --tertiary */
   --status-warning-bg: oklch(0.9482 0.0135 60.567);
   --status-warning-border: oklch(0.7886 0.0733 61.632);
-  --status-danger: oklch(0.4437 0.1613 26.899); /* tint of --destructive */
+  --status-danger: oklch(0.4437 0.1613 26.899);        /* tint of --destructive */
   --status-danger-bg: oklch(0.9478 0.023 17.565);
   --status-danger-border: oklch(0.8383 0.071 18.674);
-  --status-info: oklch(0.37 0.1221 262.228); /* = --primary */
+  --status-info: oklch(0.37 0.1221 262.228);          /* = --primary */
   --status-info-bg: oklch(0.9475 0.0149 260.73);
   --status-info-border: oklch(0.8314 0.0587 264.656);
 
@@ -176,10 +176,8 @@
      on a filled swatch (e.g. a toast's icon strip). Unlike the status foregrounds above,
      these must stay a mid, white-legible shade in BOTH themes, so they are not derived
      from --status-*. neutral covers the untyped/loading case. */
-  --status-success-solid: oklch(
-    0.6271 0.1699 149.214
-  ); /* green-600, chosen so the white glyph clears 3:1 */
-  --status-warning-solid: oklch(0.6658 0.1574 58.318); /* amber-600, same */
+  --status-success-solid: oklch(0.6271 0.1699 149.214);   /* green-600, chosen so the white glyph clears 3:1 */
+  --status-warning-solid: oklch(0.6658 0.1574 58.318);   /* amber-600, same */
   --status-danger-solid: oklch(0.6368 0.2078 25.331);
   --status-info-solid: oklch(0.6231 0.188 259.815);
   --status-neutral-solid: oklch(0.551 0.0234 264.364);
@@ -187,8 +185,8 @@
   /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
      clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
      a tab's count pill. Interim brand accent until the visual redesign. */
-  --tab-active: oklch(0.5109 0.0861 186.391); /* teal-700 */
-  --tab-active-bg: oklch(0.9527 0.0498 180.801); /* teal-100 */
+  --tab-active: oklch(0.5109 0.0861 186.391);           /* teal-700 */
+  --tab-active-bg: oklch(0.9527 0.0498 180.801);        /* teal-100 */
 
   /* Badge tokens derive from the status family (values unchanged), so badges and the
      other status surfaces can never drift apart. Dark mode overrides only --status-*
@@ -205,10 +203,11 @@
   --badge-info: var(--status-info);
   --badge-info-bg: var(--status-info-bg);
   --badge-info-border: var(--status-info-border);
-  --badge-neutral: oklch(0.3867 0 0); /* tint of --muted-foreground */
+  --badge-neutral: oklch(0.3867 0 0);        /* tint of --muted-foreground */
   --badge-neutral-bg: oklch(0.9551 0 0);
   --badge-neutral-border: oklch(0.8699 0 0);
 }
+
 
 .dark {
   --background: oklch(0.141 0.005 285.823);
@@ -276,8 +275,8 @@
   /* Solid fills carry a white glyph, so they keep the same mid shade in dark (a lighter
      fill would drop below 3:1 against white); only the grey neutral is lightened here. */
   --status-neutral-solid: oklch(0.7107 0.0351 256.788);
-  --tab-active: oklch(0.7845 0.1325 181.912); /* teal-400 */
-  --tab-active-bg: oklch(0.3861 0.059 188.416 / 40%); /* teal-900 / 40% */
+  --tab-active: oklch(0.7845 0.1325 181.912);                    /* teal-400 */
+  --tab-active-bg: oklch(0.3861 0.059 188.416 / 40%);   /* teal-900 / 40% */
   /* Neutral badge stays badge-scoped. */
   --badge-neutral: oklch(0.6993 0 0);
   --badge-neutral-bg: oklch(0.329 0 0 / 35%);
