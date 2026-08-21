@@ -115,7 +115,7 @@ The installer will:
 After installation, check the services:
 
 ```bash
-docker compose ps
+sudo afctctl status
 ```
 
 Then open the public URL in a browser and confirm that:
@@ -135,16 +135,19 @@ Do not delete Docker volumes unless you intentionally want to delete AFCT data.
 
 ## Updates and operations
 
-Run these commands from the directory that contains `docker-compose.yml`:
+The installer leaves you with `afctctl`, which runs from any directory:
 
 ```bash
-sh install.sh status
-sh install.sh logs
-sh install.sh doctor
-sh install.sh update
-sh install.sh restart
-sh install.sh diagnostics
+sudo afctctl status
+sudo afctctl logs
+sudo afctctl doctor
+sudo afctctl update
+sudo afctctl restart
+sudo afctctl diagnostics
 ```
+
+These behave exactly as they do on any Linux host, so the
+[Linux guide](linux.md) covers them in full.
 
 Continue with [TLS certificates](../../admin/system-settings.md#tls-certificate), [updates](../../operations/updates.md), [backups](../../operations/backups.md), and [troubleshooting](../../operations/troubleshooting.md).
 

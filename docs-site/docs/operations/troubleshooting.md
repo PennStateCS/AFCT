@@ -2,31 +2,47 @@
 
 Start by identifying the failing layer:
 
-- nginx: The site does not load, HTTPS fails, or requests do not reach AFCT
-- AFCT application: Pages, authentication, or API requests fail
-- PostgreSQL: The application reports database or migration errors
-- Backup service: Scheduled or on-demand backups fail
-- Optional updater: In-app updates do not start or finish
+- nginx: the site does not load, HTTPS fails, or requests do not reach AFCT
+- AFCT application: pages, sign-in, or API requests fail
+- Evaluator worker: submissions arrive but are never graded, or sit at Pending
+- PostgreSQL: the application reports database or migration errors
+- Backup service: scheduled or on-demand backups fail
+- Optional updater: in-app updates do not start or finish
 
 ## Start with the built-in checks
 
-On Linux or macOS, the installer runs a read-only system and configuration check that is the fastest way to triage a deployment:
+On Linux and macOS, `afctctl` runs a read-only system and configuration check that is the fastest way to triage a deployment. It works from any directory:
 
 ```bash
-sh install.sh doctor
+sudo afctctl doctor
 ```
 
 It reports on the Compose file, `.env.production` completeness and permissions, disk space, clock sync, Docker reachability, Compose validity, container health, and the local HTTP health endpoint.
 
-For a lighter check, `sh install.sh status` gives a quick health snapshot and `sh install.sh logs` gives a live log tail.
+For a lighter check, `sudo afctctl status` gives a quick health snapshot and `sudo afctctl logs` follows the application log.
+
+If AFCT stops working after a configuration change, `sudo afctctl recover` restores the most recent protected copy of `.env.production`.
 
 ## Check service status
 
 ```bash
-docker compose ps
+sudo afctctl status
 ```
 
-All four core services should be `Up`, and the application should eventually report `healthy`. When the updater profile is enabled, `afct-updater` should also be healthy.
+Five services make up a normal deployment, and all of them should be `Up`:
+
+| Service     | What it does                                            |
+| ----------- | ------------------------------------------------------- |
+| `nginx`     | Terminates HTTPS and passes requests to the application |
+| `app`       | AFCT itself                                             |
+| `worker`    | Grades submissions                                      |
+| `postgres`  | The database                                            |
+| `db-backup` | Takes the scheduled backups                             |
+
+The application should eventually report `healthy`. When the updater is enabled, `afct-updater`
+should be healthy too. `worker` has no health check, so `Up` is all you get for it: if it is up
+and submissions still are not being graded, look at
+[System Status, Workers tab](../admin/system-status.md).
 
 Common states:
 
@@ -35,6 +51,24 @@ Common states:
 - `Unhealthy`: The service is running, but its health check is failing
 
 ## Read logs
+
+The short way, which needs no directory and no flags:
+
+```bash
+sudo afctctl logs
+```
+
+For anything more specific, Docker needs to be told where the stack is. On Linux that is:
+
+```bash
+docker compose -p afct \
+  --env-file /opt/afct/shared/.env.production \
+  -f /opt/afct/shared/runtime/docker-compose.yml logs --tail=200 worker
+```
+
+The commands below are written in the short `docker compose ...` form for readability. Every one
+of them needs those three flags on a real install, or it will find nothing and print nothing.
+On macOS the paths are under `$HOME/.afct` instead.
 
 Application logs:
 
@@ -52,12 +86,13 @@ One service at a time:
 
 ```bash
 docker compose logs --tail=200 nginx
+docker compose logs --tail=200 worker
 docker compose logs --tail=200 postgres
 docker compose logs --tail=200 db-backup
 docker compose logs --tail=200 updater
 ```
 
-Use `docker compose ps` to confirm the service names in the current Compose file.
+
 
 ## The site does not load
 
@@ -98,13 +133,13 @@ NEXTAUTH_URL=https://afct.example.edu
 
 Do not include a path. Do not use HTTP for a public HTTPS deployment.
 
-After changing `.env.production`, apply the configuration:
+After changing `.env.production`, apply it:
 
 ```bash
-docker compose up -d
+sudo afctctl restart
 ```
 
-On Linux or macOS, `sh install.sh restart` recreates the stack and verifies health after a configuration change.
+On Linux or macOS, `sudo afctctl restart` recreates the stack and verifies health after a configuration change.
 
 ## AFCT cannot connect to PostgreSQL
 
@@ -128,7 +163,7 @@ docker compose logs --tail=200 postgres
 Linux or macOS:
 
 ```bash
-sh install.sh diagnostics
+sudo afctctl diagnostics
 ```
 
 Windows PowerShell:

@@ -102,7 +102,24 @@ Use this endpoint during startup to validate a stored token.
 }
 ```
 
-Missing, expired, or revoked tokens return `401`.
+A token is turned away with `401` for any of seven reasons, and the server logs which one:
+
+| Reason | What happened |
+| --- | --- |
+| `unknown token` | Not a token AFCT issued |
+| `revoked` | Revoked, from the account page or by signing out |
+| `expired` | Past its expiry |
+| `past maximum age` | Older than the installation allows, however recently used |
+| `account disabled` | The account was deactivated |
+| `password changed since the token was issued` | Any password change or admin reset invalidates every token issued before it |
+| `account locked` | Too many failed sign-ins locked the account, which stops bearer requests as well as the login form |
+
+The last two are the ones that look like a bug in the field: nothing about the client changed,
+and it stops working. Both are answered by signing in again once the account is usable.
+
+Tokens can also be listed and revoked from the web account page, so a user can cut a client off
+without calling `/auth/logout`. Unlike a browser session, a client token is not subject to the
+idle timeout or the twelve-hour session cap; it lives until it expires or is revoked.
 
 ## Health
 
@@ -321,7 +338,7 @@ Returns the caller's attempts for one problem, newest first:
 }
 ```
 
-`fileName` is the name of the file the student uploaded. `feedback` is the evaluator's witness or counterexample string, and is `null` while the submission is still queued or processing. `submittedBy` is the member who submitted; for a group problem this can be any groupmate, and for an individual problem it is always the caller. This endpoint never returns another student's work.
+`fileName` is the name of the file the student uploaded. `feedback` is the evaluator's witness or counterexample string, and is `null` while the submission is still queued or processing. `submittedBy` is the member who submitted; for a group problem this can be any groupmate, and for an individual problem it is always the caller. This endpoint never returns the work of a student outside the caller's group.
 
 ### `GET /api/client/v1/submissions/{submissionId}`
 

@@ -48,9 +48,19 @@ To decrypt an archive by hand:
 gpg --decrypt afct-20260101-020000.tar.gz.gpg | tar xzf - -C /tmp/restore
 ```
 
+## When a backup actually happens
+
+The schedule is a daily one, not a precise clock. The backup service checks periodically and runs
+once a day at the first check where the current hour has reached the hour you set. One
+consequence surprises people: **starting the container after the configured hour backs up
+immediately**, because that day's backup has not happened yet.
+
+Retention prunes by the age of the file on disk, so an archive you copied off the server and back
+again looks newer than it is.
+
 ## Configure backups
 
-Sign in as an administrator and open **Admin Menu > System Settings > Backups**. You can enable or disable the daily schedule, select the UTC hour, set retention from 1 to 365 days, or choose **Back up now**.
+Sign in as an administrator and open **Administration > System Settings > Backups**. You can enable or disable the daily schedule, select the UTC hour, set retention from 1 to 365 days, or choose **Back up now**.
 
 The default schedule is enabled at 02:00 UTC with 14 days of retention. The backup service checks stored settings periodically, so a schedule change does not require a restart.
 
@@ -90,21 +100,77 @@ Protect the exported archive because it contains account data, grades, submissio
 
 The Backups tab lists the archives available to the application and lets an administrator download them. One archive is a complete copy, so a single download is enough. This is useful for a quick off-host copy, but it is not a restore action.
 
-## Restore planning
+## Restore a full backup
 
-The current interface does not provide a general full-backup restore button. A full recovery is a host-administration procedure:
+There is no restore button. A full recovery is done from a terminal on the server, and it is
+short enough to read in one go. You need the archive, the passphrase it was encrypted with, and
+`gpg` installed on the machine you unpack it on.
 
-1. Preserve the current database and upload volumes before changing them.
-2. Stop the `app` and `db-backup` services so no writes occur during the restore.
-3. Unpack the archive, decrypting it first if it ends in `.gpg`:
+The paths below are the Linux ones. On macOS the deployment lives under `$HOME/.afct` instead of
+`/opt/afct`.
+
+**Practice this on a spare machine before you need it**, decryption included. A passphrase you
+cannot produce under pressure is the same as having no backup at all.
+
+1. **Stop the services that write**, so nothing changes underneath you:
+
    ```bash
+   sudo afctctl stop
+   ```
+
+2. **Unpack the archive**, decrypting it if the name ends in `.gpg`. You are asked for the
+   passphrase:
+
+   ```bash
+   mkdir -p /tmp/restore
    gpg --decrypt afct-20260101-020000.tar.gz.gpg | tar xzf - -C /tmp/restore
    ```
-4. Restore `db/database.dump` with `pg_restore --clean --if-exists --no-owner` into the `afct` database.
-5. Copy the upload directories from the same archive into the public and private upload volumes.
-6. Start the stack, wait for health checks, and verify accounts, courses, submissions, grades, and downloadable files.
 
-Practice this procedure on a separate recovery deployment first, including the decryption step. A passphrase you cannot produce under pressure is the same as no backup.
+   A plain `.tar.gz` needs only `tar xzf afct-20260101-020000.tar.gz -C /tmp/restore`.
+
+3. **Start the database on its own** and put the dump back:
+
+   ```bash
+   docker compose -p afct \
+     --env-file /opt/afct/shared/.env.production \
+     -f /opt/afct/shared/runtime/docker-compose.yml up -d postgres
+
+   docker cp /tmp/restore/db/database.dump afct-postgres:/tmp/database.dump
+   docker exec afct-postgres \
+     pg_restore -U afct_user -d afct --clean --if-exists --no-owner /tmp/database.dump
+   ```
+
+4. **Put the uploaded files back.** The archive holds them in two directories, matching the two
+   volumes they came from:
+
+   **Check the volume names first.** Compose prefixes them with the project name, so they are
+   `afct_private_uploads` and `afct_uploads_data`, not the bare names in the compose file:
+
+   ```bash
+   docker volume ls | grep uploads
+   ```
+
+   Use exactly what that prints. A name that does not exist is not an error: Docker creates an
+   empty volume, every command below succeeds, and the uploads are silently not restored.
+
+   ```bash
+   docker run --rm -v afct_private_uploads:/dest -v /tmp/restore:/src alpine \
+     cp -a /src/private-uploads/. /dest/
+   docker run --rm -v afct_uploads_data:/dest -v /tmp/restore:/src alpine \
+     cp -a /src/public-uploads/. /dest/
+   ```
+
+5. **Bring everything back up and check it**:
+
+   ```bash
+   sudo afctctl restart
+   sudo afctctl status
+   ```
+
+   Then sign in and confirm accounts, courses, submissions and grades are there, and that a
+   submitted file actually downloads.
+
+6. **Delete `/tmp/restore`.** It holds every education record in the installation, in the clear.
 
 Restore both parts from the same archive. Restoring only the database can leave missing or mismatched files, and restoring only the uploads can leave files that the database does not reference.
 
@@ -129,22 +195,26 @@ cmd /c "docker exec afct-postgres pg_dump -U afct_user --clean --if-exists afct 
 
 ## Restore a database-only dump
 
-Stop application writes first. Confirm the target database and keep a copy of its current state.
+Stop everything that writes first, the evaluator worker included, not just the app. Confirm the
+target database and keep a copy of its current state.
 
 ### Linux or macOS
 
 ```bash
-docker compose stop app db-backup
+sudo afctctl stop
+docker compose -p afct --env-file /opt/afct/shared/.env.production \
+  -f /opt/afct/shared/runtime/docker-compose.yml up -d postgres
 docker exec -i afct-postgres psql -U afct_user afct < backup.sql
-docker compose up -d
+sudo afctctl restart
 ```
 
 ### Windows PowerShell
 
 ```powershell
-docker compose stop app db-backup
+afctctl.ps1 stop
+docker start afct-postgres
 cmd /c "docker exec -i afct-postgres psql -U afct_user afct < backup.sql"
-docker compose up -d
+afctctl.ps1 restart
 ```
 
 Test sign-in and course data after the services become healthy.

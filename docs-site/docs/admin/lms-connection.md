@@ -27,7 +27,7 @@ If your LMS is one that issues a deployment separately from the registration, fi
 
 Two things automatic registration cannot do, both rare:
 
-- **Brightspace** hands out an OAuth2 Audience of its own, which is not part of the exchange. If grades fail to send, register the LMS by hand as well and fill that field in.
+- **Brightspace** hands out an OAuth2 Audience of its own, which is not part of the exchange. If grades fail to send, register the LMS by hand as well and put it in **Token audience**.
 - If your LMS does not send a **deployment ID** back, AFCT will say so and quote the client ID it was given. Register by hand using the steps below, which is the only case that still needs them.
 
 Then set AFCT to open in a new tab, below.
@@ -36,7 +36,7 @@ Then set AFCT to open in a new tab, below.
 
 Use this if your LMS does not offer automatic registration, or if it did and something above sent you here.
 
-Registration is mutual: your LMS needs four values from AFCT, and AFCT needs six back. Doing it means going back and forth between two screens, so collect one set before starting the other.
+Registration is mutual: your LMS needs four values from AFCT, and AFCT needs seven back. Doing it means going back and forth between two screens, so collect one set before starting the other.
 
 1. In AFCT, go to **System Settings** and open the **LTI** tab.
 2. Copy the four values under **Or give these to your LMS by hand**:
@@ -62,6 +62,7 @@ Registration is mutual: your LMS needs four values from AFCT, and AFCT needs six
    | **Authorization URL** | OIDC Authorization Endpoint, or Authorization Redirect URL |
    | **Token URL** | Token Endpoint, or OAuth2 Token URL |
    | **Public keyset URL** | Public Keyset URL, or JWKS URL |
+   | **Token audience (optional)** | Leave blank unless your LMS documents a different audience for token requests. D2L Brightspace is the one that does. |
 
 5. Select **Register**.
 
@@ -74,7 +75,7 @@ AFCT identifies an LMS by the combination of **issuer, client ID and deployment 
 Where it lives depends on the LMS:
 
 - **Canvas**: **Load In New Tab**, on the developer key's placements, and again on an individual link if somebody adds one by hand.
-- **Moodle**: **Launch container**, set to **New window**, under **Site administration → Plugins → Activity modules → External tool → Manage tools**, on the AFCT tool itself. Moodle stopped letting a tool ask for this in version 4.3, so AFCT's own request is ignored and this setting is the only thing that decides it.
+- **Moodle**: **Launch container**, set to **New window**, under **Site administration > Plugins > Activity modules > External tool > Manage tools**, on the AFCT tool itself. Moodle stopped letting a tool ask for this in version 4.3, so AFCT's own request is ignored and this setting is the only thing that decides it.
 - **Brightspace** and **Blackboard**: an equivalent option on the link or the tool configuration, usually worded as opening in a new window.
 
 The reason is that browsers no longer let a site keep somebody signed in while it is being displayed inside another site's page. Firefox and Safari have blocked it for some time and Chrome is going the same way, so a link that opens AFCT in a panel will show an empty box or a message about the page refusing to connect. It is a browser rule rather than an AFCT setting, and there is nothing to turn on in AFCT that changes it.
@@ -99,6 +100,16 @@ If a launch fails, open [System Logs](system-logs.md) and filter for `LTI_LAUNCH
 | `deep-link-settings` | Somebody chose AFCT while adding content, but the LMS did not say where to send the answer or what it will accept. Check how the AFCT placement is configured. |
 | `content-type-not-accepted` | AFCT was offered somewhere that does not take a link to an external tool, which is the only thing AFCT can add. Add it somewhere that does. |
 | `malformed` or `wrong-message-type` | The request was not a launch AFCT understands. Check that the link points at the target link URI above. |
+| `missing-claims` | The launch left out something LTI itself requires, so AFCT cannot trust it. Usually the LMS is sharing less than the standard expects; check what the key or registration is allowed to send. |
+| `wrong-authorized-party` | The launch names a different tool as the one it was issued for. Normally a client ID that belongs to another registration, so check which key the link is using. |
+
+Two more can appear before a launch even reaches that point, at the moment the LMS first redirects
+to AFCT:
+
+| Reason in the log | What to fix |
+| --- | --- |
+| `missing-target-link-uri` | The LMS did not say which AFCT address it wants to open. Check the target link URI on the registration. |
+| `ambiguous-platform` | The issuer matched more than one AFCT registration and the LMS sent nothing to tell them apart. Remove the registration you no longer use, or make sure the LMS sends its client ID. |
 
 If the link shows an empty box or a message about the page refusing to connect, **and nothing appears in the log at all**, the launch is not reaching AFCT: the link is opening it inside the LMS page. Set it to open in a new tab, as above.
 
@@ -122,7 +133,8 @@ All three are described in [Grades and rosters from your LMS](../faculty/lms.md)
 
 When somebody opens AFCT from the LMS and has no AFCT account, one is created for them, and their LMS identity is attached to it so later launches find the same account. If an account with that email address already exists, the launch attaches to it rather than making a second one.
 
-You can see what is attached to any account from [User Accounts](user-accounts.md): open the account's menu and choose **Sign-in Methods**. This is also where you detach one, for example when somebody's LMS identity has changed. An account with no AFCT password and only one connected sign-in method cannot have it detached, because that would leave the person unable to sign in at all; give them a password first.
+To see or detach what is attached to a particular account, use **Sign-in Methods** on
+[User Accounts](user-accounts.md#sign-in-methods).
 
 ## Opening AFCT from your LMS as an administrator
 
@@ -144,7 +156,7 @@ connect on the first launch with no prompt.
 
 Removing an LMS from the **LTI** tab stops every launch from it immediately, for every course. Existing AFCT accounts, courses, submissions and grades are untouched, but people who signed in only through that LMS will not be able to get in until they have another way to sign in.
 
-To disconnect a single course instead, leave the registration alone; faculty can disconnect their own course from the **Course status** card on the course **Settings** tab.
+To disconnect a single course instead, leave the registration alone; faculty can disconnect their own course from the **Course Status** card on the course **Settings** tab.
 
 ## When a student has not opened AFCT from your LMS
 

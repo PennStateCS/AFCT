@@ -25,7 +25,7 @@ Only courses you are staff on, as faculty or as a TA, are offered, so you cannot
 
 A student who opens the LMS link before you have connected the course, or before you have published it, lands on their AFCT dashboard with a line saying why, rather than on an error. Their other courses are there in the meantime.
 
-If the course is connected but unpublished, opening the link **enrols them**, so the course appears on their dashboard the moment you publish it and later launches take them straight to it. If it is not connected yet, nothing is recorded: they need to open the link again once you have connected it, or you can bring them in with a roster sync.
+If the course is connected but unpublished, opening the link **enrolls them**, so the course appears on their dashboard the moment you publish it and later launches take them straight to it. If it is not connected yet, nothing is recorded: they need to open the link again once you have connected it, or you can bring them in with a roster sync.
 
 ## Send grades to your LMS
 

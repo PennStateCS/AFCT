@@ -47,12 +47,12 @@ Important shared files include:
 next to its siblings in any listing, so you get the grouping without having to decide
 where the file belongs.
 
-`api/`, `security/`, and `status/` are the only folders. If your module is not part of
-one of those three, it goes flat. **Adding a fourth folder is a decision to argue for in
-review**, not something to do while naming a file.
+`api/`, `security/`, `status/`, `lti/`, `rich-description/` and `similarity/` are the only
+folders. If your module is not part of one of those, it goes flat. **Adding another folder is a
+decision to argue for in review**, not something to do while naming a file.
 
-Those three exist for two reasons, recorded here so a proposal for a fourth has something
-to be measured against:
+They exist for two reasons, recorded here so a proposal for a new one has something to be
+measured against:
 
 - **It has internals**, at least one module that should not be imported from outside the
   folder. `status/` qualifies: `status/cache.ts` and `status/ip-classify.ts` are used only
@@ -110,7 +110,12 @@ Use the helpers in `src/lib/permissions.ts`.
 
 The default role set is `COURSE_STAFF_ROLES`. Pass `COURSE_FACULTY_ROLES` when an action must require Faculty.
 
-Both helpers enforce course lifecycle rules. Archived courses are read-only for everyone. Soft-deleted courses are inaccessible to everyone.
+Both helpers apply the soft-delete rule: a deleted course is unreachable through them.
+
+**They do not enforce the archive freeze.** `canManageCourse` and `canAccessCourse` never read
+`isArchived`. A route that must refuse writes to an archived course opts in with
+`blockWhenArchived: true` on its auth wrapper, which answers `409`. Leave it off and your route
+will happily write to an archived course. Soft-deleted courses are inaccessible to everyone.
 
 Do not repeat publication and roster rules inside route handlers. Centralized checks reduce authorization drift.
 
@@ -238,14 +243,21 @@ Do not run a query for each row in a loop.
 
 Use `createEnhancedActivityLog` for audit entries.
 
-Severity is inferred from action suffixes:
+**Severity and category are required at every call site, and neither is inferred.** Both are a
+deliberate classification of what an entry means, and the code will not guess one from the
+action name. Under FERPA this log is the record of who touched a student's work, so a denial
+filed as `INFO` is a real loss, not a cosmetic one. Pick from:
 
-| Suffix | Severity |
-|---|---|
-| `_DENIED`, `_FORBIDDEN` | `SECURITY` |
-| `_ERROR` | `ERROR` |
-| `_REJECTED`, `_INVALID`, `_RATE_LIMIT` | `WARNING` |
-| Other | `INFO` |
+| Severity   | For                                                             |
+| ---------- | --------------------------------------------------------------- |
+| `SECURITY` | A denial, a refused privileged action, a lockout                |
+| `ERROR`    | Something failed that should have worked                        |
+| `WARNING`  | A request rejected as invalid, or rate-limited                   |
+| `INFO`     | A normal action worth recording                                  |
+
+There is an `inferSeverity(action)` helper that derives a severity from the action's suffix, but
+you have to opt into it by passing `severity: inferSeverity(action)`. Prefer naming the severity
+outright.
 
 Log writes, privileged student actions, and security denials. Include the actor, action, target, and course when available.
 
@@ -308,13 +320,17 @@ See [Contributing changes](./contributing.md) for the full local-check sequence,
 
 ## CI and publishing
 
-- `ci.yml` runs lint, tests, and documentation checks on pull requests and pushes to `main`.
+- `ci.yml` runs the checks below. Some of them, `lint` and `docs-check` among them, run on pull requests only.
 - `docs.yml` publishes the generated API reference to GitHub Pages.
 - `publish-ghcr.yml` builds and publishes the GHCR image after CI succeeds on `main`.
 - The publish workflow pins the production Compose file to the published image digest.
 
-Required status checks are:
+Seven checks are required before a pull request can merge, named by their job:
 
-- `CI / lint`
-- `CI / test`
-- `CI / docs-check`
+- `lint`
+- `typecheck`
+- `test`
+- `test-db`
+- `build`
+- `docs-check`
+- `evaluator`

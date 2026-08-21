@@ -18,7 +18,9 @@ Creating an account does not enroll it in a course. Add the person from a course
 4. Review the parsed and invalid row counts.
 5. Select **Import Users**.
 
-The import processes valid rows and reports failed rows separately. Fix only the failed rows before trying again. The only size limit on the file is the configured **Max upload size**.
+The import processes valid rows and reports failed rows separately. Fix only the failed rows before trying again.
+
+**One import can carry at most 1,000 rows.** A larger file is rejected before it reaches the server, and the dialog reports only that the import failed, so split a bigger list into files of 1,000 or fewer and import them one after another. The configured **Max upload size** applies as well, though the row limit is normally what you meet first.
 
 ## Find and review an account
 
@@ -83,7 +85,7 @@ who only ever opens AFCT from your LMS needs an AFCT password before they can su
 
 ## Desktop client tokens
 
-Anyone can create an app token from **Account → App tokens**, name it so they can tell their
+Anyone can create an app token from **Account > App tokens**, name it so they can tell their
 machines apart, and revoke it when they stop using one.
 
 A token is shown once, when it is created. If someone loses it, they create another and revoke
@@ -117,7 +119,7 @@ AFCT temporarily locks an account after too many failed sign-in attempts, to slo
 - **See which accounts are locked.** A locked account shows a **Locked** badge with a live countdown of the time remaining on its row. Use the table's lock-status filter to list only locked accounts.
 - **Unlock immediately.** Open **Manage** and select **Unlock Account**, then confirm. This clears the lock right away so the person can sign in. Repeated failed sign-ins can lock the account again.
 
-The number of failed attempts before a lockout and how long a lock lasts are set in **System Settings → General** (*Failed logins before lockout* and *Account lockout duration*). For how account lockout and the separate per-IP limits work under the hood, see [Login protection](../reference/login-protection.md).
+The number of failed attempts before a lockout and how long a lock lasts are set in **System Settings > General** (*Failed logins before lockout* and *Account lockout duration*). For how account lockout and the separate per-IP limits work under the hood, see [Login protection](../reference/login-protection.md).
 
 ## Delete an account
 

@@ -4,7 +4,7 @@ AFCT sends a strict, nonce-based [Content Security Policy](https://developer.moz
 
 ## How it works
 
-The policy is generated per request in the application middleware (`src/proxy.ts`). Each response gets a fresh random **nonce**, and the app's own `<script>` tags are stamped with that nonce automatically. The script policy is:
+The policy is generated per request in the proxy (`src/proxy.ts`). Each response gets a fresh random **nonce**, and the app's own `<script>` tags are stamped with that nonce automatically. The script policy is:
 
 ```
 script-src 'self' 'nonce-<random>' 'strict-dynamic' https://hcaptcha.com https://*.hcaptcha.com
@@ -14,11 +14,29 @@ script-src 'self' 'nonce-<random>' 'strict-dynamic' https://hcaptcha.com https:/
 - **`'strict-dynamic'`** lets a trusted (nonce'd) script load additional scripts, which is how the application bundle loads its code chunks and how the hCaptcha widget loads its script.
 - There is deliberately **no `'unsafe-inline'`** for scripts.
 
-Other notable directives: `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `frame-ancestors 'self'`, and scoped `connect-src` / `frame-src` / `img-src` / `font-src`. Styles keep `'unsafe-inline'` (`style-src 'self' 'unsafe-inline' …`) because the interface uses inline styles; style-based injection is low-risk.
+In development the script policy also carries `'unsafe-eval'`, which the tooling needs. It is
+never emitted in production.
+
+Other notable directives: `default-src 'self'` as the fallback for anything not listed
+separately, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, and scoped
+`connect-src` / `frame-src` / `img-src` / `font-src`. Styles keep `'unsafe-inline'`
+(`style-src 'self' 'unsafe-inline' …`) because the interface uses inline styles; style-based
+injection is low-risk.
 
 The hCaptcha origins are allowlisted in the script, frame, style, and connect directives so the bot-protection challenge works under the policy.
 
-`frame-ancestors 'self'` is additionally enforced by nginx (`docker/nginx/default.conf`) so that directly-served files under `/uploads/` are also protected against clickjacking.
+### `frame-ancestors` is not a constant
+
+Everywhere else in AFCT, `frame-ancestors` is `'self'` and nothing may frame the app. On the LTI
+paths (`/lti`, `/lti/*` and `/api/lti/*`) it is computed per request: `'self'` plus the origin of
+every LMS registered with this installation. That is what lets Canvas draw the assignment picker
+inside its own page, and it is the only place framing is allowed.
+
+nginx does **not** add a second copy of the header on app-rendered responses, deliberately.
+Browsers enforce the intersection of every CSP header they receive, so a blanket
+`frame-ancestors 'self'` from nginx would silently override the computed one and break the
+picker. nginx sets it only on the files it serves directly under `/uploads/`, which nothing
+should ever frame.
 
 ## Enforcement
 
@@ -51,7 +69,7 @@ If part of the site stops working after a change and you suspect the CSP:
    The message names the exact resource and the directive that blocked it.
 2. To confirm the CSP is the cause without breaking the site for users, set
    `CSP_ENFORCE="false"` in `.env.production` and restart the application
-   (`sh install.sh restart`). The same violations now appear as reports rather than
+   (`sudo afctctl restart`). The same violations now appear as reports rather than
    blocks. If the problem disappears, the CSP was the cause.
 3. Add the required source to the appropriate directive in `buildCsp` (`src/proxy.ts`),
    or nonce the script, then re-enable enforcement.

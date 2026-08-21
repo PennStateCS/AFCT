@@ -33,12 +33,12 @@ The rule that keeps the two columns honest lives in one function,
 `buildDescriptionWrite` in `src/lib/rich-description/write.ts`, and every create, update,
 duplicate, and import path goes through it:
 
-- **Rich JSON present** → validate it, store it, set `TIPTAP_JSON`, and **derive** `description`
+- **Rich JSON present** > validate it, store it, set `TIPTAP_JSON`, and **derive** `description`
   from it. Any plain text supplied in the same request is ignored, because two independent
   sources of truth drift.
-- **No rich JSON** → it is a plain-text write. Store the text, set `PLAIN_TEXT`, and clear
+- **No rich JSON** > it is a plain-text write. Store the text, set `PLAIN_TEXT`, and clear
   `descriptionJson`.
-- **Malformed rich JSON** → throw. A bad payload must never overwrite a good description. API
+- **Malformed rich JSON** > throw. A bad payload must never overwrite a good description. API
   routes reject it with a 400 before reaching this point via their Zod schema.
 
 Reads go through `resolveDescription` (`src/lib/rich-description/resolve.ts`) on the server, and

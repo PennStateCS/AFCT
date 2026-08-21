@@ -4,11 +4,11 @@
 
 The AFCT Submission Center is a window built into the JFLAP editor. You design an automaton, grammar, or machine in JFLAP as usual, then use the Submission Center to send it to AFCT for grading without leaving the app. It shows your courses, assignments, and problems, submits your work, and tracks each attempt's result.
 
-The Submission Center only lists work you can access, and it never shows another student's submissions. Deadlines, attempt limits, and access rules are all enforced by the server, so they behave the same as they do in the web app.
+The Submission Center only lists work you can access. It never shows the work of another student outside your group; on a group problem you can see your groupmates' attempts, because the submission belongs to the group. Deadlines, attempt limits, and access rules are all enforced by the server, so they behave the same as they do in the web app.
 
 ## Open the Submission Center
 
-In JFLAP, open the **Assignments** menu and choose **Submission Center**. The window is titled "AFCT Submission".
+In JFLAP, open the **AFCT** menu and choose **Submission Center**. The heading inside the window reads "AFCT Submission Center"; the window's own title bar shows the file you are working on.
 
 You can keep it open beside your JFLAP work. If you close it, reopen it the same way; it remembers your session until you sign out.
 
@@ -16,11 +16,11 @@ You can keep it open beside your JFLAP work. If you close it, reopen it the same
 
 The first time you open the Submission Center you are asked to sign in:
 
-- **Server** and **Port**: the address of your AFCT server, for example `https://afct.example.edu` and `443`. Your instructor provides these.
+- **Server** and **Port**: the address of your AFCT server, for example `https://afct.example.edu` and `443`. Your instructor provides these. The boxes come prefilled with a development address, so replace both rather than trusting what is there.
 - **Email** and **Password**: your AFCT account, the same credentials you use for the web app.
 - **Show password**: reveals what you typed so you can check it.
-- **Remember Me**: saves the server, port, and email (and password) so you do not retype them next time. Leave it off on a shared computer.
-- **Validate SSL Certificate**: keep this **checked** for a normal server. Uncheck it only when connecting to a test or development server that uses a self signed certificate; otherwise the connection is refused.
+- **Remember Me**: saves the server, port, email and password, and signs you in automatically the next time the window opens. The saved details expire after seven days. Leave it off on a shared computer.
+- **Validate SSL Certificate**: **tick this box.** It starts unticked, which means the client does not check your server's certificate. Leave it unticked only when your instructor has told you the server uses a self-signed certificate, which is normally only true of a test server.
 
 Select **Login**. Messages appear below the button while it connects. Only active accounts can sign in.
 
@@ -71,11 +71,18 @@ Selecting an assignment or a problem fills the panels on the right.
 2. Check the **File to Submit** field in the **Submission** box at the bottom right. By default it is the file you have open in JFLAP. To send a different file, choose **Browse...**; to return to the open file, choose **Use open file**.
 3. Select **Submit**.
 
-The file uploads and is placed in the grading queue. A short status message reports progress, and the result appears in Submission History when grading finishes.
+The file uploads and is placed in the grading queue. A short status message reports progress. AFCT keeps checking for about two minutes and announces the result on the status line, including the counterexample if there is one, and the tick in the tree updates as soon as the answer is correct. The attempt also appears in Submission History.
 
-A few rules the server enforces:
+:::tip What actually gets sent
+Unless you picked a file with **Browse...**, the Submission Center sends **what is on screen in
+JFLAP right now**, not the last version you saved. So you do not have to save first, but you do
+have to look at the editor before you submit: an unsaved change you were experimenting with will
+go with it.
+:::
 
-- Each accepted upload counts as an attempt. A problem may allow unlimited attempts or set a maximum; the Selected Problem panel shows how many you have left. Submitted attempts cannot be edited or deleted, so check your file first.
+A few things to know before you submit:
+
+- Each accepted upload counts as an attempt. A problem may allow unlimited attempts or set a maximum; the Selected Problem panel shows how many you have left, and it warns you before you spend the last one. Submitted attempts cannot be edited or deleted.
 - After the due date, work is accepted only when late submissions are enabled and any late cutoff has not passed.
 - There may be a short cooldown between attempts on the same problem. The status message tells you when you can try again.
 - For a group assignment, everyone in your group shares one set of submissions per problem. Any member can submit, and autograding gives the whole group the same grade. Coordinate so you do not submit over each other.
@@ -94,4 +101,4 @@ For a group problem, an extra column shows which group member made each submissi
 
 ## Refresh
 
-Select **Refresh** (top right) to pull the latest courses, assignments, problems, and results from the server, for example after grading finishes or an instructor publishes new work. Refresh keeps whatever you had expanded and selected. There is a brief cooldown between refreshes.
+Select **Refresh** (top right) to pull the latest courses, assignments, problems, and results from the server, for example after grading finishes or an instructor publishes new work. Refresh keeps whatever you had expanded and selected. There is a ten-second cooldown between refreshes, counted down on the button itself.

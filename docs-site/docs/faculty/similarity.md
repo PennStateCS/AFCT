@@ -51,7 +51,7 @@ The **?** button on each card explains that card's match type in a sentence or t
 
 ### What is on a card
 
-Under the strength and the match type is the count that gives the match its meaning, for example "2 of 38 students submitted the same saved machine", or the same saved grammar on a problem that has no drawing,, along with the size of the work and how far apart the closest two submissions were.
+Under the strength and the match type is the count that gives the match its meaning, for example "2 of 38 students submitted the same saved machine". On a problem with no drawing it reads the same way about the saved grammar. Beside the count are the size of the work and how far apart in time the closest two submissions were.
 
 **Read the count before anything else.** Identical work proves nothing on its own: a problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of thirty-eight is worth reading. Fourteen out of thirty-eight is what a correct answer looks like.
 

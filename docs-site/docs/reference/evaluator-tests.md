@@ -81,7 +81,8 @@ A good pair of cases for any problem: grade a solution **against itself**
 ## What each type exercises
 
 - **`FA`** (finite automata) and **`RE`** (regular expressions) are decidable and need
-  only the jar, so they are the most robust and make good defaults.
+  only the jar, so they are the least likely to fail for a reason unrelated to your change. Make
+  them your default.
 - **`CFG`** and **`PDA`** additionally invoke the native `cfganalyzer` binary
   (`bin/cfganalyzer`). The runner already points `CFGANALYZER_BINARY` and
   `CFGANALYZER_LIMIT` at it, so adding a CFG or PDA case is the way to also catch a broken

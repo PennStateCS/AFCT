@@ -109,53 +109,24 @@ You can begin with an IP address and move to a domain later. When you do, reconf
 
 ## Certificates and HTTPS
 
-AFCT normally installs with a self-signed certificate.
+AFCT installs with a self-signed certificate, and your browser will warn you about it the first
+time you visit. The warning is about identity, not encryption: the connection is encrypted either
+way, but the certificate was made by the AFCT server itself rather than signed by an authority the
+browser already trusts, so the browser cannot confirm the server is the one it claims to be.
 
-A self-signed certificate still encrypts the connection between the browser and the AFCT server. Information such as passwords, grades, and account details is not sent across the network as plain text.
+For a local test installation that is fine. Check that you typed the right address, then continue
+past the warning.
 
-The difference is that the certificate was created by the AFCT server itself rather than signed by a certificate authority that the browser already trusts.
+**For a production installation, replace it before you invite anyone in.** Not because the traffic
+is exposed, but because a permanent warning teaches your users to click through security warnings,
+and leaves them no way to tell the real server from a fake one.
 
-Because the browser cannot independently verify who created the certificate, it displays a warning such as:
+You do that after installing, from inside AFCT, in
+[Step 7](#step-7-configure-a-trusted-certificate-for-production). It takes a certificate from your
+institution, or one requested automatically from Let's Encrypt. Let's Encrypt needs a public domain
+name pointing at this server, ports 80 and 443 reachable from the internet, and a hostname matching
+the AFCT public URL.
 
-```text
-Your connection is not private
-```
-
-or:
-
-```text
-Warning: Potential Security Risk Ahead
-```
-
-The warning does not mean that encryption is disabled. It means the browser cannot confirm that the server is really the server it claims to be.
-
-This distinction is important:
-
-- **Encryption** protects information while it travels between the browser and the server.
-- **Certificate validation** helps confirm the identity of the server.
-
-A self-signed certificate provides encryption, but it does not provide browser-verified identity.
-
-For a local test installation, this is usually acceptable. Confirm that you entered the correct AFCT address before continuing past the warning.
-
-For a production installation, replace the self-signed certificate before inviting users to sign in. Otherwise, users may become accustomed to ignoring browser security warnings, and they have no reliable way to confirm that they reached the real AFCT server.
-
-After signing in as an administrator, you can use the AFCT administration interface to:
-
-- Upload a certificate issued by your organization
-- Upload a certificate issued by another trusted certificate authority
-- Request and install a trusted certificate automatically from Let’s Encrypt
-
-A trusted certificate provides the same encrypted connection while also allowing the browser to verify the server’s identity. Once it is installed correctly, users should no longer see the certificate warning.
-
-To request a certificate from Let’s Encrypt, the server generally needs:
-
-- A public domain name that points to the AFCT server
-- Public access to port 80
-- Public access to port 443
-- A hostname that matches the AFCT public URL
-
-You can complete the initial installation before setting up the trusted certificate.
 
 ## Step 1: Install Docker
 
@@ -314,9 +285,16 @@ The installer may ask whether AFCT should use a dedicated `afct` system account.
 
 For a shared or long-running server, accept the default.
 
-The service account keeps the AFCT deployment separate from a specific administrator's login account.
+The service account keeps the AFCT deployment separate from any one administrator's login
+account, so the deployment survives that person's account being removed.
 
-For a temporary local test, using the dedicated account is still fine. You may also choose current-user mode when you have a specific reason to do so.
+One thing to be aware of before you accept it: the installer adds that account to the `docker`
+group, and it has to, because it cannot run the stack otherwise. Membership of the `docker` group
+is effectively root on the host. That is true of anyone who runs Docker on this machine, not
+something AFCT introduces, but it is worth knowing you are creating such an account.
+
+For a temporary local test the dedicated account is still fine. Choose current-user mode only when
+you have a specific reason to.
 
 ## Step 4: Wait for AFCT to start
 
@@ -444,6 +422,7 @@ The main directories are:
   releases/             Installed deployment-tool versions
   shared/               Persistent configuration and logs
     .env.production     AFCT configuration and secrets
+    deploy.state        What the installer recorded about this deployment
     install.log         Installer log
     runtime/            Active Docker Compose configuration
 ```
@@ -498,11 +477,36 @@ Update the deployment tools:
 sudo afctctl self-update
 ```
 
-Create a support archive:
+Restore the last good configuration, if a change to `.env.production` broke the deployment:
+
+```bash
+sudo afctctl recover
+```
+
+Create a support archive, with secrets removed, to attach to a bug report:
 
 ```bash
 sudo afctctl diagnostics
 ```
+
+## Update AFCT
+
+`sudo afctctl update` pulls the latest images, recreates the stack, and waits for the health
+check. If the new version does not come up healthy it puts the previous one back by itself, using
+the images already on disk, so a rollback works even if the server is offline.
+
+Two things to know before you run it:
+
+- **It needs about 12 GB free** on the disk holding Docker's images, and refuses to start
+  otherwise. An upgrade holds the old and the new image at once. It prunes the superseded ones
+  after a successful update, so a deployment that stays current should not accumulate them.
+- **Take a backup first.** Not for the upgrade, which rolls itself back, but because a
+  **downgrade** does not: going back to an earlier version restores that version's database and
+  **permanently discards anything recorded since**, grades included. Only downgrade when you
+  accept that.
+
+You can also update from the browser, without a terminal, once the updater is enabled. See
+[Update AFCT](../../operations/updates.md).
 
 ## Run the installer again
 

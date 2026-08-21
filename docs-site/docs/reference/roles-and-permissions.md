@@ -116,7 +116,12 @@ Manual grade overrides are recorded in the activity log. AFCT does not have a se
 
 Students never receive answer files.
 
-Group mode currently controls problem-to-group mappings in the course interface. The main submission, grade, and discussion workflow remains student-specific. Do not assume that saving one student's grade updates every group member.
+On a group assignment the submission belongs to the group, and grading it writes a row for
+every member. The autograder does this as part of the same transaction that records the grade,
+reading the membership at that moment so the fan-out and the grade are one snapshot, and manual
+group grading does the same. Each member still has their own row, so a grade can be adjusted for
+one person afterwards; the row remembers the group value it came from, which is what makes an
+adjusted member distinguishable from one who was never graded with the group.
 
 ### Accounts and administration
 
@@ -124,9 +129,9 @@ Group mode currently controls problem-to-group mappings in the course interface.
 | --------------------------------------------------------- | ------------- | --------------- | ------- |
 | Create, activate, deactivate, or delete accounts          | Yes           | No              | No      |
 | Grant administrator access                                | Yes           | No              | No      |
-| Reset another account's password                          | Yes           | No              | No      |
+| Reset another account's password                          | Yes           | Students on their own roster | No      |
 | Change own profile name, avatar, or timezone              | Yes           | Yes             | Yes     |
-| Change an account email address                           | No interface  | No              | No      |
+| Change an account email address                           | Yes           | No              | No      |
 | Manage system settings, status, logs, backups, or updates | Yes           | No              | No      |
 | View course activity                                      | Any course    | Assigned course | No      |
 

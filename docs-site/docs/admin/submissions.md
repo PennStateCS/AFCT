@@ -38,9 +38,16 @@ The page opens showing everything in scope. It loads one page of submissions at 
 To narrow it:
 
 - **Search** matches across the table, or one field if you pick one in the box beside it.
-- **Filters** holds Timing, Status and Submission as separate lists. Ticking several values in one list widens (any of them), while picking from two different lists narrows (both must be true), so Timing **Late** plus Submission **Incorrect** finds late wrong answers.
+- **Filters** holds **Timing** on one side and **Status** and **Submission** on the other.
+
+  Status and Submission are two headings over one question, because a submission has exactly
+  one of those five values. Picking across them means "either": Failed plus Incorrect finds
+  both, it does not find submissions that are somehow both.
+
+  Timing is separate and combines with them, so Timing **Late** plus Submission **Incorrect**
+  finds late wrong answers.
 - **Columns** turns columns on and off, including **Due** and **Recorded grade**, which are off by default. That choice is remembered in your browser.
-- Sort by most column headings, including Status. **Timing**, **Grade** and **Recorded grade** cannot be sorted: none of them is a stored value (Timing is a comparison against the due date, Grade is worked out from the result, and Recorded grade is kept with the gradebook), so there is nothing to order the whole queue by. Filter by Timing instead.
+- Sort by most column headings, including Status. **Timing**, **Type**, **Grade** and **Recorded grade** cannot be sorted: none of them is a stored value (Timing is a comparison against the due date, Grade is worked out from the result, and Recorded grade is kept with the gradebook), so there is nothing to order the whole queue by. Filter by Timing instead.
 
 There is no CSV export here. The page holds one page of results at a time, so an export would have written whatever was on screen rather than everything matching your filters. To get grades out of AFCT, use the [grade export](../faculty/grades.md#export-grades) on a course instead.
 

@@ -20,8 +20,9 @@ You do not need to be technical. The most useful things are:
 - **What you expected** versus **what actually happened**.
 - **A screenshot**, if it is something you can see on screen. Drag the image straight
   into the form.
-- **The version**, if you are an admin: read it from **Dashboard -> System Status ->
-  Server** (the "AFCT Dashboard" line).
+- **The version**, if you are an admin: open **System Status**, then the **Server** tab,
+  and read the **Image** line under Software. That is the AFCT version. The line above it,
+  **AFCT Evaluator**, is the grading engine's own version, which is a different number.
 
 ## Please remove student data first
 

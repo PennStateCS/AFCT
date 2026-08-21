@@ -110,8 +110,23 @@ npm run docs
 On Windows PowerShell, chain with `;` and check each result, or just run the commands one
 at a time.
 
-If that whole sequence passes, five of the six CI jobs will pass. The sixth is the
-database job, covered next.
+That sequence covers most of CI. Four checks it does not cover run only on the server:
+
+| CI job | What it checks | Run it locally |
+| --- | --- | --- |
+| `test-db` | The real-Postgres suite | `npm run test:db`, covered next |
+| `deadcode` | Unused files and exports, via knip | `npm run knip` |
+| `dockerfiles` | Dockerfile lint, via hadolint | See the workflow |
+| `secrets` | Committed credentials, via gitleaks | See the workflow |
+| `e2e` | Browser tests, via Playwright | `npm run e2e` |
+
+If you changed anything under `deploy/` or `docker/`, run the shell suites too. They need `jq`,
+so they run in a container:
+
+```bash
+docker run --rm -v "${PWD}:/code" -w /code --entrypoint sh bats/bats:latest \
+  -c "apk add --no-cache jq >/dev/null 2>&1; bats deploy/test/install.bats deploy/test/updater.bats"
+```
 
 ### If your dev environment runs in Docker
 
@@ -150,7 +165,7 @@ The dev stack includes **Mailpit**, a local mail server that catches everything 
 shows it in a web UI. Nothing leaves your machine, which matters: a dev database full of test
 accounts must never be able to mail real people.
 
-Configure it in **System Settings → Email**:
+Configure it in **System Settings > Email**:
 
 | Field | Value |
 | --- | --- |

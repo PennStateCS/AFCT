@@ -85,7 +85,7 @@ What seeded demo data already shows: with twenty students and machines of three 
 
 ## The presentation layer
 
-Everything the tab decides about *display* lives in `components/assignments/similarity-evidence.ts`, as pure functions over what the API returns. Nothing there touches the detector.
+Everything the tab decides about *display* lives in `lib/similarity/evidence.ts`, as pure functions over what the API returns. Nothing there touches the detector.
 
 - `matchTypeOf` maps a group to one of `exact`, `same-machine`, `structural` or `common`. Commonality is checked first: past the threshold it is convergence whatever the files look like.
 - `STRENGTH_OF` maps that to the word shown on the card. It grades the artifact evidence, never the likelihood of misconduct, and `common` sits outside the scale rather than at the bottom of it.

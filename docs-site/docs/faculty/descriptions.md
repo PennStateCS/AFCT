@@ -7,7 +7,7 @@ give an example string or two, and say what counts as a correct answer.
 The editor is used in four places, and behaves the same in all of them:
 
 - **Create Problem** and **Edit Problem**, on the Details step (see [Problems](problems.md)).
-- **Create Assignment** and the assignment's own Details tab (see [Details](details.md)).
+- **Create Assignment** and the assignment's own Details tab (see [Assignments](assignments.md#details)).
 
 ## The toolbar
 
@@ -34,7 +34,7 @@ reader.
 
 ## Keyboard shortcuts
 
-`Ctrl` is shown here; on macOS it is `Cmd`.
+The app writes these as `Ctrl/Command`, on every platform.
 
 | Action | Keys |
 | --- | --- |

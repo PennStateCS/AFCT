@@ -19,7 +19,7 @@
 
 Session timeout covers inactivity only. Separately, every session ends 12 hours after sign-in however busy it has been, so a browser left signed in cannot stay signed in indefinitely. That limit is fixed and is not a setting.
 
-The configured URL cannot be edited in the browser. On an installed server, use `sh install.sh --reconfigure` or set the correct `APP_URL` through the installer workflow.
+The configured URL cannot be edited in the browser. To change it, run `sudo afctctl install --reconfigure` on the server, or set `APP_URL` in `.env.production` and restart.
 
 ### Public signup
 
@@ -37,7 +37,7 @@ These settings control submission processing:
 
 | Setting                          | Default |       Range | What it does                                                                      |
 | -------------------------------- | ------: | ----------: | --------------------------------------------------------------------------------- |
-| **Evaluation timeout (seconds)** |      30 |    1 to 600 | Stops an evaluation that runs too long.                                           |
+| **Evaluation timeout (seconds)** |      30 |    1 to 900 | Stops an evaluation that runs too long.                                           |
 | **Resubmit cooldown (seconds)**  |      10 |  0 to 3,600 | Sets the wait before another attempt. Zero disables the cooldown.                 |
 | **Evaluator memory cap (MB)**    |     256 | 64 to 8,192 | Limits JVM heap for one evaluation.                                               |
 | **Max concurrent evaluations**   |       5 |     1 to 20 | Controls how many evaluations run at once. Changes apply within about 30 seconds. |
@@ -57,7 +57,7 @@ Keep the database dump and uploaded-file archive together. See [Backups and reco
 The **Email** tab holds the mail server AFCT sends from. It is used for password reset links, so
 people can recover their own accounts without an administrator doing it for them.
 
-Email is off until you configure a server and switch it on. A site that leaves it off behaves
+Email is off until you fill the server in and turn on **Send email from this site**. A site that leaves it off behaves
 exactly as it did before: passwords can still be reset by an administrator, and nothing else
 changes.
 
@@ -76,8 +76,8 @@ The password is write-only: it is encrypted before it is stored and never shown 
 without retyping it keeps the stored one. Use **Remove saved password** to clear it.
 
 :::tip Send a test message
-Use **Send a test message** as soon as you save. It sends using the stored settings, so it proves
-what the site will actually do. Finding out that mail is misconfigured now is much better than
+Use **Send a test message** as soon as you save, putting your own address in **Send to**. It sends
+using the stored settings, so it proves what the site will actually do. Finding out that mail is misconfigured now is much better than
 finding out when a student cannot get back into their account.
 :::
 
@@ -107,8 +107,17 @@ is off until you configure a provider and turn it on, and **AFCT passwords keep 
 way**, so a misconfigured provider cannot lock you out of your own site.
 
 Your IT department gives you the issuer URL, a client ID and a client secret, and needs the
-redirect URL shown on the tab. Registration usually fails without that URL, with an error about
-a mismatched redirect.
+**Redirect URL** shown on the tab. Registration usually fails without that URL, with an error
+about a mismatched redirect.
+
+**Allow institutional sign-in** is the switch that turns it on once those are saved. Like the mail
+password, the client secret is write-only: it is encrypted before storage and never shown again,
+saving without retyping it keeps the stored one, and **Remove saved client secret** clears it.
+
+**Button wording** is what the sign-in button says. It is worth setting, because the default is
+generic and your people recognise their own institution's name. "Sign in with PSU Access" tells
+somebody they are in the right place; a generic label makes them hunt for the AFCT password they
+may not have.
 
 ### Matching people to existing accounts
 
@@ -166,9 +175,20 @@ values by their LMS names, and what the launch errors mean.
 
 ## Captcha
 
-The **Captcha** tab stores the optional hCaptcha site key and secret key used to protect sign-in and signup flows.
+The **Captcha** tab stores an optional hCaptcha site key and secret key.
+
+hCaptcha is not a barrier on every sign-in. It is an escalation: AFCT asks for it after repeated
+failed attempts from the same place, as a step before locking the account outright. See
+[How AFCT protects sign-in](../reference/login-protection.md).
 
 The secret is write-only and is not displayed after saving. Use **Remove saved secret key** when you need to clear it. Leave both fields blank to disable hCaptcha, and do not use hCaptcha test credentials in production.
+
+:::tip Verify your keys
+**Verify your keys** on the same tab draws a real hCaptcha using the keys you saved and checks the
+answer against hCaptcha, so it proves the round trip rather than just that the fields are filled
+in. Do it as soon as you save. A wrong secret key is invisible until somebody is being challenged,
+and by then they cannot get in.
+:::
 
 ## TLS Certificate
 

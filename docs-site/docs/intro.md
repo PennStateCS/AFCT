@@ -4,13 +4,16 @@ slug: /
 
 # AFCT Dashboard
 
-AFCT (Automated Feedback for CS Theory) is a course dashboard for automata and formal-language coursework. Students submit finite automata, push-down automata, context-free grammars, and regular expressions built in JFLAP; the dashboard evaluates them automatically and gives immediate feedback, while faculty manage courses, assignments, and grades.
+AFCT (Automated Feedback for CS Theory) is a course dashboard for automata and formal-language coursework. Students submit finite automata, push-down automata, context-free grammars, regular expressions, and Turing machines built in JFLAP. AFCT grades them automatically and answers straight away, while faculty run their courses, assignments, and grades in the same place.
 
 ## Where to start
 
+**New here?** [Your first course](getting-started/first-course.md) walks the whole path once, from
+a fresh install to a student submission that comes back graded. About half an hour.
+
 - **Students**: the [Student Guide](student/overview.md) covers enrolling in a course, submitting solutions, and reading your feedback and grades.
 - **Faculty and TAs**: the [Faculty Guide](faculty/course.md) covers building courses and assignments, grading, and managing your roster.
-- **Administrators**: the [Administrator Guide](guides/admin.md) covers user management, system settings, backups, and updates.
+- **Administrators**: the [Administrator Guide](admin/index.md) covers user management, system settings, backups, and updates.
 
 ## Running your own AFCT
 
@@ -22,6 +25,11 @@ AFCT is self-hosted with Docker. Start with the [production setup overview](setu
 - [macOS](setup/production/macos.md), useful for smaller or locally managed deployments
 
 Once deployed, see [updates](operations/updates.md), [backups](operations/backups.md), [TLS certificates](admin/system-settings.md#tls-certificate), and [troubleshooting](operations/troubleshooting.md).
+
+## Before you adopt it
+
+[What AFCT stores about students](getting-started/student-data.md) describes what is kept, where,
+and who can read it. It is written to be handed to a privacy or IT office.
 
 ## Integrating with AFCT
 

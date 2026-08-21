@@ -1,6 +1,6 @@
 # Production deployment
 
-AFCT is deployed as a Docker Compose stack with four core services: nginx, the AFCT application, PostgreSQL, and the backup service. An optional updater service supports browser-based upgrades and is disabled by default.
+AFCT runs as a Docker Compose stack of five services: nginx in front, the AFCT application, the evaluator worker that grades submissions, PostgreSQL, and the backup service. A sixth, the updater, powers browser-based upgrades and is off by default.
 
 Docker is the supported production method. A non-Docker deployment requires you to reproduce the container configuration, startup order, security boundaries, and backup process yourself.
 
@@ -23,9 +23,27 @@ Linux is the best fit for a long-running public server. Windows and macOS are su
 
 ## Choose an installation method
 
-**Use the guided installer.** It is the recommended method for every platform: it checks Docker, collects the required settings, generates secrets, creates `.env.production`, and starts the stack. It also serves as an operations helper for a running deployment, with `status`, `logs`, `update` with automatic rollback, `restart`, `stop`, `doctor`, `recover`, and `diagnostics` commands.
+**Use the guided installer.** It checks Docker, asks for the settings it needs, generates the
+secrets, writes `.env.production`, and starts the stack.
 
-A manual installation path is documented after the installer in each platform guide. Use it only when you need to customize the Compose configuration, automate provisioning, or manage the repository directly with Git. Both methods create the same AFCT stack.
+What it installs is a command called **`afctctl`**, and that is the name to remember: it is how
+you run the deployment afterwards, from any directory.
+
+| Command | What it does |
+| --- | --- |
+| `sudo afctctl status` | Container and application health |
+| `sudo afctctl logs` | Follow the application log |
+| `sudo afctctl update` | Pull the latest images, recreate the stack, roll back if it is not healthy |
+| `sudo afctctl restart` | Recreate the stack without pulling anything new |
+| `sudo afctctl stop` | Stop it, keeping the data |
+| `sudo afctctl doctor` | A longer read-only check of the whole deployment |
+| `sudo afctctl recover` | Restore the last good `.env.production` |
+| `sudo afctctl diagnostics` | Build a support archive with secrets removed |
+| `sudo afctctl enable-updater` | Turn on browser-based upgrades |
+| `sudo afctctl version` | What is deployed, and what version the tool itself is |
+
+On macOS the same commands run without `sudo`. On Windows the equivalent is `afctctl.ps1`; see
+the [Windows guide](production/windows.md).
 
 A [non-Docker outline](production/non-docker.md) is available for teams that must reproduce the deployment manually, but that path is not supported.
 
@@ -33,7 +51,8 @@ A [non-Docker outline](production/non-docker.md) is available for teams that mus
 
 Review the [system requirements](requirements.md) for hardware, network, and platform prerequisites.
 
-Set the public DNS name before configuration. `NEXTAUTH_URL` must exactly match the HTTPS address users enter in their browsers.
+Set the public DNS name first. The installer asks for the **Public URL** and it has to match the
+HTTPS address people will type, exactly.
 
 ## After installation
 

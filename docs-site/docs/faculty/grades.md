@@ -6,7 +6,9 @@ The **Grades** page gives Faculty and TAs a course-wide view of student scores. 
 
 An assignment cell shows the student's earned points and the assignment's available points. A dash means the assignment does not have a recorded grade for that student.
 
-The **Average** column calculates a percentage from the assignments that have recorded grades. Ungraded assignments are not included in that total, so treat it as a progress summary rather than a final course grade until grading is complete. Only assignments a student is actually assigned count toward it, so a student who is not assigned everything is not measured against the full course total.
+The **Average** column is the student's earned points over the points of **everything they are assigned**, graded or not. Work you have not marked yet counts as zero until you mark it, so an average drops when you publish a new assignment and climbs back as you grade it. Read it as progress through the course, not as a standing grade.
+
+Only assignments a student is actually assigned count toward it, so somebody who is not assigned everything is not measured against the full course total.
 
 The gradebook loads a page of students at a time, so a course with a thousand students opens as quickly as a small one. Searching and sorting apply to the whole class rather than to the students currently on screen, and the number beside the pager is the total who match:
 
@@ -27,8 +29,6 @@ Each score must be between zero and that problem's maximum points. Saving the br
 Grades you save here are held, so re-running the autograder will not change them.
 
 ### Where each grade came from
-
-Two columns answer two different questions, and it is worth keeping them apart.
 
 **Problem Setting** is how the problem is set up. It reads the same whether or not the student has been graded yet.
 

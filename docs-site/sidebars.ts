@@ -3,36 +3,100 @@ import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 // `npm run docs:api` at the repo root first to produce the spec.
 import apiSidebar from './docs/api-reference/sidebar';
 
-// One explicit sidebar so the reading order is deliberate. Doc ids are the file
-// paths under docs/ without the extension.
+/**
+ * One explicit sidebar so the reading order is deliberate. Doc ids are the file
+ * paths under docs/ without the extension.
+ *
+ * The order follows the reader rather than the alphabet. A professor evaluating AFCT
+ * should be able to read from the top and never land in contributor material, which is
+ * why development setup sits with the rest of the developer docs at the end rather than
+ * in the middle of the install path.
+ */
 const sidebars: SidebarsConfig = {
   docs: [
     {
       type: 'category',
       label: 'Getting Started',
       collapsed: false,
-      items: ['intro', 'reporting-bugs'],
+      items: [
+        'intro',
+        'getting-started/first-course',
+        'getting-started/student-data',
+        'reporting-bugs',
+      ],
     },
     {
       type: 'category',
-      label: 'Installation & Setup',
+      label: 'Install AFCT',
       items: [
         'setup/requirements',
         {
           type: 'category',
-          label: 'Production',
+          label: 'Choose a platform',
           link: { type: 'doc', id: 'setup/production' },
           items: [
             'setup/production/aws',
             'setup/production/linux',
-            'setup/production/macos',
             'setup/production/windows',
+            'setup/production/macos',
             'setup/production/non-docker',
           ],
         },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Faculty and TA Guide',
+      link: { type: 'doc', id: 'faculty/course' },
+      items: [
+        'faculty/settings',
+        'faculty/roster',
+        'faculty/groups',
+        'faculty/problems',
+        'faculty/descriptions',
+        'faculty/evaluator-sandbox',
         {
           type: 'category',
-          label: 'Development',
+          label: 'Assignments',
+          link: { type: 'doc', id: 'faculty/assignments' },
+          items: ['faculty/submissions', 'faculty/statistics', 'faculty/similarity'],
+        },
+        'faculty/grades',
+        'faculty/lms',
+        'faculty/activity',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Student Guide',
+      items: ['student/overview', 'student/client'],
+    },
+    {
+      type: 'category',
+      label: 'Administrator Guide',
+      link: { type: 'doc', id: 'admin/index' },
+      items: [
+        'admin/system-settings',
+        'admin/user-accounts',
+        'admin/courses',
+        'admin/lms-connection',
+        'admin/system-status',
+        'admin/system-logs',
+        'admin/submissions',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Maintenance',
+      items: ['operations/updates', 'operations/backups', 'operations/troubleshooting'],
+    },
+    {
+      type: 'category',
+      label: 'Developer Documentation',
+      items: [
+        {
+          type: 'category',
+          label: 'Set up a development environment',
           items: [
             'setup/development',
             'setup/development-windows',
@@ -40,104 +104,41 @@ const sidebars: SidebarsConfig = {
             'setup/development-troubleshooting',
           ],
         },
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Guides',
-      items: [
         {
           type: 'category',
-          label: 'Student',
-          items: ['student/overview', 'student/client'],
-        },
-        {
-          type: 'category',
-          label: 'Faculty and TA',
+          label: 'How we work',
           items: [
-            {
-              type: 'category',
-              label: 'Course',
-              link: {
-                type: 'doc',
-                id: 'faculty/course',
-              },
-              items: [
-                'faculty/activity',
-                {
-                  type: 'category',
-                  label: 'Assignments',
-                  link: {
-                    type: 'doc',
-                    id: 'faculty/assignments',
-                  },
-                  items: [
-                    'faculty/details',
-                    'faculty/type',
-                    'faculty/assign-to',
-                    'faculty/assignment-problems',
-                    'faculty/submissions',
-                    'faculty/statistics',
-                    'faculty/similarity',
-                  ],
-                },
-                'faculty/descriptions',
-                'faculty/evaluator-sandbox',
-                'faculty/grades',
-                'faculty/groups',
-                'faculty/problems',
-                'faculty/lms',
-                'faculty/roster',
-                'faculty/settings',
-              ],
-            },
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Administrator',
-          link: {
-            type: 'doc',
-            id: 'guides/admin',
-          },
-          items: [
-            'admin/courses',
-            'admin/development-tests',
-            'admin/lms-connection',
-            'admin/submissions',
-            'admin/system-logs',
-            'admin/system-settings',
-            'admin/system-status',
-            'admin/user-accounts',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Developer',
-          items: [
-            'reference/client-api',
-            'reference/code-and-documentation-style',
-            'reference/confirmation-dialogs',
-            'reference/content-security-policy',
             'reference/contributing',
-            'reference/creating-a-release',
             'reference/conventions',
-            'reference/database-schema',
-            'reference/login-protection',
-            'reference/rich-descriptions',
-            'reference/roles-and-permissions',
-            'reference/similarity-detection',
+            'reference/code-and-documentation-style',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'How the system works',
+          items: [
             'reference/system-architecture',
-            'reference/toast-messages',
+            'reference/database-schema',
+            'reference/roles-and-permissions',
+            'reference/client-api',
+            'reference/rich-descriptions',
+            'reference/similarity-detection',
+            'reference/login-protection',
+            'reference/content-security-policy',
             'reference/evaluator-tests',
           ],
         },
+        {
+          type: 'category',
+          label: 'Interface patterns',
+          items: [
+            'reference/confirmation-dialogs',
+            'reference/toast-messages',
+            'reference/development-tests',
+          ],
+        },
+        'reference/creating-a-release',
       ],
-    },
-    {
-      type: 'category',
-      label: 'Operations',
-      items: ['operations/updates', 'operations/backups', 'operations/troubleshooting'],
     },
   ],
 
