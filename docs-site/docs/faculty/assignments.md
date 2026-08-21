@@ -35,7 +35,7 @@ The default schedule applies to everyone assigned unless a target has an overrid
 
 ## The assignment page
 
-Open an assignment by selecting its title, or **Manage → View Assignment**. A badge in the
+Open an assignment by selecting its title, or **Manage > View Assignment**. A badge in the
 header says whether it is a group or an individual assignment, and a quick-jump beside it moves
 you to another assignment in the course without leaving the tab you are on.
 
@@ -144,7 +144,7 @@ Use the **Published** switch to show or hide an assignment. AFCT asks for confir
 
 ### Duplicate an assignment
 
-**Manage → Duplicate Assignment** opens a short wizard to copy an assignment within the same course:
+**Manage > Duplicate Assignment** opens a short wizard to copy an assignment within the same course:
 
 1. **Details** - the title and description start as the original's; edit them or leave them as is.
 2. **Problems** - choose what happens to the original's problems:

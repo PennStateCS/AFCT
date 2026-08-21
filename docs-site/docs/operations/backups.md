@@ -103,9 +103,13 @@ The Backups tab lists the archives available to the application and lets an admi
 ## Restore a full backup
 
 There is no restore button. A full recovery is done from a terminal on the server, and it is
-short enough to read in one go. You need the archive and the passphrase it was encrypted with.
+short enough to read in one go. You need the archive, the passphrase it was encrypted with, and
+`gpg` installed on the machine you unpack it on.
 
-**Practise this on a spare machine before you need it**, decryption included. A passphrase you
+The paths below are the Linux ones. On macOS the deployment lives under `$HOME/.afct` instead of
+`/opt/afct`.
+
+**Practice this on a spare machine before you need it**, decryption included. A passphrase you
 cannot produce under pressure is the same as having no backup at all.
 
 1. **Stop the services that write**, so nothing changes underneath you:
@@ -139,15 +143,22 @@ cannot produce under pressure is the same as having no backup at all.
 4. **Put the uploaded files back.** The archive holds them in two directories, matching the two
    volumes they came from:
 
+   **Check the volume names first.** Compose prefixes them with the project name, so they are
+   `afct_private_uploads` and `afct_uploads_data`, not the bare names in the compose file:
+
    ```bash
-   docker run --rm -v private_uploads:/dest -v /tmp/restore:/src alpine \
-     cp -a /src/private-uploads/. /dest/
-   docker run --rm -v uploads_data:/dest -v /tmp/restore:/src alpine \
-     cp -a /src/public-uploads/. /dest/
+   docker volume ls | grep uploads
    ```
 
-   If your project name is not `afct`, the volumes are prefixed with it, so check
-   `docker volume ls` first.
+   Use exactly what that prints. A name that does not exist is not an error: Docker creates an
+   empty volume, every command below succeeds, and the uploads are silently not restored.
+
+   ```bash
+   docker run --rm -v afct_private_uploads:/dest -v /tmp/restore:/src alpine \
+     cp -a /src/private-uploads/. /dest/
+   docker run --rm -v afct_uploads_data:/dest -v /tmp/restore:/src alpine \
+     cp -a /src/public-uploads/. /dest/
+   ```
 
 5. **Bring everything back up and check it**:
 
@@ -184,7 +195,8 @@ cmd /c "docker exec afct-postgres pg_dump -U afct_user --clean --if-exists afct 
 
 ## Restore a database-only dump
 
-Stop application writes first. Confirm the target database and keep a copy of its current state.
+Stop everything that writes first, the evaluator worker included, not just the app. Confirm the
+target database and keep a copy of its current state.
 
 ### Linux or macOS
 
@@ -199,9 +211,10 @@ sudo afctctl restart
 ### Windows PowerShell
 
 ```powershell
-docker compose stop app db-backup
+afctctl.ps1 stop
+docker start afct-postgres
 cmd /c "docker exec -i afct-postgres psql -U afct_user afct < backup.sql"
-docker compose up -d
+afctctl.ps1 restart
 ```
 
 Test sign-in and course data after the services become healthy.

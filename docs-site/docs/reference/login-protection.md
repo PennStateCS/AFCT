@@ -61,7 +61,7 @@ address, over a rolling 15-minute window. Within that window the response escala
 3. **Lockout** once the attempts reach the configured maximum: the account is blocked
    for the configured duration.
 
-Two parts of this are **admin-configurable** in **System Settings → General**, and
+Two parts of this are **admin-configurable** in **System Settings > General**, and
 override the built-in account defaults (the IP limits below stay fixed):
 
 | Setting | Env fallback | Default | Range |
@@ -115,7 +115,7 @@ challenge instead of rehydrating clean. Both the counting path and the peek hono
 
 ### Inspecting and clearing IP limits
 
-**System Status → Rate Limits** lists the IPs currently blocked or challenged on the
+**System Status > Rate Limits** lists the IPs currently blocked or challenged on the
 instance serving the request, with the reason, when the restriction started, how many
 attempts have been counted and refused, and when it expires. An administrator can clear
 one early (`POST /api/admin/status/rate-limits/clear`), which is logged at `SECURITY`

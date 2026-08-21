@@ -51,7 +51,7 @@ never dropped. See [Grades and rosters from your LMS](lms.md).
 
 ## Manage roles and membership
 
-Faculty can use **Manage → Edit Role** on a roster member to change that person's course role. A course must always have at least one Faculty member, so AFCT will not allow the only Faculty member to be demoted.
+Faculty can use **Manage > Edit Role** on a roster member to change that person's course role. A course must always have at least one Faculty member, so AFCT will not allow the only Faculty member to be demoted.
 
 Faculty can remove a TA or student who has no submissions in the course. Faculty cannot remove another Faculty member. TAs can view the roster and enroll users. Changing someone's role, removing them, and dropping or re-enrolling them are reserved for Faculty and site administrators.
 

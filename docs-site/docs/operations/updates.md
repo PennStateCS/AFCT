@@ -5,9 +5,20 @@ server. Most people should use the browser. Take or confirm a backup either way.
 
 ## From the browser
 
-This is the recommended path and it is covered in full under [In-app updates](#in-app-updates)
-below. It needs no terminal, it applies stack changes for you, and it rolls back on its own if
-the new version does not come up healthy.
+Open **Administration > System Settings > Updates**, pick a newer version, and confirm. The
+updater backs the database up, swaps the images, waits for the whole stack to come up healthy,
+watches it a little longer to be sure it stays that way, and rolls back by itself if it does not.
+Releases that change the stack layout are applied for you.
+
+This needs the updater service, which is off by default because it holds the Docker socket. Turn
+it on once from a terminal:
+
+```bash
+sudo afctctl enable-updater
+```
+
+[In-app updates](#in-app-updates) below covers the rest: downgrades, restore points, and what
+happens when an upgrade is interrupted.
 
 ## From a terminal on the server
 
@@ -105,7 +116,7 @@ Every upgrade, downgrade, and update-service change is recorded in **Administrat
 
 An upgrade is only committed once the whole stack is confirmed good, not just the application container:
 
-- **Every recreated service must be up**, and any service that defines a health check (the app, the web front, the backup sidecar) must report healthy. The web front's health check also proves it can reach the app. The evaluator worker is a background process with no health check, so "running" is enough for it; a deployment that health-checks every service can require them all with `UPDATER_REQUIRE_HEALTHCHECKS=true`.
+- **Every recreated service must be up**, and any service that defines a health check (the app, nginx, and the backup service) must report healthy. Nginx's health check also proves it can reach the app. The evaluator worker is a background process with no health check, so "running" is enough for it; a deployment that health-checks every service can require them all with `UPDATER_REQUIRE_HEALTHCHECKS=true`.
 - **A stability window** (default 45 seconds, `UPDATER_STABILITY_SECONDS`) follows: the updater keeps watching after everything is healthy, so a version that comes up and then crash-loops is caught and rolled back rather than committed. A service that exits, or the app drifting off the new version, ends the window early and rolls back.
 - **Transient network failures are retried.** Downloading the images and fetching a release's manifest or compose file are retried a few times with a short backoff (`UPDATER_PULL_RETRIES`, `UPDATER_FETCH_RETRIES`), so a momentary blip does not fail an upgrade. Destructive steps (database restores, the version swap, recreating containers) are never blindly retried; those roll back instead.
 
@@ -122,7 +133,7 @@ This means a terminal is normally not needed to keep a deployment current. `sudo
 
 An upgrade downloads the new images before it replaces anything, and the previous ones stay on disk until the new version is confirmed healthy, so the machine has to hold both for a while. The updater checks for room before it starts and refuses the upgrade rather than running out halfway through, which would leave the stack in a state it could not roll back from.
 
-It wants about 12 GB free on the filesystem holding Docker's image store, and `afctctl` applies the same figure when you update from a terminal. `UPDATER_DISK_MIN_MB` and `AFCT_UPDATE_MIN_FREE_MB` change it if your deployment genuinely needs a different number, but the requirement is real rather than cautious: the application image is a large one and an upgrade briefly holds two of them.
+It wants about 12 GB free on the filesystem holding Docker's image store, and `afctctl` applies about the same when you update from a terminal. `UPDATER_DISK_MIN_MB` and `AFCT_UPDATE_MIN_FREE_MB` change it if your deployment genuinely needs a different number, but the requirement is real rather than cautious: the application image is a large one and an upgrade briefly holds two of them.
 
 Old images left by earlier upgrades are the usual cause. `docker image prune -af` removes anything no running container is using. Superseded images are cleaned up automatically once an upgrade is confirmed healthy, so a deployment that stays current should rarely need this, but one that has rolled back or been interrupted can collect them.
 

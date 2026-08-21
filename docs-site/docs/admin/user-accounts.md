@@ -85,7 +85,7 @@ who only ever opens AFCT from your LMS needs an AFCT password before they can su
 
 ## Desktop client tokens
 
-Anyone can create an app token from **Account → App tokens**, name it so they can tell their
+Anyone can create an app token from **Account > App tokens**, name it so they can tell their
 machines apart, and revoke it when they stop using one.
 
 A token is shown once, when it is created. If someone loses it, they create another and revoke
@@ -119,7 +119,7 @@ AFCT temporarily locks an account after too many failed sign-in attempts, to slo
 - **See which accounts are locked.** A locked account shows a **Locked** badge with a live countdown of the time remaining on its row. Use the table's lock-status filter to list only locked accounts.
 - **Unlock immediately.** Open **Manage** and select **Unlock Account**, then confirm. This clears the lock right away so the person can sign in. Repeated failed sign-ins can lock the account again.
 
-The number of failed attempts before a lockout and how long a lock lasts are set in **System Settings → General** (*Failed logins before lockout* and *Account lockout duration*). For how account lockout and the separate per-IP limits work under the hood, see [Login protection](../reference/login-protection.md).
+The number of failed attempts before a lockout and how long a lock lasts are set in **System Settings > General** (*Failed logins before lockout* and *Account lockout duration*). For how account lockout and the separate per-IP limits work under the hood, see [Login protection](../reference/login-protection.md).
 
 ## Delete an account
 

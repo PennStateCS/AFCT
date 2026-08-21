@@ -241,7 +241,7 @@ a specific one, pass it explicitly:
 AFCT_APP_TAG=v0.1.3 sh install.sh
 ```
 
-**Existing install (in-app).** In the app, go to **Admin → System Settings → Updates**,
+**Existing install (in-app).** In the app, go to **Admin > System Settings > Updates**,
 pick the version, and click **Upgrade**. The stack backs up the database, pulls the new
 images, recreates, and health-checks, rolling back automatically if the new version is
 unhealthy.

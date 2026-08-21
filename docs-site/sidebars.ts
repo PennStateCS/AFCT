@@ -74,7 +74,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Administrator Guide',
-      link: { type: 'doc', id: 'guides/admin' },
+      link: { type: 'doc', id: 'admin/index' },
       items: [
         'admin/system-settings',
         'admin/user-accounts',

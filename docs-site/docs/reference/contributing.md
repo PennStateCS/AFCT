@@ -165,7 +165,7 @@ The dev stack includes **Mailpit**, a local mail server that catches everything 
 shows it in a web UI. Nothing leaves your machine, which matters: a dev database full of test
 accounts must never be able to mail real people.
 
-Configure it in **System Settings → Email**:
+Configure it in **System Settings > Email**:
 
 | Field | Value |
 | --- | --- |

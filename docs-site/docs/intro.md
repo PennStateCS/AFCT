@@ -13,7 +13,7 @@ a fresh install to a student submission that comes back graded. About half an ho
 
 - **Students**: the [Student Guide](student/overview.md) covers enrolling in a course, submitting solutions, and reading your feedback and grades.
 - **Faculty and TAs**: the [Faculty Guide](faculty/course.md) covers building courses and assignments, grading, and managing your roster.
-- **Administrators**: the [Administrator Guide](guides/admin.md) covers user management, system settings, backups, and updates.
+- **Administrators**: the [Administrator Guide](admin/index.md) covers user management, system settings, backups, and updates.
 
 ## Running your own AFCT
 

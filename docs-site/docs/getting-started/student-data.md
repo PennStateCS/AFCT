@@ -20,10 +20,13 @@ deliberately:
 - To your institution's identity provider, if you enable institutional sign-in.
 - To your mail server, if you configure email.
 - To GitHub, to check for a newer AFCT version and download it when you ask.
-- To hCaptcha, if you enable it, on sign-in pages.
+- To Let's Encrypt, if you ask AFCT to obtain and renew a certificate for you.
+- To hCaptcha, if you enable it, when somebody is being challenged after repeated failed
+  sign-ins.
 
-The container that grades submissions has **no network access at all**. Student work is evaluated
-on an isolated container that cannot reach the internet or the rest of the network.
+**The container that grades submissions cannot reach the internet.** It is attached only to the
+private network it needs to read the database, and to nothing else, so a submitted file cannot be
+made to call out from your server.
 
 ## What is stored about a person
 
@@ -31,6 +34,10 @@ on an isolated container that cannot reach the internet or the rest of the netwo
 whether the account is active. A password is stored only if the person has one; it is hashed, not
 kept in a readable form. Someone who only ever signs in through an LMS or their university account
 has no password stored at all.
+
+**Sign-in identities.** Where an account signs in from another system, AFCT stores the link: which
+provider or LMS, the identifier that system uses for the person, when it was connected and when it
+was last used. It does not store credentials for those systems.
 
 **Course membership.** Which courses a person is in and their role in each (faculty, TA or
 student), plus whether they have been dropped.
@@ -47,9 +54,10 @@ request came from.
 
 It is the record of who changed a grade and who looked at a student's work. Under FERPA that makes
 it both an education record in itself and the evidence behind a disclosure record, so it is
-deliberately hard to weaken: entries are append-only, the app never edits or deletes an individual
-one, and the severity of each entry is set explicitly at the point it is written rather than
-guessed afterwards.
+deliberately hard to weaken: entries are append-only and nothing in the app removes one, and the severity of each entry is set
+explicitly at the point it is written rather than guessed afterwards. Deleting an account does not
+delete its entries; it detaches them, so what happened is still on record without naming a person
+who has been removed.
 
 Only administrators can read the whole log. Faculty and TAs can read the activity for a course
 they run, and nothing outside it. Students cannot read it at all.
@@ -64,8 +72,8 @@ Access is a global administrator flag plus a role in each course.
 | | Sees |
 | --- | --- |
 | **Student** | Their own work, grades and feedback, in courses they are enrolled in. On a group assignment, their group's submissions, because the work belongs to the group. |
-| **TA** | Everything inside the courses they are assigned to, and nothing outside them. |
-| **Faculty** | The same as a TA for their own courses, plus the ability to change roles and grades. |
+| **TA** | Everything inside the courses they are assigned to, including entering and changing grades, and nothing outside them. |
+| **Faculty** | The same as a TA for their own courses, plus control of the roster: who is enrolled, and in what role. |
 | **Administrator** | The whole installation, including every course and the full activity log. |
 
 Faculty is not the same as administrator. A professor running two courses cannot see a third.
@@ -77,8 +85,8 @@ their own groupmates on group work.
 
 ## Getting data out
 
-Grades export as CSV from the course, which is what makes AFCT usable alongside whichever system
-your institution treats as the system of record. AFCT is not designed to be that system: it sits
+An administrator can export a course's grades as CSV, which is what makes AFCT usable alongside
+whichever system your institution treats as the system of record. AFCT is not designed to be that system: it sits
 beside your LMS rather than replacing it.
 
 Where a course is connected to an LMS, grades are sent back to that gradebook automatically.

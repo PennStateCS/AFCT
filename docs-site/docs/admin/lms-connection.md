@@ -75,7 +75,7 @@ AFCT identifies an LMS by the combination of **issuer, client ID and deployment 
 Where it lives depends on the LMS:
 
 - **Canvas**: **Load In New Tab**, on the developer key's placements, and again on an individual link if somebody adds one by hand.
-- **Moodle**: **Launch container**, set to **New window**, under **Site administration → Plugins → Activity modules → External tool → Manage tools**, on the AFCT tool itself. Moodle stopped letting a tool ask for this in version 4.3, so AFCT's own request is ignored and this setting is the only thing that decides it.
+- **Moodle**: **Launch container**, set to **New window**, under **Site administration > Plugins > Activity modules > External tool > Manage tools**, on the AFCT tool itself. Moodle stopped letting a tool ask for this in version 4.3, so AFCT's own request is ignored and this setting is the only thing that decides it.
 - **Brightspace** and **Blackboard**: an equivalent option on the link or the tool configuration, usually worded as opening in a new window.
 
 The reason is that browsers no longer let a site keep somebody signed in while it is being displayed inside another site's page. Firefox and Safari have blocked it for some time and Chrome is going the same way, so a link that opens AFCT in a panel will show an empty box or a message about the page refusing to connect. It is a browser rule rather than an AFCT setting, and there is nothing to turn on in AFCT that changes it.
@@ -100,6 +100,16 @@ If a launch fails, open [System Logs](system-logs.md) and filter for `LTI_LAUNCH
 | `deep-link-settings` | Somebody chose AFCT while adding content, but the LMS did not say where to send the answer or what it will accept. Check how the AFCT placement is configured. |
 | `content-type-not-accepted` | AFCT was offered somewhere that does not take a link to an external tool, which is the only thing AFCT can add. Add it somewhere that does. |
 | `malformed` or `wrong-message-type` | The request was not a launch AFCT understands. Check that the link points at the target link URI above. |
+| `missing-claims` | The launch left out something LTI itself requires, so AFCT cannot trust it. Usually the LMS is sharing less than the standard expects; check what the key or registration is allowed to send. |
+| `wrong-authorized-party` | The launch names a different tool as the one it was issued for. Normally a client ID that belongs to another registration, so check which key the link is using. |
+
+Two more can appear before a launch even reaches that point, at the moment the LMS first redirects
+to AFCT:
+
+| Reason in the log | What to fix |
+| --- | --- |
+| `missing-target-link-uri` | The LMS did not say which AFCT address it wants to open. Check the target link URI on the registration. |
+| `ambiguous-platform` | The issuer matched more than one AFCT registration and the LMS sent nothing to tell them apart. Remove the registration you no longer use, or make sure the LMS sends its client ID. |
 
 If the link shows an empty box or a message about the page refusing to connect, **and nothing appears in the log at all**, the launch is not reaching AFCT: the link is opening it inside the LMS page. Set it to open in a new tab, as above.
 

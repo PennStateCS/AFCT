@@ -6,33 +6,31 @@ of the documentation describes in detail.
 
 Do it on a test course before you set up a real one. Everything here is reversible.
 
-**Before you start** you need AFCT installed and the administrator account you created during
-installation. If you do not have that yet, begin with [Install AFCT](../setup/production.md).
+**Before you start** you need three things: AFCT installed, the administrator account you created
+during installation, and JFLAP on your own machine, because you will build the answer file and a
+student submission in it. If AFCT is not installed yet, begin with
+[Install AFCT](../setup/production.md).
 
 ## 1. Create the course
 
 Only an administrator can create a course. On a new installation that is you, so you are wearing
 both hats: administrator for this step, faculty for most of the rest.
 
-Open **Administration → Courses**, select **Create Course**, and fill in the wizard. Two fields
-matter more than the others:
+Open **Administration > Courses**, select **Create Course**, and fill in the wizard. Three things
+matter more than the rest:
 
+- **Faculty.** The wizard makes you pick at least one, and that is who ends up on the roster.
+  Pick yourself. Administrator and faculty are separate: administrator runs the installation,
+  faculty runs a course, and being one does not make you the other.
 - **Timezone.** Every deadline in the course is interpreted in it. Set it to the timezone your
   class actually meets in, not the server's.
-- **Start and end dates.** These decide whether the course reads as Upcoming, Open or Closed.
+- **Registration opens and closes.** Set both. They are what decide whether your registration
+  code works, and a course with either one left empty refuses every student who tries to join.
 
 Leave it unpublished for now. An unpublished course is fully usable by you and invisible to
 students, which is exactly what you want while you build it.
 
-## 2. Add yourself as faculty
-
-Creating a course does not put you on its roster. Open the course, go to **Roster**, and enrol
-yourself as **Faculty**.
-
-This matters more than it looks: administrator and faculty are separate. Administrator runs the
-installation, faculty runs a course. Being one does not make you the other.
-
-## 3. Build one problem
+## 2. Build one problem
 
 Go to **Problems** and select **Create Problem**. The wizard asks for four things:
 
@@ -51,20 +49,21 @@ want to check it behaves the way you expect before committing to it, run it thro
 with no course or student involved.
 :::
 
-## 4. Create an assignment and put the problem in it
+## 3. Create an assignment and put the problem in it
 
 Go to **Assignments** and select **Create Assignment**. The wizard has four steps: Details, Type
 (choose **Individual**), Assign To (leave it as **All students** and set a due date a few days
 out), and Review.
 
 The assignment is created unpublished. Open it, go to the **Problems** tab, and use **Add
-Existing Problem** to add the problem you just built. Then set:
+Existing Problem** to add the problem you just built. Then open that problem's settings from the
+same tab and set:
 
 - **Max Points**, say 10.
 - **Accepted Submissions**, say 3, so you can watch the attempt count go down.
 - **Automatically Graded**, on.
 
-## 5. Publish
+## 4. Publish
 
 Two switches, and both have to be on before a student sees anything:
 
@@ -74,19 +73,23 @@ Two switches, and both have to be on before a student sees anything:
 Publish the assignment first, then the course. A published course with nothing in it is a
 confusing first impression.
 
-## 6. Get a student in
+## 5. Get a student in
 
 Open the course header and copy either the **registration code** or the **invite link**. Either
 one lets somebody join while the self-registration window is open, which you set on the Settings
 tab.
 
-You cannot test this with your own account: an administrator cannot self-enrol, and you are
-already faculty here anyway. Use a second account. Either create one under
-**Administration → User Accounts**, or send the link to a colleague.
+You cannot test this with your own account: an administrator cannot join a course this way, and
+you are already faculty here anyway. Use a second account. Create one under
+**Administration > User Accounts**, giving it a password you know, then sign in as that person in
+a private browser window and join with the code.
 
-Sign in as that student and confirm they can see the course and the assignment.
+Confirm they can see the course and the assignment.
 
-## 7. Submit something
+If the code is refused as closed, go back to the course's Settings tab and check the registration
+open and close dates. Both have to be set, and today has to fall between them.
+
+## 6. Submit something
 
 There are two ways in, and your students will mostly use the second.
 
@@ -98,7 +101,7 @@ native client is for: students build the automaton and submit it without leaving
 Submit a **wrong** answer first, on purpose. Watching a wrong answer come back is more
 informative than watching a right one.
 
-## 8. Watch it get graded
+## 7. Watch it get graded
 
 The submission goes into a queue and the evaluator picks it up. As faculty, open the assignment's
 **Submissions** tab and select the student.
@@ -113,12 +116,12 @@ full marks for a correct answer, zero for an incorrect one.
 Open **Grades** and confirm the score is there.
 
 :::note If nothing is being graded
-Check **Administration → System Status → Workers**. If submissions are piling up in "Waiting to be
+Check **Administration > System Status > Workers**. If submissions are piling up in "Waiting to be
 graded" and nothing is in progress, the evaluator worker is not running. See
 [Troubleshooting](../operations/troubleshooting.md).
 :::
 
-## 9. Override one student's grade
+## 8. Override one student's grade
 
 Still on the Submissions tab, change the student's score by hand and save it.
 
@@ -136,7 +139,7 @@ account for.
 | Assignments, schedules, overrides | [Assignments](../faculty/assignments.md) |
 | Reviewing work and grading | [Submissions](../faculty/submissions.md) |
 | The student's side | [Student guide](../student/overview.md) |
-| Accounts and system settings | [Administrator guide](../guides/admin.md) |
+| Accounts and system settings | [Administrator guide](../admin/index.md) |
 
 ## What to do next
 

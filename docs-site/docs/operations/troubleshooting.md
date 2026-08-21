@@ -52,6 +52,24 @@ Common states:
 
 ## Read logs
 
+The short way, which needs no directory and no flags:
+
+```bash
+sudo afctctl logs
+```
+
+For anything more specific, Docker needs to be told where the stack is. On Linux that is:
+
+```bash
+docker compose -p afct \
+  --env-file /opt/afct/shared/.env.production \
+  -f /opt/afct/shared/runtime/docker-compose.yml logs --tail=200 worker
+```
+
+The commands below are written in the short `docker compose ...` form for readability. Every one
+of them needs those three flags on a real install, or it will find nothing and print nothing.
+On macOS the paths are under `$HOME/.afct` instead.
+
 Application logs:
 
 ```bash
@@ -74,19 +92,7 @@ docker compose logs --tail=200 db-backup
 docker compose logs --tail=200 updater
 ```
 
-:::note
-A bare `docker compose` command finds nothing unless you are in the right directory with the
-right files named. The stack lives at `/opt/afct/shared/`, so run Docker commands as:
 
-```bash
-docker compose -p afct \
-  --env-file /opt/afct/shared/.env.production \
-  -f /opt/afct/shared/runtime/docker-compose.yml ps
-```
-
-`afctctl` adds all of that for you, which is why `sudo afctctl status` and `sudo afctctl logs`
-are the easier way in.
-:::
 
 ## The site does not load
 
@@ -127,10 +133,10 @@ NEXTAUTH_URL=https://afct.example.edu
 
 Do not include a path. Do not use HTTP for a public HTTPS deployment.
 
-After changing `.env.production`, apply the configuration:
+After changing `.env.production`, apply it:
 
 ```bash
-docker compose up -d
+sudo afctctl restart
 ```
 
 On Linux or macOS, `sudo afctctl restart` recreates the stack and verifies health after a configuration change.
