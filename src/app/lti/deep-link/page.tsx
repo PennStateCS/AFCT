@@ -228,11 +228,11 @@ export default async function DeepLinkPage({
         </p>
         {unconfirmed.length > 0 ? (
           <p className="text-muted-foreground mb-4 text-sm">
-            The assignments under <strong>Added before, but never opened</strong> were sent to
-            this course already. Nobody has opened one from your LMS since, so AFCT cannot tell
-            whether it arrived. Open it in your LMS to find out, and add it here again only if it
-            is genuinely missing: adding a second one gives you two links and two gradebook
-            columns for the same work.
+            The assignments under <strong>Added before, but never opened</strong> were sent to this
+            course already. Nobody has opened one from your LMS since, so AFCT cannot tell whether
+            it arrived. Open it in your LMS to find out, and add it here again only if it is
+            genuinely missing: adding a second one gives you two links and two gradebook columns for
+            the same work.
           </p>
         ) : null}
         {failure}

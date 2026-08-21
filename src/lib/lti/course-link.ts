@@ -349,9 +349,7 @@ export async function linkableCourseCount(userId: string): Promise<number> {
   return prisma.course.count({
     where: {
       deletedAt: null,
-      ...(user?.isAdmin
-        ? {}
-        : { roster: { some: { userId, role: { in: LINKING_ROLES } } } }),
+      ...(user?.isAdmin ? {} : { roster: { some: { userId, role: { in: LINKING_ROLES } } } }),
     },
   });
 }

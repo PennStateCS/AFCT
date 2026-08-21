@@ -83,7 +83,9 @@ describe('the deep-link assignment picker', () => {
    * tall, and a term's worth of assignments as a list of radios does not fit in it.
    */
   it('stays one control when a course has a term of assignments', async () => {
-    setAssignments(Array.from({ length: 40 }, (_, i) => assignment(`a${i}`, `Assignment ${i}`, 100)));
+    setAssignments(
+      Array.from({ length: 40 }, (_, i) => assignment(`a${i}`, `Assignment ${i}`, 100)),
+    );
 
     await renderConnect();
 
@@ -242,7 +244,9 @@ describe('assignments whose link was never opened', () => {
 
     await renderConnect();
 
-    expect(within(screen.getByLabelText('Assignment')).queryByRole('group')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText('Assignment')).queryByRole('group'),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/never opened/)).not.toBeInTheDocument();
   });
 

@@ -54,10 +54,7 @@ import { buildProblemColumns } from './problem-columns';
 import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
 import { AssignmentLmsLinksCard } from '@/components/lti/AssignmentLmsLinksCard';
-import {
-  fetchAssignmentLmsLinks,
-  type AssignmentLmsLink,
-} from '@/lib/lti/fetch-assignment-links';
+import { fetchAssignmentLmsLinks, type AssignmentLmsLink } from '@/lib/lti/fetch-assignment-links';
 
 /**
  * The dialogs and the settings tab load on demand. Between them they were the only things
@@ -499,7 +496,6 @@ export default function AssignmentDashboardPage({
         autograderEnabled: assignmentProblemForDialog.autograderEnabled,
       }
     : undefined;
-
 
   // Single source of truth for the assignment tab strip and its mobile select
   // fallback, so the two stay in sync.

@@ -559,7 +559,10 @@ describe('confirming a deep link on launch', () => {
   };
 
   const launch = (over: Partial<LaunchIdentity> = {}) =>
-    resolveLaunchTarget({ identity: identity({ assignmentId: ASSIGNMENT, ...over }), userId: ids.student });
+    resolveLaunchTarget({
+      identity: identity({ assignmentId: ASSIGNMENT, ...over }),
+      userId: ids.student,
+    });
 
   const reread = (id: string) => prisma.ltiDeepLink.findUniqueOrThrow({ where: { id } });
 

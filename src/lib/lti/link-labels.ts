@@ -67,5 +67,7 @@ export function lmsBadgeLabel(links: Array<{ platform: string }>): string | null
  * each one is) lives here rather than being lost.
  */
 export function lmsLinkDescription(links: Array<{ platform: string; context: string | null }>) {
-  return links.map((link) => (link.context ? `${link.context} in ${link.platform}` : link.platform));
+  return links.map((link) =>
+    link.context ? `${link.context} in ${link.platform}` : link.platform,
+  );
 }

@@ -142,6 +142,25 @@ describe('reading the links', () => {
     expect(body.links[0]).toMatchObject({ platform: 'Canvas', context: 'CMPSC 464 F26' });
   });
 
+  /**
+   * The card cannot say a link is unconfirmed if the route does not tell it, and an unconfirmed
+   * link shown as an ordinary one is the wrong claim #697 is about.
+   */
+  it('says whether the LMS has ever opened the link', async () => {
+    const link = await linkFor(ASSIGNMENT, COURSE);
+
+    const unconfirmed = (await (await list()).json()) as { links: Array<{ confirmedAt: unknown }> };
+    expect(unconfirmed.links[0]?.confirmedAt).toBeNull();
+
+    await prisma.ltiDeepLink.update({
+      where: { id: link.id },
+      data: { confirmedAt: new Date('2026-08-20T10:00:00Z') },
+    });
+
+    const confirmed = (await (await list()).json()) as { links: Array<{ confirmedAt: unknown }> };
+    expect(confirmed.links[0]?.confirmedAt).toBe('2026-08-20T10:00:00.000Z');
+  });
+
   it('is empty, not absent, for an assignment no LMS opens', async () => {
     const body = (await (await list()).json()) as { links: unknown[] };
 

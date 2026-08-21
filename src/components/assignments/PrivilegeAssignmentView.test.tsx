@@ -289,6 +289,7 @@ type Handlers = {
   courseProblems: () => Resp;
   assignmentsList: () => Resp;
   problemsMutation: (init?: RequestInit) => Resp;
+  lmsLinks: () => Resp;
 };
 
 const courseProblemsList = [p1, p2, problem({ id: 'p3', title: 'Problem Three' })];
@@ -302,11 +303,26 @@ const defaultHandlers = (): Handlers => ({
   courseProblems: () => ({ ok: true, json: async () => ({ problems: courseProblemsList }) }),
   assignmentsList: () => ({ ok: true, json: async () => initialAssignments }),
   problemsMutation: () => ({ ok: true, json: async () => ({}) }),
+  // Answered rather than left to fall through: without it this request matched the assignment
+  // shell, the LMS links query threw on the shape, and the header quietly rendered no badge
+  // whatever the links said.
+  lmsLinks: () => ({ ok: true, json: async () => ({ links: [] }) }),
+});
+
+const lmsLink = (over: Record<string, unknown> = {}) => ({
+  id: 'link-1',
+  platform: 'Canvas',
+  context: 'CMPSC 464 F26',
+  addedAt: '2026-08-18T14:00:00.000Z',
+  confirmedAt: '2026-08-18T14:05:00.000Z',
+  addedBy: 'Ada Lovelace',
+  ...over,
 });
 
 let handlers: Handlers;
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   const u = String(url);
+  if (u.includes('/lti-links')) return handlers.lmsLinks();
   if (u.includes('/assignments/a1/problems')) return handlers.problemsMutation(init);
   if (u.includes('/assignments/a1')) return handlers.shell();
   if (u.includes('/assignments')) return handlers.assignmentsList();
@@ -711,5 +727,40 @@ describe('PrivilegeAssignmentView — assignment switcher', () => {
     await waitFor(() =>
       expect(nav.push).toHaveBeenCalledWith('/dashboard/courses/c1/a2?tab=submissions'),
     );
+  });
+});
+
+/**
+ * The header badge says an LMS opens this assignment. A link the platform refused would put
+ * "In Canvas" on a course that has no such thing, which is the wrong claim #697 is about, told
+ * in a smaller place. The Settings card below still lists it, because saying so is its job.
+ */
+describe('PrivilegeAssignmentView - the LMS badge', () => {
+  it('shows the LMS once a link there has been opened', async () => {
+    handlers.lmsLinks = () => ({ ok: true, json: async () => ({ links: [lmsLink()] }) });
+
+    renderView();
+
+    expect(await screen.findByText('In Canvas')).toBeInTheDocument();
+  });
+
+  /**
+   * Asserted through what the badge counts rather than by looking for its absence: the links
+   * arrive from a query, so "no badge yet" is also what the first paint looks like, and a test
+   * written that way passes whether or not the filter is there.
+   */
+  it('leaves a link nobody has opened out of the count', async () => {
+    handlers.lmsLinks = () => ({
+      ok: true,
+      json: async () => ({
+        links: [lmsLink(), lmsLink({ id: 'link-2', platform: 'Moodle', confirmedAt: null })],
+      }),
+    });
+
+    renderView();
+
+    // One confirmed link of two, so the badge names it. Counting both would say "In 2 LMS
+    // courses", and one of those two is a course that may never have received the link.
+    expect(await screen.findByText('In Canvas')).toBeInTheDocument();
   });
 });
