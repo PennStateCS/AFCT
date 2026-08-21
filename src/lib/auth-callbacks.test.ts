@@ -335,6 +335,21 @@ describe('buildSession', () => {
 
   // A token issued before this existed carries no authTime, and a deploy must not sign
   // everyone out.
+  // What the watcher's end-of-session warning reads. Absent for legacy tokens, so an old
+  // session shows no warning rather than a wrong time.
+  it('tells the client when the session ends for good', async () => {
+    const signedInAt = Date.now() - 60_000;
+    const session = await runSession({ authTime: signedInAt });
+
+    expect(session.sessionEndsAt).toBe(signedInAt + ABSOLUTE_SESSION_MAX_AGE_MS);
+  });
+
+  it('reports no end time for a token that predates the cap', async () => {
+    const session = await runSession({ authTime: undefined });
+
+    expect(session.sessionEndsAt).toBeUndefined();
+  });
+
   it('keeps a token that predates absolute-limit tracking', async () => {
     const session = await runSession({ authTime: undefined });
     expect(session.user.inactive).toBe(false);

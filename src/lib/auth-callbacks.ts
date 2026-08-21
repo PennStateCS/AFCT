@@ -14,7 +14,11 @@ import type { Session, User } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/session-user-cache';
-import { isSessionIdleExpired, isSessionPastAbsoluteLimit } from '@/lib/session-timeout';
+import {
+  ABSOLUTE_SESSION_MAX_AGE_MS,
+  isSessionIdleExpired,
+  isSessionPastAbsoluteLimit,
+} from '@/lib/session-timeout';
 import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
 import { passwordChangedSinceToken } from '@/lib/session-password';
 
@@ -194,6 +198,12 @@ export async function buildSession({
   // is merely open has to end eventually, however recently it was touched.
   if (isSessionPastAbsoluteLimit(token.authTime, Date.now())) {
     return revoke(session, token);
+  }
+
+  // Tell the client when that will be, so the watcher can warn before it happens rather than
+  // the session simply dying mid-work. Absent for tokens issued before the cap existed.
+  if (typeof token.authTime === 'number' && Number.isFinite(token.authTime)) {
+    session.sessionEndsAt = token.authTime + ABSOLUTE_SESSION_MAX_AGE_MS;
   }
 
   try {
