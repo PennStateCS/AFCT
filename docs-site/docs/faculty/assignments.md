@@ -18,7 +18,7 @@ All dates are interpreted in the course timezone. New assignments are created **
 An assignment is one or the other, not a mix:
 
 - **Individual** - assigned to students; each submits on their own.
-- **Group** - tied to one group set; students submit and are graded together as their group. A student who is not in any group of that set is not assigned the work.
+- **Group** - tied to one group set; students submit and are graded together as their group. A student who is in no group of that set still gets the assignment while the audience is **All groups**, and submits alone with their own attempt count. Pick specific groups instead if the work should reach only students who have a group.
 
 You set the type when you create the assignment, and you can change it later on the assignment's **Type** tab. Switching between individual and group resets who the assignment is for (back to everyone) and removes any date overrides, so you rebuild those afterward on **Assign To**. The app asks you to confirm before applying the change.
 
@@ -35,35 +35,89 @@ The default schedule applies to everyone assigned unless a target has an overrid
 
 ## The assignment page
 
-Open an assignment (select its title, or **Manage → View Assignment**). It has these tabs: **Details**, **Type**, **Assign To**, **Problems**, **Submissions**, **Statistics**, and **Similarity**.
+Open an assignment by selecting its title, or **Manage → View Assignment**. A badge in the
+header says whether it is a group or an individual assignment, and a quick-jump beside it moves
+you to another assignment in the course without leaving the tab you are on.
+
+There are eight tabs. The first five are where you set the assignment up; the last three are
+where you look at what students have done.
 
 ### Details
 
-Edit the assignment's title and description. See [Details](details.md).
+The assignment's title and description. The description accepts headings, formatting, equations
+and links, all covered in [Formatted descriptions](descriptions.md).
 
 ### Type
 
-Switch the assignment between individual and group. See [Type](type.md).
+Whether the assignment is individual or group, and for a group assignment which group set it
+runs in. **Change type** switches it.
+
+Switching resets who the assignment is for, back to everyone, and removes any date overrides, so
+rebuild those on **Assign To** afterwards. AFCT asks you to confirm first.
 
 ### Assign To
 
-Choose the audience, set the default schedule, and add per-target date overrides. See [Assign To](assign-to.md).
+The audience, the default schedule, and per-target date overrides. The audience and schedule
+fields are the same ones the create wizard showed you.
+
+Below them, **Date overrides** gives one student or one group different dates from everyone
+else. Select **Add override** and pick a target; only students or groups actually assigned this
+assignment are offered. A row appears with four fields:
+
+- **Available from**, **Due** and **Accept until** are blank by default, and a blank field
+  inherits the default schedule. So you can change only the due date and leave the rest alone.
+- **Late submissions** is a choice rather than a blank: **Use default**, **Allow late
+  submissions**, or **Close at due date**. The last one is worth knowing about, because it lets
+  you close late work for one student on an assignment that allows it for everyone else.
+
+Remove a row to drop the override and send that target back to the default schedule.
+**Save changes** applies the audience, the schedule and the overrides together.
 
 ### Problems
 
-Add problems to the assignment and set their per-assignment points, submission caps, and autograding. See [Problems](assignment-problems.md).
+Which problems make up the assignment.
+
+- **Create Problem** makes a new problem in the course problem bank and adds it here.
+- **Add Existing Problem** reuses one already in the bank.
+
+Each problem carries its own settings on this assignment, which can differ from the defaults in
+the bank. Open a problem's settings to change them:
+
+- **Max Points**: how much the problem contributes to the assignment grade.
+- **Accepted Submissions**: a fixed number of attempts, or unlimited. On a
+  [group](groups.md) assignment the limit belongs to the group rather than to each member, so a
+  limit of 5 means 5 attempts between them and any member's submission spends one.
+- **Automatically Graded**: whether submissions go to the autograder. When it is on, a
+  submission the autograder marks correct is awarded the maximum points automatically, and one
+  it marks incorrect is recorded as **zero** rather than left ungraded.
+
+Every assigned student or group gets the same set of problems. Removing a problem from an
+assignment does not delete it from the course.
+
+There is also an installation-wide wait between attempts on the same problem, ten seconds by
+default, which an administrator sets in System Settings. On group work the wait is shared by the
+group.
+
+### Settings
+
+Grade sync to your LMS, and the list of LMS courses this assignment has been added to, each with
+a **Remove**. See [Grades and rosters from your LMS](lms.md). On a course with no LMS connected
+there is nothing here to do.
 
 ### Submissions
 
-Once students begin working, use the **Submissions** tab to review files, rerun the autograder, discuss a problem, and enter grades. See [Submissions](submissions.md).
+Once students begin working, review files, rerun the autograder, discuss a problem, and enter
+grades. See [Submissions](submissions.md).
 
 ### Statistics
 
-Staff-only charts summarizing how the class is doing on the assignment: score distribution, submission status, attempts to solve, and more. See [Statistics](statistics.md).
+Staff-only charts summarizing how the class is doing on the assignment: score distribution,
+submission status, attempts to solve, and more. See [Statistics](statistics.md).
 
 ### Similarity
 
-A staff-only tab (in progress) for reviewing submissions for possible plagiarism. See [Similarity](similarity.md).
+A staff-only tab for reviewing submissions that may share an origin. See
+[Similarity](similarity.md).
 
 ## Group assignments
 
@@ -71,13 +125,18 @@ When an assignment is a group assignment:
 
 - Each group shares one submission set per problem. Any member can submit, and every member sees the group's submissions.
 - Autograding grades the whole group: each member receives the group's grade, which you can override for an individual student on the [Submissions](submissions.md) tab.
-- Only students who belong to a group in the set are assigned the work.
 
-Once a group in the set has submitted work, the group set is locked: you can still rename or duplicate it, but you cannot change its groups or memberships, and you cannot delete a group set that an assignment uses. Plan the groups before students begin submitting.
+Once a group in the set has submitted work **or been graded**, the group set is locked: you can
+still rename or duplicate it, but you cannot change its groups or memberships, and you cannot
+delete a group set that an assignment uses. The lock is permanent, so deleting the submission
+afterwards does not reopen it. Plan the groups before students begin submitting.
 
 ## The assignment list
 
-The table shows each assignment's due date, **Type** (Individual or Group), total points, number of problems, late-work settings, submission and comment counts, and publication status. You can filter by type.
+The table has a column for the title, **Type** (Individual or Group), **Due Date**,
+**Available From**, total points, number of problems, **Allow Late**, **Late Cutoff**, and
+**Published**. Type, Allow Late and Published each carry a filter, and you can tick more than
+one value in any of them.
 
 When an assignment has date overrides, the **Due Date** cell shows a **Multiple** badge next to the base date; select it to see each target's effective dates in a popover.
 
@@ -102,7 +161,7 @@ The assignment type and all of the Assign To settings (audience, dates, and any 
 
 1. **Source** - pick a course, then an assignment. The course list shows every course where you are faculty or a TA (administrators see all courses), including archived courses. Unpublished draft assignments in the source course can be imported too.
 2. **Details** - the title and description start as the source assignment's; edit them or leave them as is.
-3. **Problems** - choose whether to **copy the problems into this course** (each problem is copied here with its own solution file, leaving the originals untouched) or **import without problems**.
+3. **Problems** - choose whether to **copy the problems into this course** (each problem is copied here with its own solution file, leaving the originals untouched) or **Don't include problems**.
 4. **Review** - a summary before you import.
 
 Because audiences, groups, and problems belong to a specific course, an import cannot carry them across. The imported assignment is always created **unpublished**, assigned to **all students**, and as an **individual** assignment; change the audience and type afterward.
