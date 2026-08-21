@@ -197,6 +197,25 @@ export default function ProblemWorkspace({
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   );
 
+  /**
+   * What the latest attempt currently says, as one sentence.
+   *
+   * The verdict and the evaluator's feedback live in table cells, and a cell changing in place
+   * announces nothing: a submission went from Pending to Incorrect, and a counterexample
+   * appeared in a row the reader had already passed, in silence. This is the one place that
+   * says so out loud.
+   *
+   * Scoped to the newest attempt on purpose. Putting `aria-live` on the table would re-announce
+   * the whole thing on every sort, filter and page change, which is how a live region becomes
+   * something people turn off.
+   */
+  const latest = sortedSubmissions[0];
+  const latestStatus = latest
+    ? `Attempt ${attemptNumbers.get(latest.id) ?? sortedSubmissions.length}: ${
+        getReviewStatusChip(latest).label
+      }.${latest.feedback ? ` ${String(latest.feedback)}` : ''}`
+    : '';
+
   const handleDownload = (submission: ProblemSubmission) => {
     if (!submission.fileName) return;
 
@@ -418,6 +437,15 @@ export default function ProblemWorkspace({
           maxSubmissions={problem.maxSubmissions ?? undefined}
           autograderEnabled={problem.autograderEnabled ?? undefined}
         />
+
+        {/*
+          Always mounted, empty when there is nothing to say. A live region inserted together
+          with its first message is not reliably announced, so it has to be here before the
+          answer is.
+        */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {latestStatus}
+        </div>
 
         {/* No panel around the table: it carries its own toolbar, column headers and pager,
               so a band above it repeating "Submissions" on the Submissions tab added a frame

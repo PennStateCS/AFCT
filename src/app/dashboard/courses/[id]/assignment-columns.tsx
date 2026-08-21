@@ -331,7 +331,13 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
                   {assignment.title}
                 </DialogDescription>
               </DialogHeader>
-              <div className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm">
+              {/* Focusable so a long description can be scrolled without a mouse. */}
+              <div
+                className="max-h-[60vh] overflow-y-auto rounded-md border p-3 text-sm"
+                tabIndex={0}
+                role="group"
+                aria-label="Description"
+              >
                 <RichDescription
                   // Heading base: dialog title is an h2, so the description starts one level below it.
                   headingBaseLevel={3}

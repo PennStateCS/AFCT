@@ -238,6 +238,23 @@ export default function EvaluatorSandboxClient() {
         </CardContent>
       </Card>
 
+      {/*
+        Outside the card on purpose, and never unmounted.
+        The card only exists once a run has been started, so a live region inside it would be
+        inserted together with its first message, which assistive tech does not reliably
+        announce. It also has to carry the verdict rather than only the step: the region used to
+        say "Finished." while "Correct" sat in the card header outside it, so somebody using a
+        screen reader ran a file and was never told the answer, which is the only thing this
+        page exists to give them.
+      */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {trialId === null
+          ? ''
+          : `${trial ? statusText(trial) : 'Waiting for a free evaluator.'}${
+              verdict ? ` ${verdict.label}.` : ''
+            }`}
+      </div>
+
       {trialId !== null && (
         <Card>
           {/* The verdict sits beside the heading, not at the far edge of the card: on a wide
@@ -249,9 +266,11 @@ export default function EvaluatorSandboxClient() {
 
           <CardContent className="max-w-3xl space-y-4">
             {/* One live region for the whole run, so a screen reader hears each step once. */}
-            <div aria-live="polite" className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-3 text-sm">
               {running && <Spinner />}
-              <span>{trial ? statusText(trial) : 'Waiting for a free evaluator.'}</span>
+              <span aria-hidden="true">
+                {trial ? statusText(trial) : 'Waiting for a free evaluator.'}
+              </span>
             </div>
 
             {trial && isTrialFinished(trial.state) && (

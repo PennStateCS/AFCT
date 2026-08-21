@@ -84,8 +84,7 @@ export function RandomAssignDialog({
       return next;
     });
 
-  const selectAllActive = () =>
-    setSelected(new Set(detail.eligibleStudents.map((s) => s.id)));
+  const selectAllActive = () => setSelected(new Set(detail.eligibleStudents.map((s) => s.id)));
   const selectNone = () => setSelected(new Set());
 
   const runPreview = async () => {
@@ -149,7 +148,15 @@ export function RandomAssignDialog({
         {/* Persistent live region so the preview result is announced when it is built. */}
         <span className="sr-only" role="status" aria-live="polite">
           {preview
-            ? `Preview ready. ${preview.placedCount} student${preview.placedCount === 1 ? '' : 's'} will be placed.`
+            ? `Preview ready. ${
+                preview.placedCount === 0
+                  ? 'No changes: the selected students are already placed.'
+                  : `${preview.placedCount} student${preview.placedCount === 1 ? '' : 's'} will be placed.`
+              }${
+                preview.skippedInactive.length > 0
+                  ? ` ${preview.skippedInactive.length} inactive student${preview.skippedInactive.length === 1 ? '' : 's'} skipped.`
+                  : ''
+              }`
             : ''}
         </span>
 
@@ -176,13 +183,15 @@ export function RandomAssignDialog({
 
             <ul className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
               {filtered.length === 0 && (
-                <li className="text-muted-foreground p-2 text-sm">No students match your search.</li>
+                <li className="text-muted-foreground p-2 text-sm">
+                  No students match your search.
+                </li>
               )}
               {filtered.map((s) => {
                 const group = assignedGroupByUser.get(s.id);
                 return (
                   <li key={s.id}>
-                    <label className="flex items-center gap-2 rounded p-1 text-sm hover:bg-muted">
+                    <label className="hover:bg-muted flex items-center gap-2 rounded p-1 text-sm">
                       <Checkbox
                         checked={selected.has(s.id)}
                         onCheckedChange={() => toggle(s.id)}
@@ -213,7 +222,7 @@ export function RandomAssignDialog({
             </label>
 
             {error && (
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="text-destructive text-xs">
                 {error}
               </p>
             )}
@@ -229,7 +238,9 @@ export function RandomAssignDialog({
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm" aria-live="polite">
+            {/* No aria-live here: the persistent region above announces this, and a second
+                one covering the same status said the count twice. */}
+            <p className="text-sm">
               {preview.placedCount === 0
                 ? 'No changes: the selected students are already placed.'
                 : `${preview.placedCount} student${preview.placedCount === 1 ? '' : 's'} will be placed.`}
@@ -240,8 +251,7 @@ export function RandomAssignDialog({
               {preview.groups.map((g) => (
                 <div key={g.id} className="rounded-md border p-3">
                   <p className="mb-1 text-sm font-medium">
-                    {g.name}{' '}
-                    <span className="text-muted-foreground">({g.members.length})</span>
+                    {g.name} <span className="text-muted-foreground">({g.members.length})</span>
                   </p>
                   <ul className="text-muted-foreground space-y-0.5 text-xs">
                     {g.members.map((m) => (
@@ -257,7 +267,7 @@ export function RandomAssignDialog({
             </div>
 
             {error && (
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="text-destructive text-xs">
                 {error}
               </p>
             )}

@@ -71,12 +71,11 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
               const isUpcoming = new Date(course.endDate) > now;
 
               return (
-                <Link
-                  key={course.id}
-                  href={`/dashboard/courses/${course.id}`}
-                  passHref
-                  aria-label={`View course ${course.name}`}
-                >
+                // No aria-label: it would become the link's whole accessible name and
+                // replace the card's contents, so the code, semester, credits, staff, dates
+                // and status badge a sighted reader gets would all be dropped. The card's own
+                // text names it better than any label could.
+                <Link key={course.id} href={`/dashboard/courses/${course.id}`} passHref>
                   <div className="group border-border bg-card hover:border-primary hover:bg-primary/5 flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md">
                     {/* Vertical colored bar */}
                     <div

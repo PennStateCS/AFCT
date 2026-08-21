@@ -394,7 +394,12 @@ export default function StudentAssignmentPage({
               <h2 className="mb-2 font-semibold">Description</h2>
               {/* A div, not a p: a rich description can contain headings, lists, and rules,
                   which are invalid inside a paragraph. */}
-              <div className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3">
+              <div
+                className="text-muted-foreground max-h-96 resize-y overflow-y-auto rounded-md border p-3"
+                tabIndex={0}
+                role="group"
+                aria-label="Assignment description"
+              >
                 <RichDescription
                   // Heading base: sits under the h2 "Description", so the description starts one level below it.
                   headingBaseLevel={3}

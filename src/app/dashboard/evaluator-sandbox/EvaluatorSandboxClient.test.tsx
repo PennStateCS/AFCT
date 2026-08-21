@@ -113,7 +113,12 @@ describe('EvaluatorSandboxClient', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
-    expect(await screen.findByText('Waiting for a free evaluator.')).toBeInTheDocument();
+    // Two elements carry this text on purpose: the visible one, and the screen-reader region
+    // that also carries the verdict. `getAllByText` rather than `findByText`, which throws on
+    // more than one match.
+    await waitFor(() =>
+      expect(screen.getAllByText('Waiting for a free evaluator.').length).toBeGreaterThan(0),
+    );
   });
 
   it('shows the verdict, the runtime and the raw output once it finishes', async () => {
@@ -196,5 +201,53 @@ describe('EvaluatorSandboxClient', () => {
         ),
       ).toBe(true),
     );
+  });
+});
+
+/**
+ * The verdict has to be said out loud.
+ *
+ * The live region used to carry only the step ("Finished."), while Correct or Not correct sat
+ * in the card header outside it. Somebody using a screen reader could run a file and never be
+ * told the answer, which is the only thing this page is for.
+ */
+describe('what a screen reader is told', () => {
+  const liveRegion = () => document.querySelector('[role="status"][aria-live="polite"]');
+
+  it('exists before a run starts, so the first message is announced', () => {
+    renderPage();
+
+    // Present and empty: a region inserted together with its first message is not reliably
+    // announced, which is why it cannot be mounted with the result card.
+    expect(liveRegion()).toBeInTheDocument();
+    expect(liveRegion()).toHaveTextContent('');
+  });
+
+  it('names the verdict, not just that the run finished', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => trial() }).mockResolvedValue({
+      ok: true,
+      json: async () => trial({ state: 'COMPLETED', correct: false }),
+    });
+    renderPage();
+    attachBoth();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => expect(liveRegion()).toHaveTextContent(/Not correct/));
+    // The step alone is what it used to say, and is not enough on its own.
+    expect(liveRegion()).toHaveTextContent(/Finished/);
+  });
+
+  it('says so when the answer was right', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => trial() }).mockResolvedValue({
+      ok: true,
+      json: async () => trial({ state: 'COMPLETED', correct: true }),
+    });
+    renderPage();
+    attachBoth();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => expect(liveRegion()).toHaveTextContent(/Correct/));
   });
 });
