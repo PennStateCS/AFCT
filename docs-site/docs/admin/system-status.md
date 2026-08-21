@@ -17,7 +17,8 @@ Select **Refresh** for a new snapshot, or turn on **Auto-refresh** to update eve
 | **Docker**   | Container identity, hostname, and cgroup information. A non-container installation reports that Docker data is unavailable. |
 | **Network**  | Database and authentication latency, connection counts, error rates, DNS results, and configured hosts.                     |
 | **Session**  | Session counts and accounts seen during the last 24 hours, including recent IP and user-agent details.                      |
-| **Files**    | Uploaded files that exist on disk without a matching database record.                                                       |
+| **Workers**  | Whether the autograder is keeping up: how many slots are grading, how many submissions are waiting, and what failed recently. |
+| **Files**    | How much upload space is in use, files on disk with no database record, and records whose file is missing.                   |
 | **Rate Limits** | IP addresses AFCT is currently turning away for making too many requests.                                                |
 
 ## What the server itself needs
@@ -34,9 +35,38 @@ The section says when it was last checked. AFCT looks again every five minutes, 
 
 This information comes from the update service, which is the only part of AFCT allowed to see the machine (the application itself is deliberately walled off from it, because that is where submissions are graded). If that service is not running, or the server does not run Ubuntu or Debian, the section says AFCT cannot tell rather than reporting that everything is fine. Installing the updates themselves is always done on the server, never through AFCT.
 
-## Remove an abandoned file
+## When grading stops
 
-The **Files** tab groups abandoned files by category and shows a sample of up to 50. A file appears here when AFCT finds it on disk but cannot find the database record that should own it.
+The **Workers** tab is the first place to look when submissions are not coming back graded. Under
+Evaluator it reports:
+
+- **Grading now**, as slots in use out of slots configured. Steady at the maximum with a queue
+  behind it means the autograder is busy, not broken.
+- **Waiting to be graded**, the queue length. A number that only grows is the symptom worth
+  acting on.
+- **Failed in the last hour**, which points at the submission rather than the server.
+
+**Being graded now** lists what is in progress, and flags anything that has been running long
+enough to look stuck. If the queue is growing and nothing is being graded, check that the
+`worker` container is up (see [Troubleshooting](../operations/troubleshooting.md)).
+
+## Uploaded files
+
+The **Files** tab covers upload storage in two halves.
+
+The first is how much space uploads take, against how much the disk has free.
+
+The second lists files AFCT cannot account for, in two kinds:
+
+- **Abandoned files** are on disk with no database record that owns them, usually left by a
+  failed upload.
+- **Missing files** are the opposite and the more serious of the two: a record exists, but the
+  file it points at is gone, so that submission cannot be downloaded or graded again. These
+  appear in a red alert.
+
+Abandoned files are grouped by category, up to 500 of the largest per category. Each has a
+**Delete**, and each category has a **Delete all** for when there are too many to work through
+one at a time.
 
 Before selecting **Delete**:
 
@@ -45,6 +75,9 @@ Before selecting **Delete**:
 3. Make sure a current backup contains uploaded files.
 
 Deleting an abandoned file is permanent. If you are unsure why it exists, leave it in place while you investigate.
+
+The same caution applies doubly to **Delete all**: it removes every abandoned file in that
+category at once, behind its own confirmation.
 
 ## Rate-limited addresses
 

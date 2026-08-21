@@ -121,15 +121,10 @@ the host is applying the current tooling.
 
 ## Before you tag
 
-1. **Pick the version and bump `package.json` first.** AFCT uses semantic versioning: bump
-   the patch for fixes, the minor for backward-compatible features, the major for breaking
-   changes. Every existing tag sits on a `bump package.json to X.Y.Z` commit, and that is
-   the commit to tag. Since `main` requires a pull request, the bump goes in as its own PR
-   rather than a direct push:
-
-   ```bash
-   npm version 0.1.3 --no-git-tag-version
-   ```
+1. **Pick the version.** AFCT uses semantic versioning: bump the patch for fixes, the minor
+   for backward-compatible features, the major for breaking changes. The version lives in
+   the tag alone. `package.json` is **not** bumped and has not been since 0.3.0, so do not
+   go looking for a `bump package.json` commit to tag.
 2. **Choose a green commit.** Tag a commit that has already passed CI on `main`. Check
    the Actions tab, or:
 
@@ -205,6 +200,12 @@ gh api "repos/PennStateCS/AFCT/actions/runs?per_page=8" \
 If that returns `0` after a minute, there are two likely causes.
 
 **The tag points at a `[skip ci]` commit.** Retarget it, as below.
+
+A third case looks different, because the run does start and then fails within seconds. The
+release begins with a `verify` job that refuses to publish unless a **successful CI run already
+exists for the exact commit you tagged**. If you tagged a commit CI never ran on, that is where
+it stops, and the error names the SHA. Either tag a commit CI has passed, or run CI on that ref
+from Actions and re-tag.
 
 **The workflow file is invalid at that commit.** GitHub cannot parse it, so nothing triggers.
 The tell is in `gh run list`: a run listed as `.github/workflows/release.yml` rather than by
