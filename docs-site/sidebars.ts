@@ -18,7 +18,12 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Getting Started',
       collapsed: false,
-      items: ['intro', 'reporting-bugs'],
+      items: [
+        'intro',
+        'getting-started/first-course',
+        'getting-started/student-data',
+        'reporting-bugs',
+      ],
     },
     {
       type: 'category',
