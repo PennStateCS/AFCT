@@ -277,11 +277,14 @@ export async function buildAuthConfig(): Promise<NextAuthConfig> {
     },
     session: {
       strategy: 'jwt',
-      maxAge: 24 * 60 * 60, // 24 hours
+      // Rolling: an active session is re-issued and the clock starts again, so this bounds a
+      // gap in use rather than the session's whole life. The life is bounded separately, by
+      // `ABSOLUTE_SESSION_MAX_AGE_MS` and the `authTime` stamped at sign-in.
+      maxAge: 12 * 60 * 60, // 12 hours
       updateAge: 60 * 60, // 1 hour - update session if older than this
     },
     jwt: {
-      maxAge: 24 * 60 * 60, // 24 hours
+      maxAge: 12 * 60 * 60, // 12 hours
     },
     secret: requireAuthSecret(),
   };

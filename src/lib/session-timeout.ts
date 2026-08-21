@@ -70,3 +70,32 @@ export function isSessionIdleExpired(
   if (typeof idleTimeoutMs !== 'number' || idleTimeoutMs <= 0) return false;
   return now - lastActivity > idleTimeoutMs;
 }
+
+/**
+ * The longest a session may live from the moment somebody signed in, however active they are.
+ *
+ * Distinct from the idle limit above, and both are needed. The idle limit ends a session nobody
+ * is using; this one ends a session somebody is using, which is what stops a browser left signed
+ * in on a shared machine from staying signed in indefinitely by being touched now and then.
+ * NIST 800-63B asks for reauthentication at least this often at AAL2 regardless of activity, and
+ * these are grades.
+ *
+ * Twelve hours rather than eight so a session started in the morning survives a working day.
+ */
+export const ABSOLUTE_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * True when a token has outlived the absolute cap, counted from sign-in.
+ *
+ * A token with no `authTime` is treated as live, the same way the idle check treats an untracked
+ * token: those are sessions issued before this existed, and signing everyone out on deploy is a
+ * worse failure than letting the last few pre-existing sessions run out on their own.
+ */
+export function isSessionPastAbsoluteLimit(
+  authTime: number | undefined | null,
+  now: number,
+  maxAgeMs: number = ABSOLUTE_SESSION_MAX_AGE_MS,
+): boolean {
+  if (typeof authTime !== 'number' || !Number.isFinite(authTime)) return false;
+  return now - authTime > maxAgeMs;
+}

@@ -14,7 +14,7 @@ import type { Session, User } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/session-user-cache';
-import { isSessionIdleExpired } from '@/lib/session-timeout';
+import { isSessionIdleExpired, isSessionPastAbsoluteLimit } from '@/lib/session-timeout';
 import { getServerIdleTimeoutMs } from '@/lib/session-timeout.server';
 import { passwordChangedSinceToken } from '@/lib/session-password';
 
@@ -112,6 +112,13 @@ export async function buildJwtToken({
     // Start the idle clock at sign-in.
     token.lastActivity = Date.now();
     token.idleTimeoutMs = await getServerIdleTimeoutMs();
+    /**
+     * When this person actually signed in, which is the one instant a refresh must not move.
+     * `lastActivity` is reset by every heartbeat and NextAuth re-issues the token on its own
+     * schedule, so neither can say how old the session itself is. Only set here, in the
+     * sign-in branch.
+     */
+    token.authTime = Date.now();
   }
 
   // Explicit activity heartbeat from the client (`update()`): refresh the idle clock,
@@ -177,6 +184,12 @@ export async function buildSession({
   // out first; this covers server-side consumers (`auth()`, the route wrappers) if it
   // doesn't. Returning early also avoids a pointless user read for a dead session.
   if (isSessionIdleExpired(token.lastActivity, token.idleTimeoutMs, Date.now())) {
+    return revoke(session, token);
+  }
+
+  // The absolute cap, which the idle check cannot cover: a session kept alive by a client that
+  // is merely open has to end eventually, however recently it was touched.
+  if (isSessionPastAbsoluteLimit(token.authTime, Date.now())) {
     return revoke(session, token);
   }
 
