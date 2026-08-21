@@ -251,7 +251,11 @@
   --table-highlight: oklch(0.2795 0.0368 260.031);
   --table-background: oklch(0.2077 0.0398 265.755);
   --node-color: oklch(0.7293 0.1363 88.887);
-  --grid-color: oklch(0.2098 0.0083 84.585);
+  /* Lighter than the --card surface (0.21) it is drawn on, not darker. The old value was
+     0.2098, the same lightness as the card to three decimals, so the grid was painted in the
+     background's own colour and no grid appeared in dark mode at all. Matched to --muted
+     (0.274), which is the next step up from the card in this palette. */
+  --grid-color: oklch(0.274 0.006 286.033);
   --success: oklch(0.7669 0.1597 134.58);
   /* Status dark values (explicit tints; can't reuse brand vars, since --tertiary flips to
      teal in dark). Badges/alerts/toasts inherit these through the aliases defined in

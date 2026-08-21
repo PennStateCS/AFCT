@@ -14,6 +14,10 @@ import {
   NODE_DIAMETER,
   START_MARKER_SIZE,
   STATE_BORDER_WIDTH,
+  noteBox,
+  noteCentre,
+  NOTE_MAX_WIDTH,
+  NOTE_PADDING,
 } from './jflap-layout';
 
 describe('the initial-state marker', () => {
@@ -278,5 +282,41 @@ describe('loopLabelOffset', () => {
 
   it('treats a label with no lines as one line', () => {
     expect(loopLabelOffset(0, 0)).toEqual(loopLabelOffset(0, 1));
+  });
+});
+
+describe('note geometry', () => {
+  it('sizes a short note to its text plus padding', () => {
+    const box = noteBox('hi');
+    expect(box.width).toBe(Math.round(2 * 7.5) + NOTE_PADDING * 2);
+    // One line.
+    expect(box.height).toBe(18 + NOTE_PADDING * 2);
+  });
+
+  it('counts each hard line, including a blank one between paragraphs', () => {
+    const box = noteBox('a\n\nb');
+    expect(box.height).toBe(18 * 3 + NOTE_PADDING * 2);
+  });
+
+  /**
+   * A note is free text a student typed, so it has no natural bound. Without a cap, one long
+   * paragraph stretches the canvas until `fit` shrinks the machine itself to a speck.
+   */
+  it('wraps rather than growing wider than the cap', () => {
+    const box = noteBox('x'.repeat(500));
+    expect(box.width).toBeLessThanOrEqual(NOTE_MAX_WIDTH + NOTE_PADDING * 2);
+    // 500 characters have to go somewhere, so it grows downwards instead.
+    expect(box.height).toBeGreaterThan(18 * 4);
+  });
+
+  /**
+   * JFLAP saves a note's top-left, because `automata/Note` is a Swing component placed with
+   * `setLocation`. Cytoscape positions every node by its centre.
+   */
+  it('converts a saved top-left corner into a centre', () => {
+    expect(noteCentre({ x: 100, y: 200 }, { width: 40, height: 20 })).toEqual({
+      x: 120,
+      y: 210,
+    });
   });
 });

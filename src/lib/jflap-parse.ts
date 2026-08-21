@@ -6,7 +6,7 @@
 // independent of the imperative rendering. Uses DOMParser, which browsers and jsdom
 // provide.
 
-import { NODE_DIAMETER } from './jflap-layout';
+import { NODE_DIAMETER, noteBox, noteCentre } from './jflap-layout';
 
 export type MachineType = 'fa' | 'pda' | 'tm' | 'unknown';
 
@@ -54,6 +54,14 @@ export type Parsed = {
     push?: string; // PDA
     __idx: number; // original XML order
   }>;
+  /**
+   * Text the student wrote on the canvas beside the machine.
+   *
+   * JFLAP's note is a `javax.swing.JTextArea` (`automata/Note` in the evaluator jar), which is
+   * why the text can contain line breaks, and why `xPos`/`yPos` are its **top-left corner**
+   * rather than its centre the way a state's coordinates are.
+   */
+  notes: { text: string; xPos: number; yPos: number }[];
 };
 
 export function parseJflap(xmlText: string): Parsed {
@@ -99,7 +107,42 @@ export function parseJflap(xmlText: string): Parsed {
     return { from, to, read, write, move, pop, push, __idx: idx };
   });
 
-  return { type, states, transitions };
+  /**
+   * Notes, which JFLAP writes as `<note><text>..</text><x>..</x><y>..</y></note>`.
+   *
+   * That is the whole of it: `file/xml/AutomatonTransducer` in the evaluator jar defines only
+   * `NOTE_NAME` and `NOTE_TEXT_NAME` beside the shared coordinate names, and `automata/Note`
+   * persists no id, size, colour or font.
+   *
+   * Coordinates are written as floats (`0.0`), so `parseInt` would work by accident and
+   * `parseFloat` works on purpose.
+   */
+  const notes = Array.from(automaton.querySelectorAll('note'))
+    .map((n) => {
+      // The `<text>` child is where JFLAP puts it; the element's own text content is the
+      // fallback for a file written by something else, and includes the coordinates, so it is
+      // only reached when there is no `<text>` at all.
+      const raw = n.querySelector('text')?.textContent ?? n.textContent ?? '';
+      /**
+       * Line endings, matched to what JFLAP itself draws.
+       *
+       * A real break in a JFLAP note arrives as CRLF, and becomes one line break here. A
+       * **lone** carriage return is dropped rather than turned into a break, because that is
+       * what JFLAP does with it: a note written as `properly&#13;and` renders as "properlyand"
+       * in JFLAP's own editor, with no break and no space. Confirmed by opening the same file
+       * in both, which is the only way to settle it.
+       */
+      const text = raw.replace(/\r\n/g, '\n').replace(/\r/g, '').trim();
+      const xPos = parseFloat(n.querySelector('x')?.textContent ?? '');
+      const yPos = parseFloat(n.querySelector('y')?.textContent ?? '');
+      return { text, xPos, yPos };
+    })
+    // An empty note is one the student opened and never wrote in, and there is nothing to show.
+    // A note with no usable position is dropped rather than drawn at the origin, where it would
+    // sit on top of whatever is there and look deliberate.
+    .filter((n) => n.text.length > 0 && Number.isFinite(n.xPos) && Number.isFinite(n.yPos));
+
+  return { type, states, transitions, notes };
 }
 
 export function labelFor(t: Parsed['transitions'][number], type: MachineType, eps: string) {
@@ -202,7 +245,46 @@ export function toElements(parsed: Parsed, eps: string, honorPositions?: boolean
       isLoop: e.from === e.to ? 1 : 0,
     },
   }));
-  return [...nodes, ...edges];
+
+  /**
+   * Notes, but only where the saved coordinates are being used.
+   *
+   * A note has nowhere to be in an auto-arranged graph: the layout has moved every state, so a
+   * note left at the position the student chose ends up annotating whatever it happens to land
+   * on, which is worse than not drawing it. `describeMachine` lists them either way, so they
+   * are never unreachable.
+   */
+  /**
+   * An id no state has taken.
+   *
+   * State ids come straight out of the file, so a student can name a state `jff-note-0`, and
+   * cytoscape drops a duplicate id without saying anything: the note or the state would just
+   * not be there. A prefix makes that unlikely; checking makes it impossible.
+   */
+  const takenIds = new Set(parsed.states.map((s) => s.id));
+  const freeNoteId = (i: number) => {
+    let id = `jff-note-${i}`;
+    for (let n = 0; takenIds.has(id); n++) id = `jff-note-${i}-${n}`;
+    takenIds.add(id);
+    return id;
+  };
+
+  const notes = honorPositions
+    ? parsed.notes.map((n, i) => {
+        const size = noteBox(n.text);
+        const centre = noteCentre({ x: n.xPos * POSITION_SCALE, y: n.yPos * POSITION_SCALE }, size);
+        return {
+          data: { id: freeNoteId(i), label: n.text, width: size.width, height: size.height },
+          classes: 'note',
+          position: centre,
+          // Not part of the machine: it cannot be selected, dragged, or highlighted by a tap.
+          selectable: false,
+          grabbable: false,
+        };
+      })
+    : [];
+
+  return [...nodes, ...edges, ...notes];
 }
 
 /**
@@ -221,6 +303,15 @@ export type MachineDescription = {
   finalStates: string[];
   /** Human-readable transitions, e.g. "q0 to q1 on a". */
   transitionLines: string[];
+  /**
+   * Text the student wrote on the canvas, one entry per note.
+   *
+   * Notes are content rather than decoration: the Similarity tab can tell a professor that two
+   * pieces of text on the drawing match word for word, so somebody reading this instead of the
+   * picture needs to be able to read the text that claim is about. Line breaks within a note
+   * are flattened so one note stays one entry.
+   */
+  noteLines: string[];
   /** True when the file parsed but contains nothing to show. */
   isEmpty: boolean;
 };
@@ -245,19 +336,32 @@ export function describeMachine(parsed: Parsed, eps: string): MachineDescription
     .sort((a, b) => a.__idx - b.__idx)
     .map((t) => `${nameOf(t.from)} to ${nameOf(t.to)} on ${labelFor(t, parsed.type, eps)}`);
 
-  const isEmpty = parsed.states.length === 0;
+  const noteLines = parsed.notes.map((n) => n.text.replace(/\s*\n\s*/g, ' ').trim());
+
+  // A file can hold notes and no states, and a student who wrote only a note has not submitted
+  // an empty file: saying "nothing to show" would be wrong, and would hide the one thing in it.
+  const isEmpty = parsed.states.length === 0 && noteLines.length === 0;
   const noun = MACHINE_NOUN[parsed.type] ?? MACHINE_NOUN.unknown;
 
-  const summary = isEmpty
-    ? `${noun} with no states.`
-    : `${noun} with ${parsed.states.length} ${parsed.states.length === 1 ? 'state' : 'states'} ` +
-      `and ${parsed.transitions.length} ${parsed.transitions.length === 1 ? 'transition' : 'transitions'}. ` +
-      `Initial state ${initialState ?? 'not set'}. ` +
-      `${
-        finalStates.length === 0
-          ? 'No final states.'
-          : `Final ${finalStates.length === 1 ? 'state' : 'states'} ${finalStates.join(', ')}.`
-      }`;
+  // Said in the summary as well as listed below it, because the summary is the whole of what
+  // `aria-describedby` gives the canvas: without this, a screen-reader user is not told the
+  // notes exist unless they happen to expand the detail.
+  const noteNote =
+    noteLines.length === 0
+      ? ''
+      : ` ${noteLines.length} ${noteLines.length === 1 ? 'note' : 'notes'} written on the drawing.`;
 
-  return { summary, stateNames, initialState, finalStates, transitionLines, isEmpty };
+  const summary =
+    (parsed.states.length === 0
+      ? `${noun} with no states.`
+      : `${noun} with ${parsed.states.length} ${parsed.states.length === 1 ? 'state' : 'states'} ` +
+        `and ${parsed.transitions.length} ${parsed.transitions.length === 1 ? 'transition' : 'transitions'}. ` +
+        `Initial state ${initialState ?? 'not set'}. ` +
+        `${
+          finalStates.length === 0
+            ? 'No final states.'
+            : `Final ${finalStates.length === 1 ? 'state' : 'states'} ${finalStates.join(', ')}.`
+        }`) + noteNote;
+
+  return { summary, stateNames, initialState, finalStates, transitionLines, noteLines, isEmpty };
 }

@@ -13,6 +13,8 @@ import {
   LABEL_LINE_HEIGHT,
   LOOP_REACH,
   NODE_DIAMETER,
+  NOTE_FONT_SIZE,
+  NOTE_MAX_WIDTH,
   START_MARKER_SIZE,
   STATE_BORDER_WIDTH,
 } from '@/lib/jflap-layout';
@@ -269,6 +271,13 @@ export function useJffCytoscape({
         const STROKE = darkMode ? '#e2e8f0' : '#000000';
         const TEXT_COLOR = STROKE;
 
+        // A note is the student's own words rather than part of the machine, so it is drawn as
+        // a piece of paper laid on the canvas: a pale panel in light, a raised one in dark.
+        // Hex literals for the same reason as everything else here, see the note at the top.
+        const NOTE_FILL = darkMode ? '#1e293b' : '#fefce8';
+        const NOTE_BORDER = darkMode ? '#475569' : '#d6d3a8';
+        const NOTE_TEXT = darkMode ? '#e2e8f0' : '#1f2937';
+
         const cy = cytoscape({
           container: containerRef.current!,
           elements,
@@ -279,6 +288,8 @@ export function useJffCytoscape({
             {
               selector: 'node',
               style: {
+                // Above a note; see the note style below for why.
+                'z-index': 1,
                 'background-color': NODE_FILL,
                 'border-color': STATE_STROKE,
                 'border-width': STATE_BORDER_WIDTH,
@@ -321,6 +332,7 @@ export function useJffCytoscape({
             {
               selector: 'edge',
               style: {
+                'z-index': 1,
                 'curve-style': 'bezier',
                 'line-color': STROKE,
                 width: EDGE_WIDTH,
@@ -360,6 +372,49 @@ export function useJffCytoscape({
                 'arrow-scale': 0.95,
                 'line-cap': 'round',
                 'text-rotation': 'none',
+              },
+            },
+
+            /*
+             * A note the student wrote on the canvas.
+             *
+             * Deliberately unlike a state: a soft rectangle rather than JFLAP's yellow circle,
+             * so nobody reads it as part of the machine. Sized from the text by `noteBox`,
+             * which is also what positioned it, so the box and the wrap agree.
+             */
+            {
+              selector: 'node.note',
+              style: {
+                shape: 'round-rectangle',
+                'background-color': NOTE_FILL,
+                'background-opacity': 0.95,
+                'border-color': NOTE_BORDER,
+                'border-width': 1,
+                width: 'data(width)',
+                height: 'data(height)',
+                label: 'data(label)',
+                color: NOTE_TEXT,
+                'font-size': NOTE_FONT_SIZE,
+                'font-family': uiFontFamily,
+                'text-wrap': 'wrap',
+                'text-max-width': `${NOTE_MAX_WIDTH}px`,
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'text-justification': 'left',
+                /**
+                 * Behind the machine.
+                 *
+                 * A note sits wherever the student dropped it and nothing moves aside for it,
+                 * so it can overlap a state. When it does, the answer has to win: a note is
+                 * the student's aside, and losing sight of a state behind an opaque panel
+                 * would be a worse reading of the file than a note partly covered. JFLAP draws
+                 * its notes on top, because there they are live Swing components the student
+                 * is editing; here nobody is editing anything.
+                 */
+                'z-index': 0,
+                // Not part of the machine, so a tap must not pick it up and fade everything
+                // else out around it.
+                events: 'no',
               },
             },
 
@@ -572,6 +627,9 @@ export function useJffCytoscape({
             return;
           }
           const ele = evt.target;
+          // `events: 'no'` should stop a note being a tap target at all; this is the belt to
+          // that brace, since a note has no neighbourhood and would fade the whole machine.
+          if (ele.hasClass?.('note')) return;
           const neighborhood = ele.closedNeighborhood
             ? ele.closedNeighborhood()
             : ele.neighborhood();
@@ -584,7 +642,7 @@ export function useJffCytoscape({
         // it: it has nothing hanging off it, and reacting would only recurse.
         cy.on('position', async (evt: any) => {
           const target = evt.target;
-          if (!target?.isNode?.() || target.hasClass('start')) return;
+          if (!target?.isNode?.() || target.hasClass('start') || target.hasClass('note')) return;
 
           await updateEdgeLabelMargins();
           await selfLoopGeometry();

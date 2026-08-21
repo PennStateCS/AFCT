@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTheme } from 'next-themes';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,15 +9,7 @@ import { describeMachine, type MachineType } from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
-import {
-  Grid,
-  Download,
-  ImageDown,
-  Copy,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-} from 'lucide-react';
+import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 // Grid overlay color (component-only; the engine styling lives in useJffCytoscape).
 const GRID_COLOR =
@@ -33,7 +26,7 @@ export function JffCytoscapeViewer({
   height = '72vh',
   fill = false,
   epsSymbol = DEFAULT_EPS,
-  darkMode = false,
+  darkMode,
   showGridDefault = false,
   honorPositionsDefault = false,
 }: {
@@ -43,10 +36,21 @@ export function JffCytoscapeViewer({
   /** Fill the parent instead of using `height`, for a viewer inside a sized container. */
   fill?: boolean;
   epsSymbol?: string;
+  /**
+   * Draw for a dark background. Defaults to the page's own theme.
+   *
+   * It used to default to `false`, and no caller ever passed it, so every diagram was drawn
+   * with the light-theme edge and label colour whatever the page was set to. Left overridable
+   * because the value has to be forced in tests, where there is no theme provider.
+   */
   darkMode?: boolean;
   showGridDefault?: boolean;
   honorPositionsDefault?: boolean;
 }) {
+  // `resolvedTheme` rather than `theme`: the latter is "system" for most people, which says
+  // nothing about which colours are actually on screen.
+  const { resolvedTheme } = useTheme();
+  const isDark = darkMode ?? resolvedTheme === 'dark';
   // The cytoscape engine (fetch/parse/layout/interaction + zoom/export actions) lives in
   // a hook; this component owns only the toolbar chrome and the grid overlay.
   const {
@@ -62,7 +66,7 @@ export function JffCytoscapeViewer({
     downloadPNG,
     copyPNG,
     parsed,
-  } = useJffCytoscape({ src, title, epsSymbol, darkMode, honorPositionsDefault });
+  } = useJffCytoscape({ src, title, epsSymbol, darkMode: isDark, honorPositionsDefault });
 
   // Non-visual alternative. The canvas is unreadable to a screen reader, and reading
   // automata is the point of this viewer, so the same machine is also published as text:
@@ -266,7 +270,7 @@ export function JffCytoscapeViewer({
           <div id="jff-text-representation" hidden={!showText} className="mt-2 text-xs">
             {description.isEmpty ? (
               <p className="text-muted-foreground">
-                This file contains no states, so there is nothing to describe.
+                This file contains no states or notes, so there is nothing to describe.
               </p>
             ) : (
               <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
@@ -293,6 +297,22 @@ export function JffCytoscapeViewer({
                     </ul>
                   )}
                 </dd>
+
+                {/* Only when there are any: an empty Notes row on every machine would be
+                    noise, and most files have none. Notes are drawn on the canvas only in
+                    "As drawn", so this is where they are always readable. */}
+                {description.noteLines.length > 0 ? (
+                  <>
+                    <dt className="text-muted-foreground">Notes</dt>
+                    <dd>
+                      <ul className="list-none space-y-0.5">
+                        {description.noteLines.map((line, i) => (
+                          <li key={`${line}-${i}`}>{line}</li>
+                        ))}
+                      </ul>
+                    </dd>
+                  </>
+                ) : null}
               </dl>
             )}
           </div>
@@ -312,7 +332,7 @@ export default function JffViewerDialog({
   width = '80vw',
   height = '85vh',
   epsSymbol = DEFAULT_EPS,
-  darkMode = false,
+  darkMode,
   showGridDefault = true,
   honorPositionsDefault = true,
 }: {

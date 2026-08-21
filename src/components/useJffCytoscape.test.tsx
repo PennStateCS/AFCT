@@ -133,8 +133,23 @@ class FakeCy {
   fitCalls = 0;
   layoutNames: string[] = [];
   handlers: Record<string, (evt: unknown) => void> = {};
+  /**
+   * The element definitions exactly as they were handed to cytoscape.
+   *
+   * `nodeList` below keeps only what a fake element models. Some things are properties of the
+   * definition rather than of the element, `selectable` and `grabbable` among them, and those
+   * are the ones that say a note is not part of the machine.
+   */
+  rawElements: Array<Record<string, unknown>> = [];
+  /** The stylesheet as handed to cytoscape, so a rule can be asserted by its selector. */
+  styleSheet: Array<{ selector: string; style: Record<string, unknown> }> = [];
 
-  constructor(config: { elements?: Array<Record<string, unknown>> }) {
+  constructor(config: {
+    elements?: Array<Record<string, unknown>>;
+    style?: Array<{ selector: string; style: Record<string, unknown> }>;
+  }) {
+    this.rawElements = config.elements ?? [];
+    this.styleSheet = config.style ?? [];
     for (const el of config.elements ?? []) {
       const data = el.data as Record<string, unknown>;
       const made = new FakeEl(
@@ -146,6 +161,11 @@ class FakeCy {
       if (data.source !== undefined) this.edgeList.push(made);
       else this.nodeList.push(made);
     }
+  }
+
+  /** The style block for one selector, exactly as the viewer declared it. */
+  styleFor(selector: string) {
+    return this.styleSheet.find((rule) => rule.selector === selector)?.style;
   }
 
   byId(id: string) {
@@ -309,9 +329,11 @@ describe('loading the machine', () => {
   });
 
   it('surfaces a failed fetch with its status, and builds no graph', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' }) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+    }) as unknown as typeof fetch;
 
     const { api } = renderViewer();
 
@@ -423,7 +445,9 @@ describe('transition labels', () => {
     renderViewer();
 
     await waitFor(() => expect(lastCy()).toBeDefined());
-    const straight = lastCy().edges().find((e) => e.data('isLoop') !== 1) as FakeEl;
+    const straight = lastCy()
+      .edges()
+      .find((e) => e.data('isLoop') !== 1) as FakeEl;
 
     await waitFor(() => expect(straight.style()['text-margin-x']).toEqual(expect.any(Number)));
     expect(straight.style()['text-margin-y']).toEqual(expect.any(Number));
@@ -466,6 +490,68 @@ describe('rebuilding the graph', () => {
 
     await waitFor(() => expect(lastCy().layoutNames.length).toBeGreaterThan(0));
     expect(lastCy().layoutNames).not.toContain('preset');
+  });
+
+  /**
+   * Notes only make sense where the saved coordinates are used. Auto-arranged, every state has
+   * moved, so a note left where the student put it annotates whatever it lands on.
+   */
+  describe('notes written on the drawing', () => {
+    const noteXml = `
+<structure>
+  <type>fa</type>
+  <automaton>
+    <state id="0" name="q0"><x>10</x><y>20</y><initial/></state>
+    <note><text>check this loop</text><x>60</x><y>80</y></note>
+  </automaton>
+</structure>`;
+
+    const noteElements = () =>
+      lastCy().rawElements.filter((e) => e.classes === 'note') as Array<{
+        data: { label: string };
+        selectable?: boolean;
+        grabbable?: boolean;
+      }>;
+
+    it('draws a note when the saved positions are used', async () => {
+      global.fetch = fetchOk(noteXml) as unknown as typeof fetch;
+      renderViewer({ honorPositionsDefault: true });
+
+      await waitFor(() => expect(noteElements()).toHaveLength(1));
+      expect(noteElements()[0].data.label).toBe('check this loop');
+    });
+
+    it('leaves it out when the machine is auto-arranged', async () => {
+      global.fetch = fetchOk(noteXml) as unknown as typeof fetch;
+      renderViewer({ honorPositionsDefault: false });
+
+      await waitFor(() => expect(lastCy().rawElements.length).toBeGreaterThan(0));
+      expect(noteElements()).toHaveLength(0);
+    });
+
+    /**
+     * A note sits where the student dropped it and nothing moves aside for it, so it can land
+     * on a state. When it does the machine has to stay readable, which means the note goes
+     * behind it rather than over it.
+     */
+    it('is drawn behind the machine, so it cannot hide a state', async () => {
+      global.fetch = fetchOk(noteXml) as unknown as typeof fetch;
+      renderViewer({ honorPositionsDefault: true });
+
+      await waitFor(() => expect(noteElements()).toHaveLength(1));
+      const style = lastCy().styleFor('node.note');
+      const stateStyle = lastCy().styleFor('node');
+      expect(Number(style?.['z-index'])).toBeLessThan(Number(stateStyle?.['z-index']));
+    });
+
+    it('is not something the reader can select or drag', async () => {
+      global.fetch = fetchOk(noteXml) as unknown as typeof fetch;
+      renderViewer({ honorPositionsDefault: true });
+
+      await waitFor(() => expect(noteElements()).toHaveLength(1));
+      expect(noteElements()[0].selectable).toBe(false);
+      expect(noteElements()[0].grabbable).toBe(false);
+    });
   });
 
   it('fits the whole graph, labels included', async () => {
