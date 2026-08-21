@@ -14,7 +14,9 @@ settings the repository ships.
 - Git
 - Docker Engine with the Compose plugin
 
-The development stack runs PostgreSQL, nginx, the Next.js development server, the backup service, and Prisma Studio.
+The development stack runs seven containers: PostgreSQL, the Next.js development server, the
+evaluator worker that grades submissions, nginx, the backup service, Prisma Studio, and Mailpit
+for catching outbound email.
 
 ## Install Docker
 
@@ -137,17 +139,31 @@ npm run docker:dev:detached
 | PostgreSQL          | Port `5432`              |
 | nginx HTTP          | `http://localhost:8080`  |
 | nginx HTTPS         | `https://localhost:8443` |
+| Mailpit (sent mail) | `http://localhost:8025`  |
 
 nginx uses a self-signed certificate in development. The browser warning at `https://localhost:8443` is expected.
 
 Use port 3000 for normal development with hot reload. Use the nginx ports when testing proxy headers, redirects, or HTTPS behavior.
 
+## Sign in
+
+Every seeded account shares one password:
+
+| | |
+| --- | --- |
+| Email | `admin@example.com` |
+| Password | `password123` |
+
+That one is an administrator. Faculty, TA and student accounts are seeded too, all with the same
+password; the Users page lists them once you are in.
+
 ## What the seed gives you
 
-`npm run docker:dev:seed` fills an empty database with a term's worth of sample data: admins,
-faculty, TAs and students sharing one password, nine courses, classes of fifteen to twenty
-students, problems and assignments, and around five hundred submissions with real JFLAP files
-behind them.
+The stack seeds itself on first start. `npm run docker:dev:seed` runs it again by hand.
+
+It fills an empty database with a term's worth of sample data: admins, faculty, TAs and students
+sharing that one password, nine courses, classes of fourteen to twenty-two students, problems and
+assignments, and around five hundred submissions with real JFLAP files behind them.
 
 Assignments read like something a person set. Each one names the problems it covers, in the order
 a course would teach them, and the theory course (CMPSC 464) sets **every problem type AFCT
@@ -217,9 +233,13 @@ npm run docker:dev:nuke
 | `docker:dev:down`         | Stops containers and keeps volumes                      |
 | `docker:dev:clean`        | Stops the stack and prunes unused Docker resources      |
 | `docker:dev:emptydb`      | Removes table data but keeps the schema                 |
-| `docker:dev:down:volumes` | Removes development volumes                             |
-| `docker:dev:resetdb`      | Removes the development database                        |
-| `docker:dev:nuke`         | Removes containers, volumes, database data, and uploads |
+| `docker:dev:down:volumes` | Removes every development volume: database, uploads and backups |
+| `docker:dev:resetdb`      | The same command under a second name                    |
+| `docker:dev:nuke`         | The same again, plus orphaned containers                |
+
+The last three are one operation with three names, and none of them is limited to the database:
+all of them take the uploads and the backups with it. Reach for `docker:dev:emptydb` if you only
+want the rows gone.
 
 Read destructive commands before running them. Local seed data and uploads may not be recoverable.
 
@@ -265,6 +285,21 @@ npm run docker:dev:psql
 ```
 
 Prisma Studio opens on port 5555. The psql command opens a PostgreSQL shell inside the development stack.
+
+## Things that will bite you once
+
+- **`node_modules` is a container volume, not a folder on your machine.** The entrypoint
+  reinstalls automatically when `package-lock.json` changes. Never run `npm ci` inside the
+  running container: the restart policy can interrupt it and leave the volume half-installed,
+  while npm still reports "up to date". If that happens, remove the volume
+  (`docker volume rm afct_afct-dev-node-modules`) and bring the stack back up.
+- **Run the checks inside the container**, not on your host, for the same reason: the
+  dependencies and the generated Prisma client live in that volume. See
+  [Contributing changes](../reference/contributing.md) for the full pre-push sequence.
+- **The entrypoint narrates what it decided**, every line prefixed `[afct]`. When startup looks
+  wrong, `docker logs afct-dev | grep '\[afct\]'` usually answers it in one command.
+- **A pre-commit hook regenerates `src/types/api.ts`**, so a commit can come back with a file you
+  did not edit. That is expected; commit it.
 
 ## Troubleshooting
 

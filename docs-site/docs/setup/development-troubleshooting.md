@@ -59,6 +59,15 @@ When either value is missing, fix `.env.development` and recreate the containers
 
 `NEXTAUTH_URL` must match the address being used for the current test.
 
+## Start by reading what the entrypoint decided
+
+Every startup decision is logged with an `[afct]` prefix, so this answers most of the questions
+on this page in one command:
+
+```bash
+docker logs afct-dev | grep '\[afct\]'
+```
+
 ## Uploads fail
 
 Check the upload directories inside the application container:
@@ -73,13 +82,18 @@ Both directories must exist and be writable by the application user.
 
 The `afct-dev-node-modules` named volume can keep an older dependency set even after an image rebuild.
 
-### Update the existing volume
+### Restart the container
 
 ```bash
-docker exec afct-dev npm install
-docker exec afct-dev sh -lc 'rm -rf .next/cache'
 docker restart afct-dev
 ```
+
+That is the whole fix in most cases. The entrypoint compares the lockfile against what the volume
+holds and reinstalls when they differ, so restarting is what triggers it.
+
+Do **not** run `npm install` or `npm ci` inside the running container. The restart policy can
+interrupt it partway, which leaves the volume half-installed while npm still reports "up to
+date": a much more confusing problem than the one you started with.
 
 ### Recreate only the dependency volume
 
