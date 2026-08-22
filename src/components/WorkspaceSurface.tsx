@@ -8,15 +8,14 @@ import { cn } from '@/lib/utils';
  * you do things on, so it takes the card colour and drops the border, radius and shadow
  * a Card would bring: this is the page, not an object on it.
  *
- * The negative margins are the awkward part and the reason this lives in one place.
- * `dashboard/layout.tsx` puts `p-4` on the column holding the navbar AND `<main>`, so a
- * plain background inside `<main>` would stop 16px short on three sides and read as a
- * rectangle floating on slate. The margins bleed back through that padding and the
- * padding is then restored inside. `-mt-5` matches the navbar's own `mb-5`, so the
- * surface begins at the header's divider rather than 20px below it.
+ * The negative margin is the awkward part and the reason this lives in one place.
+ * `dashboard/layout.tsx` puts `p-4` on `<main>`, so a plain background inside it would
+ * stop 16px short on every side and read as a rectangle floating on slate. `-m-4` bleeds
+ * back through that padding and `p-4` restores it inside, which puts the surface flush
+ * against the navbar's divider and the workspace edges.
  *
- * If either of those two values in the layout or the navbar changes, this has to change
- * with it. There is no way to express "fill my parent's padding" in CSS alone.
+ * It is tied to that one value in the layout: change `p-4` there and change it here too.
+ * There is no way to express "fill my parent's padding" in CSS alone.
  */
 export function WorkspaceSurface({
   className,
@@ -26,7 +25,7 @@ export function WorkspaceSurface({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn('bg-card -mx-4 -mt-5 -mb-4 flex-1 px-4 pt-5 pb-4', className)}>
+    <div className={cn('bg-card -m-4 flex-1 p-4', className)}>
       {children}
     </div>
   );

@@ -73,13 +73,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 {/* min-w-0: without it this flex item refuses to shrink below its
                   content's intrinsic width, so a wide table stretches the whole
                   page sideways instead of scrolling inside its own container. */}
-                <div className="flex min-w-0 flex-1 flex-col p-4">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {/* The gutter belongs to the content, not the column: on the column it
+                      inset the navbar too, so the header read as a floating strip with a
+                      divider that stopped short of both edges. */}
                   <Navbar />
                   {/* flex-1 so a page-level surface (see WorkspaceSurface) can fill the
-                      viewport instead of stopping where its content does. Purely a sizing
-                      change: main paints nothing, so pages that do not use one look the
-                      same. */}
-                  <main id="main-content" tabIndex={-1} lang="en" className="flex flex-1 flex-col">
+                      viewport instead of stopping where its content does. */}
+                  <main
+                    id="main-content"
+                    tabIndex={-1}
+                    lang="en"
+                    className="flex min-w-0 flex-1 flex-col p-4"
+                  >
                     {children}
                   </main>
                 </div>
