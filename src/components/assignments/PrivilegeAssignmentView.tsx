@@ -525,7 +525,7 @@ export default function AssignmentDashboardPage({
               <CardTitle
                 role="heading"
                 aria-level={1}
-                className="flex min-w-0 flex-wrap items-center gap-2 text-2xl break-words"
+                className="flex min-w-0 flex-wrap items-center gap-2 text-2xl tracking-tight break-words"
               >
                 <span className="font-semibold">Assignment:</span>{' '}
                 <span className="min-w-0 [overflow-wrap:anywhere] break-words">
@@ -622,7 +622,7 @@ export default function AssignmentDashboardPage({
             />
             <TabsContent value="description">
               <div className="space-y-4">
-                <h2 className="flex items-center gap-2 text-2xl font-semibold">
+                <h2 className="flex items-center gap-2 text-xl font-semibold">
                   <AlignLeft className="h-6 w-6" />
                   Details
                 </h2>
@@ -652,7 +652,7 @@ export default function AssignmentDashboardPage({
             >
               <div className="space-y-4">
                 <div className="flex w-full items-center justify-between">
-                  <h2 className="flex items-center gap-2 text-2xl font-semibold">
+                  <h2 className="flex items-center gap-2 text-xl font-semibold">
                     <FileText className="h-6 w-6" />
                     Problems
                   </h2>

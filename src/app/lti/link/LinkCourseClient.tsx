@@ -80,7 +80,7 @@ export default function LinkCourseClient({
           was unreachable by keyboard. */}
       <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto p-4" tabIndex={0}>
         <CardHeader className="pb-2">
-          <CardTitle role="heading" aria-level={1} className="text-xl">
+          <CardTitle role="heading" aria-level={1} className="text-xl tracking-tight">
             {notReady ? 'This course is not ready yet' : 'Which course is this?'}
           </CardTitle>
         </CardHeader>

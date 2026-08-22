@@ -140,7 +140,7 @@ export function AssignmentSimilarityPanel() {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <Fingerprint className="h-6 w-6" />
           Similarity
         </h2>

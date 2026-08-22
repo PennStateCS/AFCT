@@ -242,7 +242,7 @@ export function AdminCourseView({
 
           <CourseTabPanel value="settings" active={tab === 'settings'}>
             <div className="space-y-4">
-              <h2 className="flex items-center gap-2 text-2xl font-semibold">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
                 <Settings className="h-5 w-5" />
                 Course Settings
               </h2>

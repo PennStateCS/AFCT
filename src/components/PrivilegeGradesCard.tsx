@@ -417,7 +417,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       <div>
         <div className="flex flex-wrap items-center justify-between gap-y-1">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <h2 className="flex items-center gap-2 text-2xl font-semibold">
+            <h2 className="flex items-center gap-2 text-xl font-semibold">
               <Table className="h-5 w-5" />
               Grades
             </h2>

@@ -102,7 +102,7 @@ export default function CompleteLaunchClient() {
       <div className="max-w-md text-center">
         {failed ? (
           <>
-            <h1 className="text-lg font-medium">AFCT could not open here</h1>
+            <h1 className="text-xl font-semibold">AFCT could not open here</h1>
             {/*
               Almost always the browser refusing AFCT a cookie because it is inside the LMS
               page. A new tab is first-party, where nothing is refused, and the ticket is still

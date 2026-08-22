@@ -395,7 +395,7 @@ export default function AssignmentSubmissions({
   // saying out loud. It used to render an empty div: a course with nobody enrolled looked
   // identical to a page that had failed, and every cold load flashed blank first.
   const heading = (
-    <h2 className="flex items-center gap-2 text-2xl font-semibold">
+    <h2 className="flex items-center gap-2 text-xl font-semibold">
       <FileText className="h-6 w-6" /> Submissions
     </h2>
   );
@@ -438,7 +438,7 @@ export default function AssignmentSubmissions({
       {selectedStudent && (
         <div className="space-y-4">
           <div>
-            <h2 className="flex items-center gap-2 text-2xl font-semibold">
+            <h2 className="flex items-center gap-2 text-xl font-semibold">
               <FileText className="h-6 w-6" /> Submissions
             </h2>
 
