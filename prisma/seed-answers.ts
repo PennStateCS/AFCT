@@ -160,9 +160,11 @@ export function ownAttempt(base: string, variant: number): string {
 export const JFF_TYPES: Record<string, ProblemType> = {
   fa: 'FA',
   pda: 'PDA',
-  turing: 'TM',
   grammar: 'CFG',
   re: 'RE',
+  // No `turing`. The evaluator refuses a Turing machine and no course can create one, so a
+  // seeded TM problem was data no deployment could have, carrying a verdict the seed wrote
+  // itself. A `turing` file dropped into solution_files is now ignored rather than seeded.
 };
 
 /**

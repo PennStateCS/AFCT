@@ -178,7 +178,7 @@ export const courseData: CourseSeed[] = [
     assignTa: false,
     // The one course that sets every problem type AFCT grades, so it has to be running: on the
     // rolling term it landed in a future semester and carried no submissions at all, which left
-    // the grammar, regular-expression, pushdown and Turing paths unseeded no matter what.
+    // the grammar, regular-expression and pushdown paths unseeded no matter what.
     lifecycle: 'current',
   },
   // Charles Xavier's lifecycle set: one course in each state so the dev DB can
@@ -346,54 +346,64 @@ export const problemData = [
     type: 'RE' as ProblemType,
     courseIndex: 4,
   },
+  /*
+   * The theory course's later material, in the types the evaluator can actually grade.
+   *
+   * These files are the same ones the evaluator's gold standard suite grades, so each is known
+   * to parse and to be equivalent to itself rather than merely looking plausible. They replaced
+   * six Turing machine problems, which had to go: the evaluator refuses a TM and no course can
+   * create one, so those problems existed only in seeded data and carried verdicts the seed
+   * wrote itself.
+   */
   {
-    title: 'Busy Beaver 4',
-    description: 'Create the 4-state Busy Beaver Turing machine shown in the provided JFLAP file.',
-    fileName: 'busyBeaver4.jff',
-    originalFileName: 'busyBeaver4.jff',
-    type: 'TM' as ProblemType,
-    courseIndex: 4,
-  },
-  {
-    title: 'Collatz Binary',
-    description: 'Create the binary Collatz Turing machine shown in the provided JFLAP file.',
-    fileName: 'collatzBinary.jff',
-    originalFileName: 'collatzBinary.jff',
-    type: 'TM' as ProblemType,
-    courseIndex: 4,
-  },
-  {
-    title: 'Collatz Unary',
-    description: 'Create the unary Collatz Turing machine shown in the provided JFLAP file.',
-    fileName: 'collatzUnaryTM.jff',
-    originalFileName: 'collatzUnaryTM.jff',
-    type: 'TM' as ProblemType,
-    courseIndex: 4,
-  },
-  {
-    title: 'Infinite Loop TM',
+    title: 'a^n b^n Pushdown Automaton',
     description:
-      'Create the Turing machine shown in the provided JFLAP file that loops on its working alphabet.',
-    fileName: 'InfiniteLoopTM.jff',
-    originalFileName: 'InfiniteLoopTM.jff',
-    type: 'TM' as ProblemType,
+      'Build a pushdown automaton accepting the strings of n as followed by n bs, for n at least zero.',
+    fileName: 'pda_anbn.jff',
+    originalFileName: 'pda_anbn.jff',
+    type: 'PDA' as ProblemType,
     courseIndex: 4,
   },
   {
-    title: 'Odd 01 Pairs TM',
-    description: 'Create the Turing machine shown in the provided JFLAP file for odd 01 pairs.',
-    fileName: 'odd01pairsTM.jff',
-    originalFileName: 'odd01pairsTM.jff',
-    type: 'TM' as ProblemType,
-    courseIndex: 4,
-  },
-  {
-    title: 'To Lowercase TM',
+    title: 'Balanced Parentheses',
     description:
-      'Create the Turing machine shown in the provided JFLAP file that converts input to lowercase.',
-    fileName: 'toLowercaseTM.jff',
-    originalFileName: 'toLowercaseTM.jff',
-    type: 'TM' as ProblemType,
+      'Build a pushdown automaton accepting exactly the strings of balanced parentheses.',
+    fileName: 'pda_balanced_parens.jff',
+    originalFileName: 'pda_balanced_parens.jff',
+    type: 'PDA' as ProblemType,
+    courseIndex: 4,
+  },
+  {
+    title: 'Equal As and Bs',
+    description:
+      'Build a pushdown automaton accepting the strings with as many as as bs, in any order.',
+    fileName: 'pda_equal_ab.jff',
+    originalFileName: 'pda_equal_ab.jff',
+    type: 'PDA' as ProblemType,
+    courseIndex: 4,
+  },
+  {
+    title: 'a^n b^n Grammar',
+    description: 'Give a context-free grammar for the strings of n as followed by n bs.',
+    fileName: 'cfg_anbn.jff',
+    originalFileName: 'cfg_anbn.jff',
+    type: 'CFG' as ProblemType,
+    courseIndex: 4,
+  },
+  {
+    title: 'Strings of As',
+    description: 'Give a context-free grammar for a*, including the empty string.',
+    fileName: 'cfg_a_star.jff',
+    originalFileName: 'cfg_a_star.jff',
+    type: 'CFG' as ProblemType,
+    courseIndex: 4,
+  },
+  {
+    title: 'Ends in B',
+    description: 'Write a regular expression for the strings over {a, b} that end in b.',
+    fileName: 're_ends_in_b.jff',
+    originalFileName: 're_ends_in_b.jff',
+    type: 'RE' as ProblemType,
     courseIndex: 4,
   },
 ];
@@ -415,11 +425,15 @@ export const groupSetData: GroupSetSeed[] = [
  *
  * Two things here are deliberate. Each assignment names its problems, so a course reads as a
  * sequence somebody planned rather than a shuffle: flip-flops before real-world machines, and in
- * the theory course the standard progression from finite automata through to Turing machines.
- * And the theory course covers **every problem type AFCT grades** (FA, RE, CFG, PDA, TM), because
- * a developer who has only ever seen seeded finite automata has never seen the grammar and
+ * the theory course the standard progression from finite automata through to pushdown automata.
+ * And the theory course covers **every problem type AFCT grades** (FA, RE, CFG, PDA), because a
+ * developer who has only ever seen seeded finite automata has never seen the grammar and
  * regular-expression paths, which behave differently: they carry no layout, so the similarity
  * report and the evaluator both treat them unlike an automaton.
+ *
+ * Turing machines are deliberately absent. The evaluator refuses them and no course can create
+ * one, so seeding them produced problems no deployment can have, carrying verdicts the seed
+ * wrote itself. That read as evidence that TM grading worked.
  */
 export const assignmentData: AssignmentSeed[] = [
   // CMPEN 271, both sections. The same two assignments, but grouped in one section and
@@ -557,24 +571,35 @@ export const assignmentData: AssignmentSeed[] = [
     maxSubmissions: 4,
   },
   {
-    title: 'Turing Machines',
+    title: 'Pushdown Automata in Practice',
     description:
-      'Build each Turing machine, and state the number of steps yours takes on the worst input of length five.',
-    dueFraction: 0.8,
+      'Build a pushdown automaton for each language, and describe in a sentence what your stack holds at each point.',
+    dueFraction: 0.75,
     isPublished: true,
     courseIndex: 4,
-    problemTitles: ['Busy Beaver 4', 'Collatz Unary', 'To Lowercase TM'],
+    problemTitles: ['a^n b^n Pushdown Automaton', 'Balanced Parentheses', 'Equal As and Bs'],
     pointsPerProblem: 30,
     maxSubmissions: 3,
   },
   {
-    title: 'Undecidability',
+    title: 'Grammars and Expressions',
     description:
-      'Reduce the halting problem to each of the questions below, then exhibit a machine that does not halt.',
+      'Give a grammar or an expression for each language below, and say which of the two is the more natural fit and why.',
+    dueFraction: 0.85,
+    isPublished: true,
+    courseIndex: 4,
+    problemTitles: ['a^n b^n Grammar', 'Strings of As', 'Ends in B'],
+    pointsPerProblem: 20,
+    maxSubmissions: 5,
+  },
+  {
+    title: 'Pumping Lemma',
+    description:
+      'Prove that the language below is not regular, using the pumping lemma, and say which case of the proof your chosen decomposition falls into.',
     dueFraction: 0.95,
     isPublished: true,
     courseIndex: 4,
-    problemTitles: ['Infinite Loop TM'],
+    problemTitles: ['CFG Test'],
     pointsPerProblem: 20,
     // Hand-graded: a reduction is an argument, not something the evaluator can check. Students
     // still submit and the grader still records a verdict; what it does not do is set a grade.

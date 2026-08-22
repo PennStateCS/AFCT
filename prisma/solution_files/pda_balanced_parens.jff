@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<!-- PDA for the balanced-parentheses (Dyck) language over {a,b}, with 'a' as the open bracket
+     and 'b' as the close bracket: every 'b' matches an earlier unmatched 'a', and all are
+     matched at the end. Accept by final state, modern "$" convention. Push an 'a' per open,
+     pop one per close (a close with nothing to match is rejected), accept when back to "$". -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0">
+		<x>100.0</x>
+		<y>150.0</y>
+		<initial />
+	</state>
+	<state id="1" name="q1">
+		<x>300.0</x>
+		<y>150.0</y>
+	</state>
+	<state id="2" name="q2">
+		<x>500.0</x>
+		<y>150.0</y>
+		<final />
+	</state>
+	<transition>
+		<from>0</from>
+		<to>1</to>
+		<read></read>
+		<pop></pop>
+		<push>$</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>a</read>
+		<pop></pop>
+		<push>a</push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>1</to>
+		<read>b</read>
+		<pop>a</pop>
+		<push></push>
+	</transition>
+	<transition>
+		<from>1</from>
+		<to>2</to>
+		<read></read>
+		<pop>$</pop>
+		<push></push>
+	</transition>
+</structure>
