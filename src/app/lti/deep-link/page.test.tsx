@@ -100,8 +100,10 @@ describe('the deep-link assignment picker', () => {
 
     await renderConnect();
 
-    expect(screen.getByRole('option', { name: /Graded work — 200 points/ })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Practice — not graded/ })).toBeInTheDocument();
+    // A comma, not a dash: an option's text is its accessible name, and a screen reader reads
+    // the dash aloud between the title and the points.
+    expect(screen.getByRole('option', { name: /Graded work, 200 points/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Practice, not graded/ })).toBeInTheDocument();
   });
 
   it('picks the first assignment so the form can be submitted without a choice', async () => {

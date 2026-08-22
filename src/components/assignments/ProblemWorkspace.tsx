@@ -197,6 +197,25 @@ export default function ProblemWorkspace({
     (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
   );
 
+  /**
+   * What the latest attempt currently says, as one sentence.
+   *
+   * The verdict and the evaluator's feedback live in table cells, and a cell changing in place
+   * announces nothing: a submission went from Pending to Incorrect, and a counterexample
+   * appeared in a row the reader had already passed, in silence. This is the one place that
+   * says so out loud.
+   *
+   * Scoped to the newest attempt on purpose. Putting `aria-live` on the table would re-announce
+   * the whole thing on every sort, filter and page change, which is how a live region becomes
+   * something people turn off.
+   */
+  const latest = sortedSubmissions[0];
+  const latestStatus = latest
+    ? `Attempt ${attemptNumbers.get(latest.id) ?? sortedSubmissions.length}: ${
+        getReviewStatusChip(latest).label
+      }.${latest.feedback ? ` ${String(latest.feedback)}` : ''}`
+    : '';
+
   const handleDownload = (submission: ProblemSubmission) => {
     if (!submission.fileName) return;
 
@@ -312,7 +331,13 @@ export default function ProblemWorkspace({
       enableSorting: false,
       cell: ({ row }) => {
         const feedback = row.original.feedback;
-        if (!feedback) return <span className="text-muted-foreground">—</span>;
+        if (!feedback)
+          return (
+            <span className="text-muted-foreground">
+              <span aria-hidden="true">—</span>
+              <span className="sr-only">No feedback</span>
+            </span>
+          );
         // TableCell bakes in whitespace-nowrap; override it here so long evaluator
         // output wraps (and keeps its own line breaks) inside a bounded width.
         return (
@@ -321,7 +346,15 @@ export default function ProblemWorkspace({
           </div>
         );
       },
-      meta: { priority: 2 },
+      /*
+       * Priority 1, not 2.
+       * Priority 2 hides a column below 768px, and this table becomes cards below 640px, so
+       * between those two widths the cell was removed from the page altogether with no card
+       * to fall back on. A student in a half-width window lost the counterexample and the link
+       * to their own submission, with nothing saying either existed. This table carries a
+       * handful of attempts for one problem, so it has the room.
+       */
+      meta: { priority: 1 },
     },
     {
       id: 'file',
@@ -329,7 +362,13 @@ export default function ProblemWorkspace({
       enableSorting: false,
       cell: ({ row }) => {
         const submission = row.original;
-        if (!submission.fileName) return <span className="text-muted-foreground">—</span>;
+        if (!submission.fileName)
+          return (
+            <span className="text-muted-foreground">
+              <span aria-hidden="true">—</span>
+              <span className="sr-only">No file</span>
+            </span>
+          );
         return (
           // The name previews; everything else lives in the row's menu.
           <button
@@ -342,7 +381,15 @@ export default function ProblemWorkspace({
           </button>
         );
       },
-      meta: { priority: 2 },
+      /*
+       * Priority 1, not 2.
+       * Priority 2 hides a column below 768px, and this table becomes cards below 640px, so
+       * between those two widths the cell was removed from the page altogether with no card
+       * to fall back on. A student in a half-width window lost the counterexample and the link
+       * to their own submission, with nothing saying either existed. This table carries a
+       * handful of attempts for one problem, so it has the room.
+       */
+      meta: { priority: 1 },
     },
     {
       id: 'actions',
@@ -418,6 +465,15 @@ export default function ProblemWorkspace({
           maxSubmissions={problem.maxSubmissions ?? undefined}
           autograderEnabled={problem.autograderEnabled ?? undefined}
         />
+
+        {/*
+          Always mounted, empty when there is nothing to say. A live region inserted together
+          with its first message is not reliably announced, so it has to be here before the
+          answer is.
+        */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {latestStatus}
+        </div>
 
         {/* No panel around the table: it carries its own toolbar, column headers and pager,
               so a band above it repeating "Submissions" on the Submissions tab added a frame
@@ -552,8 +608,13 @@ export default function ProblemWorkspace({
           </button>
         </div>
         <div id="problem-discussion" hidden={!discussionOpen}>
+          {/* Kept across both branches. It used to be mounted with "Loading discussion..." and
+              then replaced wholesale by the panel, so neither the wait nor its end announced. */}
+          <span role="status" aria-live="polite" className="sr-only">
+            {commentsLoading ? 'Loading the discussion.' : 'Discussion loaded.'}
+          </span>
           {commentsLoading ? (
-            <div role="status" className="text-muted-foreground text-sm">
+            <div className="text-muted-foreground text-sm" aria-hidden="true">
               Loading discussion...
             </div>
           ) : (

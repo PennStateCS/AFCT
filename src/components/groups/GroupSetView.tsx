@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -178,6 +178,8 @@ export function GroupSetView({
   const [deleteSetOpen, setDeleteSetOpen] = useState(false);
   const [renameGroup, setRenameGroup] = useState<{ id: string; name: string } | null>(null);
   const [deleteGroup, setDeleteGroup] = useState<{ id: string; name: string } | null>(null);
+  /** Where focus goes after a delete: the card holding the trigger is gone by then. */
+  const setHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const disabled = courseIsArchived || !!detail?.locked;
 
@@ -362,21 +364,35 @@ export function GroupSetView({
       : (nameById.get(activeDrag) ?? 'Student')
     : '';
 
+  /**
+   * What is being dragged, in words.
+   *
+   * Dragging a selected student carries the whole selection, so naming only the one under the
+   * pointer told a keyboard user "Picked up Ada Lovelace" and then moved five people. The
+   * visible drag overlay already said "5 students"; the announcements did not.
+   */
+  const dragDescription = useCallback(
+    (activeId: string) => {
+      const count = draggedIdsFor(activeId).length;
+      return count > 1 ? `${count} students` : (nameById.get(activeId) ?? 'student');
+    },
+    [draggedIdsFor, nameById],
+  );
+
   const announcements: Announcements = useMemo(
     () => ({
-      onDragStart: ({ active }) => `Picked up ${nameById.get(String(active.id)) ?? 'student'}.`,
+      onDragStart: ({ active }) => `Picked up ${dragDescription(String(active.id))}.`,
       onDragOver: ({ active, over }) =>
         over
-          ? `${nameById.get(String(active.id)) ?? 'Student'} is over ${zoneName(String(over.id))}.`
+          ? `${dragDescription(String(active.id))} over ${zoneName(String(over.id))}.`
           : undefined,
       onDragEnd: ({ active, over }) =>
         over
-          ? `Dropped ${nameById.get(String(active.id)) ?? 'student'} on ${zoneName(String(over.id))}.`
-          : `Dropped ${nameById.get(String(active.id)) ?? 'student'}.`,
-      onDragCancel: ({ active }) =>
-        `Dragging ${nameById.get(String(active.id)) ?? 'student'} cancelled.`,
+          ? `Dropped ${dragDescription(String(active.id))} on ${zoneName(String(over.id))}.`
+          : `Dropped ${dragDescription(String(active.id))}.`,
+      onDragCancel: ({ active }) => `Dragging ${dragDescription(String(active.id))} cancelled.`,
     }),
-    [nameById, zoneName],
+    [dragDescription, zoneName],
   );
 
   const screenReaderInstructions: ScreenReaderInstructions = {
@@ -460,7 +476,11 @@ export function GroupSetView({
     <div className="space-y-4">
       {/* Header + set actions */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-xl font-semibold">
+        <h3
+          ref={setHeadingRef}
+          tabIndex={-1}
+          className="flex items-center gap-2 text-xl font-semibold"
+        >
           {detail.name}
           {detail.locked && <Badge variant="secondary">Locked</Badge>}
         </h3>
@@ -472,10 +492,17 @@ export function GroupSetView({
             variant="secondary"
             onClick={() => setRandomOpen(true)}
             disabled={disabled || detail.groups.length === 0}
-            title={detail.groups.length === 0 ? 'Add a group first' : undefined}
+            /* Described by the visible note beside it rather than by a `title`: a disabled
+               button takes neither focus nor hover, so a title on one is unreachable text. */
+            aria-describedby={detail.groups.length === 0 ? 'random-assign-note' : undefined}
           >
             <Shuffle className="h-4 w-4" /> Random assign
           </Button>
+          {detail.groups.length === 0 ? (
+            <span id="random-assign-note" className="text-muted-foreground text-sm">
+              Add a group first
+            </span>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" aria-label="Group set actions">
@@ -597,8 +624,18 @@ export function GroupSetView({
           <section className="lg:col-span-1" aria-label="Unassigned students">
             <DropZone id={UNASSIGNED_ZONE} className="rounded-md border">
               <div className="border-b p-3">
-                <p className="flex items-center gap-2 text-sm font-medium">
-                  <Users className="h-4 w-4" /> Unassigned ({unassigned.length})
+                {/*
+                  The count is the answer to the search below it, so it announces.
+                  Typing a name narrows this list and nothing said whether it had matched
+                  anybody. `aria-atomic` so the number is read with the word it counts.
+                */}
+                <p
+                  className="flex items-center gap-2 text-sm font-medium"
+                  role="status"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  <Users className="h-4 w-4" aria-hidden="true" /> Unassigned ({unassigned.length})
                 </p>
                 <Input
                   value={search}
@@ -759,6 +796,12 @@ export function GroupSetView({
         confirmText="Delete group"
         onConfirm={confirmDeleteGroup}
         onCancel={() => setDeleteGroup(null)}
+        onCloseAutoFocus={(event) => {
+          // The menu that opened this sat inside the group card the delete has just removed,
+          // so restoring focus to it would drop focus to the body.
+          event.preventDefault();
+          setHeadingRef.current?.focus();
+        }}
       />
     </div>
   );

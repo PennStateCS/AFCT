@@ -707,8 +707,30 @@ describe('AssignmentSubmissions — reviewData seeding safety net (M12)', () => 
       // First problem is selected by default (one submission).
       await waitFor(() => expect(screen.getByTestId('submission-count')).toHaveTextContent('1'));
 
+      // Focus has to be inside the review panel; see the next test for why.
+      screen.getByTestId('grade-input').focus();
       fireEvent.keyDown(window, { key: '2' });
       await waitFor(() => expect(screen.getByTestId('submission-count')).toHaveTextContent('2'));
+    });
+
+    /**
+     * WCAG 2.1.4. A letter or digit bound to the window has to be switchable off, remappable,
+     * or active only on focus. These are active only on focus, so a stray "2" from speech
+     * input or from a screen reader's browse mode no longer changes the problem being graded
+     * out from under the reader.
+     */
+    it('ignores the number key while focus is outside the review panel', async () => {
+      vi.stubGlobal('fetch', twoProblemRoutes());
+      renderWithClient(<AssignmentSubmissions {...twoProblemProps} />);
+      await waitFor(() => expect(screen.getByTestId('submission-count')).toHaveTextContent('1'));
+
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      outside.focus();
+      fireEvent.keyDown(window, { key: '2' });
+
+      expect(screen.getByTestId('submission-count')).toHaveTextContent('1');
+      outside.remove();
     });
 
     it('ignores the number key while typing in a field', async () => {
@@ -788,9 +810,7 @@ describe('AssignmentSubmissions — who a comment reaches', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
     await screen.findByTestId('problem-workspace');
-    await waitFor(() =>
-      expect(screen.getByTestId('comment-audience')).toHaveTextContent('group'),
-    );
+    await waitFor(() => expect(screen.getByTestId('comment-audience')).toHaveTextContent('group'));
     return fetchMock;
   };
 
@@ -932,7 +952,10 @@ describe('AssignmentSubmissions — which student is selected', () => {
   it('says so when the course has nobody enrolled', async () => {
     vi.stubGlobal(
       'fetch',
-      routeFetch({ ...routesFor(twoStudents), '/students': () => ({ ok: true, json: async () => [] }) }),
+      routeFetch({
+        ...routesFor(twoStudents),
+        '/students': () => ({ ok: true, json: async () => [] }),
+      }),
     );
 
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
@@ -945,7 +968,10 @@ describe('AssignmentSubmissions — which student is selected', () => {
 
   it('shows a loading state instead of flashing blank', async () => {
     // A fetch that never settles: the component should be mid-load, not empty.
-    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    );
 
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
 
@@ -966,7 +992,9 @@ describe('AssignmentSubmissions — which student is selected', () => {
 
     renderWithClient(<AssignmentSubmissions {...baseProps} />);
 
-    await waitFor(() => expect(screen.getByText(/Could not load the student list/)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Could not load the student list/)).toBeInTheDocument(),
+    );
     expect(screen.queryByText(/Nobody is enrolled/)).not.toBeInTheDocument();
   });
 });

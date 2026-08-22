@@ -71,7 +71,9 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
         {timeline.map((p, i) => {
           const x = M.left + i * slot + gap / 2;
           const y = yOf(p.count);
-          const label = `${shortDate(p.date)}: ${p.count} submission${p.count === 1 ? '' : 's'}`;
+          const label = `${shortDate(p.date)}: ${p.count} submission${p.count === 1 ? '' : 's'}${
+            i === dueIndex ? ', the due date' : ''
+          }`;
           return (
             <g key={p.date}>
               <rect
@@ -129,10 +131,16 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
         )}
       </svg>
 
+      {/*
+        The due date is a column, not just a line on the drawing.
+        The marker and its "Due" label are inside an `aria-hidden` group, so a reader could see
+        every day's count and still not know which day the work was due, which is the whole
+        comparison this chart exists to support.
+      */}
       <ChartDataTable
-        caption={`Submissions per day for ${unitPlural}.`}
-        headers={['Date', 'Submissions']}
-        rows={timeline.map((p) => [p.date, p.count])}
+        caption={`Submissions per day for ${unitPlural}, with the due date marked.`}
+        headers={['Date', 'Submissions', 'Due date']}
+        rows={timeline.map((p, i) => [p.date, p.count, i === dueIndex ? 'Due' : ''])}
       />
       <ChartTooltip state={state} />
     </div>

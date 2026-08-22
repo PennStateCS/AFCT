@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileText } from 'lucide-react';
 import type { Submission, User } from '@prisma/client';
@@ -82,7 +82,7 @@ const hasSubmissions = (obj: unknown): obj is { submissions: Submission[] } => {
   );
 };
 
-/** True when the key event originates from a text field, so global shortcuts stay dormant. */
+/** True when the key event originates from a text field, so the shortcuts stay dormant. */
 const isTypingTarget = (e: KeyboardEvent): boolean => {
   if (e.altKey || e.ctrlKey || e.metaKey) return true;
   const target = e.target as HTMLElement | null;
@@ -111,6 +111,8 @@ export default function AssignmentSubmissions({
 }: Props) {
   const epsSymbol = useEmptyStringSymbol(courseId);
   const [rerunning, setRerunning] = useState<Record<string, boolean>>({});
+  /** The review panel. The single-key shortcuts fire only while focus is inside it. */
+  const rootRef = useRef<HTMLDivElement>(null);
   const [grantDialogOpen, setGrantDialogOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   // Set on first open and never cleared, so the dynamic import above stays deferred.
@@ -202,6 +204,17 @@ export default function AssignmentSubmissions({
   // the user is typing in a field (comment box, grade input, student search, etc.).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      /**
+       * Only while focus is inside the review panel.
+       *
+       * WCAG 2.1.4 allows a single-character shortcut when it is active only on focus, and
+       * these are letters and digits bound to the window. The typing guard below is not the
+       * same thing: it covers a text field, not somebody dictating with speech input or
+       * reading the page in a screen reader's browse mode, where a stray "g" or "3" silently
+       * changed which problem was being graded.
+       */
+      const root = rootRef.current;
+      if (!root || !(document.activeElement && root.contains(document.activeElement))) return;
       if (isTypingTarget(e)) return;
       // Grading is the reason to be here, so it gets a key of its own rather than a reach
       // for the mouse after every problem change.
@@ -420,7 +433,8 @@ export default function AssignmentSubmissions({
   }
 
   return (
-    <div>
+    // Focus inside this element is what arms the single-key shortcuts; see the handler above.
+    <div ref={rootRef}>
       {selectedStudent && (
         <div className="space-y-4">
           <div>

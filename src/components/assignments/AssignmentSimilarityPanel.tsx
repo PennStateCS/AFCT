@@ -99,10 +99,7 @@ export function AssignmentSimilarityPanel() {
   };
   const formatFull = (iso: string) => `${formatDay(iso)} ${formatTime(iso)}`.trim();
 
-  const clusters = useMemo(
-    () => clusterMatches(data ?? [], commonShare),
-    [data, commonShare],
-  );
+  const clusters = useMemo(() => clusterMatches(data ?? [], commonShare), [data, commonShare]);
 
   const worthReviewing = clusters.filter((cluster) => cluster.type !== 'common');
   const common = clusters.filter((cluster) => cluster.type === 'common');
@@ -171,6 +168,18 @@ export function AssignmentSimilarityPanel() {
           <div className="flex max-w-3xl flex-wrap items-center justify-between gap-3">
             <SimilarityFilters counts={counts} value={filter} onChange={setFilter} />
 
+            {/*
+              What the filter did, announced. The summary above is computed from every cluster,
+              so narrowing thirty groups down to two changed the page and said nothing.
+            */}
+            <span aria-live="polite" className="sr-only">
+              {filter === 'all'
+                ? ''
+                : `Showing ${sections.reduce((n, [, section]) => n + section.clusters.length, 0)} ${
+                    filter === 'common' ? 'common' : filter
+                  } matches.`}
+            </span>
+
             <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
               <span>Common threshold: {Math.round(commonShare * 100)}%</span>
               <Popover>
@@ -185,8 +194,8 @@ export function AssignmentSimilarityPanel() {
                       Common threshold
                     </Label>
                     <p className="text-muted-foreground text-sm">
-                      Work shared by at least this share of a problem&apos;s students is treated
-                      as the expected answer and set aside at the bottom of the page.
+                      Work shared by at least this share of a problem&apos;s students is treated as
+                      the expected answer and set aside at the bottom of the page.
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -236,11 +245,7 @@ export function AssignmentSimilarityPanel() {
       ))}
 
       {common.length > 0 ? (
-        <Collapsible
-          open={showCommon}
-          onOpenChange={setShowCommon}
-          className="max-w-3xl space-y-3"
-        >
+        <Collapsible open={showCommon} onOpenChange={setShowCommon} className="max-w-3xl space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
             <div>
               <h3 className="flex items-center gap-2 text-lg font-semibold">
@@ -255,7 +260,9 @@ export function AssignmentSimilarityPanel() {
             <CollapsibleTrigger asChild>
               <Button variant="outline" size="sm">
                 <ChevronDown
-                  className={showCommon ? 'rotate-180 transition-transform' : 'transition-transform'}
+                  className={
+                    showCommon ? 'rotate-180 transition-transform' : 'transition-transform'
+                  }
                 />
                 {showCommon ? 'Hide' : 'Show'} common answers
               </Button>

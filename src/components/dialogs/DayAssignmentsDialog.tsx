@@ -64,12 +64,16 @@ export default function DayAssignmentsDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent
-        className="max-w-lg"
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent className="max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader className="flex items-start justify-between gap-4">
-          <div>
+          {/*
+            Announced as a group when Previous day or Next day changes it.
+            The dialog stays open across a move, so the title, the weekday and the count all
+            change under a reader whose focus has not left the arrow button: pressing Next day
+            produced silence, with no way to tell whether it had worked or what the new day
+            held. `aria-atomic` so the date is read with the count rather than a fragment of it.
+          */}
+          <div aria-live="polite" aria-atomic="true">
             <DialogTitle>
               {parsedDate ? `${formatDateInTimeZone(parsedDate, timezone)}` : 'Assignments'}
             </DialogTitle>

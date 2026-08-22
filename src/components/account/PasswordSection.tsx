@@ -71,8 +71,11 @@ export function PasswordSection({
   }, [load]);
 
   if (!capability) {
+    // `role="status"` rather than a bare `aria-live`: this element is created together with its
+    // text and then replaced by the form, so it is announced on arrival at best. The region
+    // below, inside the loaded tree, is the one that carries anything afterwards.
     return (
-      <p className="text-muted-foreground text-sm" aria-live="polite">
+      <p className="text-muted-foreground text-sm" role="status" aria-live="polite">
         Loading…
       </p>
     );

@@ -87,20 +87,16 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
     [defaultTz],
   );
 
-  const {
-    control,
-    handleSubmit,
-    reset,
-    watch,
-    trigger,
-    getValues,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(CreateCourseFormSchema),
-    defaultValues: defaults,
-    mode: 'onChange',
-    reValidateMode: 'onChange',
-  });
+  const { control, handleSubmit, reset, watch, trigger, getFieldState, getValues, formState } =
+    useForm<FormValues>({
+      resolver: zodResolver(CreateCourseFormSchema),
+      defaultValues: defaults,
+      mode: 'onChange',
+      reValidateMode: 'onChange',
+    });
+
+  const { errors, isSubmitting } = formState;
+  const formRef = useRef<HTMLFormElement>(null);
 
   const startDateStr = watch('startDate'); // string (YYYY-MM-DDTHH:MM)
 
@@ -139,8 +135,34 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
   // Advance only when the current step's own fields validate; errors render in
   // place and the step holds. (The whole schema still gates the final submit.)
   const next = async () => {
-    const ok = await trigger(STEPS[step]?.fields ?? []);
-    if (ok) setStep((s) => Math.min(s + 1, LAST_STEP));
+    const fields = STEPS[step]?.fields ?? [];
+    const ok = await trigger(fields);
+    if (ok) {
+      setStep((s) => Math.min(s + 1, LAST_STEP));
+      return;
+    }
+    /**
+     * Move to the first field that failed.
+     *
+     * Without this, pressing Next when something is invalid did nothing at all: focus stayed
+     * on the button, and the reason was rendered further up the form where somebody using a
+     * keyboard or a screen reader had no way to know it had appeared. Focusing the field reads
+     * its label and its error together, and puts the caret where the fix has to happen.
+     */
+    // `getFieldState` with the live `formState` passed in. A destructured `errors` is captured
+    // at render, so immediately after `trigger` it still describes the previous check.
+    const firstInvalid = fields.find((f) => getFieldState(f, formState).invalid);
+    if (!firstInvalid) return;
+
+    /**
+     * Focused through the DOM rather than with `setFocus`.
+     *
+     * These fields are `Controller`s wrapped in `InputGroup`, and the ref does not survive the
+     * trip, so `setFocus` silently did nothing. Querying the form for the control by name is
+     * plain, and it fails visibly rather than quietly if the markup changes.
+     */
+    const control = formRef.current?.querySelector<HTMLElement>(`[name="${firstInvalid}"]`);
+    control?.focus();
   };
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -198,6 +220,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
             form element, not an interactive-role gap. */}
         {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
         <form
+          ref={formRef}
           // Only the Review step may submit. Earlier steps swallow any submit that
           // slips through (backstop for the button-swap hazard handled below).
           onSubmit={step === LAST_STEP ? handleSubmit(onSubmit) : (e) => e.preventDefault()}

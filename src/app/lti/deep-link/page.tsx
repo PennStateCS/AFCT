@@ -339,7 +339,7 @@ function AssignmentOption({
   const points = assignment.problems.reduce((sum, p) => sum + Number(p.maxPoints ?? 0), 0);
   return (
     <option value={assignment.id}>
-      {assignment.title} {'—'} {points > 0 ? `${points} points` : 'not graded'}
+      {assignment.title}, {points > 0 ? `${points} points` : 'not graded'}
     </option>
   );
 }
@@ -441,7 +441,14 @@ function Choice({
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <main className="flex min-h-dvh w-full items-center justify-center p-4">
-      <div className="bg-card max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-lg border p-6">
+      {/* Focusable: an LMS draws this in a short modal, so the card scrolls inside itself, and
+          several of its states (expired request, course not connected, not your course) have no
+          tabbable content at all. Without a focus stop the text below the fold was unreachable
+          by keyboard, which is the case this page is most likely to be met in. */}
+      <div
+        className="bg-card max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-lg border p-6"
+        tabIndex={0}
+      >
         <h1 className="mb-3 text-xl font-semibold">{title}</h1>
         {children}
       </div>

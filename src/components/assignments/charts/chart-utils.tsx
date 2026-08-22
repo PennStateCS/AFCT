@@ -62,6 +62,29 @@ export function useChartTooltip() {
     setState({ x: r.left + r.width / 2, y: r.top, content });
   }, []);
   const hide = useCallback(() => setState(null), []);
+
+  /**
+   * Escape dismisses it, which WCAG 1.4.13 requires of anything that appears on hover or
+   * focus. Without this the only way out was to move the pointer or move focus, and a
+   * magnifier user who cannot see around the tooltip has neither as a comfortable option.
+   *
+   * Bound only while something is shown, so the page is not carrying a key listener the rest
+   * of the time.
+   */
+  useEffect(() => {
+    if (!state) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Stopped here so Escape dismisses the tooltip without also closing the dialog the
+        // chart may be sitting in: one Escape, one thing.
+        e.stopPropagation();
+        setState(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [state]);
+
   return { state, showAtEvent, showAtElement, hide };
 }
 

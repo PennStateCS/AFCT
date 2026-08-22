@@ -75,7 +75,10 @@ export default function LinkCourseClient({
     // reached from an LMS, where the frame can be a few hundred pixels tall. The card scrolls
     // inside itself so a long list never puts its own top out of reach.
     <main className="flex min-h-dvh w-full items-center justify-center p-4">
-      <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto p-4">
+      {/* Focusable for the same reason the picker is: an LMS modal is short, and the
+          not-ready and no-courses states carry nothing tabbable, so their text below the fold
+          was unreachable by keyboard. */}
+      <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto p-4" tabIndex={0}>
         <CardHeader className="pb-2">
           <CardTitle role="heading" aria-level={1} className="text-xl">
             {notReady ? 'This course is not ready yet' : 'Which course is this?'}

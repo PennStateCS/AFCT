@@ -260,3 +260,35 @@ describe('the disconnect confirmation', () => {
     expect(screen.queryByText(/sign in to AFCT with Penn State/)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * Focus after a disconnect.
+ *
+ * The Disconnect button is inside the row the removal deletes, and the confirm is awaited, so
+ * by the time the dialog closes Radix's restore target has gone and focus falls to the body.
+ * A keyboard user was returned to the top of the page every time.
+ */
+describe('where focus goes after disconnecting', () => {
+  it('lands on the section heading rather than on the body', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) =>
+        init?.method === 'DELETE'
+          ? respond({ ok: true })
+          : respond({ identities: [identity], hasPassword: true }),
+      ),
+    );
+
+    render(<IdentitiesSection providerLabel="Penn State" />);
+    await screen.findByRole('button', { name: /disconnect/i });
+
+    await user.click(screen.getByRole('button', { name: /disconnect/i }));
+    await user.click(await screen.findByRole('button', { name: /^disconnect$/i, hidden: false }));
+
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement).toHaveTextContent('Connected accounts');
+    });
+  });
+});

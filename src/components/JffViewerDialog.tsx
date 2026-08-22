@@ -234,6 +234,19 @@ export function JffCytoscapeViewer({
         </div>
       </div>
 
+      {/*
+        A render failure, outside the graph container.
+        `role="img"` makes everything inside the container presentational, so an error message
+        placed in there was never reachable: a file that failed to parse announced as "Diagram
+        of x.jff, image" and nothing else, with no text alternative either, because there is
+        nothing parsed to describe.
+      */}
+      {error ? (
+        <p role="alert" className="text-destructive px-3 py-2 text-sm">
+          {error}
+        </p>
+      ) : null}
+
       {/* The rendered graph. role="img" + a description keeps a screen reader from
           wandering into cytoscape's internals while still conveying what it shows. */}
       <div
@@ -242,16 +255,27 @@ export function JffCytoscapeViewer({
         style={fill ? backgroundStyle : { height, ...backgroundStyle }}
         className={cn('bg-card relative overflow-hidden', fill && 'min-h-0 flex-1')}
         role="img"
-        aria-label={title ? `Diagram of ${title}` : 'Automaton diagram'}
+        aria-label={
+          error
+            ? 'The diagram could not be drawn'
+            : title
+              ? `Diagram of ${title}`
+              : 'Automaton diagram'
+        }
         aria-describedby={description ? summaryId : undefined}
-      >
-        {error ? <div className="text-destructive p-4 text-sm">{error}</div> : null}
-      </div>
+      />
 
       {description ? (
         // Capped and scrollable on its own: the expanded transition listing can be long,
-        // and it must not steal height from the graph or grow the dialog.
-        <div className="max-h-40 shrink-0 overflow-y-auto border-t px-3 py-2">
+        // and it must not steal height from the graph or grow the dialog. Focusable with it,
+        // because past the toggle below there is nothing tabbable, so the states and
+        // transitions this panel exists to expose could not be scrolled to by keyboard.
+        <div
+          className="max-h-40 shrink-0 overflow-y-auto border-t px-3 py-2"
+          tabIndex={0}
+          role="group"
+          aria-label="Description of this file"
+        >
           <p id={summaryId} className="text-muted-foreground text-xs">
             {description.summary}
           </p>

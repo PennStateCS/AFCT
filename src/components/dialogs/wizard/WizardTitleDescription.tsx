@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Label } from '@/components/ui/label';
+import { RequiredMark } from '@/components/ui/required-mark';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
@@ -55,19 +56,26 @@ export function WizardTitleDescription({
   return (
     <>
       <div>
-        <Label htmlFor={titleId} className="mb-2 block">
-          Title
-        </Label>
+        {/* The marker is a sibling of the label, matching `RequiredMark`'s own rule: the
+            label's text stays the field name, so the control's accessible name does too, and
+            `aria-required` below is what tells assistive tech it is required. Every caller of
+            this block rejects an empty title and none of them said so. */}
+        <div className="mb-2 flex items-center">
+          <Label htmlFor={titleId}>Title</Label>
+          <RequiredMark />
+        </div>
         <Input
           id={titleId}
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
+          required
+          aria-required="true"
           aria-invalid={!!titleError}
           aria-describedby={titleError ? titleErrorId : undefined}
           placeholder={titlePlaceholder}
         />
         {titleError && (
-          <p id={titleErrorId} className="mt-1 text-xs text-destructive" role="alert">
+          <p id={titleErrorId} className="text-destructive mt-1 text-xs" role="alert">
             {titleError}
           </p>
         )}

@@ -295,12 +295,22 @@ export default function StudentAssignmentPage({
     }));
   }, [assignment, submissions, problemGrades, effectiveMax]);
 
+  // Both announce. On a first paint plain text would do, but this same branch renders when
+  // moving between assignments client-side, where the change is otherwise silent.
   if (loading) {
-    return <div className="p-6">Loading assignment...</div>;
+    return (
+      <div className="p-6" role="status" aria-live="polite">
+        Loading assignment...
+      </div>
+    );
   }
 
   if (!assignment) {
-    return <div className="p-6">Assignment not found.</div>;
+    return (
+      <div className="p-6" role="alert">
+        Assignment not found.
+      </div>
+    );
   }
 
   if (isStudent && !assignment.isPublished) {
@@ -394,7 +404,12 @@ export default function StudentAssignmentPage({
               <h2 className="mb-2 font-semibold">Description</h2>
               {/* A div, not a p: a rich description can contain headings, lists, and rules,
                   which are invalid inside a paragraph. */}
-              <div className="text-muted-foreground max-h-auto resize-y overflow-y-auto rounded-md border p-3">
+              <div
+                className="text-muted-foreground max-h-96 resize-y overflow-y-auto rounded-md border p-3"
+                tabIndex={0}
+                role="group"
+                aria-label="Assignment description"
+              >
                 <RichDescription
                   // Heading base: sits under the h2 "Description", so the description starts one level below it.
                   headingBaseLevel={3}

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -139,7 +139,7 @@ describe('TokensSection', () => {
     it('asks before revoking', async () => {
       const user = userEvent.setup();
       render(<TokensSection />);
-      await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+      await user.click(await screen.findByRole('button', { name: /^Revoke My laptop$/ }));
 
       expect(screen.getByRole('dialog')).toHaveTextContent(/revoke this token/i);
       expect(fetchMock).not.toHaveBeenCalledWith(
@@ -151,7 +151,7 @@ describe('TokensSection', () => {
     it('sends nothing when the confirmation is cancelled', async () => {
       const user = userEvent.setup();
       render(<TokensSection />);
-      await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+      await user.click(await screen.findByRole('button', { name: /^Revoke My laptop$/ }));
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
       expect(fetchMock).not.toHaveBeenCalledWith(
@@ -163,7 +163,7 @@ describe('TokensSection', () => {
     it('revokes once confirmed', async () => {
       const user = userEvent.setup();
       render(<TokensSection />);
-      await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+      await user.click(await screen.findByRole('button', { name: /^Revoke My laptop$/ }));
       const dialog = screen.getByRole('dialog');
       await user.click(within(dialog).getByRole('button', { name: 'Revoke token' }));
 
@@ -173,6 +173,33 @@ describe('TokensSection', () => {
           expect.objectContaining({ method: 'DELETE' }),
         ),
       );
+    });
+  });
+});
+
+/**
+ * The one moment the token exists.
+ *
+ * It is shown once and never again. It used to appear above the Create button with nothing
+ * announced and focus left where it was, so somebody using a screen reader pressed the button,
+ * heard silence, and the value was behind them.
+ */
+describe('when a token is created', () => {
+  it('puts focus on the field holding it', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return { ok: true, json: async () => ({ token: 'afct_secret_value', label: 'Laptop' }) };
+      }
+      return { ok: true, json: async () => ({ tokens: [] }) };
+    });
+
+    render(<TokensSection />);
+    await waitFor(() => expect(screen.getByLabelText(/name this token/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /create token/i }));
+
+    await waitFor(() => {
+      const field = screen.getByDisplayValue('afct_secret_value');
+      expect(document.activeElement).toBe(field);
     });
   });
 });

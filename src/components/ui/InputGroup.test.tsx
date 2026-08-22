@@ -127,3 +127,48 @@ describe('InputGroup', () => {
     expect(document.querySelector('svg.text-status-success')).toBeTruthy();
   });
 });
+
+/**
+ * The valid/invalid text has to reach the field.
+ *
+ * It was rendered beside the input as the text equivalent of the status icon, and then
+ * referenced by nothing: somebody typing into "Confirm new password" was never told it
+ * matched, because the information was in the page but not on the control.
+ */
+describe('the field status', () => {
+  it('is named in aria-describedby, so it is read with the field', () => {
+    render(
+      <InputGroup
+        name="pw"
+        label="Confirm new password"
+        value="abc"
+        setValue={() => {}}
+        showStatus
+        isValid
+      />,
+    );
+
+    const field = screen.getByLabelText('Confirm new password');
+    const describedBy = field.getAttribute('aria-describedby') ?? '';
+    expect(describedBy).toContain('-status');
+
+    // And the element it points at exists and says which it is.
+    const status = document.getElementById(
+      describedBy.split(' ').find((id) => id.endsWith('-status'))!,
+    );
+    expect(status).toHaveTextContent('valid');
+  });
+
+  it('keeps the referenced element present while the field is empty', () => {
+    render(
+      <InputGroup name="pw" label="New password" value="" setValue={() => {}} showStatus isValid />,
+    );
+
+    const field = screen.getByLabelText('New password');
+    const id = (field.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .find((x) => x.endsWith('-status'));
+    // Present but empty: a description pointing at a missing element is a dangling reference.
+    expect(id && document.getElementById(id)).toBeInTheDocument();
+  });
+});

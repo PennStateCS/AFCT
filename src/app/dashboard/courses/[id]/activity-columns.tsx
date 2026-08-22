@@ -146,9 +146,14 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="relative z-10">
+        {/* Focusable: the details are a <pre> with nothing tabbable in it, so a keyboard
+            user could open this panel and not reach past the first few lines. */}
         <div
           ref={containerRef}
           className="bg-popover absolute top-2 right-0 max-h-60 w-80 max-w-[90vw] overflow-auto rounded-md border p-3 shadow-md"
+          tabIndex={0}
+          role="group"
+          aria-label="Activity details"
         >
           <div className="mb-2 text-xs font-medium">Activity details</div>
           <pre className="text-muted-foreground font-mono text-xs break-words whitespace-pre-wrap">
@@ -310,7 +315,9 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
       return (
         <div className="text-sm">
           {assignmentTitle ? (
-            <span className="font-medium text-purple-700 dark:text-purple-300">{assignmentTitle}</span>
+            <span className="font-medium text-purple-700 dark:text-purple-300">
+              {assignmentTitle}
+            </span>
           ) : (
             <span className="text-muted-foreground italic">N/A</span>
           )}

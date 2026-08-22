@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Copy, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
@@ -37,7 +37,24 @@ export function TokensSection() {
   /** The plaintext of a token just issued. Held in memory only, and never fetched again. */
   const [justIssued, setJustIssued] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const issuedPanelRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Move focus to the new token when it appears.
+   *
+   * It is displayed exactly once and never again, and it arrived above the button that made
+   * it with nothing announced: somebody using a screen reader pressed Create token, heard
+   * silence, and the one copy of the value was sitting off-screen behind them. Focusing the
+   * field reads its label, "Copy this now. It will not be shown again.", along with the value.
+   */
+  useEffect(() => {
+    if (!justIssued) return;
+    const field = issuedPanelRef.current?.querySelector('input');
+    field?.focus();
+  }, [justIssued]);
   const [revoking, setRevoking] = useState<ClientToken | null>(null);
+  /** Where focus lands after a revoke: the row that held the button is gone by then. */
+  const tokensHeadingRef = useRef<HTMLHeadingElement>(null);
 
   const load = async () => {
     try {
@@ -93,6 +110,9 @@ export function TokensSection() {
     if (!justIssued) return;
     try {
       await navigator.clipboard.writeText(justIssued);
+      // Cleared first so a second press changes the region's text and is announced again.
+      // Leaving it true meant the second Copy produced silence and no visible change.
+      setCopied(false);
       setCopied(true);
     } catch {
       // Clipboard access can be refused. The value is on screen and selectable, so say that
@@ -117,7 +137,10 @@ export function TokensSection() {
       </p>
 
       {justIssued ? (
-        <div className="border-status-info-border bg-status-info-bg space-y-3 rounded-md border p-4">
+        <div
+          ref={issuedPanelRef}
+          className="border-status-info-border bg-status-info-bg space-y-3 rounded-md border p-4"
+        >
           <p className="text-sm font-medium">Your new token</p>
           {/* Rendered as a labelled, readonly field rather than decorative text: it has to be
               reachable and selectable by keyboard, since this is the only time it exists. */}
@@ -161,7 +184,9 @@ export function TokensSection() {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-medium">Your tokens</h2>
+        <h2 ref={tokensHeadingRef} tabIndex={-1} className="mb-2 text-sm font-medium">
+          Your tokens
+        </h2>
         {tokens === null ? (
           <p className="text-muted-foreground text-sm">Loading…</p>
         ) : tokens.length === 0 ? (
@@ -208,6 +233,11 @@ export function TokensSection() {
                         size="sm"
                         variant="outline"
                         onClick={() => setRevoking(token)}
+                        /* Which token. Tabbing the table otherwise gave "Revoke, Revoke,
+                           Revoke" with nothing to tell them apart. The name still begins with
+                           the visible word, so speech input for "Revoke" still matches
+                           (WCAG 2.5.3), and this is a real button, so a label belongs on it. */
+                        aria-label={`Revoke ${token.label || 'Unnamed token'}`}
                       >
                         Revoke
                       </Button>
@@ -220,17 +250,25 @@ export function TokensSection() {
         )}
       </div>
 
-      {revoking ? (
-        <ConfirmDialog
-          open
-          variant="destructive"
-          title="Revoke this token?"
-          description={`The client using ${revoking.label || 'this token'} will stop working immediately and will need a new one.`}
-          confirmText="Revoke token"
-          onConfirm={() => revoke(revoking)}
-          onCancel={() => setRevoking(null)}
-        />
-      ) : null}
+      {/*
+        `open={...}` rather than mounting the dialog conditionally. Unmounting an open Radix
+        dialog tears it out of the tree instead of closing it, so the close transition and the
+        focus restore are both skipped. The handler then sends focus to the section heading,
+        because the button that opened this was in the row the revoke has just removed.
+      */}
+      <ConfirmDialog
+        open={!!revoking}
+        variant="destructive"
+        title="Revoke this token?"
+        description={`The client using ${revoking?.label || 'this token'} will stop working immediately and will need a new one.`}
+        confirmText="Revoke token"
+        onConfirm={() => (revoking ? revoke(revoking) : undefined)}
+        onCancel={() => setRevoking(null)}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          tokensHeadingRef.current?.focus();
+        }}
+      />
     </div>
   );
 }

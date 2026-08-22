@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +42,14 @@ export function AssignmentLmsLinksCard({
 }) {
   const { timezone, hour12 } = useEffectiveTimezone();
   const [toRemove, setToRemove] = useState<AssignmentLmsLink | null>(null);
+  /**
+   * Where focus goes once a link is removed.
+   *
+   * Radix restores focus to whatever opened the dialog, and that was the Remove button inside
+   * the row the removal has just deleted. Restoring to a node that no longer exists drops focus
+   * to the document body, so a keyboard user was returned to the top of the page.
+   */
+  const headingRef = useRef<HTMLDivElement>(null);
 
   const remove = async (link: AssignmentLmsLink) => {
     try {
@@ -61,14 +69,31 @@ export function AssignmentLmsLinksCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
+        <CardTitle ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-base">
           <Link2 className="h-4 w-4" aria-hidden="true" />
           In your LMS
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
+        {/* One region for the whole card, kept across every branch below, so the wait and
+            its outcome are both announced. "Loading…" used to be plain text. */}
+        <span role="status" aria-live="polite" className="sr-only">
+          {/* Deliberately not a copy of the visible wording below: a screen reader would then
+              read the same sentence twice, once announced and once in the page. Short enough
+              to be the answer, and different enough not to be an echo. */}
+          {loading
+            ? 'Checking your LMS.'
+            : failed
+              ? ''
+              : links.length === 0
+                ? 'No LMS links.'
+                : `In ${links.length} LMS ${links.length === 1 ? 'course' : 'courses'}.`}
+        </span>
+
         {loading ? (
-          <p className="text-muted-foreground">Loading…</p>
+          <p className="text-muted-foreground" aria-hidden="true">
+            Loading…
+          </p>
         ) : failed ? (
           <div className="space-y-2">
             <p role="alert" className="text-status-danger">
@@ -144,6 +169,10 @@ export function AssignmentLmsLinksCard({
         confirmText="Remove link"
         onConfirm={() => (toRemove ? remove(toRemove) : undefined)}
         onCancel={() => setToRemove(null)}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          headingRef.current?.focus();
+        }}
       />
     </Card>
   );
