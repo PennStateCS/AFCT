@@ -49,7 +49,7 @@ import {
   Trash2,
   Lock,
   LockOpen,
-  ChevronDown,
+  EllipsisVertical,
   Mail,
   UserX,
   UserCheck,
@@ -271,7 +271,9 @@ export function getUserColumns(
     },
     {
       id: 'actions',
-      header: () => <span className="sr-only">Actions</span>,
+      // Visible now rather than sr-only: the trigger used to say "Manage" on its face, so
+      // the column named itself. A bare ellipsis does not.
+      header: 'Actions',
       meta: { priority: 1 },
       cell: ({ row }) => {
         const user = row.original;
@@ -567,13 +569,10 @@ function UserActionsCell({ user, onUserUpdate }: { user: UserListItem; onUserUpd
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="secondary"
-            aria-label={`Manage user ${fullName}`}
-            className="inline-flex items-center gap-2"
-          >
-            Manage
-            <ChevronDown className="h-4 w-4" />
+          {/* Every row carries one of these, so the label names the row: a dozen buttons
+              all called "More" is what a screen reader would otherwise hear. */}
+          <Button variant="ghost" size="icon" aria-label={`Actions for ${fullName}`}>
+            <EllipsisVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-56">

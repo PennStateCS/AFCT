@@ -56,10 +56,10 @@ const baseUser = {
 };
 
 describe('user-columns display cells', () => {
-  it('names the per-row Manage trigger for the specific user', () => {
+  it('names the per-row actions trigger for the specific user', () => {
     renderCell('actions', baseUser);
     expect(
-      screen.getByRole('button', { name: 'Manage user Ada Lovelace' }),
+      screen.getByRole('button', { name: 'Actions for Ada Lovelace' }),
     ).toBeInTheDocument();
   });
 

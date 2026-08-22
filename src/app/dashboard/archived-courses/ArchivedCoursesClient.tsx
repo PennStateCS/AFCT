@@ -5,8 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { columns } from '../courses/course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Archive } from 'lucide-react';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
+import { Archive, Library } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import type { CourseListItem } from '@/lib/courses-list';
@@ -55,32 +55,38 @@ export default function ArchivedCoursesClient({
 
   const columnsMemo = useMemo(() => {
     const cols = columns(refresh, refresh, timezone);
-    // The row actions (Manage: duplicate / archive / restore / delete) are admin-only here.
+    // The row actions (duplicate / archive / restore / delete) are admin-only here.
     return isAdmin ? cols : cols.filter((col) => col.id !== 'actions');
   }, [refresh, timezone, isAdmin]);
 
   return (
-    <Card className="p-4" aria-labelledby="archived-courses-title">
-      <CardHeader className="pb-4">
-        <CardTitle
+    // Same shape as the Courses page it is the counterpart to: a work page on the white
+    // surface, no outer card around a table that already has a border, and a real <h1> in
+    // place of the CardTitle that was carrying role="heading" aria-level={1}.
+    <WorkspaceSurface>
+      <section className="space-y-6" aria-labelledby="archived-courses-title">
+        <h1
           id="archived-courses-title"
-          role="heading"
-          aria-level={1}
-          className="text-2xl tracking-tight"
+          className="flex items-center gap-3 text-2xl font-semibold tracking-tight"
         >
-          Archived Courses
-        </CardTitle>
-      </CardHeader>
+          {/* Decorative: the heading beside it already says what this is. Library, the icon
+              the sidebar already uses for the archive, in the neutral muted surface: this
+              is where courses go to rest, not a place to draw the eye. */}
+          <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <Library className="size-5" aria-hidden="true" />
+          </span>
+          <span>Archived Courses</span>
+        </h1>
 
-      <CardContent>
         {isError && (
-          <div className="mb-3 flex items-center justify-between rounded-md border border-status-danger-border bg-status-danger-bg p-3 text-sm text-status-danger">
+          <div className="border-status-danger-border bg-status-danger-bg text-status-danger flex items-center justify-between rounded-md border p-3 text-sm">
             <span>Failed to refresh courses. Please try again.</span>
             <Button size="sm" variant="outline" onClick={refresh}>
               Retry
             </Button>
           </div>
         )}
+
         <DataTable
           columns={columnsMemo}
           data={courses}
@@ -91,7 +97,7 @@ export default function ArchivedCoursesClient({
           emptyIcon={Archive}
           loadingMessage="Loading archived courses, please wait..."
         />
-      </CardContent>
-    </Card>
+      </section>
+    </WorkspaceSurface>
   );
 }
