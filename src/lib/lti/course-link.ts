@@ -101,7 +101,9 @@ export async function peekLaunchTarget(opts: {
   });
   if (link) return { status: 'linked', courseId: link.courseId };
 
-  return (await canLinkCourses(userId)) ? { status: 'needs-link' } : { status: 'not-set-up' };
+  return (await canLinkCourses(userId, identity.roles))
+    ? { status: 'needs-link' }
+    : { status: 'not-set-up' };
 }
 
 /**
@@ -171,7 +173,9 @@ export async function resolveLaunchTarget(opts: {
     return { status: 'linked', courseId: link.courseId };
   }
 
-  return (await canLinkCourses(userId)) ? { status: 'needs-link' } : { status: 'not-set-up' };
+  return (await canLinkCourses(userId, identity.roles))
+    ? { status: 'needs-link' }
+    : { status: 'not-set-up' };
 }
 
 /**
@@ -321,16 +325,32 @@ function isUniqueConstraintError(error: unknown): boolean {
 const LINKING_ROLES: CourseRole[] = ['FACULTY', 'TA'];
 
 /**
- * Whether this person may link an LMS course to an AFCT one.
+ * Whether this person should be offered the linking path at all.
  *
- * Admins, and course staff on at least one course. TAs are included: they are the ones setting
- * a course up often enough that excluding them mostly produced a dead end, and a TA already
- * reads and grades everything in their course, so the LMS connection is not a new power. It is
- * still per course, not in general: see {@link linkLaunchCourse}.
+ * Admins, course staff on at least one course, and anyone the launch itself calls staff. TAs
+ * are included in the first two: they are the ones setting a course up often enough that
+ * excluding them mostly produced a dead end, and a TA already reads and grades everything in
+ * their course, so the LMS connection is not a new power.
+ *
+ * **This is routing, not permission.** It decides which screen somebody sees. Whether they may
+ * actually attach an LMS course is checked per course in {@link linkLaunchCourse}, and the
+ * picker lists only courses they are staff on, so trusting the launch here grants nothing.
+ *
+ * The launch roles are read for one reason. An instructor opening AFCT from their LMS for the
+ * first time has an account created for them on the spot, with no roster row anywhere, so this
+ * used to answer no and send them the message written for a student: that their instructor had
+ * not connected the course yet. They are the instructor. Reading the roles routes them to the
+ * message meant for staff instead, which says an administrator creates the AFCT course first.
+ * They still cannot link anything they do not run.
  */
-async function canLinkCourses(userId: string): Promise<boolean> {
+async function canLinkCourses(userId: string, launchRoles: string[]): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
   if (user?.isAdmin) return true;
+
+  // Against the same constant the per-course grant uses, so a role added to one cannot quietly
+  // fail to be added to the other. An unrecognised vocabulary maps to STUDENT, which is the
+  // safe reading and keeps the old answer.
+  if (LINKING_ROLES.includes(mapLtiRoles(launchRoles))) return true;
 
   const staff = await prisma.roster.count({ where: { userId, role: { in: LINKING_ROLES } } });
   return staff > 0;
