@@ -240,17 +240,19 @@ export default async function DashboardPage({
     <div className="grid w-full items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
       <section className="min-w-0">
         {/* Replaces the sr-only "Dashboard" h1, and sits inside the left column so the
-            rail starts level with it rather than below the whole greeting. Its own mb-6
-            rather than space-y on the section, so the launch notice below keeps the one
-            margin it already carries. */}
-        <div className="mb-6">
+            rail starts level with it rather than below the whole greeting. On a surface
+            of its own so it balances the Join a Course card opposite it, but a shallow
+            one: content-driven height, no accent, no illustration. Its own mb-6 rather
+            than space-y on the section, so the launch notice below keeps the one margin
+            it already carries. */}
+        <section className="border-border bg-card mb-6 rounded-lg border p-5">
           <h1 className="text-2xl font-semibold tracking-tight">
             {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
             {courseSummary} &middot; {assignmentSummary}
           </p>
-        </div>
+        </section>
 
         {/* Renders nothing unless an LMS launch sent them here, which is most of the time. */}
         <LaunchNotice notice={lms} courseTitle={lmsCourseTitle} />
