@@ -2,7 +2,7 @@
 // loaded here (and only here), so the rest of the app stays on whatever
 // fonts.ts says; preload is off since this is a dev-only page.
 import {
-  Geist,
+  Open_Sans,
   Inter,
   Atkinson_Hyperlegible,
   Source_Sans_3,
@@ -10,10 +10,11 @@ import {
   IBM_Plex_Sans,
   Lexend,
 } from 'next/font/google';
-// geistSans is whatever fonts.ts currently points the app at (Open Sans for now).
+// geistSans is whatever fonts.ts currently points the app at, so this row always
+// shows the real interface font rather than a second copy of it.
 import { geistSans } from '@/app/fonts';
 
-const geist = Geist({ subsets: ['latin'], preload: false });
+const openSans = Open_Sans({ subsets: ['latin'], preload: false });
 const inter = Inter({ subsets: ['latin'], preload: false });
 // The established "Atkinson Hyperlegible" (not the newer "…Next" variant): next/font has
 // fallback-metrics for it, so it doesn't log "Failed to find font override values". It is
@@ -25,8 +26,8 @@ const plexSans = IBM_Plex_Sans({ subsets: ['latin'], preload: false });
 const lexend = Lexend({ subsets: ['latin'], preload: false });
 
 const FONTS = [
-  { name: 'Open Sans (current)', className: geistSans.className },
-  { name: 'Geist', className: geist.className },
+  { name: 'Geist (current)', className: geistSans.className },
+  { name: 'Open Sans', className: openSans.className },
   { name: 'Inter', className: inter.className },
   { name: 'Atkinson Hyperlegible', className: atkinson.className },
   { name: 'Source Sans 3', className: sourceSans.className },

@@ -9,8 +9,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* next/font defines both variables on the body class (see the root layout). The
+     fallbacks matter for the moment before the webfont arrives, and for anything that
+     renders outside body. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   /* One step below `text-xs`, for the places that genuinely need it: a dense table label, a
      hint under a field. There were four bespoke values doing this job (0.65, 0.68, 0.70 and
      0.80rem), none distinguishable from the others on screen and none of them a decision
@@ -482,7 +485,9 @@ html {
     max-width: 440px !important;
     overflow: hidden !important;
     padding: 0 !important;
-    font-family: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif) !important;
+    /* Sonner sets its own font-family on the toast, so this has to win. It is the only
+       place in the app that names a font outside the theme tokens. */
+    font-family: var(--font-sans) !important;
   }
 
   .custom-toast[data-type='success'] {
