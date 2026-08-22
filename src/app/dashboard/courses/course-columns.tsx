@@ -15,7 +15,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import {
   Trash2,
   BookOpen,
-  ChevronDown,
+  EllipsisVertical,
   Copy,
   Archive,
   ArchiveRestore,
@@ -237,7 +237,9 @@ export const columns = (
   },
   {
     id: 'actions',
-    header: () => <span className="sr-only">Actions</span>,
+    // Visible now rather than sr-only: the trigger used to say "Manage" on its face, so
+    // the column named itself. A bare ellipsis does not.
+    header: 'Actions',
     enableSorting: false,
     meta: { priority: 1 },
     cell: ({ row }) => {
@@ -344,8 +346,10 @@ function CourseActionsCell({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary" aria-label={`Manage course ${course.name}`}>
-            <ChevronDown /> Manage
+          {/* Every row carries one of these, so the label names the course: a dozen
+              buttons all called "More" is what a screen reader would otherwise hear. */}
+          <Button variant="ghost" size="icon" aria-label={`Actions for ${course.name}`}>
+            <EllipsisVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
