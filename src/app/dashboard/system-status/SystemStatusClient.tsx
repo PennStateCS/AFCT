@@ -3,12 +3,12 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { TabBar } from '@/components/course/course-tabs';
+import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import {
   Server,
   Database,
@@ -125,17 +125,26 @@ export default function SystemStatusClient() {
     [summary, trends],
   );
 
+  const statusTabs = TABS.map((t) => ({ value: t.value, label: t.label, Icon: t.icon }));
+
+  // xl rather than lg: metric grids and charts beside a rail need the room.
+  const railNav = useIsDesktopNav(1280);
+
   // Refresh both the summary and whichever tab is currently open.
   const refreshAll = () => queryClient.invalidateQueries({ queryKey: ['admin', 'status'] });
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="space-y-4 pb-8">
-      <Card>
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <CardTitle role="heading" aria-level={1} className="text-2xl tracking-tight">
-              System Status
-            </CardTitle>
+    <Tabs
+      value={tab}
+      onValueChange={setTab}
+      orientation={railNav ? 'vertical' : 'horizontal'}
+      className="space-y-4"
+    >
+      {/* Heading, health badges, refresh controls and the metric tiles all sit on the
+          workspace itself: the page-sized card put a dashboard inside a card. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">System Status</h1>
             <Badge variant={dbOk ? 'success' : 'danger'} title={summary?.db.message || ''}>
               DB {dbOk ? 'OK' : 'DOWN'}
               {summary?.db.message ? (
@@ -161,9 +170,9 @@ export default function SystemStatusClient() {
               </Badge>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">Auto-refresh</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">Auto-refresh</span>
               <Switch
                 checked={autoRefresh}
                 onCheckedChange={setAutoRefresh}
@@ -186,16 +195,16 @@ export default function SystemStatusClient() {
             <div className="text-muted-foreground text-xs" aria-live="polite">
               {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ''}
             </div>
-            <Button size="sm" onClick={refreshAll} disabled={isFetching}>
-              {isFetching ? 'Refreshing…' : 'Refresh'}
-            </Button>
-          </div>
-        </CardHeader>
+          <Button size="sm" onClick={refreshAll} disabled={isFetching}>
+            {isFetching ? 'Refreshing…' : 'Refresh'}
+          </Button>
+        </div>
+      </div>
 
-        <CardContent className="space-y-4 pb-6">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-            {tiles.map((t) => (
-              <div key={t.label} className="rounded border p-3">
+      {/* Eight across only from xl. At lg they were 128px wide and the values wrapped. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
+        {tiles.map((t) => (
+          <div key={t.label} className="bg-card rounded-lg border p-3">
                 <div className="text-muted-foreground text-xs">{t.label}</div>
                 <div className="mt-1 flex h-7 items-center text-lg font-semibold">
                   {!summary ? (
@@ -211,15 +220,25 @@ export default function SystemStatusClient() {
             ))}
           </div>
 
+      {/* Eight sections is too many for a strip, so above xl they become a rail beside the
+          panels. Below that the strip and its select stay as they were. One control at a
+          time: two tablists under one Tabs root would duplicate its ARIA wiring. */}
+      <div className="space-y-4 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
+        {railNav ? (
+          <TabRail tabs={statusTabs} ariaLabel="System status sections" />
+        ) : (
           <TabBar
             ariaLabel="System status sections"
             selectId="system-status-tab-select"
             value={tab}
             onValueChange={setTab}
-            tabs={TABS.map((t) => ({ value: t.value, label: t.label, Icon: t.icon }))}
+            tabs={statusTabs}
           />
+        )}
 
-          <div className="pt-2">
+        {/* No max width, unlike System Settings: this page is metric grids, charts and
+            tables, all of which want the room. */}
+        <div className="min-w-0">
             <TabsContent value="server">
               <ServerTab
                 active={tab === 'server'}
@@ -248,9 +267,8 @@ export default function SystemStatusClient() {
             <TabsContent value="workers">
               <WorkersTab active={tab === 'workers'} autoRefresh={autoRefresh} />
             </TabsContent>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </Tabs>
   );
 }
