@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><structure>
+	<type>re</type>
+	<!--The same language built the other way: each iteration contributes either a single b or
+	    a pair of a's, so the count of a's is even by construction.-->
+	<expression>(b+ab*a)*</expression>
+</structure>

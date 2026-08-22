@@ -65,7 +65,6 @@
       "deterministic": true,
       "expectCorrect": false
     },
-
     {
       "name": "RE: regular expression is equivalent to itself",
       "type": "RE",
@@ -105,7 +104,6 @@
       "deterministic": false,
       "expectCorrect": true
     },
-
     {
       "name": "Rejection path: a Mealy machine is refused, not silently marked wrong",
       "type": "FA",
@@ -124,7 +122,6 @@
       "expectCorrect": false,
       "expectErrorContains": "unsupported answer type"
     },
-
     {
       "name": "RE (ends in b): solution is equivalent to itself",
       "type": "RE",
@@ -153,7 +150,6 @@
       "submission": "gs-re-endsb-edge.jff",
       "expectCorrect": false
     },
-
     {
       "name": "CFG (a^n b^n): solution is equivalent to itself",
       "type": "CFG",
@@ -182,7 +178,6 @@
       "submission": "gs-cfg-anbn-edge.jff",
       "expectCorrect": false
     },
-
     {
       "name": "PDA (a^n b^n): solution is equivalent to itself",
       "type": "PDA",
@@ -215,7 +210,6 @@
       "maxStates": -1,
       "expectCorrect": false
     },
-
     {
       "name": "PDA (a^n b^n): a version that empties its stack is equivalent",
       "type": "PDA",
@@ -324,6 +318,83 @@
       "answer": "gs-cfg-anbn-solution.jff",
       "submission": "gs-cfg-anbn-useless.jff",
       "expectCorrect": true
+    },
+    {
+      "name": "RE (even number of a's): solution is equivalent to itself",
+      "type": "RE",
+      "answer": "gs-re-evenA-solution.jff",
+      "submission": "gs-re-evenA-solution.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "RE (even number of a's): the same language written the other way round is accepted",
+      "type": "RE",
+      "answer": "gs-re-evenA-solution.jff",
+      "submission": "gs-re-evenA-correct.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "RE (even number of a's): the odd-parity complement is rejected",
+      "type": "RE",
+      "answer": "gs-re-evenA-solution.jff",
+      "submission": "gs-re-evenA-incorrect.jff",
+      "expectCorrect": false
+    },
+    {
+      "name": "RE (even number of a's): edge case that cannot make the empty string is rejected",
+      "type": "RE",
+      "answer": "gs-re-evenA-solution.jff",
+      "submission": "gs-re-evenA-edge.jff",
+      "expectCorrect": false
+    },
+    {
+      "name": "CFG (palindromes): solution is equivalent to itself",
+      "type": "CFG",
+      "answer": "gs-cfg-pal-solution.jff",
+      "submission": "gs-cfg-pal-solution.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "CFG (palindromes): the same language through a helper nonterminal is accepted",
+      "type": "CFG",
+      "answer": "gs-cfg-pal-solution.jff",
+      "submission": "gs-cfg-pal-correct.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "CFG (palindromes): even-length palindromes only, a strict subset, is rejected",
+      "type": "CFG",
+      "answer": "gs-cfg-pal-solution.jff",
+      "submission": "gs-cfg-pal-incorrect.jff",
+      "expectCorrect": false
+    },
+    {
+      "name": "CFG (palindromes): every even-length string, a strict superset, is rejected",
+      "type": "CFG",
+      "answer": "gs-cfg-pal-solution.jff",
+      "submission": "gs-cfg-pal-edge.jff",
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (a^n b^2n): solution is equivalent to itself",
+      "type": "PDA",
+      "answer": "gs-pda-a2b-solution.jff",
+      "submission": "gs-pda-a2b-solution.jff",
+      "expectCorrect": true
+    },
+    {
+      "name": "PDA (a^n b^2n): one b per a instead of two is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-a2b-solution.jff",
+      "submission": "gs-pda-a2b-incorrect.jff",
+      "expectCorrect": false
+    },
+    {
+      "name": "PDA (a^n b^2n): the balanced-parentheses language is rejected",
+      "type": "PDA",
+      "answer": "gs-pda-a2b-solution.jff",
+      "submission": "gs-pda-dyck-solution.jff",
+      "expectCorrect": false
     },
     {
       "name": "Rejection path: a finite automaton submitted for a PDA problem is refused",

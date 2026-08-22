@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><structure>
+	<type>re</type>
+	<!--Right in every way but one: one-or-more instead of zero-or-more, so it makes every
+	    string of the language except the empty one. Zero is even, so this is wrong.-->
+	<expression>(b+ab*a)(b+ab*a)*</expression>
+</structure>

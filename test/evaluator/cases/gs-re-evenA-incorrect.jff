@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><structure>
+	<type>re</type>
+	<!--An ODD number of a's: the complementary near-miss, sharing no string with the answer.-->
+	<expression>b*ab*(ab*ab*)*</expression>
+</structure>

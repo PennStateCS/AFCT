@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- One marker per 'a' instead of two, so this is { a^n b^n }: the same shape of machine
+     answering a different question, and the mistake a student actually makes here. -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0"><x>100.0</x><y>150.0</y><initial /></state>
+	<state id="1" name="q1"><x>300.0</x><y>150.0</y></state>
+	<state id="2" name="q2"><x>500.0</x><y>150.0</y></state>
+	<state id="3" name="q3"><x>700.0</x><y>150.0</y><final /></state>
+	<transition><from>0</from><to>1</to><read></read><pop></pop><push>$</push></transition>
+	<transition><from>1</from><to>1</to><read>a</read><pop></pop><push>x</push></transition>
+	<transition><from>1</from><to>2</to><read></read><pop></pop><push></push></transition>
+	<transition><from>2</from><to>2</to><read>b</read><pop>x</pop><push></push></transition>
+	<transition><from>2</from><to>3</to><read></read><pop>$</pop><push></push></transition>
+</structure>
