@@ -52,12 +52,11 @@ import {
   Library,
   Book,
   Users,
-  UserRound,
   CircleCheckBig,
   LogOut,
   Logs,
   UserPen,
-  ChevronUp,
+  EllipsisVertical,
   ChevronDown,
   Activity,
   Settings,
@@ -339,6 +338,11 @@ export default function DashboardSidebarMenu() {
     'User';
   const avatarUrl = avatar?.trim() !== '' ? avatar : null;
 
+  // Second line of the account row. isAdmin is the only role that is global; FACULTY, TA
+  // and STUDENT are per-course (Roster.role), so a user can be all three at once and
+  // there is no one label to show. Everyone else gets their address.
+  const accountSubtitle = isAdmin ? 'Administrator' : email;
+
   const user = {
     id,
     firstName: firstName,
@@ -567,8 +571,9 @@ export default function DashboardSidebarMenu() {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Footer menu for user account actions */}
-      <SidebarFooter>
+      {/* Footer menu for user account actions. The divider is what stops this reading as
+          one more navigation link below Archived Courses. */}
+      <SidebarFooter className="border-sidebar-border border-t">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -578,14 +583,16 @@ export default function DashboardSidebarMenu() {
                   // plus the visible span) and never said what activating it does.
                   aria-label={`Open account menu for ${user.name}`}
                   className={cn(
-                    'hover:bg-sidebar-accent data-[state=open]:bg-sidebar-primary bg-sidebar-foreground/10 h-14 px-3 py-3 transition-colors data-[state=open]:text-sidebar-primary-foreground',
+                    // Open uses the hover surface, not the cobalt primary: cobalt means
+                    // "this is the page you are on", and an open menu is neither.
+                    'h-14 px-3 py-3 transition-colors hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent',
                     // In the icon rail the button shrinks to 32px; drop the padding and
                     // center so the 32px avatar fills the tile as a clean circle instead
                     // of overflowing an 8px-padded 16px box behind the (hidden) name.
                     'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:!p-0',
                   )}
                 >
-                  <Avatar className="h-8 w-8 shrink-0">
+                  <Avatar className="h-8 w-8 shrink-0 border-0">
                     {/* Decorative: the button carries the name, so an alt here would only
                         duplicate it. */}
                     <AvatarImage
@@ -601,25 +608,65 @@ export default function DashboardSidebarMenu() {
                   </Avatar>
                   {!collapsed && (
                     <>
-                      <span className="truncate">{user.name}</span>
-                      <ChevronUp className="ml-auto" />
+                      <span className="flex min-w-0 flex-1 flex-col text-left">
+                        <span className="text-sidebar-foreground truncate text-sm font-medium">
+                          {user.name}
+                        </span>
+                        {accountSubtitle && (
+                          <span className="text-sidebar-muted-foreground truncate text-xs">
+                            {accountSubtitle}
+                          </span>
+                        )}
+                      </span>
+                      {/* Decorative: the button already says "Open account menu for X".
+                          An ellipsis rather than a chevron, because a chevron here read as
+                          another collapsible section like the course groups above. */}
+                      <EllipsisVertical
+                        aria-hidden="true"
+                        className="text-sidebar-muted-foreground ml-auto h-4 w-4 shrink-0"
+                      />
                     </>
                   )}
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               {/* min-w (not w) so the menu still fills the trigger when the sidebar is
                   expanded, but grows to fit its items when collapsed (the trigger is
-                  then only 32px wide, which would otherwise squish the menu). */}
+                  then only 32px wide, which would otherwise squish the menu). The max
+                  keeps a long address from stretching the menu across the page. */}
               <DropdownMenuContent
                 side="top"
-                className="min-w-[max(var(--radix-popper-anchor-width),12rem)]"
+                className="max-w-64 min-w-[max(var(--radix-popper-anchor-width),13rem)]"
               >
-                {/* Section header, not an action. A Label keeps it out of the menu's
-                    focus/arrow-key order; overrides preserve the exact resting look. */}
-                <DropdownMenuLabel className="[&_svg:not([class*='text-'])]:text-muted-foreground font-normal">
+                {/* Identity, not an action. A Label keeps it out of the menu's
+                    focus/arrow-key order, which is why the name is repeated here rather
+                    than made a menu item. */}
+                <DropdownMenuLabel className="font-normal">
                   <span className="flex w-full items-center gap-2 text-left">
-                    <UserRound className="h-4 w-4" />
-                    User Account
+                    <Avatar className="h-8 w-8 shrink-0 border-0">
+                      <AvatarImage
+                        src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
+                        alt=""
+                        cropX={user.cropX ?? 0.5}
+                        cropY={user.cropY ?? 0.5}
+                        zoom={user.zoom ?? 1}
+                      />
+                      <AvatarFallback className="text-xs">
+                        {getInitials(user.firstName, user.lastName, user.email)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm font-medium">{user.name}</span>
+                      {user.email && (
+                        <span className="text-muted-foreground truncate text-xs">
+                          {user.email}
+                        </span>
+                      )}
+                      {isAdmin && (
+                        <span className="text-muted-foreground truncate text-xs">
+                          Administrator
+                        </span>
+                      )}
+                    </span>
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -631,6 +678,7 @@ export default function DashboardSidebarMenu() {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  variant="destructive"
                   className="cursor-pointer"
                   onClick={() => void safeSignOut({ callbackUrl: '/' })}
                 >

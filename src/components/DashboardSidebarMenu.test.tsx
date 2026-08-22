@@ -419,6 +419,31 @@ describe('DashboardSidebarMenu', () => {
     );
   });
 
+  /**
+   * The account row's second line. isAdmin is the only role AFCT holds globally; FACULTY,
+   * TA and STUDENT live on Roster per course, so there is no single label for them and the
+   * address is shown instead. Asserting both branches keeps someone from "fixing" this by
+   * printing a course role here.
+   */
+  it('shows Administrator under the name for an admin', () => {
+    renderWithClient(<DashboardSidebarMenu />);
+
+    const trigger = screen.getByLabelText(/Open account menu/);
+    expect(trigger).toHaveTextContent('Administrator');
+  });
+
+  it('shows the email address under the name for a non-admin', () => {
+    useSessionMock.mockReturnValue({
+      data: { user: { id: 'student-1', email: 'jane@psu.edu', isAdmin: false } },
+    });
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    const trigger = screen.getByLabelText(/Open account menu/);
+    expect(trigger).toHaveTextContent('jane@psu.edu');
+    expect(trigger).not.toHaveTextContent('Administrator');
+  });
+
   it('calls safeSignOut when the user selects Sign out', () => {
     renderWithClient(<DashboardSidebarMenu />);
 
