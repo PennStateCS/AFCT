@@ -586,9 +586,10 @@ export default function DashboardSidebarMenu() {
                     // Open uses the hover surface, not the cobalt primary: cobalt means
                     // "this is the page you are on", and an open menu is neither.
                     'h-14 px-3 py-3 transition-colors hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent',
-                    // In the icon rail the button shrinks to 32px; drop the padding and
-                    // center so the 32px avatar fills the tile as a clean circle instead
-                    // of overflowing an 8px-padded 16px box behind the (hidden) name.
+                    // In the icon rail the button is a 40px square. Drop the padding and
+                    // center, so the 32px avatar sits in the middle of it rather than
+                    // being pushed left by the padding that positions a 16px icon. The
+                    // avatar stays 32px: it is identity, not another nav icon.
                     'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:!p-0',
                   )}
                 >
@@ -631,7 +632,7 @@ export default function DashboardSidebarMenu() {
               </DropdownMenuTrigger>
               {/* min-w (not w) so the menu still fills the trigger when the sidebar is
                   expanded, but grows to fit its items when collapsed (the trigger is
-                  then only 32px wide, which would otherwise squish the menu). The max
+                  then only 40px wide, which would otherwise squish the menu). The max
                   keeps a long address from stretching the menu across the page. */}
               <DropdownMenuContent
                 side="top"

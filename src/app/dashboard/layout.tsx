@@ -48,7 +48,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           // width the drawer has really been rendering at; 10rem is too narrow for
           // rows like "Archived Courses" and has never been seen in practice.
           '--sidebar-width-mobile': '18rem',
-          '--sidebar-width-icon': '3rem',
+          '--sidebar-width-icon': '3.5rem',
         } as React.CSSProperties
       }
       defaultOpen={defaultOpen}
