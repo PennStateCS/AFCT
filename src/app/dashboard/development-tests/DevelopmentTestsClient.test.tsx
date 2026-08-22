@@ -77,7 +77,9 @@ describe('DevelopmentTestsClient', () => {
     render(<DevelopmentTestsClient />);
 
     expect(screen.getByText('Development Tests')).toBeInTheDocument();
-    expect(screen.getByText('Toast Messages')).toBeInTheDocument();
+    // By role, not text: the label is now also the tab and the mobile select's option,
+    // and this assertion is about the section heading.
+    expect(screen.getByRole('heading', { name: 'Toast Messages' })).toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Success' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Error' })).toBeInTheDocument();
