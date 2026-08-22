@@ -224,9 +224,14 @@ function CourseTabRail({ tabs, ariaLabel }: { tabs: readonly TabBarTab[]; ariaLa
     // A surface rather than a rule down the page: the divider split the workspace in two
     // instead of grouping the items. self-start so it stays the height of its own list
     // rather than stretching beside a long table.
+    //
+    // Sticky only from lg, where the rail exists at all. `top-6` rather than a navbar-sized
+    // offset because nothing is pinned up there: the header scrolls away with the page, so
+    // this just needs a little air above it. No ancestor sets overflow, which is what would
+    // otherwise turn position:sticky into a no-op.
     <TabsList
       aria-label={ariaLabel}
-      className="bg-muted/40 h-auto w-full flex-col items-stretch justify-start gap-0.5 self-start rounded-lg border-0 p-2"
+      className="bg-muted/40 h-auto w-full flex-col items-stretch justify-start gap-0.5 self-start rounded-lg border-0 p-2.5 lg:sticky lg:top-6"
     >
       {tabs.map(({ value: tabValue, label, Icon, count }) => (
         <TabsTrigger
@@ -242,9 +247,9 @@ function CourseTabRail({ tabs, ariaLabel }: { tabs: readonly TabBarTab[]; ariaLa
           {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
           <span className="truncate">{label}</span>
           {count !== undefined ? (
-            // Outlined and quiet at rest so the counts read as one column rather than
-            // seven tinted chips; only the active row's count picks up the tint.
-            <span className="border-border bg-background text-muted-foreground group-data-[state=active]:border-primary/20 group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary dark:group-data-[state=active]:border-blue-900 dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300 ml-auto min-w-5 rounded-full border px-1.5 text-center text-xs leading-5 font-medium">
+            // Filled and borderless at rest: the outline made seven quiet counts read as
+            // seven controls. Only the active row's count picks up the tint.
+            <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300 ml-auto min-w-5 rounded-full border-0 px-1.5 text-center text-xs leading-5 font-medium">
               {count}
             </span>
           ) : null}
