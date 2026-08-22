@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { Library } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { getCourseStatusTag } from '@/lib/course-status';
@@ -51,11 +52,17 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
     // rest (credits, faculty, TAs, dates), which is where managing a course happens.
     <section
       className="border-border bg-card overflow-hidden rounded-lg border"
-      aria-labelledby="my-courses-title"
+      aria-labelledby="courses-title"
     >
       <div className="flex items-center justify-between gap-4 px-4 py-3">
-        <h2 id="my-courses-title" className="text-base font-semibold">
-          {title}
+        <h2 id="courses-title" className="flex items-center gap-2.5 text-base font-semibold">
+          {/* Decorative: the heading beside it already says what this is. Matches the
+              treatment on the two rail cards, in a third accent so the three headings
+              are distinguishable at a glance. */}
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <Library className="size-4" aria-hidden="true" />
+          </span>
+          <span>{title}</span>
         </h2>
         {/* A quiet way out to the full list, not an action. Everyone who reaches the
             dashboard can open /dashboard/courses; the page scopes itself per viewer. */}

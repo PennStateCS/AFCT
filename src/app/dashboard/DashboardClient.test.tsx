@@ -33,7 +33,7 @@ const course = (over: Partial<CourseInput> & { id: string; name: string }): Cour
 
 const renderDash = (courses: CourseInput[], isAdmin = false) =>
   render(
-    <DashboardClient sessionUser={{ id: 'u1', isAdmin }} title="My Courses" courses={courses} />,
+    <DashboardClient sessionUser={{ id: 'u1', isAdmin }} title="Courses" courses={courses} />,
   );
 
 describe('DashboardClient per-course role', () => {
