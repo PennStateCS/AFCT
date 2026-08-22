@@ -128,8 +128,7 @@ export const apiPaths = {
   courseProblemImport: (id: string) => `/api/courses/${id}/problems/import`,
   courseRosterEntry: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}`,
   // Drop / re-enroll a student (PATCH { status }).
-  courseRosterStatus: (id: string, userId: string) =>
-    `/api/courses/${id}/roster/${userId}/status`,
+  courseRosterStatus: (id: string, userId: string) => `/api/courses/${id}/roster/${userId}/status`,
   courseRosterResetPassword: (id: string, userId: string) =>
     `/api/courses/${id}/roster/${userId}/reset-password`,
   courseAssignments: (id: string, opts?: { includeUnpublished?: boolean }) =>
@@ -240,6 +239,9 @@ export const apiPaths = {
     users: (opts?: { role?: string }) => `/api/admin/users${qs({ role: opts?.role })}`,
     usersBulk: () => '/api/admin/users/bulk',
     usersList: () => '/api/admin/users/list',
+    /** An unused account an LMS launch made for this name, when there is exactly one. */
+    launchAccount: (firstName: string, lastName: string) =>
+      `/api/admin/users/launch-account${qs({ firstName, lastName })}`,
     resetPassword: () => '/api/admin/reset-password',
     unlockAccount: () => '/api/admin/unlock-account',
     logs: () => '/api/admin/logs',

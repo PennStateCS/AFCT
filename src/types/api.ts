@@ -684,6 +684,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/users/launch-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find an unused account an LMS launch created for this name
+         * @description Whether an LMS has already made an account for the person about to be created.   Read-only and deliberately quiet: a miss answers `null` rather than an error, because most  names will not match and the dialog asking is not doing anything wrong. Administrators only,  like everything else that reads across accounts.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/admin/users/launch-account/route.ts)
+         */
+        get: operations["getAdminUsersLaunchAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/users/list": {
         parameters: {
             query?: never;
@@ -5109,6 +5131,45 @@ export interface operations {
             };
             /** @description Server error. */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminUsersLaunchAccount: {
+        parameters: {
+            query: {
+                firstName: string;
+                lastName: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account, or null when there is no single safe match. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A name is missing. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description System administrators only. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
