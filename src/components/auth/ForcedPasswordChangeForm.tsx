@@ -71,8 +71,10 @@ export function ForcedPasswordChangeForm() {
       <main className="relative z-10 mx-4 w-full max-w-[430px]">
         <div className="rounded-2xl bg-white p-8 shadow-[0_25px_60px_rgba(0,0,0,0.25)]">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold text-gray-800">Change Temporary Password</h1>
-            <p className="mt-2 text-sm text-gray-600">
+            <h1 className="text-3xl font-semibold tracking-tight text-gray-800">
+              Change Temporary Password
+            </h1>
+            <p className="mt-2 text-base leading-6 text-gray-600">
               Your account is using a temporary password. You must choose a new password before
               continuing to the dashboard.
             </p>

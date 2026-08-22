@@ -123,7 +123,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                     x={xOf(0)}
                     y={cy}
                     dominantBaseline="middle"
-                    className="fill-muted-foreground text-[11px] italic"
+                    className="fill-muted-foreground text-2xs italic"
                     aria-hidden="true"
                   >
                     No graded {unitPlural}
