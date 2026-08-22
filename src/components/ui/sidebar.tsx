@@ -393,7 +393,7 @@ function SidebarContent({ className, ...props }: React.ComponentProps<'div'>) {
         // design) but must keep vertical scrolling: `overflow-hidden` there clipped the
         // lower links out of sight while leaving them keyboard-focusable, so tabbing
         // landed on targets the user could not see.
-        'flex min-h-0 flex-1 flex-col gap-0 overflow-auto group-data-[collapsible=icon]:gap-2 group-data-[collapsible=icon]:overflow-x-hidden group-data-[collapsible=icon]:overflow-y-auto group-data-[collapsible=icon]:p-2',
+        'flex min-h-0 flex-1 flex-col gap-0 overflow-auto group-data-[collapsible=icon]:gap-3 group-data-[collapsible=icon]:overflow-x-hidden group-data-[collapsible=icon]:overflow-y-auto group-data-[collapsible=icon]:p-2',
         className,
       )}
       {...props}
