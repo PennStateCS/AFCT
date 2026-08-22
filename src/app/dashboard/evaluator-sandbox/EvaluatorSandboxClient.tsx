@@ -122,73 +122,81 @@ export default function EvaluatorSandboxClient() {
   })();
 
   return (
-    <div className="space-y-4 pb-8">
-      <Card>
-        <CardHeader>
-          <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl tracking-tight">
-            <FlaskConical className="h-6 w-6" aria-hidden="true" />
-            Evaluator Sandbox
-          </CardTitle>
-          <p className="text-muted-foreground text-sm">
-            Run a pair of files through the autograder without building a course around them.
-            Nothing here is graded, and both files are deleted as soon as the run finishes.
-          </p>
-        </CardHeader>
+    // Capped rather than full-bleed: a handful of short controls stretched across a wide
+    // display would put a label and its own control at opposite ends with nothing between.
+    <div className="max-w-5xl space-y-6">
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <FlaskConical className="size-6 shrink-0" aria-hidden="true" />
+          Evaluator Sandbox
+        </h1>
+        <p className="text-muted-foreground max-w-2xl text-sm">
+          Run a pair of files through the autograder without building a course around them.
+          Nothing here is graded, and both files are deleted as soon as the run finishes.
+        </p>
+      </div>
 
-        {/* Capped rather than full-bleed: these are a handful of short controls, and on a
-            wide screen a full-width row leaves a label and its own control at opposite
-            ends of the display with nothing between them. */}
-        <CardContent className="max-w-3xl space-y-6">
-          {/* One narrow column rather than a grid. Max States grows a second row when it is
-              limited, which left it half a control lower than whatever sat beside it. */}
-          <div className="max-w-sm space-y-4">
-            <div>
-              <Label htmlFor="trial-type" className="mb-2 block text-sm font-medium">
-                Problem Type
-              </Label>
-              <select
-                id="trial-type"
-                className="bg-card border-input h-9 w-full rounded border px-2"
-                value={type}
-                disabled={running}
-                onChange={(e) => setType(e.target.value as typeof type)}
-              >
-                {PROBLEM_TYPES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <section className="bg-card space-y-5 rounded-lg border p-5" aria-labelledby="trial-config">
+        <h2 id="trial-config" className="text-base font-semibold">
+          Test Configuration
+        </h2>
 
-            {(type === 'FA' || type === 'PDA') && (
-              <LimitField
-                label="Max States"
-                name="trial-max-states"
-                unlimited={unlimitedStates}
-                onUnlimitedChange={setUnlimitedStates}
-                value={maxStates}
-                onValueChange={setMaxStates}
-                min={1}
-                max={1000}
-                placeholder="e.g. 12"
-                disabled={running}
-              />
-            )}
-
-            {type === 'FA' && (
-              <SwitchField
-                label="Deterministic"
-                name="trial-deterministic"
-                id="trial-deterministic"
-                checked={isDeterministic}
-                onCheckedChange={setIsDeterministic}
-                disabled={running}
-              />
-            )}
+        {/* Type and Max States pair up; Deterministic gets its own row because it is a
+            switch, and because Max States grows a second row when it is limited, which
+            would leave anything beside it half a control lower. */}
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <Label htmlFor="trial-type" className="mb-2 block text-sm font-medium">
+              Problem Type
+            </Label>
+            <select
+              id="trial-type"
+              className="bg-card border-input h-9 w-full rounded border px-2"
+              value={type}
+              disabled={running}
+              onChange={(e) => setType(e.target.value as typeof type)}
+            >
+              {PROBLEM_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+          {(type === 'FA' || type === 'PDA') && (
+            <LimitField
+              label="Max States"
+              name="trial-max-states"
+              unlimited={unlimitedStates}
+              onUnlimitedChange={setUnlimitedStates}
+              value={maxStates}
+              onValueChange={setMaxStates}
+              min={1}
+              max={1000}
+              placeholder="e.g. 12"
+              disabled={running}
+            />
+          )}
+        </div>
+
+        {type === 'FA' && (
+          <SwitchField
+            label="Deterministic"
+            name="trial-deterministic"
+            id="trial-deterministic"
+            checked={isDeterministic}
+            onCheckedChange={setIsDeterministic}
+            disabled={running}
+          />
+        )}
+      </section>
+
+      <section className="space-y-4" aria-labelledby="trial-files">
+        <h2 id="trial-files" className="text-base font-semibold">
+          Files
+        </h2>
+        <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
             <FileUploadInput
               id="trial-answer-file"
               name="answerFile"
@@ -212,31 +220,31 @@ export default function EvaluatorSandboxClient() {
               onChange={setSubmissionFile}
             />
           </div>
+      </section>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button onClick={run} disabled={!canRun}>
-              {starting ? 'Starting…' : 'Run'}
-            </Button>
-            {trialId !== null && (
-              <Button variant="outline" onClick={clear} disabled={starting}>
-                Clear
-              </Button>
-            )}
-            {/* Say why the button is dead rather than leaving it greyed with no reason. */}
-            {!answerFile || !submissionFile ? (
-              <span className="text-muted-foreground text-sm">
-                Choose both files to run a test.
-              </span>
-            ) : null}
-          </div>
+      {/* The reason sits with the disabled button, and Run trails to the right where the
+          eye lands last after filling the form in. */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {!answerFile || !submissionFile ? (
+          <span className="text-muted-foreground mr-auto text-sm">
+            Choose both files to run a test.
+          </span>
+        ) : null}
+        {trialId !== null && (
+          <Button variant="outline" onClick={clear} disabled={starting}>
+            Clear
+          </Button>
+        )}
+        <Button onClick={run} disabled={!canRun}>
+          {starting ? 'Starting…' : 'Run'}
+        </Button>
+      </div>
 
-          {error && (
-            <p role="alert" className="text-destructive text-sm">
-              {error}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      {error && (
+        <p role="alert" className="text-destructive text-sm">
+          {error}
+        </p>
+      )}
 
       {/*
         Outside the card on purpose, and never unmounted.
