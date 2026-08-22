@@ -344,8 +344,10 @@ jobs:
       - name: Install evaluator font dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core
 
-      # The seed FA cases don't invoke cfganalyzer, but make it executable so CFG/PDA
-      # cases added later work (checkout does not always preserve the +x bit).
+      # Belt and braces: the binary is stored 100755, so this is normally a no-op. Kept
+      # because a checkout on a filesystem that drops the mode would otherwise fail the
+      # fourteen CFG and PDA cases with the binary's own path quoted as a counterexample,
+      # which reads like a grading bug rather than a permissions one.
       - name: Make cfganalyzer executable
         run: chmod +x bin/cfganalyzer
 

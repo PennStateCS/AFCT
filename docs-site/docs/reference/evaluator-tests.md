@@ -87,8 +87,17 @@ A good pair of cases for any problem: grade a solution **against itself**
   (`bin/cfganalyzer`). The runner already points `CFGANALYZER_BINARY` and
   `CFGANALYZER_LIMIT` at it, so adding a CFG or PDA case is the way to also catch a broken
   `cfganalyzer` in the build.
-- **`TM`** (Turing machines) are graded by bounded simulation.
+- **`TM`** (Turing machines) are not gradeable in practice today. The only TM fixture in the
+  suite asserts that the jar **refuses** one, with "unsupported answer type", and `TM` is not
+  offered as a problem type when creating a problem, so no course can set one. The schema and
+  the viewers carry `TM` because the work was started; the grading is not there.
 
-Because context-free and Turing equivalence are undecidable in general, the CFG/PDA/TM
-checks are bounded and heuristic; pick fixtures whose verdict is unambiguous within those
-bounds.
+:::note If `cfganalyzer` looks broken
+Fourteen CFG and PDA cases fail together, each quoting the binary's own path as the
+counterexample ("the string `/app/bin/cfganalyzer` is an example"). That is not a grading bug,
+it is `bin/cfganalyzer` having lost its executable bit. It is stored `100755`, so this only
+happens on a filesystem that drops the mode; `chmod +x bin/cfganalyzer` fixes it.
+:::
+
+Because context-free equivalence is undecidable in general, the CFG and PDA checks are bounded
+and heuristic; pick fixtures whose verdict is unambiguous within those bounds.
