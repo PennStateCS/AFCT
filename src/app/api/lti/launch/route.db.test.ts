@@ -337,9 +337,7 @@ describe('where a launch lands', () => {
     expect(next.pathname).toBe('/dashboard');
     expect(next.searchParams.get('lms')).toBe('not-published');
     // Enrolled all the same, which is what makes the course appear once it is published.
-    expect(
-      await prisma.roster.count({ where: { courseId: COURSE, userId: USER_ID } }),
-    ).toBe(1);
+    expect(await prisma.roster.count({ where: { courseId: COURSE, userId: USER_ID } })).toBe(1);
   });
 
   /** Staff are there to publish it, so they go to the course as before. */
@@ -389,6 +387,36 @@ describe('where a launch lands', () => {
    * An empty picker is a wall. They are told what is missing instead, and no pending link is
    * written, since there is no choice for it to record.
    */
+  /**
+   * #655, end to end. An instructor's first launch: the account is created here and now, with
+   * no roster row anywhere, and they used to be told their instructor had not connected the
+   * course yet.
+   *
+   * The two assertions carry different weight. The notice is the fix. The pending-link count is
+   * the load-bearing one: the whole claim that reading LMS roles grants nothing rests on
+   * `linkableCourseCount` staying blind to them, so nothing is written and no picker is shown.
+   * The obvious future "improvement", passing roles into that count so instructors get a picker
+   * of every course, is exactly what this assertion is here to stop.
+   */
+  it('tells an instructor with no AFCT course what is missing, not to ask their instructor', async () => {
+    await withCourse();
+    validateLaunch.mockResolvedValue({
+      ok: true,
+      identity: {
+        ...identity,
+        roles: ['http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor'],
+      },
+    });
+
+    const res = await post(await goodLaunch());
+    const next = new URL(nextOf(res)!, 'https://afct.test');
+
+    expect(next.pathname).toBe('/dashboard');
+    expect(next.searchParams.get('lms')).toBe('no-courses');
+    expect(await prisma.ltiPendingLink.count()).toBe(0);
+    expect(await prisma.ltiContextLink.count()).toBe(0);
+  });
+
   it('sends staff with no course of their own to the dashboard', async () => {
     await withCourse();
     validateLaunch.mockResolvedValue({

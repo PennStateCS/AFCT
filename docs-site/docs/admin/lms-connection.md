@@ -86,6 +86,13 @@ Faculty adding their own links need the same setting, which is covered in [Grade
 
 Ask someone with a course in the LMS to add an AFCT link and open it. On a first launch AFCT asks them which of their AFCT courses this LMS course is, and they choose it once.
 
+**Create the AFCT course before the instructor opens the link.** They can only connect an LMS
+course to an AFCT course they already run, and only an administrator creates courses. An
+instructor who opens the link before that exists is told so, and told that an administrator
+creates the course first, but it is a wasted trip. Create the course, add them to it as Faculty
+on the [Roster](../faculty/roster.md), and their first launch then offers the connection
+straight away.
+
 If a launch fails, open [System Logs](system-logs.md) and filter for `LTI_LAUNCH_DENIED`. The entry says why it was refused and which issuer the LMS claimed, which is what you compare against the registration. The common causes:
 
 | Reason in the log | What to fix |

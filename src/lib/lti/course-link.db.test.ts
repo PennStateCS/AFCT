@@ -211,6 +211,43 @@ describe('where a launch lands', () => {
     expect(target).toEqual({ status: 'needs-link' });
   });
 
+  /**
+   * #655. An instructor's first launch creates their account on the spot, with no roster row
+   * anywhere, so this used to answer `not-set-up` and land them on the message written for a
+   * student: that their instructor had not connected the course yet. They are the instructor.
+   */
+  it('offers the choice when the launch itself says instructor', async () => {
+    const target = await resolveLaunchTarget({
+      identity: identity({ roles: [`${R}#Instructor`] }),
+      userId: ids.student,
+    });
+
+    expect(target).toEqual({ status: 'needs-link' });
+  });
+
+  it('does the same for a teaching assistant, matching who may link', async () => {
+    const target = await resolveLaunchTarget({
+      identity: identity({ roles: [`${R}#TeachingAssistant`] }),
+      userId: ids.student,
+    });
+
+    expect(target).toEqual({ status: 'needs-link' });
+  });
+
+  /**
+   * Platforms carry vocabularies AFCT has never seen. `mapLtiRoles` reads anything it does not
+   * know as a student, and that has to stay the answer here: guessing the other way would hand
+   * the picker to whoever the platform happened to word oddly.
+   */
+  it('still treats an unrecognised role as a student', async () => {
+    const target = await resolveLaunchTarget({
+      identity: identity({ roles: ['http://example.test/vocab#Wizard'] }),
+      userId: ids.student,
+    });
+
+    expect(target).toEqual({ status: 'not-set-up' });
+  });
+
   it('offers the choice to an admin who runs no courses', async () => {
     const target = await resolveLaunchTarget({ identity: identity(), userId: ids.admin });
 
@@ -303,6 +340,28 @@ describe('who may link a course', () => {
     });
 
     expect(result).toEqual({ ok: false, reason: 'not-allowed' });
+  });
+
+  /**
+   * The guard that keeps the launch roles a routing decision rather than a permission.
+   *
+   * Somewhere upstream, a launch saying Instructor is now enough to be offered the linking
+   * screen, because an instructor's first launch has no roster row yet and used to dead-end on
+   * a message written for students. That is only safe while this check ignores the claim
+   * entirely: the LMS says who somebody is to the LMS, and AFCT decides what they may attach.
+   *
+   * If this test ever fails, the fix is not to update the expectation.
+   */
+  it('refuses somebody the launch calls an instructor but AFCT does not staff', async () => {
+    const result = await linkLaunchCourse({
+      identity: identity({ roles: [`${R}#Instructor`] }),
+      courseId: COURSE,
+      userId: ids.student,
+      context: CTX,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'not-allowed' });
+    expect(await prisma.ltiContextLink.count({ where: { courseId: COURSE } })).toBe(0);
   });
 
   it('lets an admin link any course', async () => {
