@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,12 +14,14 @@ import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import InputGroup from '@/components/ui/InputGroup';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { CreateUserSchema, type CreateUserRaw, type CreateUserInput } from '@/schemas/user';
 import { apiPaths } from '@/lib/api-paths';
+import type { OrphanedLaunchAccount } from '@/lib/lti/jit-duplicates';
 
 // For the checklist UI only
 const passwordRules = [
@@ -37,7 +39,7 @@ type CreateUserDialogProps = {
 };
 
 export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogProps) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const defaults: CreateUserRaw = useMemo(() => {
     return {
       firstName: '',
@@ -92,7 +94,13 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
     const res = await fetch(apiPaths.admin.users(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      // Only when the box is ticked AND the account it was ticked for is still the one on
+      // screen: a name edited afterwards finds a different account, or none.
+      body: JSON.stringify(
+        adopt && launchAccount
+          ? { ...payload, adoptLaunchAccountId: launchAccount.userId }
+          : payload,
+      ),
     });
 
     if (res.ok) {
@@ -107,6 +115,49 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
   };
 
   const pw = watch('password');
+
+  /**
+   * Look for an account an LMS already made for this name.
+   *
+   * Debounced, because it runs while somebody is typing a name and most keystrokes are halfway
+   * through one. A miss is silent: the answer is usually none, and saying so would be noise.
+   */
+  const firstName = watch('firstName');
+  const lastName = watch('lastName');
+  const [launchAccount, setLaunchAccount] = useState<OrphanedLaunchAccount | null>(null);
+  const [adopt, setAdopt] = useState(false);
+
+  useEffect(() => {
+    const first = firstName?.trim() ?? '';
+    const last = lastName?.trim() ?? '';
+    if (!open || !first || !last) {
+      setLaunchAccount(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void fetch(apiPaths.admin.launchAccount(first, last))
+        .then((res) => (res.ok ? res.json() : { account: null }))
+        .then((body: { account: OrphanedLaunchAccount | null }) => {
+          if (cancelled) return;
+          setLaunchAccount(body.account);
+          // A different account (or none) is a different decision, so the tick does not carry
+          // over: it would otherwise adopt whatever the last lookup happened to return.
+          if (!body.account) setAdopt(false);
+        })
+        .catch(() => {
+          // A failed lookup is not worth interrupting an administrator over: the warning is a
+          // courtesy, and creating the account still works without it.
+          if (!cancelled) setLaunchAccount(null);
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, firstName, lastName]);
 
   return (
     <Dialog
@@ -152,6 +203,37 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
               />
             )}
           />
+
+          {/*
+            An account an LMS already made for this person.
+            Shown rather than acted on: two people can share a name, so this says what it found
+            and leaves the decision, with the box off until somebody ticks it.
+          */}
+          <div role="status" aria-live="polite">
+            {launchAccount ? (
+              <div className="border-status-info-border bg-status-info-bg space-y-2 rounded-md border p-3 text-sm">
+                <p className="font-medium">Someone with this name already signed in from an LMS</p>
+                <p className="text-muted-foreground">
+                  {launchAccount.email}, connected{' '}
+                  {formatDateTimeInTimeZone(launchAccount.connectedAt, timezone, hour12)}, and never
+                  added to a course. If that is the same person, move their LMS sign-in to the
+                  account you are creating, or they will keep landing on the empty one.
+                </p>
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={adopt}
+                    onChange={(e) => setAdopt(e.target.checked)}
+                  />
+                  <span>
+                    Move their LMS sign-in to this account, and retire{' '}
+                    <span className="font-medium">{launchAccount.email}</span>
+                  </span>
+                </label>
+              </div>
+            ) : null}
+          </div>
 
           {/* Email */}
           <Controller

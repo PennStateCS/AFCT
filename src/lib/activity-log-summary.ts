@@ -292,6 +292,15 @@ export function describeActivity(action: string, metadata: Metadata): string | n
     case 'IDENTITY_LINK_DENIED':
       return str(metadata, 'reason');
 
+    case 'USER_IDENTITY_REASSIGNED': {
+      // Both addresses, because the point of the entry is which account an LMS launch now
+      // signs somebody in as. One address alone would not say what changed.
+      const from = str(metadata, 'fromUserEmail');
+      const to = str(metadata, 'targetUserEmail');
+      if (from && to) return `LMS sign-in moved from ${from} to ${to}`;
+      return 'an LMS sign-in was moved to another account';
+    }
+
     case 'IDENTITY_UNLINKED': {
       // Entries written before the issuer was recorded have only the two ids, and say the
       // plain fact rather than nothing: somebody's way in was removed either way.

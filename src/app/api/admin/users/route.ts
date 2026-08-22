@@ -10,6 +10,8 @@ import { readJson } from '@/lib/api/request';
 import { isValidEmail } from '@/lib/email';
 import { isStrongPassword } from '@/lib/password-policy';
 import { UserCreateApiSchema } from '@/schemas/user';
+import { readAdoptableAccount } from '@/lib/lti/jit-duplicates';
+import { isWriteConflict } from '@/lib/linked-identity';
 import { Prisma } from '@prisma/client';
 
 /**
@@ -81,7 +83,7 @@ export const POST = withAdminAuth(
     try {
       const parsed = await readJson(req, UserCreateApiSchema);
       if (!parsed.ok) return parsed.response;
-      const { email, firstName, lastName, password, timezone } = parsed.data;
+      const { email, firstName, lastName, password, timezone, adoptLaunchAccountId } = parsed.data;
 
       if (!isValidEmail(email)) {
         console.warn(`[USERS_POST] Invalid email format: ${email}`);
@@ -117,32 +119,117 @@ export const POST = withAdminAuth(
         select: { timezone: true },
       });
 
-      // The unique index on email is the real guard, so a clash is answered here rather than
-      // pre-checked: an admin adding an address that already has an account should be told
-      // so, not shown a server error.
+      const newUserData = {
+        email,
+        firstName,
+        lastName,
+        password: hashedPassword,
+        timezone: timezone || systemSettings?.timezone || 'UTC',
+      };
+      const newUserFields = {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        createdAt: true,
+        timezone: true,
+      } as const;
+
       let newUser;
+      /** Set when an LMS sign-in was moved, so the response can say what became of the old one. */
+      let adopted: { fromEmail: string } | null = null;
+
       try {
-        newUser = await prisma.user.create({
-          data: {
-            email,
-            firstName,
-            lastName,
-            password: hashedPassword,
-            timezone: timezone || systemSettings?.timezone || 'UTC',
-          },
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            createdAt: true,
-            timezone: true,
-          },
-        });
+        if (!adoptLaunchAccountId) {
+          // The unique index on email is the real guard, so a clash is answered here rather than
+          // pre-checked: an admin adding an address that already has an account should be told
+          // so, not shown a server error.
+          newUser = await prisma.user.create({ data: newUserData, select: newUserFields });
+        } else {
+          /**
+           * Creating the account and moving the sign-in are one transaction, so a refusal
+           * leaves nothing behind. Answering 201 with "but the adoption failed" would be read
+           * as success and the duplicate would survive, which is the whole problem.
+           *
+           * Serializable for the same reason the promotion path is: this reads the old
+           * account's identities and then writes its user row, and an automatic link landing on
+           * it in between would otherwise be lost. That pair of statements is the cycle.
+           */
+          const result = await prisma.$transaction(
+            async (tx) => {
+              const orphan = await readAdoptableAccount(adoptLaunchAccountId, tx);
+              // Asked again here rather than trusted from the lookup: a person read that
+              // warning and then decided, and anything it depends on can have changed since.
+              if (!orphan) return { stale: true as const };
+
+              const created = await tx.user.create({ data: newUserData, select: newUserFields });
+
+              await tx.linkedIdentity.update({
+                where: { id: orphan.identityId },
+                data: {
+                  userId: created.id,
+                  // No longer just-in-time: an administrator attached this, which is both true
+                  // and load-bearing. `JUST_IN_TIME` counts as an automatic link, and promoting
+                  // somebody to administrator deletes every automatic link they have, which
+                  // would silently sever the very sign-in this is preserving.
+                  linkedVia: 'ADMIN',
+                },
+              });
+
+              // Retired rather than deleted: deletion is not reversible, and the activity log
+              // still points at it. The response tells the administrator it can now go.
+              await tx.user.update({
+                where: { id: orphan.userId },
+                data: { inactive: true },
+              });
+
+              return { stale: false as const, created, orphan };
+            },
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          );
+
+          if (result.stale) {
+            return NextResponse.json(
+              {
+                error:
+                  'That LMS account can no longer be moved. It may have been used since, or already connected elsewhere. Create the account on its own and check the sign-in methods.',
+              },
+              { status: 409 },
+            );
+          }
+
+          newUser = result.created;
+          adopted = { fromEmail: result.orphan.email };
+
+          await createEnhancedActivityLog(prisma, req, {
+            userId: user.id,
+            action: 'USER_IDENTITY_REASSIGNED',
+            // A deliberate administrator action with real consequences, which is WARNING here.
+            // SECURITY is for refusals and violations, and this is neither.
+            severity: 'WARNING',
+            category: 'USER',
+            metadata: {
+              fromUserId: result.orphan.userId,
+              fromUserEmail: result.orphan.email,
+              targetUserId: result.created.id,
+              targetUserEmail: result.created.email,
+              identityId: result.orphan.identityId,
+              issuer: result.orphan.issuer,
+              kind: 'LTI',
+              orphanDeactivated: true,
+            },
+          });
+        }
       } catch (err) {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
           // Same message as the pre-check above: one condition, one thing said about it.
           return NextResponse.json({ error: 'Email already in use' }, { status: 409 });
+        }
+        if (isWriteConflict(err)) {
+          return NextResponse.json(
+            { error: 'That account was being changed at the same time. Try again.' },
+            { status: 409 },
+          );
         }
         throw err;
       }
@@ -158,7 +245,7 @@ export const POST = withAdminAuth(
         },
       });
 
-      return NextResponse.json(newUser, { status: 201 });
+      return NextResponse.json({ ...newUser, adopted }, { status: 201 });
     } catch (error) {
       console.error('[USERS_POST_ERROR]', error);
       await logError(req, {

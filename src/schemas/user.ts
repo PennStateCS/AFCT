@@ -61,7 +61,6 @@ export const CreateUserSchema = BaseUserSchema.extend({
 
 // The avatar field, and why it carries no size limit, live in one place now.
 
-
 export const UpdateUserSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.').max(60, 'First name is too long.'),
   lastName: z.string().trim().min(1, 'Last name is required.').max(60, 'Last name is too long.'),
@@ -86,6 +85,13 @@ export const UserCreateApiSchema = z.object({
   lastName: z.string().min(1),
   password: z.string().min(1),
   timezone: z.string().optional(),
+  /**
+   * An account an LMS launch made for this person, whose sign-in should move to the new one.
+   *
+   * Optional and deliberate: the administrator ticks a box after reading which account it is.
+   * Nothing is matched automatically, because two people can share a name.
+   */
+  adoptLaunchAccountId: z.string().min(1).optional(),
 });
 
 /** JSON branch of PATCH /api/users/[id] (the multipart branch carries the avatar). */
