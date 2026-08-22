@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import {
-  ChevronDown,
+  EllipsisVertical,
   Lock,
   Pencil,
   Tag,
@@ -184,13 +184,12 @@ function ActionsCell({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant="secondary"
-            aria-label={`Manage ${user.firstName} ${user.lastName}`}
-            className="inline-flex items-center gap-2"
+            variant="ghost"
+            size="icon"
+            aria-label={`Actions for ${user.firstName} ${user.lastName}`}
             disabled={courseRole === 'FACULTY' && !viewerIsAdmin}
           >
-            Manage
-            <ChevronDown className="h-4 w-4" />
+            <EllipsisVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[12rem]">
@@ -446,7 +445,7 @@ export const userColumns = (
   if (viewerHasActions) {
     cols.push({
       id: 'manage',
-      header: 'Manage',
+      header: 'Actions',
       meta: { priority: 1 },
       cell: ({ row }) => (
         <ActionsCell

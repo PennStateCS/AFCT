@@ -11,6 +11,7 @@ import {
   NotebookText,
   Trash2,
   ChevronDown,
+  EllipsisVertical,
   BookOpen,
   CalendarClock,
   Copy,
@@ -465,7 +466,9 @@ export function useAssignmentColumns(
     },
     {
       id: 'actions',
-      header: () => <span className="sr-only">Actions</span>,
+      // Visible now rather than sr-only: the trigger used to say "Manage" on its face, so
+      // the column named itself. A bare ellipsis does not.
+      header: 'Actions',
       cell: ({ row }) => {
         const disabled = !!row.original.hasSubmissionsOrComments || courseIsArchived;
         const title = disabled ? 'Cannot delete' : undefined;
@@ -474,9 +477,12 @@ export function useAssignmentColumns(
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary" aria-label={`Manage assignment ${row.original.title}`}>
-                  <ChevronDown />
-                  Manage
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Actions for ${row.original.title}`}
+                >
+                  <EllipsisVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
