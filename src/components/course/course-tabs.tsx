@@ -37,24 +37,24 @@ export const COURSE_TABS: readonly CourseTabDef[] = [
 export const TAB_BAR_LIST_CLASS =
   'h-auto w-full items-center justify-start gap-2 lg:gap-6 overflow-x-auto overflow-y-hidden rounded-none border-b border-border bg-transparent p-0';
 
-// Each trigger is a content-width item with a transparent bottom border that
-// turns teal (and its text teal + bolder) when active, sitting just above the
+// Each trigger is a content-width item with a transparent bottom border that picks up
+// the active colour (and a bolder label) when active, sitting just above the
 // bar's own bottom border. The uniform 144px min-width only kicks in at `lg`; below
 // that each tab shrinks to its label so more of them fit before the mobile select
 // takes over. No negative margin here: it would push the trigger 1px past the scroll
 // container and produce a phantom vertical scrollbar.
 export const TAB_BAR_TRIGGER_CLASS = [
   'text-muted-foreground hover:text-foreground',
-  // Active tab: the sidebar's own charcoal, a white label, and the brand teal underline that
-  // matches the header bar. The sidebar token rather than a literal, so the active tab follows
-  // the sidebar in both themes instead of drifting from it; white on that charcoal is
-  // comfortably past AA. The underline is decoration, so the lighter teal is fine there.
+  // Active tab: the sidebar's own charcoal with a white label, and a cobalt underline via
+  // --tab-active, which matches the vertical rails. The sidebar token rather than a literal,
+  // so the active tab follows the sidebar in both themes instead of drifting from it; white
+  // on that charcoal is comfortably past AA.
   'data-[state=active]:text-white data-[state=active]:font-semibold',
   // `group` so the count badge can react to the tab's own active state.
   'group inline-flex h-auto items-center justify-center gap-1.5 whitespace-nowrap',
   'rounded-none border-0 border-b-4 border-transparent bg-transparent px-2 py-3 text-sm font-medium lg:px-1',
   'transition-colors',
-  'data-[state=active]:border-brand-teal',
+  'data-[state=active]:border-tab-active',
   // Set for both themes explicitly. The base trigger fills only in dark
   // (`dark:data-[state=active]:bg-input/30`), which the old `bg-transparent` never cancelled,
   // so light mode showed the card straight through and the two themes disagreed.

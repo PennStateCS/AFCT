@@ -13,9 +13,10 @@ describe('Loading', () => {
     const { container } = render(<Loading label="Loading server status…" />);
 
     expect(screen.getByText('Loading server status…')).toBeInTheDocument();
-    // The shared Spinner renders a decorative brand-teal wrapper around the animation. Asserting
-    // on that rather than on react-spinners internals: the point is that it is the shared one.
-    expect(container.querySelector('[aria-hidden="true"].text-brand-teal')).toBeInTheDocument();
+    // The shared Spinner renders a decorative wrapper in the primary colour around the
+    // dots. Assert on that rather than on react-spinners internals: the point is that the
+    // shared component is used, not which library draws it.
+    expect(container.querySelector('[aria-hidden="true"].text-primary')).toBeInTheDocument();
   });
 
   /** Screen readers got nothing from the old version: it was an unlabelled div of text. */

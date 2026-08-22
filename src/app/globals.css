@@ -57,15 +57,13 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-node-color: var(--node-color);
-  /* The navbar's green/teal (--secondary in light mode), pinned as a literal so it
-     stays the same in both themes: --secondary itself flips to a dark neutral in
-     dark mode, which would make anything drawn in it vanish on a dark background. */
+  /* A CHART hue, not the app's accent. It was the brand teal, used for the navbar, the
+     spinner, avatars, meters and active tabs; all of those are cobalt now. What is left
+     is data: the sequential scales in the heatmap and attempts charts, and the single
+     series in the histogram and timeline. Pinned as a literal so a chart does not change
+     colour between themes. Worth renaming to --color-chart-teal one day; that would touch
+     six chart files, which is why it has not been. */
   --color-brand-teal: oklch(0.6794 0.0938 203.328);
-  /* A darker brand teal for solid swatches that carry WHITE text, such as the initials
-     shown when a user has no profile photo. --brand-teal itself is only 2.78:1 against
-     white, under the 4.5:1 AA floor; this one is 5.3:1. Same hue, and pinned as a
-     literal for the same reason --brand-teal is: it must not flip in dark mode. */
-  --color-brand-teal-dark: oklch(0.52 0.09 203.328);
   --color-badge-success: var(--badge-success);
   --color-badge-success-bg: var(--badge-success-bg);
   --color-badge-success-border: var(--badge-success-border);
@@ -101,7 +99,11 @@
   --color-status-danger-solid: var(--status-danger-solid);
   --color-status-info-solid: var(--status-info-solid);
   --color-status-neutral-solid: var(--status-neutral-solid);
-  /* Active-tab brand accent. Usage: text-tab-active, border-tab-active, bg-tab-active-bg. */
+  /* The active tab: cobalt, matching the vertical rails. Kept as its own token pair
+     rather than inlined `text-primary`/`bg-primary/10`, because dark mode needs a lighter
+     blue (primary on the dark card is 3.45:1, under the floor for text) and the theme is
+     the right place for that to live rather than a dark: variant in every tab component.
+     Usage: text-tab-active, border-tab-active, bg-tab-active-bg. */
   --color-tab-active: var(--tab-active);
   --color-tab-active-bg: var(--tab-active-bg);
   --radius-sm: calc(var(--radius) - 4px);
@@ -123,8 +125,11 @@
   --popover-foreground: oklch(0.141 0.005 285.823);
   --primary: oklch(0.37 0.1221 262.228);
   --primary-foreground: oklch(1 0.0001 271.152);
-  --secondary: oklch(0.6794 0.0938 203.328);
-  --secondary-foreground: oklch(1 0.0001 271.152);
+  /* Slate-200. A neutral surface for secondary controls: this was the brand teal, which
+     made every "secondary" thing read as a coloured call to action. Cobalt is the action
+     colour; this is the quiet one. Foreground flips to dark to suit a pale surface. */
+  --secondary: oklch(0.9288 0.0126 255.508); /* #E2E8F0 */
+  --secondary-foreground: oklch(0.2077 0.0398 265.755); /* #0F172A */
   --tertiary: oklch(0.5424 0.1381 45.828);
   --tertiary-foreground: oklch(1 0 0);
   /* A muted SURFACE, so it sits just off the page background. It used to be a 56%-lightness
@@ -209,8 +214,8 @@
   /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
      clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
      a tab's count pill. Interim brand accent until the visual redesign. */
-  --tab-active: oklch(0.5109 0.0861 186.391); /* teal-700 */
-  --tab-active-bg: oklch(0.9527 0.0498 180.801); /* teal-100 */
+  --tab-active: oklch(0.37 0.1221 262.228); /* = --primary, 10.6:1 on the card */
+  --tab-active-bg: oklch(0.37 0.1221 262.228 / 10%);
 
   /* Badge tokens derive from the status family (values unchanged), so badges and the
      other status surfaces can never drift apart. Dark mode overrides only --status-*
@@ -315,8 +320,9 @@
   /* Solid fills carry a white glyph, so they keep the same mid shade in dark (a lighter
      fill would drop below 3:1 against white); only the grey neutral is lightened here. */
   --status-neutral-solid: oklch(0.7107 0.0351 256.788);
-  --tab-active: oklch(0.7845 0.1325 181.912); /* teal-400 */
-  --tab-active-bg: oklch(0.3861 0.059 188.416 / 40%); /* teal-900 / 40% */
+  /* blue-300 / blue-950 rather than --primary: cobalt text on the dark card is 3.45:1. */
+  --tab-active: oklch(0.8091 0.0956 251.813); /* #93C5FD, 9.9:1 on the card */
+  --tab-active-bg: oklch(0.2823 0.0874 267.935 / 40%); /* blue-950 / 40% */
   /* Neutral badge stays badge-scoped. */
   --badge-neutral: oklch(0.6993 0 0);
   --badge-neutral-bg: oklch(0.329 0 0 / 35%);

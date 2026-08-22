@@ -48,7 +48,7 @@ export function FirstAttemptChart({ problems, unitPlural }: Props) {
                 onBlur={hide}
               >
                 {p.submitted > 0 && (
-                  <div className="bg-brand-teal h-full rounded-l-md" style={{ width: `${pct}%` }} />
+                  <div className="bg-primary h-full rounded-l-md" style={{ width: `${pct}%` }} />
                 )}
               </div>
               <div className="text-muted-foreground w-10 shrink-0 text-right text-xs tabular-nums">

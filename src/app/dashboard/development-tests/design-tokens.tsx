@@ -71,6 +71,17 @@ const SURFACES = [
   { cls: 'bg-tab-active', label: 'tab-active' },
 ] as const;
 
+// The sidebar has its own family: it is a dark surface in BOTH themes, so it does not
+// follow the tokens above and is worth seeing beside them.
+const SIDEBAR_SURFACES = [
+  { cls: 'bg-sidebar', label: 'sidebar' },
+  { cls: 'bg-sidebar-accent', label: 'sidebar-accent (hover)' },
+  { cls: 'bg-sidebar-primary', label: 'sidebar-primary (active)' },
+  { cls: 'bg-sidebar-foreground', label: 'sidebar-foreground' },
+  { cls: 'bg-sidebar-muted-foreground', label: 'sidebar-muted-foreground' },
+  { cls: 'bg-sidebar-border', label: 'sidebar-border' },
+] as const;
+
 export function DesignTokens() {
   return (
     <div className="space-y-8">
@@ -114,6 +125,26 @@ export function DesignTokens() {
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {SURFACES.map((s) => (
+            <div key={s.cls} className="border-border overflow-hidden rounded-md border">
+              <div className={`h-12 ${s.cls}`} aria-hidden="true" />
+              <div className="bg-card space-y-0.5 p-2">
+                <div className="text-foreground text-xs font-medium">{s.label}</div>
+                <Cls>{s.cls}</Cls>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold">Sidebar</h3>
+          <p className="text-muted-foreground text-sm">
+            Its own family, and the same dark surface in both themes.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {SIDEBAR_SURFACES.map((s) => (
             <div key={s.cls} className="border-border overflow-hidden rounded-md border">
               <div className={`h-12 ${s.cls}`} aria-hidden="true" />
               <div className="bg-card space-y-0.5 p-2">

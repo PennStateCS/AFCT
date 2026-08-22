@@ -20,10 +20,10 @@ const buttonVariants = cva(
         outline:
           'border-border bg-card text-foreground border shadow-xs hover:bg-accent hover:text-accent-foreground',
         menu: 'bg-tertiary/90 text-tertiary-foreground shadow-xs hover:bg-tertiary/80',
-        // Neutral, not --secondary: that token is still the brand teal in light mode, so
-        // every Filters/Columns/Export control read as a coloured call to action. The
-        // dark hover is spelled out because --muted and --accent are the same value
-        // there, which would leave the button inert on hover.
+        // --muted rather than --secondary. --secondary is neutral now too, so the two
+        // would look alike; this keeps the button a shade quieter than a secondary
+        // surface. The dark hover is spelled out because --muted and --accent are the
+        // same value there, which would leave the button inert on hover.
         secondary:
           'bg-muted text-foreground shadow-xs hover:bg-accent dark:hover:bg-accent/60',
         ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',

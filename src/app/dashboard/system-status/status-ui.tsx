@@ -81,7 +81,7 @@ export const Meter = ({ pct, label }: { pct?: number; label: string }) => {
       aria-valuenow={v}
       aria-valuetext={`${v}%`}
     >
-      <div className="bg-brand-teal h-full" style={{ width: `${v}%` }} />
+      <div className="bg-primary h-full" style={{ width: `${v}%` }} />
     </div>
   );
 };
@@ -186,7 +186,7 @@ export const Sparkline = ({
         height={height}
         role="img"
         aria-label={`${label ? `${label}: ` : ''}trend ${trendDir}`}
-        className="stroke-current text-brand-teal"
+        className="stroke-current text-primary"
         strokeWidth={1.5}
         fill="none"
       >
