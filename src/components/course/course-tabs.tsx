@@ -201,7 +201,7 @@ export function TabBar({
 // sidebar is the dark one, and two charcoal columns would read as two applications.
 const RAIL_TRIGGER_CLASS = [
   // `group` so the count badge can react to the item's own active state.
-  'group flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-sm',
+  'group flex h-10 w-full items-center gap-2 rounded-md px-2.5 text-sm',
   'justify-start whitespace-nowrap',
   'text-muted-foreground hover:bg-accent hover:text-foreground',
   // Active: a soft tint of the primary, not a filled row. The dark pair is spelled out
@@ -243,7 +243,7 @@ export function TabRail({
     // otherwise turn position:sticky into a no-op.
     <TabsList
       aria-label={ariaLabel}
-      className="bg-muted/40 h-auto w-full flex-col items-stretch justify-start gap-0.5 self-start rounded-lg border-0 p-2.5 lg:sticky lg:top-6"
+      className="bg-muted/40 h-auto w-full flex-col items-stretch justify-start gap-1 self-start rounded-lg border-0 p-2.5 lg:sticky lg:top-6"
     >
       {tabs.map(({ value: tabValue, label, Icon, count }) => (
         <TabsTrigger
