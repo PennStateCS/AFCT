@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, Pencil, Trash2, NotebookText, Eye, Download } from 'lucide-react';
+import { EllipsisVertical, Pencil, Trash2, NotebookText, Eye, Download } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
 
 export const problemTypeLabels: Record<string, string> = {
@@ -231,8 +231,14 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       cell: ({ row }: { row: { original: Problem } }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="secondary" size="sm" aria-label={`Manage problem ${row.original.title}`}>
-              <ChevronDown className="mr-1 h-4 w-4" /> Manage
+            {/* Every row carries one of these, so the label names the problem: a dozen
+                buttons all called "More" is what a screen reader would otherwise hear. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Actions for ${row.original.title}`}
+            >
+              <EllipsisVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
