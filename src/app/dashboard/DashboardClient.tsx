@@ -4,6 +4,8 @@ import React from 'react';
 import Link from 'next/link';
 import { Library } from 'lucide-react';
 
+import { cn } from '@/lib/utils';
+
 import { Badge } from '@/components/ui/badge';
 import { getCourseStatusTag } from '@/lib/course-status';
 import type { EnrolledUser } from '@/lib/course-roster';
@@ -34,6 +36,23 @@ type Props = {
   title: string;
   courses: DashboardCourse[];
 };
+
+/**
+ * The number a course is known by, for the row's tile: "CMPEN 271" reads as "271" on a
+ * wall timetable and in conversation. Takes the last run of digits rather than assuming
+ * a prefix, so a code shaped differently still yields something, and falls back to the
+ * whole code when there are no digits at all. The full code stays in the row text.
+ */
+function courseNumber(code: string): string {
+  return code.match(/\d+/g)?.pop() ?? code;
+}
+
+/** Decorative only, alternating so stacked rows are easy to tell apart. The dark cobalt
+ *  pair is spelled out: cobalt at 10% behind a cobalt glyph is under 3:1 on a dark card. */
+const NUMBER_TILES = [
+  'bg-primary/10 text-primary dark:bg-blue-950/40 dark:text-blue-300',
+  'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300',
+] as const;
 
 export default function DashboardClient({ sessionUser, courses, title }: Props) {
   const { isAdmin } = sessionUser;
@@ -80,7 +99,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
         </p>
       ) : (
         <ul>
-          {visibleCourses.map((course) => {
+          {visibleCourses.map((course, index) => {
             const { status, variant } = getCourseStatusTag(course);
             // Staff only. A student must not learn the size of the roster.
             const students = canManageCourse(course) ? getStudentCount(course.enrolled) : null;
@@ -95,6 +114,18 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                   href={`/dashboard/courses/${course.id}`}
                   className="hover:bg-accent/50 focus-visible:ring-ring flex items-start gap-3 px-4 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:-outline-offset-2"
                 >
+                  {/* aria-hidden: the full code is already in the row text right beside
+                      it, so announcing "271" first would only stutter. */}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'flex size-11 shrink-0 items-center justify-center rounded-lg text-base font-semibold',
+                      NUMBER_TILES[index % NUMBER_TILES.length],
+                    )}
+                  >
+                    {courseNumber(course.code)}
+                  </span>
+
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-baseline gap-x-2">
                       <span className="text-muted-foreground shrink-0 text-sm font-medium">
