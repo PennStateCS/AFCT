@@ -201,7 +201,10 @@ export function TabBar({
 // sidebar is the dark one, and two charcoal columns would read as two applications.
 const RAIL_TRIGGER_CLASS = [
   // `group` so the count badge can react to the item's own active state.
-  'group flex h-10 w-full items-center gap-2 rounded-md px-2.5 text-sm',
+  // flex-none matters: the base TabsTrigger carries flex-1, and in a COLUMN flex container
+  // that makes flex-basis govern the main axis, which is height. h-10 was being ignored and
+  // every row sat at its content height instead.
+  'group flex h-10 w-full flex-none items-center gap-2 rounded-md px-2.5 text-sm',
   'justify-start whitespace-nowrap',
   'text-muted-foreground hover:bg-accent hover:text-foreground',
   // Active: a soft tint of the primary, not a filled row. The dark pair is spelled out
