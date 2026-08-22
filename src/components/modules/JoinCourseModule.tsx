@@ -75,9 +75,10 @@ export function JoinCourseModule() {
     void joinWithCode(code);
   };
 
+  // Same compact shell as the Deadlines card beside it, so the rail has one rhythm.
   return (
-    <Card className="w-full" aria-labelledby="join-course-title">
-      <CardHeader>
+    <Card className="w-full gap-4 py-5" aria-labelledby="join-course-title">
+      <CardHeader className="px-5">
         <CardTitle
           id="join-course-title"
           role="heading"
@@ -87,13 +88,13 @@ export function JoinCourseModule() {
           Join a Course
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-5">
         <form onSubmit={handleSubmit}>
           <div>
             <Label htmlFor="course-code" className="mb-2 text-sm">
               Enter a registration code below:
             </Label>
-            <p id="course-code-help" className="text-muted-foreground mb-3 text-xs">
+            <p id="course-code-help" className="text-muted-foreground mb-2 text-xs">
               You can only join while the course registration window is open.
             </p>
 
@@ -131,7 +132,7 @@ export function JoinCourseModule() {
               </InputOTPGroup>
             </InputOTP>
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-3 flex gap-2">
             <Button type="submit" disabled={loading || code.length !== CODE_LENGTH}>
               {loading ? 'Joining...' : 'Join'}
             </Button>
