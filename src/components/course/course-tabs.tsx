@@ -197,16 +197,83 @@ export function TabBar({
   );
 }
 
+// The vertical rail (see {@link CourseTabBar}). Light and quiet on purpose: the global
+// sidebar is the dark one, and two charcoal columns would read as two applications.
+const RAIL_TRIGGER_CLASS = [
+  'group flex h-9 w-full items-center gap-2 rounded-md px-3 text-sm',
+  'justify-start whitespace-nowrap',
+  'text-muted-foreground hover:bg-accent hover:text-foreground',
+  // Active: a soft tint of the primary, not a filled row. The dark pair is spelled out
+  // because primary at 10% behind primary text is 2.8:1 on a dark card, under the floor.
+  'data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:font-medium',
+  'dark:data-[state=active]:bg-blue-950/40 dark:data-[state=active]:text-blue-300',
+  'data-[state=active]:shadow-none',
+  'border-0 bg-transparent transition-colors',
+].join(' ');
+
+/**
+ * The course sections as a vertical rail, for wide screens.
+ *
+ * Still a Radix tablist, not a `<nav>`: the panels are tab panels and behave as such, so
+ * converting the semantics for the sake of the shape would be a regression. The Tabs root
+ * carries `orientation="vertical"` (set by the caller) so arrow keys run up and down.
+ */
+function CourseTabRail({ tabs, ariaLabel }: { tabs: readonly TabBarTab[]; ariaLabel: string }) {
+  return (
+    <TabsList
+      aria-label={ariaLabel}
+      className="border-border h-auto w-full flex-col items-stretch justify-start gap-0.5 rounded-none border-0 border-r bg-transparent p-0 pr-4"
+    >
+      {tabs.map(({ value: tabValue, label, Icon, count }) => (
+        <TabsTrigger
+          key={tabValue}
+          value={tabValue}
+          className={RAIL_TRIGGER_CLASS}
+          id={`tab-${tabValue}`}
+          aria-controls={`panel-${tabValue}`}
+          // With a count, spell it into the accessible name; otherwise the visible label
+          // already names the tab.
+          aria-label={count === undefined ? undefined : `${label}, ${count}`}
+        >
+          {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
+          <span className="truncate">{label}</span>
+          {count !== undefined ? (
+            <span className="bg-primary/10 text-primary dark:bg-blue-950/40 dark:text-blue-300 ml-auto rounded-full px-1.5 py-0.5 text-xs leading-none font-medium">
+              {count}
+            </span>
+          ) : null}
+        </TabsTrigger>
+      ))}
+    </TabsList>
+  );
+}
+
 /** The course page's tab strip: {@link TabBar} preloaded with COURSE_TABS + counts. */
 export function CourseTabBar({
   counts,
   value,
   onValueChange,
+  rail = false,
 }: {
   counts?: TabCounts;
   value: string;
   onValueChange: (value: string) => void;
+  /** Render the vertical rail instead of the strip. Set by the caller from viewport
+   *  width, because only one tablist may be in the DOM at a time: both emit `tab-*`
+   *  ids that CourseTabPanel points `aria-labelledby` at. */
+  rail?: boolean;
 }) {
+  const tabs = COURSE_TABS.map((t) => ({
+    value: t.value,
+    label: t.label,
+    Icon: t.Icon,
+    count: counts?.[t.value],
+  }));
+
+  if (rail) {
+    return <CourseTabRail tabs={tabs} ariaLabel="Course content sections" />;
+  }
+
   return (
     <TabBar
       ariaLabel="Course content sections"
@@ -214,12 +281,7 @@ export function CourseTabBar({
       value={value}
       onValueChange={onValueChange}
       linkPanels
-      tabs={COURSE_TABS.map((t) => ({
-        value: t.value,
-        label: t.label,
-        Icon: t.Icon,
-        count: counts?.[t.value],
-      }))}
+      tabs={tabs}
     />
   );
 }

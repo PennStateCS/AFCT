@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { Tabs } from '@/components/ui/tabs';
-import { TabBar } from './course-tabs';
+import { CourseTabBar, TabBar } from './course-tabs';
 import { BookOpen } from 'lucide-react';
 
 const TABS = [
@@ -67,5 +67,55 @@ describe('TabBar', () => {
     );
     expect(document.getElementById('tab-a')).not.toBeNull();
     expect(document.getElementById('tab-a')).toHaveAttribute('aria-controls', 'panel-a');
+  });
+});
+
+describe('CourseTabBar', () => {
+  const renderCourseBar = (rail: boolean, onValueChange = vi.fn()) =>
+    render(
+      <Tabs value="assignments" onValueChange={onValueChange} orientation={rail ? 'vertical' : 'horizontal'}>
+        <CourseTabBar
+          value="assignments"
+          onValueChange={onValueChange}
+          rail={rail}
+          counts={{ assignments: 2, problems: 13, roster: 20 }}
+        />
+      </Tabs>,
+    );
+
+  /**
+   * Exactly one tablist, whichever shape is on screen. Both emit `tab-*` ids that
+   * CourseTabPanel points its aria-labelledby at, so rendering the rail and the strip
+   * together would duplicate every one of them.
+   */
+  it('renders the rail as a single tablist carrying the trigger ids', () => {
+    renderCourseBar(true);
+
+    const lists = screen.getAllByRole('tablist', { name: 'Course content sections' });
+    expect(lists).toHaveLength(1);
+    expect(within(lists[0]).getAllByRole('tab')).toHaveLength(7);
+    expect(document.querySelectorAll('#tab-assignments')).toHaveLength(1);
+    expect(screen.getByRole('tab', { name: 'Assignments, 2' })).toHaveAttribute(
+      'aria-controls',
+      'panel-assignments',
+    );
+  });
+
+  it('drives the same value change from a rail item', () => {
+    const onValueChange = vi.fn();
+    renderCourseBar(true, onValueChange);
+
+    // Radix activates a trigger on mousedown, not click.
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Roster, 20' }));
+    expect(onValueChange).toHaveBeenCalledWith('roster');
+  });
+
+  it('falls back to the strip and the mobile select when the rail is off', () => {
+    renderCourseBar(false);
+
+    // The select is the below-md control, and the rail branch never renders one, so its
+    // presence proves which branch ran. Still exactly one tablist either way.
+    expect(screen.getByRole('combobox', { name: 'Course content sections' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tablist', { name: 'Course content sections' })).toHaveLength(1);
   });
 });
