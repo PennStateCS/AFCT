@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { KeyRound, Link2, Terminal, UserRound } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { TabBar } from '@/components/course/course-tabs';
+import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { PasswordSection } from '@/components/account/PasswordSection';
 import { TokensSection } from '@/components/account/TokensSection';
@@ -39,6 +39,8 @@ export default function AccountClient({
 }) {
   const changePassword = useChangePassword();
   const [tab, setTab] = useState<string>('profile');
+  // Same breakpoint as System Settings and the other shared-rail workspaces.
+  const railNav = useIsDesktopNav(1280);
 
   // Remember the last tab, the way System Settings does, so returning after a save lands where
   // you were rather than back at the top.
@@ -73,10 +75,9 @@ export default function AccountClient({
     }
   };
 
-  // Same shape as System Settings and the course pages: one card, its title as the page
-  // heading, tabs inside it. TabBar rather than a hand-rolled TabsList, because it is what
-  // swaps the underline strip for a select below `md`; rolling our own left this page with no
-  // usable tabs on a phone.
+  // Same shape as System Settings and the course pages: a rail beside the panels above xl,
+  // and below that the shared TabBar, which swaps the underline strip for a select below
+  // `md`. Both come from the shared tab components rather than being rolled here.
   const tabs = [
     { value: 'profile', label: 'Profile', Icon: UserRound },
     { value: 'password', label: 'Password', Icon: KeyRound },
@@ -94,46 +95,59 @@ export default function AccountClient({
   ];
 
   return (
-    <Card className="p-4">
-      <CardHeader className="pb-2">
-        <CardTitle role="heading" aria-level={1} className="text-2xl tracking-tight">
-          Account
-        </CardTitle>
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
         <p className="text-muted-foreground text-sm">
           Your profile and how you sign in. Only you can see this page.
         </p>
-      </CardHeader>
+      </div>
 
-      <CardContent>
-        <Tabs value={tab} onValueChange={onTabChange} className="w-full gap-6">
-          <TabBar
-            ariaLabel="Account sections"
-            selectId="account-tab-select"
-            value={tab}
-            onValueChange={onTabChange}
-            // Only three or four sections here. Spreading them across the card reads as a
-            // layout accident rather than a choice.
-            fill={false}
-            tabs={tabs}
-          />
+      <Tabs
+        value={tab}
+        onValueChange={onTabChange}
+        orientation={railNav ? 'vertical' : 'horizontal'}
+        className="w-full gap-6"
+      >
+        {/* One control at a time: two tablists under one Tabs root would duplicate its
+            ARIA wiring. Below xl the strip and its select stay as they were. */}
+        <div className="space-y-6 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
+          {railNav ? (
+            <TabRail tabs={tabs} ariaLabel="Account sections" />
+          ) : (
+            <TabBar
+              ariaLabel="Account sections"
+              selectId="account-tab-select"
+              value={tab}
+              onValueChange={onTabChange}
+              // Only four sections here. Spreading them across the width reads as a
+              // layout accident rather than a choice.
+              fill={false}
+              tabs={tabs}
+            />
+          )}
 
-          <TabsContent value="profile">
-            <ProfileSection user={user} />
-          </TabsContent>
+          <div className="min-w-0">
+            {/* Profile and Password are forms and keep a readable measure. Connected
+                accounts and App tokens are lists of rows, so they take the column. */}
+            <TabsContent value="profile" className="max-w-3xl">
+              <ProfileSection user={user} />
+            </TabsContent>
 
-          <TabsContent value="password">
-            <PasswordSection onChangePassword={changePassword} />
-          </TabsContent>
+            <TabsContent value="password" className="max-w-2xl">
+              <PasswordSection onChangePassword={changePassword} />
+            </TabsContent>
 
-          <TabsContent value="accounts">
-            <IdentitiesSection providerLabel={oidcLabel} canConnect={oidcAvailable} />
-          </TabsContent>
+            <TabsContent value="accounts">
+              <IdentitiesSection providerLabel={oidcLabel} canConnect={oidcAvailable} />
+            </TabsContent>
 
-          <TabsContent value="tokens">
-            <TokensSection />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+            <TabsContent value="tokens">
+              <TokensSection />
+            </TabsContent>
+          </div>
+        </div>
+      </Tabs>
+    </div>
   );
 }
