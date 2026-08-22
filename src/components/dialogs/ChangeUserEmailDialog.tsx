@@ -133,6 +133,8 @@ export function ChangeUserEmailDialog({
           <Input
             id="change-email-input"
             type="email"
+            // Somebody else's address. Left unmarked, the browser offers the admin's own.
+            autoComplete="off"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             aria-invalid={!!error}

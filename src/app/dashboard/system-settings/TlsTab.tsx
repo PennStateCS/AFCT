@@ -228,6 +228,9 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 label="Contact email"
                 name="leEmail"
                 type="email"
+                // Whoever should hear about certificate expiry, not necessarily whoever
+                // is filling the form in.
+                autoComplete="off"
                 requiredMark
                 placeholder="admin@example.edu"
                 value={leEmail}

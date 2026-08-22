@@ -111,6 +111,9 @@ export function SignInTab({
           label="Client secret"
           name="oidcClientSecret"
           type="password"
+          // The server's credential, not the admin's. Without this a password manager
+          // offers to save it as their AFCT password, and to autofill it back later.
+          autoComplete="off"
           showEye
           value={clientSecret}
           setValue={setClientSecret}

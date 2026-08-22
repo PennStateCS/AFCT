@@ -90,6 +90,8 @@ export function CaptchaTab({
           label="hCaptcha secret key"
           name="hcaptchaSecretKey"
           type="password"
+          // A service credential, not the admin's own. See SignInTab's client secret.
+          autoComplete="off"
           showEye
           value={secretKey}
           setValue={setSecretKey}

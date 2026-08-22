@@ -163,6 +163,8 @@ export function EmailTab({
           label="Password"
           name="smtpPassword"
           type="password"
+          // The SMTP account's password, not the admin's. See SignInTab's client secret.
+          autoComplete="off"
           showEye
           value={password}
           setValue={setPassword}
@@ -186,6 +188,8 @@ export function EmailTab({
           label="From address"
           name="smtpFromAddress"
           type="email"
+          // The institution's sending address, not the admin's own.
+          autoComplete="off"
           value={fromAddress}
           setValue={(v) => setField('smtpFromAddress', v)}
           disabled={disabled}
@@ -219,6 +223,7 @@ export function EmailTab({
               label="Send to"
               name="smtpTestTo"
               type="email"
+              autoComplete="off"
               value={testTo}
               setValue={setTestTo}
               disabled={disabled || test.phase === 'sending'}
