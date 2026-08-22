@@ -218,10 +218,13 @@ export default async function DashboardPage({
     .sort((x, y) => x.dueDate.getTime() - y.dueDate.getTime());
 
   return (
-    <div className="flex h-full w-full flex-col pb-4 lg:flex-row">
+    // A fixed rail rather than a quarter of the viewport: at 25% the two modules kept
+    // growing on a wide monitor while the courses beside them stayed the same size.
+    // The sr-only h1 is absolutely positioned, so it occupies no grid track.
+    <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <h1 className="sr-only">Dashboard</h1>
-      {/* Left (Big Column) */}
-      <div className="w-full lg:w-3/4">
+
+      <section className="min-w-0">
         {/* Renders nothing unless an LMS launch sent them here, which is most of the time. */}
         <LaunchNotice notice={lms} courseTitle={lmsCourseTitle} />
         <DashboardClient
@@ -229,17 +232,12 @@ export default async function DashboardPage({
           courses={currentCourses}
           title={'Current Courses'}
         />
-      </div>
+      </section>
 
-      {/* Right (Skinny Column) */}
-      <div className="w-full pt-4 lg:w-1/4 lg:pt-0 lg:pl-4">
-        <div className="pb-4">
-          <JoinCourseModule />
-        </div>
-        <div>
-          <DueDateModule assignments={assignments} />
-        </div>
-      </div>
+      <aside className="space-y-4">
+        <JoinCourseModule />
+        <DueDateModule assignments={assignments} />
+      </aside>
     </div>
   );
 }

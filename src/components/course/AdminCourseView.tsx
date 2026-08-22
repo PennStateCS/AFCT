@@ -2,7 +2,6 @@ import dynamic from 'next/dynamic';
 import { Settings } from 'lucide-react';
 
 import { Tabs } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { CourseHeaderContent } from '@/components/course/CourseHeader';
 import { CourseTabBar, CourseTabPanel } from '@/components/course/course-tabs';
 import { CourseStatusCard } from '@/components/course/CourseStatusCard';
@@ -174,100 +173,101 @@ export function AdminCourseView({
     ],
   );
 
+  // The header and tab strip sit on the page itself now, not inside a card wrapping
+  // the whole workspace. CourseHeaderContent returns a fragment, so the grid that
+  // spaced its rows came from the CardHeader and has to travel with it.
   return (
     <>
-    <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
-      <Card>
-        <CardHeader className="grid grid-cols-1 gap-3">
+    <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange} className="space-y-6">
+      <section className="space-y-4">
+        <div className="grid grid-cols-1 gap-3">
           <CourseHeaderContent course={course} isStudent={false} />
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-6">
-          <CourseTabBar
-            value={tab}
-            onValueChange={onTabChange}
-            counts={{
-              assignments: assignmentCount,
-              problems: problemCount,
-              roster: rosterCount,
-            }}
-          />
+        <CourseTabBar
+          value={tab}
+          onValueChange={onTabChange}
+          counts={{
+            assignments: assignmentCount,
+            problems: problemCount,
+            roster: rosterCount,
+          }}
+        />
+      </section>
 
-          <CourseTabPanel value="assignments" active={tab === 'assignments'}>
-            <AssignmentsCard
-              courseId={course.id}
-              courseIsArchived={course.isArchived}
-              assignments={course.assignments}
-              assignmentColumns={assignmentColumns}
-              onCreateAssignment={onCreateAssignment}
-              onImportAssignment={() => setImportAssignmentOpen(true)}
-              isLoading={isAssignmentsLoading}
+      <CourseTabPanel value="assignments" active={tab === 'assignments'}>
+        <AssignmentsCard
+          courseId={course.id}
+          courseIsArchived={course.isArchived}
+          assignments={course.assignments}
+          assignmentColumns={assignmentColumns}
+          onCreateAssignment={onCreateAssignment}
+          onImportAssignment={() => setImportAssignmentOpen(true)}
+          isLoading={isAssignmentsLoading}
+        />
+      </CourseTabPanel>
+
+      <CourseTabPanel value="problems" active={tab === 'problems'}>
+        <ProblemsCard
+          courseId={course.id}
+          courseIsArchived={course.isArchived}
+          problems={course.problems}
+          problemColumns={problemColumns}
+          onCreateProblem={onCreateProblem}
+          onImportProblem={() => setImportProblemOpen(true)}
+          isLoading={isProblemsLoading}
+        />
+        {problemViewDialog}
+      </CourseTabPanel>
+
+      <CourseTabPanel value="roster" active={tab === 'roster'}>
+        <RosterCard
+          courseId={course.id}
+          courseIsArchived={course.isArchived}
+          userColumns={rosterColumns}
+          onEnrollUser={onEnrollUser}
+          onBulkEnroll={onBulkEnroll}
+        />
+      </CourseTabPanel>
+
+      <CourseTabPanel value="grades" active={tab === 'grades'}>
+        <PrivilegeGradesCard courseId={course.id} />
+      </CourseTabPanel>
+
+      <CourseTabPanel value="groups" active={tab === 'groups'}>
+        <GroupSetsCard courseId={course.id} courseIsArchived={course.isArchived} />
+      </CourseTabPanel>
+
+      <CourseTabPanel value="activity" active={tab === 'activity'}>
+        <ActivityCard courseId={course.id} />
+      </CourseTabPanel>
+
+      <CourseTabPanel value="settings" active={tab === 'settings'}>
+        <div className="space-y-4">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Settings className="h-5 w-5" />
+            Course Settings
+          </h2>
+          <p className="text-muted-foreground text-sm">
+            Edit the course name, code, dates, timezone, and self-registration settings.
+          </p>
+          {course.isArchived ? (
+            <p className="text-muted-foreground text-xs">
+              This course is archived and read-only. Unarchive it to make changes.
+            </p>
+          ) : null}
+          {/* Form on the left; the immediate-effect status switches sit in their
+              own card to the right (stacked below on narrow screens). */}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <CourseSettingsForm course={course} onSaved={onCourseSaved} className="w-full" />
+            <CourseStatusCard
+              course={course}
+              onPublishToggle={onPublishToggle}
+              className="w-full lg:w-80 lg:shrink-0"
             />
-          </CourseTabPanel>
-
-          <CourseTabPanel value="problems" active={tab === 'problems'}>
-            <ProblemsCard
-              courseId={course.id}
-              courseIsArchived={course.isArchived}
-              problems={course.problems}
-              problemColumns={problemColumns}
-              onCreateProblem={onCreateProblem}
-              onImportProblem={() => setImportProblemOpen(true)}
-              isLoading={isProblemsLoading}
-            />
-            {problemViewDialog}
-          </CourseTabPanel>
-
-          <CourseTabPanel value="roster" active={tab === 'roster'}>
-            <RosterCard
-              courseId={course.id}
-              courseIsArchived={course.isArchived}
-              userColumns={rosterColumns}
-              onEnrollUser={onEnrollUser}
-              onBulkEnroll={onBulkEnroll}
-            />
-          </CourseTabPanel>
-
-          <CourseTabPanel value="grades" active={tab === 'grades'}>
-            <PrivilegeGradesCard courseId={course.id} />
-          </CourseTabPanel>
-
-          <CourseTabPanel value="groups" active={tab === 'groups'}>
-            <GroupSetsCard courseId={course.id} courseIsArchived={course.isArchived} />
-          </CourseTabPanel>
-
-          <CourseTabPanel value="activity" active={tab === 'activity'}>
-            <ActivityCard courseId={course.id} />
-          </CourseTabPanel>
-
-          <CourseTabPanel value="settings" active={tab === 'settings'}>
-            <div className="space-y-4">
-              <h2 className="flex items-center gap-2 text-xl font-semibold">
-                <Settings className="h-5 w-5" />
-                Course Settings
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Edit the course name, code, dates, timezone, and self-registration settings.
-              </p>
-              {course.isArchived ? (
-                <p className="text-muted-foreground text-xs">
-                  This course is archived and read-only. Unarchive it to make changes.
-                </p>
-              ) : null}
-              {/* Form on the left; the immediate-effect status switches sit in their
-                  own card to the right (stacked below on narrow screens). */}
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <CourseSettingsForm course={course} onSaved={onCourseSaved} className="w-full" />
-                <CourseStatusCard
-                  course={course}
-                  onPublishToggle={onPublishToggle}
-                  className="w-full lg:w-80 lg:shrink-0"
-                />
-              </div>
-            </div>
-          </CourseTabPanel>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </CourseTabPanel>
     </Tabs>
 
     {duplicateAssignmentMounted && (

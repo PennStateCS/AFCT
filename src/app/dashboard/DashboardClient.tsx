@@ -3,7 +3,6 @@
 import React from 'react';
 import Link from 'next/link';
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getCourseStatusTag } from '@/lib/course-status';
 import type { EnrolledUser } from '@/lib/course-roster';
@@ -50,96 +49,92 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
   const visibleCourses = courses.filter((course) => course.isPublished || canManageCourse(course));
 
   return (
-    <Card className="flex h-full" aria-labelledby="current-courses-title">
-      <CardHeader>
-        <CardTitle
-          id="current-courses-title"
-          role="heading"
-          aria-level={2}
-          className="text-2xl font-semibold tracking-tight"
-        >
+    // Flat: the course tiles below are the real objects, and a card around them was one
+    // boundary too many. It also carried `h-full`, which stretched an almost-empty
+    // section down the whole viewport when somebody had no courses.
+    <section className="space-y-4" aria-labelledby="current-courses-title">
+      <div className="flex items-center justify-between">
+        <h2 id="current-courses-title" className="text-2xl font-semibold tracking-tight">
           {title}
-        </CardTitle>
-      </CardHeader>
+        </h2>
+      </div>
 
-      <CardContent>
-        {visibleCourses.length === 0 ? (
-          <p className="text-muted-foreground italic">No courses found.</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-1 2xl:grid-cols-2">
-            {visibleCourses.map((course) => {
-              const isUpcoming = new Date(course.endDate) > now;
+      {visibleCourses.length === 0 ? (
+        <p className="text-muted-foreground italic">No courses found.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+          {visibleCourses.map((course) => {
+            const isUpcoming = new Date(course.endDate) > now;
 
-              return (
-                // No aria-label: it would become the link's whole accessible name and
-                // replace the card's contents, so the code, semester, credits, staff, dates
-                // and status badge a sighted reader gets would all be dropped. The card's own
-                // text names it better than any label could.
-                <Link key={course.id} href={`/dashboard/courses/${course.id}`} passHref>
-                  <div className="group border-border bg-card hover:border-primary hover:bg-primary/5 flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md">
-                    {/* Vertical colored bar */}
-                    <div
-                      className={`w-[15px] ${
-                        !course.isPublished
-                          ? 'bg-status-warning-solid'
-                          : isUpcoming
-                            ? 'bg-primary'
-                            : 'bg-status-neutral-solid'
-                      }`}
-                    />
+            return (
+              // No aria-label: it would become the link's whole accessible name and
+              // replace the card's contents, so the code, semester, credits, staff, dates
+              // and status badge a sighted reader gets would all be dropped. The card's own
+              // text names it better than any label could.
+              <Link key={course.id} href={`/dashboard/courses/${course.id}`} passHref>
+                <div className="group border-border bg-card hover:border-primary hover:bg-primary/5 flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md">
+                  {/* Vertical colored bar */}
+                  <div
+                    className={`w-[15px] ${
+                      !course.isPublished
+                        ? 'bg-status-warning-solid'
+                        : isUpcoming
+                          ? 'bg-primary'
+                          : 'bg-status-neutral-solid'
+                    }`}
+                  />
 
-                    {/* Content area */}
-                    <div className="flex w-full flex-col px-4 py-4 sm:p-5">
-                      {/* Top Row: Title and Badge */}
-                      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                        <div className="truncate text-base font-semibold">
-                          {course.name}
-                          <div className="text-muted-foreground mb-2 text-sm">
-                            {course.code} • {course.semester} • {course.credits} credits
-                          </div>
+                  {/* Content area */}
+                  <div className="flex w-full flex-col px-4 py-4 sm:p-5">
+                    {/* Top Row: Title and Badge */}
+                    <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                      <div className="truncate text-base font-semibold">
+                        {course.name}
+                        <div className="text-muted-foreground mb-2 text-sm">
+                          {course.code} • {course.semester} • {course.credits} credits
                         </div>
-
-                        {(() => {
-                          const { status, variant } = getCourseStatusTag(course);
-                          return <Badge variant={variant}>{status}</Badge>;
-                        })()}
                       </div>
 
-                      <div className="space-y-1 text-sm">
-                        {canManageCourse(course) && (
-                          <div>
-                            <span className="font-semibold">Enrollment:</span>{' '}
-                            {getStudentCount(course.enrolled)}
-                          </div>
-                        )}
+                      {(() => {
+                        const { status, variant } = getCourseStatusTag(course);
+                        return <Badge variant={variant}>{status}</Badge>;
+                      })()}
+                    </div>
+
+                    <div className="space-y-1 text-sm">
+                      {canManageCourse(course) && (
                         <div>
-                          <span className="font-semibold">Faculty:</span>{' '}
-                          {formatInstructorNames(course.enrolled)}
+                          <span className="font-semibold">Enrollment:</span>{' '}
+                          {getStudentCount(course.enrolled)}
                         </div>
-                        <div>
-                          <span className="font-semibold">TA(s):</span>{' '}
-                          {(() => {
-                            const taNames = getTAs(course.enrolled)
-                              .map((ta) => `${ta.firstName ?? ''} ${ta.lastName ?? ''}`.trim())
-                              .filter(Boolean)
-                              .join(', ');
-                            return taNames || 'None';
-                          })()}
-                        </div>
-                        <div>
-                          <span className="font-semibold">Dates:</span>{' '}
-                          {formatDateTimeInTimeZone(course.startDate, timezone)} to{' '}
-                          {formatDateTimeInTimeZone(course.endDate, timezone)}
-                        </div>
+                      )}
+                      <div>
+                        <span className="font-semibold">Faculty:</span>{' '}
+                        {formatInstructorNames(course.enrolled)}
+                      </div>
+                      <div>
+                        <span className="font-semibold">TA(s):</span>{' '}
+                        {(() => {
+                          const taNames = getTAs(course.enrolled)
+                            .map((ta) => `${ta.firstName ?? ''} ${ta.lastName ?? ''}`.trim())
+                            .filter(Boolean)
+                            .join(', ');
+                          return taNames || 'None';
+                        })()}
+                      </div>
+                      <div>
+                        <span className="font-semibold">Dates:</span>{' '}
+                        {formatDateTimeInTimeZone(course.startDate, timezone)} to{' '}
+                        {formatDateTimeInTimeZone(course.endDate, timezone)}
                       </div>
                     </div>
                   </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
