@@ -187,8 +187,10 @@ function CollapsibleSidebarGroup({
 
   return (
     <SidebarGroup>
-      {/* Color/size go on SidebarGroupLabel's className so tailwind-merge overrides its
-          muted `text-sidebar-muted-foreground text-xs` base, matching the submenu items. */}
+      {/* A heading organises the destinations below it, so it is deliberately quieter
+          than they are: the label keeps SidebarGroupLabel's muted `text-xs` rather than
+          overriding it up to the nav items' size and colour, and only the weight is
+          raised. The hierarchy is typography and colour, with no rule or block. */}
       {/* The toggle sits inside a heading (WAI-ARIA accordion pattern) so screen reader
           users can jump between sidebar sections by heading, not just by button.
           Tailwind's preflight strips the h3's default margin/size, so this is
@@ -196,20 +198,23 @@ function CollapsibleSidebarGroup({
       {/* px-0 drops the label's own horizontal padding so the inner button spans the
           full group width; the button then carries p-2 itself, matching a nav item's
           box exactly so their hover highlights line up edge-to-edge. */}
-      <SidebarGroupLabel asChild className="text-sidebar-foreground px-0 text-sm">
+      <SidebarGroupLabel asChild className="px-0 text-xs font-semibold">
         <h3>
+          {/* The label's own focus ring sits on the h3, which never takes focus, so the
+              button carries its own or there is nothing to see when tabbing here. */}
           <button
             type="button"
             onClick={onToggle}
             aria-expanded={open}
             aria-controls={contentId}
-            className="hover:bg-sidebar-accent flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
+            className="hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-sidebar-ring flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
+            {/* Inherits the heading's colour, so it lifts with the label on hover. */}
             <ChevronDown
               aria-hidden="true"
               className={cn(
-                'ml-auto h-4 w-4 shrink-0 transition-transform',
+                'ml-auto size-3.5 shrink-0 transition-transform',
                 open ? '' : '-rotate-90',
               )}
             />
@@ -636,13 +641,17 @@ export default function DashboardSidebarMenu() {
                   keeps a long address from stretching the menu across the page. */}
               <DropdownMenuContent
                 side="top"
+                align="start"
+                sideOffset={8}
                 className="max-w-64 min-w-[max(var(--radix-popper-anchor-width),13rem)]"
               >
                 {/* Identity, not an action. A Label keeps it out of the menu's
                     focus/arrow-key order, which is why the name is repeated here rather
-                    than made a menu item. */}
-                <DropdownMenuLabel className="font-normal">
-                  <span className="flex w-full items-center gap-2 text-left">
+                    than made a menu item. No Administrator line: the account row this
+                    opens from already carries it, and repeating it here only made the
+                    header taller. */}
+                <DropdownMenuLabel className="p-2 font-normal">
+                  <span className="flex w-full items-center gap-2.5 text-left">
                     <Avatar className="h-8 w-8 shrink-0 border-0">
                       <AvatarImage
                         src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
@@ -660,11 +669,6 @@ export default function DashboardSidebarMenu() {
                       {user.email && (
                         <span className="text-muted-foreground truncate text-xs">
                           {user.email}
-                        </span>
-                      )}
-                      {isAdmin && (
-                        <span className="text-muted-foreground truncate text-xs">
-                          Administrator
                         </span>
                       )}
                     </span>

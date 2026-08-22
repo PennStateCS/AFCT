@@ -430,6 +430,9 @@ describe('DashboardSidebarMenu', () => {
 
     const trigger = screen.getByLabelText(/Open account menu/);
     expect(trigger).toHaveTextContent('Administrator');
+
+    // Once, not twice: the dropdown's identity header deliberately does not repeat it.
+    expect(screen.getAllByText('Administrator')).toHaveLength(1);
   });
 
   it('shows the email address under the name for a non-admin', () => {
