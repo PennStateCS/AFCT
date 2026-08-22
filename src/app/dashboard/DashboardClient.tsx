@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Library } from 'lucide-react';
+import { Book } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -79,7 +79,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
               treatment on the two rail cards, in a third accent so the three headings
               are distinguishable at a glance. */}
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-            <Library className="size-4" aria-hidden="true" />
+            <Book className="size-4" aria-hidden="true" />
           </span>
           <span>{title}</span>
         </h2>
