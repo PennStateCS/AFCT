@@ -200,7 +200,8 @@ export function TabBar({
 // The vertical rail (see {@link CourseTabBar}). Light and quiet on purpose: the global
 // sidebar is the dark one, and two charcoal columns would read as two applications.
 const RAIL_TRIGGER_CLASS = [
-  'group flex h-9 w-full items-center gap-2 rounded-md px-3 text-sm',
+  // `group` so the count badge can react to the item's own active state.
+  'group flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-sm',
   'justify-start whitespace-nowrap',
   'text-muted-foreground hover:bg-accent hover:text-foreground',
   // Active: a soft tint of the primary, not a filled row. The dark pair is spelled out
@@ -220,9 +221,12 @@ const RAIL_TRIGGER_CLASS = [
  */
 function CourseTabRail({ tabs, ariaLabel }: { tabs: readonly TabBarTab[]; ariaLabel: string }) {
   return (
+    // A surface rather than a rule down the page: the divider split the workspace in two
+    // instead of grouping the items. self-start so it stays the height of its own list
+    // rather than stretching beside a long table.
     <TabsList
       aria-label={ariaLabel}
-      className="border-border h-auto w-full flex-col items-stretch justify-start gap-0.5 rounded-none border-0 border-r bg-transparent p-0 pr-4"
+      className="bg-muted/40 h-auto w-full flex-col items-stretch justify-start gap-0.5 self-start rounded-lg border-0 p-2"
     >
       {tabs.map(({ value: tabValue, label, Icon, count }) => (
         <TabsTrigger
@@ -238,7 +242,9 @@ function CourseTabRail({ tabs, ariaLabel }: { tabs: readonly TabBarTab[]; ariaLa
           {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
           <span className="truncate">{label}</span>
           {count !== undefined ? (
-            <span className="bg-primary/10 text-primary dark:bg-blue-950/40 dark:text-blue-300 ml-auto rounded-full px-1.5 py-0.5 text-xs leading-none font-medium">
+            // Outlined and quiet at rest so the counts read as one column rather than
+            // seven tinted chips; only the active row's count picks up the tint.
+            <span className="border-border bg-background text-muted-foreground group-data-[state=active]:border-primary/20 group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary dark:group-data-[state=active]:border-blue-900 dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300 ml-auto min-w-5 rounded-full border px-1.5 text-center text-xs leading-5 font-medium">
               {count}
             </span>
           ) : null}
