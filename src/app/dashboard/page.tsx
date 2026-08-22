@@ -34,6 +34,11 @@ export default async function DashboardPage({
   // Get user's id
   const { id } = session.user;
 
+  // Greeting name. Falls back to the first word of the display name, then to no name at
+  // all, so this never renders "Welcome back, undefined" or a dangling comma.
+  const firstName =
+    session.user.firstName?.trim() || session.user.name?.trim().split(/\s+/)[0] || '';
+
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({
     where: {
@@ -218,26 +223,36 @@ export default async function DashboardPage({
     .sort((x, y) => x.dueDate.getTime() - y.dueDate.getTime());
 
   return (
-    // A fixed rail rather than a quarter of the viewport: at 25% the two modules kept
-    // growing on a wide monitor while the courses beside them stayed the same size.
-    // The sr-only h1 is absolutely positioned, so it occupies no grid track.
-    <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <h1 className="sr-only">Dashboard</h1>
+    <>
+      {/* Replaces the sr-only "Dashboard" h1. Sits above the grid so it spans the course
+          list and the module rail, and stays a page introduction: no card, no banner. */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Here&apos;s what&apos;s happening in your courses today.
+        </p>
+      </div>
 
-      <section className="min-w-0">
-        {/* Renders nothing unless an LMS launch sent them here, which is most of the time. */}
-        <LaunchNotice notice={lms} courseTitle={lmsCourseTitle} />
-        <DashboardClient
-          sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
-          courses={currentCourses}
-          title={'Current Courses'}
-        />
-      </section>
+      {/* A fixed rail rather than a quarter of the viewport: at 25% the two modules kept
+          growing on a wide monitor while the courses beside them stayed the same size. */}
+      <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <section className="min-w-0">
+          {/* Renders nothing unless an LMS launch sent them here, which is most of the time. */}
+          <LaunchNotice notice={lms} courseTitle={lmsCourseTitle} />
+          <DashboardClient
+            sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
+            courses={currentCourses}
+            title={'Current Courses'}
+          />
+        </section>
 
-      <aside className="space-y-4">
-        <JoinCourseModule />
-        <DueDateModule assignments={assignments} />
-      </aside>
-    </div>
+        <aside className="space-y-4">
+          <JoinCourseModule />
+          <DueDateModule assignments={assignments} />
+        </aside>
+      </div>
+    </>
   );
 }
