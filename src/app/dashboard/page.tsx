@@ -259,7 +259,7 @@ export default async function DashboardPage({
         <DashboardClient
           sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
           courses={currentCourses}
-          title={'Current Courses'}
+          title={'My Courses'}
         />
       </section>
 

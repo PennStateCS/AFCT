@@ -8,15 +8,10 @@ import DashboardClient from './DashboardClient';
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
-vi.mock('@/lib/date-format', () => ({ formatDateInTimeZone: () => 'DATE' }));
 vi.mock('@/lib/course-status', () => ({
   getCourseStatusTag: () => ({ status: 'Open', variant: 'success' }),
 }));
-vi.mock('@/lib/course-roster', () => ({
-  getStudentCount: () => 3,
-  formatInstructorNames: () => 'Prof X',
-  getTAs: () => [],
-}));
+vi.mock('@/lib/course-roster', () => ({ getStudentCount: () => 3 }));
 vi.mock('next/link', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -38,7 +33,7 @@ const course = (over: Partial<CourseInput> & { id: string; name: string }): Cour
 
 const renderDash = (courses: CourseInput[], isAdmin = false) =>
   render(
-    <DashboardClient sessionUser={{ id: 'u1', isAdmin }} title="Current Courses" courses={courses} />,
+    <DashboardClient sessionUser={{ id: 'u1', isAdmin }} title="My Courses" courses={courses} />,
   );
 
 describe('DashboardClient per-course role', () => {
