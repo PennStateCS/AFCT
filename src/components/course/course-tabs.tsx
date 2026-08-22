@@ -213,13 +213,25 @@ const RAIL_TRIGGER_CLASS = [
 ].join(' ');
 
 /**
- * The course sections as a vertical rail, for wide screens.
+ * A vertical tab rail, for wide screens. The counterpart to {@link TabBar}.
  *
  * Still a Radix tablist, not a `<nav>`: the panels are tab panels and behave as such, so
  * converting the semantics for the sake of the shape would be a regression. The Tabs root
  * carries `orientation="vertical"` (set by the caller) so arrow keys run up and down.
+ *
+ * Render this OR the strip, never both: with `linkPanels` they emit the same `tab-*` ids,
+ * and two of each would break the `aria-labelledby` on every panel.
  */
-function CourseTabRail({ tabs, ariaLabel }: { tabs: readonly TabBarTab[]; ariaLabel: string }) {
+export function TabRail({
+  tabs,
+  ariaLabel,
+  linkPanels = false,
+}: {
+  tabs: readonly TabBarTab[];
+  ariaLabel: string;
+  /** Emit explicit `tab-*`/`panel-*` ids. Off for callers that let Radix pair them. */
+  linkPanels?: boolean;
+}) {
   return (
     // A surface rather than a rule down the page: the divider split the workspace in two
     // instead of grouping the items. self-start so it stays the height of its own list
@@ -238,8 +250,7 @@ function CourseTabRail({ tabs, ariaLabel }: { tabs: readonly TabBarTab[]; ariaLa
           key={tabValue}
           value={tabValue}
           className={RAIL_TRIGGER_CLASS}
-          id={`tab-${tabValue}`}
-          aria-controls={`panel-${tabValue}`}
+          {...(linkPanels ? { id: `tab-${tabValue}`, 'aria-controls': `panel-${tabValue}` } : {})}
           // With a count, spell it into the accessible name; otherwise the visible label
           // already names the tab.
           aria-label={count === undefined ? undefined : `${label}, ${count}`}
@@ -282,7 +293,7 @@ export function CourseTabBar({
   }));
 
   if (rail) {
-    return <CourseTabRail tabs={tabs} ariaLabel="Course content sections" />;
+    return <TabRail tabs={tabs} ariaLabel="Course content sections" linkPanels />;
   }
 
   return (

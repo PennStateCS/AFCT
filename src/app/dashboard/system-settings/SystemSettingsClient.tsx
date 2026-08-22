@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { TabBar } from '@/components/course/course-tabs';
+import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -26,6 +26,7 @@ import {
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import {
+  Settings,
   SlidersHorizontal,
   Cpu,
   DatabaseBackup,
@@ -536,24 +537,43 @@ export default function SystemSettingsClient() {
   // Backups included (its schedule is part of the form), needs it.
   const showSave = tab !== 'tls' && tab !== 'updates';
 
+  // xl rather than lg: a rail plus a settings form needs more room than a table does.
+  const railNav = useIsDesktopNav(1280);
+
   return (
     <div className="space-y-4 pb-8">
       <p className="sr-only" aria-live="polite">
         {loading ? 'Loading system settings' : saving ? 'Saving system settings' : ''}
       </p>
 
-      <Card className="p-4">
-        <CardHeader className="pb-2">
-          <CardTitle role="heading" aria-level={1} className="text-2xl tracking-tight">
-            System Settings
-          </CardTitle>
-          <p className="text-muted-foreground text-sm">
-            Manage server-wide configuration, security, uploads, evaluator behavior, and TLS.
-          </p>
-        </CardHeader>
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+          {/* Decorative: the heading beside it already says what this is. The icon the
+              sidebar already uses for this page, on the neutral muted surface the other
+              admin pages use. */}
+          <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <Settings className="size-5" aria-hidden="true" />
+          </span>
+          <span>System Settings</span>
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          Manage server-wide configuration, security, uploads, evaluator behavior, and TLS.
+        </p>
+      </div>
 
-        <CardContent>
-          <Tabs value={tab} onValueChange={handleTabChange} className="w-full gap-6">
+      {/* Nine sections is too many for a strip, so above xl they become a rail beside the
+          form. Below that the strip and its select stay exactly as they were. One control
+          at a time: rendering both would put two tablists under one Tabs root. */}
+      <Tabs
+        value={tab}
+        onValueChange={handleTabChange}
+        orientation={railNav ? 'vertical' : 'horizontal'}
+        className="w-full gap-6"
+      >
+        <div className="space-y-6 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
+          {railNav ? (
+            <TabRail tabs={settingsTabs} ariaLabel="System settings sections" />
+          ) : (
             <TabBar
               ariaLabel="System settings sections"
               selectId="system-settings-tab-select"
@@ -561,6 +581,11 @@ export default function SystemSettingsClient() {
               onValueChange={handleTabChange}
               tabs={settingsTabs}
             />
+          )}
+
+          {/* max-w-3xl: the form was pinned to a narrow column inside a full-width card,
+              so it wrapped help text into slivers. Readable measure, not the whole monitor. */}
+          <div className="min-w-0 max-w-3xl">
 
             <TabsContent value="general">
               <GeneralTab
@@ -654,10 +679,9 @@ export default function SystemSettingsClient() {
             <TabsContent value="updates">
               <UpdatesTab disabled={disabled} />
             </TabsContent>
-          </Tabs>
 
-          {/* Save action, bottom-left of the card. Hidden on tabs with no savable
-              fields (TLS, Updates), which run their own actions instead. */}
+            {/* Save action, under the section it saves. Hidden on tabs with no savable
+                fields (TLS, Updates), which run their own actions instead. */}
           {showSave && (
             <div className="mt-6 flex items-center justify-start gap-3 border-t pt-4">
               <Button
@@ -683,8 +707,9 @@ export default function SystemSettingsClient() {
               {isDirty && <span className="text-muted-foreground text-sm">Unsaved changes</span>}
             </div>
           )}
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </Tabs>
 
       {/* The settings inputs live outside a <form> element, so this empty form
           gives the sticky Save button something to submit via form=. */}
