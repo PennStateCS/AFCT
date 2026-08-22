@@ -9,16 +9,24 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-secondary-foreground shadow-xs hover:bg-primary/90',
+        // Cobalt. The foreground was --secondary-foreground, which happens to be the
+        // same near-white in both themes, so this is a correctness fix rather than a
+        // repaint: nothing stopped --secondary drifting away from it.
+        default: 'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90',
         destructive:
           'bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         success:
           'bg-status-success-solid text-white shadow-xs hover:bg-status-success-solid/90 focus-visible:ring-status-success-solid/30',
         outline:
-          'border bg-table-header shadow-xs hover:bg-table-header/60 hover:text-accent-foreground',
+          'border-border bg-card text-foreground border shadow-xs hover:bg-accent hover:text-accent-foreground',
         menu: 'bg-tertiary/90 text-tertiary-foreground shadow-xs hover:bg-tertiary/80',
-        secondary: 'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        // Neutral, not --secondary: that token is still the brand teal in light mode, so
+        // every Filters/Columns/Export control read as a coloured call to action. The
+        // dark hover is spelled out because --muted and --accent are the same value
+        // there, which would leave the button inert on hover.
+        secondary:
+          'bg-muted text-foreground shadow-xs hover:bg-accent dark:hover:bg-accent/60',
+        ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
