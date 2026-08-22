@@ -26,6 +26,22 @@ type Props = {
   assignments: DueDateAssignment[];
 };
 
+/**
+ * Date-tile tints, applied by position so five stacked tiles are easy to tell apart at a
+ * glance. Decorative only: AFCT's status tokens carry meaning, and cycling them by row
+ * index would claim row 0 is a danger and row 3 is information, which is not true. What
+ * a row means is said by its urgency label, which these deliberately do not touch.
+ *
+ * Every pair clears AA on its own tint in both themes (4.8:1 at worst, on amber).
+ */
+const TILE_TINTS = [
+  'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+  'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+  'border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900 dark:bg-yellow-950/40 dark:text-yellow-300',
+  'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300',
+  'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300',
+] as const;
+
 // Keep the module skimmable: the calendar is the place for the full term.
 const MAX_VISIBLE = 5;
 const DUE_SOON_MS = 48 * 60 * 60 * 1000;
@@ -105,19 +121,18 @@ export function DueDateModule({ assignments }: Props) {
                     index < visible.length - 1 && 'border-border border-b',
                   )}
                 >
-                  {/* Neutral in every row: a filled tile per assignment would make five
-                      of them compete, and urgency is the label's job. aria-hidden because
-                      the same date is already in the row's text. */}
+                  {/* aria-hidden: the same date is already in the row's text, and the
+                      tint says nothing a reader needs. Month and day inherit the tile's
+                      colour; their hierarchy is size and weight, as before. */}
                   <div
                     aria-hidden="true"
-                    className="border-border bg-muted/50 flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border"
+                    className={cn(
+                      'flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border',
+                      TILE_TINTS[index % TILE_TINTS.length],
+                    )}
                   >
-                    <span className="text-muted-foreground text-2xs leading-none font-medium uppercase">
-                      {month}
-                    </span>
-                    <span className="text-foreground text-base leading-tight font-semibold">
-                      {day}
-                    </span>
+                    <span className="text-2xs leading-none font-medium uppercase">{month}</span>
+                    <span className="text-base leading-tight font-semibold">{day}</span>
                   </div>
 
                   <div className="min-w-0 flex-1">
