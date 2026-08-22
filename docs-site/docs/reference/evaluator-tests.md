@@ -87,8 +87,23 @@ A good pair of cases for any problem: grade a solution **against itself**
   (`bin/cfganalyzer`). The runner already points `CFGANALYZER_BINARY` and
   `CFGANALYZER_LIMIT` at it, so adding a CFG or PDA case is the way to also catch a broken
   `cfganalyzer` in the build.
-- **`TM`** (Turing machines) are graded by bounded simulation.
+- **`TM`** (Turing machines) cannot be graded today, and the suite records that rather than
+  claiming otherwise. The only TM fixture is a plain `<type>turing</type>` machine, and the jar
+  **refuses** it: "unsupported answer type". `TM` is also not offered when creating or editing a
+  problem, so no course can set one through the interface. The schema, the viewers and the
+  similarity features all carry `TM`, which is why it looks supported at a glance.
 
-Because context-free and Turing equivalence are undecidable in general, the CFG/PDA/TM
-checks are bounded and heuristic; pick fixtures whose verdict is unambiguous within those
-bounds.
+  **The seeded development database is misleading here.** It contains TM problems with
+  submissions marked correct, which looks like proof that grading works. Those verdicts are
+  written directly by `prisma/seed-dev.ts`; the evaluator never ran on them. Do not read them as
+  evidence. The evaluator suite is the only thing in the repo that actually asks the jar.
+
+:::note If `cfganalyzer` looks broken
+Fourteen CFG and PDA cases fail together, each quoting the binary's own path as the
+counterexample ("the string `/app/bin/cfganalyzer` is an example"). That is not a grading bug,
+it is `bin/cfganalyzer` having lost its executable bit. It is stored `100755`, so this only
+happens on a filesystem that drops the mode; `chmod +x bin/cfganalyzer` fixes it.
+:::
+
+Because context-free equivalence is undecidable in general, the CFG and PDA checks are bounded
+and heuristic; pick fixtures whose verdict is unambiguous within those bounds.

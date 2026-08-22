@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<!-- Every string of even length, palindrome or not: a superset that agrees with the answer on
+     short inputs and first differs at "abba" versus "abab". -->
+<structure>
+	<type>grammar</type>
+	<production><left>S</left><right>aSa</right></production>
+	<production><left>S</left><right>aSb</right></production>
+	<production><left>S</left><right>bSa</right></production>
+	<production><left>S</left><right>bSb</right></production>
+	<production><left>S</left><right></right></production>
+</structure>

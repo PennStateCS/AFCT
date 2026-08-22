@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- PDA for { a^n b^2n : n >= 0 }: every 'a' owes two 'b's. Push two markers per 'a', pop one
+     per 'b', accept by final state once the stack is back to its bottom marker. -->
+<structure>
+	<type>pda</type>
+	<state id="0" name="q0"><x>100.0</x><y>150.0</y><initial /></state>
+	<state id="1" name="q1"><x>300.0</x><y>150.0</y></state>
+	<state id="2" name="q2"><x>500.0</x><y>150.0</y></state>
+	<state id="3" name="q3"><x>700.0</x><y>150.0</y><final /></state>
+	<transition><from>0</from><to>1</to><read></read><pop></pop><push>$</push></transition>
+	<transition><from>1</from><to>1</to><read>a</read><pop></pop><push>xx</push></transition>
+	<transition><from>1</from><to>2</to><read></read><pop></pop><push></push></transition>
+	<transition><from>2</from><to>2</to><read>b</read><pop>x</pop><push></push></transition>
+	<transition><from>2</from><to>3</to><read></read><pop>$</pop><push></push></transition>
+</structure>

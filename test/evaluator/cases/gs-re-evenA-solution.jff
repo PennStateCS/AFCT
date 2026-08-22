@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><structure>
+	<type>re</type>
+	<!--Strings over {a,b} with an even number of a's, zero included. The leading b* matters:
+	    without it the expression cannot make "b", which has no a's at all and so belongs.-->
+	<expression>b*(ab*ab*)*</expression>
+</structure>

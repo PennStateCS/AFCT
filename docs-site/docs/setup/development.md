@@ -166,11 +166,16 @@ sharing that one password, nine courses, classes of fourteen to twenty-two stude
 assignments, and around five hundred submissions with real JFLAP files behind them.
 
 Assignments read like something a person set. Each one names the problems it covers, in the order
-a course would teach them, and the theory course (CMPSC 464) sets **every problem type AFCT
-grades**: finite automata, regular expressions, context-free grammars, pushdown automata and
+a course would teach them, and the theory course (CMPSC 464) sets **every problem type in the
+schema**: finite automata, regular expressions, context-free grammars, pushdown automata and
 Turing machines. That matters because they do not behave alike. A grammar and a regular expression
 carry no layout, so both the similarity report and the evaluator treat them differently from an
 automaton, and a database of nothing but finite automata hides two of those paths.
+
+The Turing machine problems are the exception, and worth knowing about before you trust them:
+the evaluator cannot grade a TM, and the verdicts on those seeded submissions are written by the
+seed rather than produced by the evaluator. They are there to exercise the viewers and the
+similarity code, not the grading.
 
 Some assignments are **group** work and most are individual, which is the only difference that
 exists between them: an assignment is a group assignment when it names a group set. Both are

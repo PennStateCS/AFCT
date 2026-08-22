@@ -39,7 +39,9 @@ const VARIANTS = Array.from({ length: 60 }, (_, i) => i);
 
 describe('the sample files behind seeded answers', () => {
   it('covers every problem type AFCT grades', () => {
-    expect([...samples.keys()].sort()).toEqual(['CFG', 'FA', 'PDA', 'RE', 'TM']);
+    // No TM: the evaluator refuses one and no course can create the problem type, so seeding
+    // them produced data no deployment could have. See the note on `JFF_TYPES`.
+    expect([...samples.keys()].sort()).toEqual(['CFG', 'FA', 'PDA', 'RE']);
   });
 });
 
