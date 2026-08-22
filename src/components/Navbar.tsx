@@ -100,7 +100,11 @@ const Navbar: React.FC = () => {
     // Chrome, not a banner: the teal block competed with the page heading under it. A
     // white utility bar spanning the whole workspace, so its divider reaches both edges;
     // the 16px gutter lives on <main> below, not around this.
-    <header className="border-border bg-card flex h-14 items-center justify-between border-b px-4">
+    //
+    // shrink-0 is load-bearing. This is a flex child of the column that also holds <main>,
+    // and flex items shrink by default, so a tall page squeezed the header below its own
+    // h-14: the bar was 56px on the dashboard and shorter on Submissions.
+    <header className="border-border bg-card flex h-14 shrink-0 items-center justify-between border-b px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
         <EnhancedSidebarTrigger />
         <Breadcrumb aria-label="Breadcrumb">
