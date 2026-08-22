@@ -295,12 +295,22 @@ export default function StudentAssignmentPage({
     }));
   }, [assignment, submissions, problemGrades, effectiveMax]);
 
+  // Both announce. On a first paint plain text would do, but this same branch renders when
+  // moving between assignments client-side, where the change is otherwise silent.
   if (loading) {
-    return <div className="p-6">Loading assignment...</div>;
+    return (
+      <div className="p-6" role="status" aria-live="polite">
+        Loading assignment...
+      </div>
+    );
   }
 
   if (!assignment) {
-    return <div className="p-6">Assignment not found.</div>;
+    return (
+      <div className="p-6" role="alert">
+        Assignment not found.
+      </div>
+    );
   }
 
   if (isStudent && !assignment.isPublished) {

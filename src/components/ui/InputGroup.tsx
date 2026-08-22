@@ -206,7 +206,13 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
                     handleToggleEye();
                   }
                 }}
-                aria-label={pwdVisible ? 'Hide password' : 'Show password'}
+                /*
+                 * A fixed name with a pressed state, not both changing at once.
+                 * Flipping the label as well meant a screen reader said "Hide password,
+                 * pressed": the name describing the action to come and the state describing
+                 * the one already taken, which read as a contradiction.
+                 */
+                aria-label="Show password"
                 aria-pressed={pwdVisible}
                 className="text-muted-foreground transition-opacity hover:opacity-80"
               >

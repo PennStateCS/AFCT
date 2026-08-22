@@ -139,7 +139,7 @@ describe('TokensSection', () => {
     it('asks before revoking', async () => {
       const user = userEvent.setup();
       render(<TokensSection />);
-      await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+      await user.click(await screen.findByRole('button', { name: /^Revoke My laptop$/ }));
 
       expect(screen.getByRole('dialog')).toHaveTextContent(/revoke this token/i);
       expect(fetchMock).not.toHaveBeenCalledWith(
@@ -151,7 +151,7 @@ describe('TokensSection', () => {
     it('sends nothing when the confirmation is cancelled', async () => {
       const user = userEvent.setup();
       render(<TokensSection />);
-      await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+      await user.click(await screen.findByRole('button', { name: /^Revoke My laptop$/ }));
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
       expect(fetchMock).not.toHaveBeenCalledWith(
@@ -163,7 +163,7 @@ describe('TokensSection', () => {
     it('revokes once confirmed', async () => {
       const user = userEvent.setup();
       render(<TokensSection />);
-      await user.click(await screen.findByRole('button', { name: 'Revoke' }));
+      await user.click(await screen.findByRole('button', { name: /^Revoke My laptop$/ }));
       const dialog = screen.getByRole('dialog');
       await user.click(within(dialog).getByRole('button', { name: 'Revoke token' }));
 

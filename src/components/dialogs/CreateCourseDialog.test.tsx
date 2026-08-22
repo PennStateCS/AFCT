@@ -352,3 +352,25 @@ describe('CreateCourseDialog', () => {
     );
   });
 });
+
+/**
+ * A blocked Next has to say so somewhere the user is.
+ *
+ * It used to validate, fail, and return: focus stayed on the button and the reason rendered
+ * further up the form, so a keyboard or screen-reader user pressed Next, nothing happened, and
+ * nothing told them why.
+ */
+describe('when Next is blocked', () => {
+  it('moves focus to the first field that failed', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    // Step 1 opens empty, so Next cannot advance.
+    await user.click(await screen.findByRole('button', { name: 'Next' }));
+
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement?.tagName).toBe('INPUT');
+    });
+  });
+});

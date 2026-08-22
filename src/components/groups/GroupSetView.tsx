@@ -492,10 +492,17 @@ export function GroupSetView({
             variant="secondary"
             onClick={() => setRandomOpen(true)}
             disabled={disabled || detail.groups.length === 0}
-            title={detail.groups.length === 0 ? 'Add a group first' : undefined}
+            /* Described by the visible note beside it rather than by a `title`: a disabled
+               button takes neither focus nor hover, so a title on one is unreachable text. */
+            aria-describedby={detail.groups.length === 0 ? 'random-assign-note' : undefined}
           >
             <Shuffle className="h-4 w-4" /> Random assign
           </Button>
+          {detail.groups.length === 0 ? (
+            <span id="random-assign-note" className="text-muted-foreground text-sm">
+              Add a group first
+            </span>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" aria-label="Group set actions">

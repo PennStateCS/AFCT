@@ -276,7 +276,14 @@ export default function EvaluatorSandboxClient() {
             {trial && isTrialFinished(trial.state) && (
               <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
                 <dt className="text-muted-foreground">Feedback</dt>
-                <dd className="whitespace-pre-wrap">{trial.feedback ?? '—'}</dd>
+                <dd className="whitespace-pre-wrap">
+                  {trial.feedback ?? (
+                    <>
+                      <span aria-hidden="true">—</span>
+                      <span className="sr-only">None</span>
+                    </>
+                  )}
+                </dd>
 
                 <dt className="text-muted-foreground">Runtime</dt>
                 <dd>{formatRuntime(trial.durationMs)}</dd>

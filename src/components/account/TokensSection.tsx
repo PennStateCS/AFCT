@@ -233,6 +233,11 @@ export function TokensSection() {
                         size="sm"
                         variant="outline"
                         onClick={() => setRevoking(token)}
+                        /* Which token. Tabbing the table otherwise gave "Revoke, Revoke,
+                           Revoke" with nothing to tell them apart. The name still begins with
+                           the visible word, so speech input for "Revoke" still matches
+                           (WCAG 2.5.3), and this is a real button, so a label belongs on it. */
+                        aria-label={`Revoke ${token.label || 'Unnamed token'}`}
                       >
                         Revoke
                       </Button>

@@ -194,7 +194,10 @@ export function IdentitiesSection({
                 size="sm"
                 onClick={() => setUnlinking(identity)}
                 disabled={isOnlyWayIn}
-                title={isOnlyWayIn ? 'This is the only way to sign in to your account.' : undefined}
+                /* The explanation is the paragraph below, pointed at rather than repeated in a
+                   `title`: a disabled button never receives focus or hover, so a title on one
+                   is text nobody can reach. A description is still exposed in browse mode. */
+                aria-describedby={isOnlyWayIn ? 'only-way-in-note' : undefined}
               >
                 <Unlink className="mr-2 h-4 w-4" aria-hidden="true" />
                 Disconnect
@@ -205,7 +208,7 @@ export function IdentitiesSection({
       )}
 
       {isOnlyWayIn && identities.length > 0 && (
-        <p className="text-muted-foreground text-sm">
+        <p id="only-way-in-note" className="text-muted-foreground text-sm">
           This is the only way to sign in to your account, so it cannot be disconnected. To be able
           to disconnect it, ask an administrator to send you a password reset, which lets you set an
           AFCT password as well.

@@ -339,7 +339,7 @@ function AssignmentOption({
   const points = assignment.problems.reduce((sum, p) => sum + Number(p.maxPoints ?? 0), 0);
   return (
     <option value={assignment.id}>
-      {assignment.title} {'—'} {points > 0 ? `${points} points` : 'not graded'}
+      {assignment.title}, {points > 0 ? `${points} points` : 'not graded'}
     </option>
   );
 }

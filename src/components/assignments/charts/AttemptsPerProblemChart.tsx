@@ -26,7 +26,12 @@ const BUCKET_STYLE = [
 ];
 const NOT_SOLVED_STYLE = { bg: 'var(--color-muted-foreground)', opacity: 0.35 };
 
-type Segment = { key: string; label: string; count: number; style: { bg: string; opacity: number } };
+type Segment = {
+  key: string;
+  label: string;
+  count: number;
+  style: { bg: string; opacity: number };
+};
 
 function segmentsFor(a: AttemptsToSolve): { segments: Segment[]; total: number } {
   const segments: Segment[] = a.buckets.map((b, i) => ({
@@ -71,12 +76,16 @@ export function AttemptsPerProblemChart({ problems, unitPlural }: Props) {
                     .filter((s) => s.count > 0)
                     .map((s) => {
                       const pct = (s.count / total) * 100;
-                      const label = `${p.title} — ${s.label}: ${s.count} ${unitPlural} (${fmtPct(s.count, total)})`;
+                      const label = `${p.title}, ${s.label}: ${s.count} ${unitPlural} (${fmtPct(s.count, total)})`;
                       return (
                         <div
                           key={s.key}
                           className="outline-none focus-visible:[outline:2px_solid_var(--color-ring)] focus-visible:-outline-offset-2"
-                          style={{ width: `${pct}%`, backgroundColor: s.style.bg, opacity: s.style.opacity }}
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: s.style.bg,
+                            opacity: s.style.opacity,
+                          }}
                           tabIndex={0}
                           role="img"
                           aria-label={label}

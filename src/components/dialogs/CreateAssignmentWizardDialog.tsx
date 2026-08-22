@@ -299,6 +299,7 @@ export function CreateAssignmentWizardDialog({
                     render={({ field }) => (
                       <InputGroup
                         label="Title"
+                        requiredMark
                         name="title"
                         fieldProps={field}
                         error={errors.title?.message}

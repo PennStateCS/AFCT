@@ -60,7 +60,7 @@ function StatusRow({
           .filter((s) => s.count > 0)
           .map((s) => {
             const pct = (s.count / total) * 100;
-            const label = `${row.label} — ${STATUS_LABELS[s.key]}: ${s.count} ${unitPlural} (${fmtPct(s.count, total)})`;
+            const label = `${row.label}, ${STATUS_LABELS[s.key]}: ${s.count} ${unitPlural} (${fmtPct(s.count, total)})`;
             return (
               <div
                 key={s.key}
