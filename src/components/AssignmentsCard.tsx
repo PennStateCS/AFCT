@@ -30,7 +30,7 @@ export function AssignmentsCard({
           fit on a phone, and a single row pushed them off the edge. Same shape as the
           User Accounts header. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <BookOpen className="h-6 w-6" />
           Assignments
         </h2>

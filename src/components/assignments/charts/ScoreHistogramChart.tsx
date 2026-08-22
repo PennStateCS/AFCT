@@ -163,7 +163,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
           x={M.left + plotW / 2}
           y={HEIGHT - 4}
           textAnchor="middle"
-          className="fill-muted-foreground text-[11px]"
+          className="fill-muted-foreground text-2xs"
           aria-hidden="true"
         >
           Assignment score (%)
@@ -171,7 +171,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
         <text
           transform={`translate(11 ${M.top + plotH / 2}) rotate(-90)`}
           textAnchor="middle"
-          className="fill-muted-foreground text-[11px]"
+          className="fill-muted-foreground text-2xs"
           aria-hidden="true"
         >
           Number of {unitPlural}

@@ -449,7 +449,7 @@ export default function ProblemWorkspace({
           action={
             isPrivilegedUser ? null : (
               <div className="border-border text-foreground inline-flex items-center gap-2 rounded-full border bg-transparent px-3 py-2 text-xs whitespace-nowrap">
-                <span className="font-semibold tracking-[0.16em] uppercase">Grade</span>
+                <span className="font-semibold tracking-widest uppercase">Grade</span>
                 <span>
                   {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
                 </span>

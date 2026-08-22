@@ -9,8 +9,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* next/font defines both variables on the body class (see the root layout). The
+     fallbacks matter for the moment before the webfont arrives, and for anything that
+     renders outside body. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   /* One step below `text-xs`, for the places that genuinely need it: a dense table label, a
      hint under a field. There were four bespoke values doing this job (0.65, 0.68, 0.70 and
      0.80rem), none distinguishable from the others on screen and none of them a decision
@@ -23,6 +26,7 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);
@@ -138,14 +142,25 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.3914 0.0013 17.215);
-  --sidebar-foreground: oklch(1 0.0001 271.152);
-  --sidebar-primary: oklch(0.9415 0.0081 254.087);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.9485 0.0047 258.626);
+  /* The sidebar is a dark surface in BOTH themes, so every token here is written for
+     light text on it. Three levels that have to stay apart: the rail, a barely-lighter
+     hover, and the sky accent for the current page. */
+  --sidebar: oklch(0.2101 0.0318 264.665); /* #111827 */
+  --sidebar-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 17.0:1 on the rail */
+  /* Section headings and supporting lines. A fixed colour rather than the foreground at
+     70%, because an opacity blends with whatever is behind it: the same class sat at
+     12.2:1 on the rail and 10.1:1 on a hovered row, so its contrast moved with the state
+     it happened to be in. This is 12.0:1 and 9.8:1, and it is one value to check. */
+  --sidebar-muted-foreground: oklch(0.869 0.0198 252.894); /* #CBD5E1 */
+  /* Active row: cobalt. White on it is 5.2:1 and it reads 3.4:1 against the charcoal,
+     so the current page is obvious and its label and icon stay white. */
+  --sidebar-primary: oklch(0.5461 0.2152 262.881); /* #2563EB */
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.2781 0.0296 256.848); /* #1F2937, hover only */
+  --sidebar-accent-foreground: oklch(0.9842 0.0034 247.858);
+  /* Gray-700: the same family as the rail, so the divider reads as part of it. */
+  --sidebar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
+  --sidebar-ring: oklch(0.9842 0.0034 247.858);
   --table-header: oklch(0.9067 0 0);
   --table-header-foreground: oklch(0 0 0);
   --table-highlight: oklch(0.9431 0 0);
@@ -159,16 +174,16 @@
      label, a soft -bg surface, and a matching -border -- so a state can be recolored in
      one place for a UI refresh or a high-contrast theme. `neutral` stays badge-scoped
      below because a general neutral is already covered by --muted / --accent. */
-  --status-success: oklch(0.4204 0.1055 138.019);       /* tint of --success */
+  --status-success: oklch(0.4204 0.1055 138.019); /* tint of --success */
   --status-success-bg: oklch(0.9447 0.0228 128.733);
   --status-success-border: oklch(0.8347 0.0835 129.018);
-  --status-warning: oklch(0.5424 0.1381 45.828);       /* = --tertiary */
+  --status-warning: oklch(0.5424 0.1381 45.828); /* = --tertiary */
   --status-warning-bg: oklch(0.9482 0.0135 60.567);
   --status-warning-border: oklch(0.7886 0.0733 61.632);
-  --status-danger: oklch(0.4437 0.1613 26.899);        /* tint of --destructive */
+  --status-danger: oklch(0.4437 0.1613 26.899); /* tint of --destructive */
   --status-danger-bg: oklch(0.9478 0.023 17.565);
   --status-danger-border: oklch(0.8383 0.071 18.674);
-  --status-info: oklch(0.37 0.1221 262.228);          /* = --primary */
+  --status-info: oklch(0.37 0.1221 262.228); /* = --primary */
   --status-info-bg: oklch(0.9475 0.0149 260.73);
   --status-info-border: oklch(0.8314 0.0587 264.656);
 
@@ -176,8 +191,10 @@
      on a filled swatch (e.g. a toast's icon strip). Unlike the status foregrounds above,
      these must stay a mid, white-legible shade in BOTH themes, so they are not derived
      from --status-*. neutral covers the untyped/loading case. */
-  --status-success-solid: oklch(0.6271 0.1699 149.214);   /* green-600, chosen so the white glyph clears 3:1 */
-  --status-warning-solid: oklch(0.6658 0.1574 58.318);   /* amber-600, same */
+  --status-success-solid: oklch(
+    0.6271 0.1699 149.214
+  ); /* green-600, chosen so the white glyph clears 3:1 */
+  --status-warning-solid: oklch(0.6658 0.1574 58.318); /* amber-600, same */
   --status-danger-solid: oklch(0.6368 0.2078 25.331);
   --status-info-solid: oklch(0.6231 0.188 259.815);
   --status-neutral-solid: oklch(0.551 0.0234 264.364);
@@ -185,8 +202,8 @@
   /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
      clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
      a tab's count pill. Interim brand accent until the visual redesign. */
-  --tab-active: oklch(0.5109 0.0861 186.391);           /* teal-700 */
-  --tab-active-bg: oklch(0.9527 0.0498 180.801);        /* teal-100 */
+  --tab-active: oklch(0.5109 0.0861 186.391); /* teal-700 */
+  --tab-active-bg: oklch(0.9527 0.0498 180.801); /* teal-100 */
 
   /* Badge tokens derive from the status family (values unchanged), so badges and the
      other status surfaces can never drift apart. Dark mode overrides only --status-*
@@ -203,59 +220,75 @@
   --badge-info: var(--status-info);
   --badge-info-bg: var(--status-info-bg);
   --badge-info-border: var(--status-info-border);
-  --badge-neutral: oklch(0.3867 0 0);        /* tint of --muted-foreground */
+  --badge-neutral: oklch(0.3867 0 0); /* tint of --muted-foreground */
   --badge-neutral-bg: oklch(0.9551 0 0);
   --badge-neutral-border: oklch(0.8699 0 0);
 }
 
-
 .dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.9851 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  /* Dark surfaces climb an elevation ladder so layered states read apart:
-     background < card < popover < muted < accent (hover) < secondary (selected).
+  /* Slate/navy, chosen to sit under the charcoal sidebar rather than beside it. Dark
+     surfaces climb an elevation ladder so layered states read apart:
+     background < card < popover < muted/accent (hover) < secondary (selected).
      In light mode these are already distinct hues, so only the dark values ladder. */
-  --popover: oklch(0.24 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.546 0.245 262.881);
-  --primary-foreground: oklch(0.379 0.146 265.522);
-  --secondary: oklch(0.35 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
+  --background: oklch(0.1288 0.0406 264.695); /* #020617 */
+  --foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 19.3:1 on the background */
+  --card: oklch(0.2077 0.0398 265.755); /* #0F172A */
+  --card-foreground: oklch(0.9842 0.0034 247.858);
+  /* Note: this is the same lightness as --card (they differ in hue only), so a popover
+     over a card is told apart by its border rather than by its fill. */
+  --popover: oklch(0.2101 0.0318 264.665); /* #111827 */
+  --popover-foreground: oklch(0.9842 0.0034 247.858);
+  /* Cobalt, the same value as light mode: it is the brand accent, not a dark-mode tint.
+     The foreground was a mid blue here, which put roughly 1.9:1 on a filled primary
+     button; white is 5.2:1. */
+  --primary: oklch(0.5461 0.2152 262.881); /* #2563EB */
+  --primary-foreground: oklch(1 0 0);
+  /* One step above --accent, so a selected row still reads apart from a hovered one. */
+  --secondary: oklch(0.3717 0.0392 257.287); /* #334155 */
+  --secondary-foreground: oklch(0.9842 0.0034 247.858);
   --tertiary: oklch(0.2966 0.0507 205.135);
   --tertiary-foreground: oklch(1 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.31 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.2795 0.0368 260.031); /* #1E293B */
+  --muted-foreground: oklch(0.869 0.0198 252.894); /* #CBD5E1, 13.6:1 on the background */
+  --accent: oklch(0.2795 0.0368 260.031); /* #1E293B */
+  --accent-foreground: oklch(0.9842 0.0034 247.858);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.488 0.243 264.376);
+  /* Solid slate, not a white veil. The veil put a 1px near-black edge on a field sitting
+     in a card, so inputs disappeared into the surface they were drawn on. */
+  --border: oklch(0.3717 0.0392 257.287); /* #334155 */
+  --input: oklch(0.3717 0.0392 257.287); /* #334155 */
+  /* Light blue rather than the mid blue this was: at 0.488 the ring barely showed on a
+     0.13 background. 9.8:1 or better on every dark surface. */
+  --ring: oklch(0.8091 0.0956 251.813); /* #93C5FD */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(0.379 0.146 265.522);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.488 0.243 264.376);
-  --table-header: oklch(0.2101 0.0318 264.665);
+  /* Same rail in both themes: it is already a dark surface in light mode, so letting it
+     drift here would make the sidebar the one thing that changes identity between
+     themes. Kept in step with the light block above; see the notes there. */
+  --sidebar: oklch(0.2101 0.0318 264.665); /* #111827 */
+  --sidebar-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
+  --sidebar-muted-foreground: oklch(0.869 0.0198 252.894); /* #CBD5E1 */
+  --sidebar-primary: oklch(0.5461 0.2152 262.881); /* #2563EB */
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.2781 0.0296 256.848); /* #1F2937 */
+  --sidebar-accent-foreground: oklch(0.9842 0.0034 247.858);
+  --sidebar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
+  --sidebar-ring: oklch(0.9842 0.0034 247.858);
+  /* Tables sit on the card surface, with the header one rung up and the row highlight
+     between the two, mirroring how light mode spaces them. */
+  --table-background: oklch(0.2077 0.0398 265.755); /* #0F172A, the card */
+  --table-header: oklch(0.2795 0.0368 260.031); /* #1E293B */
   --table-header-foreground: oklch(0.9842 0.0034 247.858);
-  --table-highlight: oklch(0.2795 0.0368 260.031);
-  --table-background: oklch(0.2077 0.0398 265.755);
+  --table-highlight: oklch(0.2449 0.0388 264.354); /* #172033 */
   --node-color: oklch(0.7293 0.1363 88.887);
   /* Lighter than the --card surface (0.21) it is drawn on, not darker. The old value was
      0.2098, the same lightness as the card to three decimals, so the grid was painted in the
-     background's own colour and no grid appeared in dark mode at all. Matched to --muted
-     (0.274), which is the next step up from the card in this palette. */
-  --grid-color: oklch(0.274 0.006 286.033);
+     background's own colour and no grid appeared in dark mode at all. Kept matched to
+     --muted, which is the next step up from the card in this palette. */
+  --grid-color: oklch(0.2795 0.0368 260.031); /* #1E293B */
   --success: oklch(0.7669 0.1597 134.58);
   /* Status dark values (explicit tints; can't reuse brand vars, since --tertiary flips to
      teal in dark). Badges/alerts/toasts inherit these through the aliases defined in
@@ -275,8 +308,8 @@
   /* Solid fills carry a white glyph, so they keep the same mid shade in dark (a lighter
      fill would drop below 3:1 against white); only the grey neutral is lightened here. */
   --status-neutral-solid: oklch(0.7107 0.0351 256.788);
-  --tab-active: oklch(0.7845 0.1325 181.912);                    /* teal-400 */
-  --tab-active-bg: oklch(0.3861 0.059 188.416 / 40%);   /* teal-900 / 40% */
+  --tab-active: oklch(0.7845 0.1325 181.912); /* teal-400 */
+  --tab-active-bg: oklch(0.3861 0.059 188.416 / 40%); /* teal-900 / 40% */
   /* Neutral badge stays badge-scoped. */
   --badge-neutral: oklch(0.6993 0 0);
   --badge-neutral-bg: oklch(0.329 0 0 / 35%);
@@ -482,7 +515,9 @@ html {
     max-width: 440px !important;
     overflow: hidden !important;
     padding: 0 !important;
-    font-family: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif) !important;
+    /* Sonner sets its own font-family on the toast, so this has to win. It is the only
+       place in the app that names a font outside the theme tokens. */
+    font-family: var(--font-sans) !important;
   }
 
   .custom-toast[data-type='success'] {

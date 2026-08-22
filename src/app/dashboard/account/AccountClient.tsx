@@ -96,7 +96,7 @@ export default function AccountClient({
   return (
     <Card className="p-4">
       <CardHeader className="pb-2">
-        <CardTitle role="heading" aria-level={1} className="text-2xl">
+        <CardTitle role="heading" aria-level={1} className="text-2xl tracking-tight">
           Account
         </CardTitle>
         <p className="text-muted-foreground text-sm">

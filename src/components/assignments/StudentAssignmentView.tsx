@@ -377,7 +377,7 @@ export default function StudentAssignmentPage({
           <CardTitle
             role="heading"
             aria-level={1}
-            className="flex min-w-0 flex-wrap items-start gap-2 text-2xl break-words"
+            className="flex min-w-0 flex-wrap items-start gap-2 text-2xl tracking-tight break-words"
           >
             <span className="font-semibold">Assignment:</span>
             <span className="min-w-0 [overflow-wrap:anywhere] break-words">{assignment.title}</span>
@@ -431,32 +431,32 @@ export default function StudentAssignmentPage({
             <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
               <div className="flex flex-1 flex-wrap gap-2">
                 <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
-                  <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
+                  <span className="mr-2 shrink-0 text-xs font-semibold tracking-widest uppercase">
                     Due
                   </span>
                   <span className="leading-none font-semibold">{dueDisplay}</span>
                 </div>
                 <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
-                  <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
+                  <span className="mr-2 shrink-0 text-xs font-semibold tracking-widest uppercase">
                     Points
                   </span>
                   <span className="leading-none font-semibold">{assignment.maxPoints}</span>
                 </div>
                 <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
-                  <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
+                  <span className="mr-2 shrink-0 text-xs font-semibold tracking-widest uppercase">
                     Problems
                   </span>
                   <span className="leading-none font-semibold">{assignment.problems.length}</span>
                 </div>
                 <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-3 py-2 text-sm leading-none">
-                  <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
+                  <span className="mr-2 shrink-0 text-xs font-semibold tracking-widest uppercase">
                     Late Policy
                   </span>
                   <span className="leading-none font-semibold">{latePolicyDisplay}</span>
                 </div>
               </div>
               <div className="border-border text-foreground inline-flex min-h-10 items-center rounded-full border bg-transparent px-4 py-2 text-right lg:self-start">
-                <span className="mr-2 shrink-0 text-xs font-semibold tracking-[0.16em] uppercase">
+                <span className="mr-2 shrink-0 text-xs font-semibold tracking-widest uppercase">
                   Grade
                 </span>
                 <span className="ml-1 text-sm leading-none font-medium">{gradeDisplay}</span>

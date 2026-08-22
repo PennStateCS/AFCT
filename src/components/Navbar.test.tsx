@@ -8,12 +8,7 @@ import CourseBreadcrumbSource from '@/components/navbar/CourseBreadcrumbSource';
 import AssignmentBreadcrumbSource from '@/components/navbar/AssignmentBreadcrumbSource';
 
 const setThemeMock = vi.fn();
-const useSessionMock = vi.fn();
 const usePathnameMock = vi.fn();
-
-vi.mock('next-auth/react', () => ({
-  useSession: () => useSessionMock(),
-}));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => usePathnameMock(),
@@ -34,19 +29,6 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    DropdownMenuSeparator: () => <hr />,
-    DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    DropdownMenuItem: ({
-      children,
-      onClick,
-    }: {
-      children: React.ReactNode;
-      onClick?: () => void;
-    }) => (
-      <button type="button" onClick={onClick}>
-        {children}
-      </button>
-    ),
     // Theme picker: forward the group's onValueChange to each item so a click
     // reports the chosen value, mirroring Radix's radio-group wiring.
     DropdownMenuRadioGroup: ({
@@ -117,40 +99,7 @@ function renderNavbar(withLabels?: {
 }
 
 describe('Navbar', () => {
-  it('renders a placeholder header while the session is loading', () => {
-    useSessionMock.mockReturnValue({ status: 'loading' });
-    usePathnameMock.mockReturnValue('/');
-
-    const { container } = render(<Navbar />);
-
-    // The bar is a <header>; the breadcrumb inside is the only navigation landmark.
-    const bar = container.querySelector('header');
-    expect(bar).not.toBeNull();
-    expect(bar?.textContent).toBe('');
-  });
-
-  it('returns null when no user data is available', () => {
-    useSessionMock.mockReturnValue({ status: 'authenticated', data: { user: null } });
-    usePathnameMock.mockReturnValue('/');
-
-    const { container } = render(<Navbar />);
-
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('shows the Admin badge for admins and breadcrumb labels from provider sources', () => {
-    useSessionMock.mockReturnValue({
-      status: 'authenticated',
-      data: {
-        user: {
-          firstName: 'Ada',
-          lastName: 'Lovelace',
-          name: 'Ada Lovelace',
-          isAdmin: true,
-          avatar: 'ada.png',
-        },
-      },
-    });
+  it('renders breadcrumb labels from provider sources', () => {
     usePathnameMock.mockReturnValue('/dashboard/courses/course-123/assignment-456');
 
     renderNavbar({
@@ -160,48 +109,34 @@ describe('Navbar', () => {
 
     expect(screen.getByText('Course Alpha')).toBeInTheDocument();
     expect(screen.getByText('Assignment Beta')).toBeInTheDocument();
-    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Ada Lovelace account menu' })).toBeInTheDocument();
-    expect(screen.getByText('Admin')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Dark'));
     expect(setThemeMock).toHaveBeenCalledWith('dark');
   });
 
-  it('does not show an Admin badge for non-admin users', () => {
-    useSessionMock.mockReturnValue({
-      status: 'authenticated',
-      data: {
-        user: {
-          firstName: 'Ada',
-          lastName: 'Lovelace',
-          name: 'Ada Lovelace',
-          isAdmin: false,
-        },
-      },
-    });
+  it('carries no account menu: the sidebar footer owns those actions', () => {
     usePathnameMock.mockReturnValue('/dashboard/system-settings');
 
     renderNavbar();
 
-    expect(screen.queryByText('Admin')).toBeNull();
-    expect(screen.getByText('System Settings')).toBeInTheDocument();
+    // Positive first, so this cannot pass by rendering nothing at all: the only buttons
+    // the navbar has left are the theme trigger and its three options (the sidebar trigger
+    // is mocked as a div). Re-adding an account trigger would land in this list and fail.
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Toggle theme',
+      'Light',
+      'Dark',
+      'System',
+    ]);
     expect(screen.getByLabelText('Breadcrumb')).toBeInTheDocument();
+    expect(screen.getByText('System Settings')).toBeInTheDocument();
+
+    expect(screen.queryByText('Sign out')).toBeNull();
+    expect(screen.queryByText('User Account')).toBeNull();
+    expect(screen.queryByText('Admin')).toBeNull();
   });
 
   it('builds stable course and assignment breadcrumbs from route patterns', () => {
-    useSessionMock.mockReturnValue({
-      status: 'authenticated',
-      data: {
-        user: {
-          firstName: 'Peter',
-          lastName: 'Parker',
-          name: 'Peter Parker',
-          role: 'STUDENT',
-          avatar: 'peter.png',
-        },
-      },
-    });
     usePathnameMock.mockReturnValue('/dashboard/courses/course-99/assignment-42');
 
     renderNavbar({
@@ -215,16 +150,6 @@ describe('Navbar', () => {
   });
 
   it('supports all theme actions', () => {
-    useSessionMock.mockReturnValue({
-      status: 'authenticated',
-      data: {
-        user: {
-          firstName: 'Bruce',
-          lastName: 'Wayne',
-          isAdmin: false,
-        },
-      },
-    });
     usePathnameMock.mockReturnValue('/dashboard/users');
 
     renderNavbar();

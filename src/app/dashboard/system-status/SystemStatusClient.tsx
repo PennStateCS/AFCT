@@ -133,7 +133,7 @@ export default function SystemStatusClient() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <CardTitle role="heading" aria-level={1} className="text-2xl">
+            <CardTitle role="heading" aria-level={1} className="text-2xl tracking-tight">
               System Status
             </CardTitle>
             <Badge variant={dbOk ? 'success' : 'danger'} title={summary?.db.message || ''}>

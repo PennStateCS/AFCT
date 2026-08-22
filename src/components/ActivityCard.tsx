@@ -164,7 +164,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   return (
     <div className="space-y-4">
       <div className="flex flex-row items-center justify-between">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <Activity className="h-5 w-5" />
           Activity
           {total > 0 && (

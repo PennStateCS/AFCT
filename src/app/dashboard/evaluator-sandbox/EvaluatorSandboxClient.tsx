@@ -125,7 +125,7 @@ export default function EvaluatorSandboxClient() {
     <div className="space-y-4 pb-8">
       <Card>
         <CardHeader>
-          <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl">
+          <CardTitle role="heading" aria-level={1} className="flex items-center gap-2 text-2xl tracking-tight">
             <FlaskConical className="h-6 w-6" aria-hidden="true" />
             Evaluator Sandbox
           </CardTitle>

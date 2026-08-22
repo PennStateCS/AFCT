@@ -292,7 +292,7 @@ export function AssignmentSettingsCard({
 
   return (
     <div className="space-y-4">
-      <h2 className="flex items-center gap-2 text-2xl font-semibold">
+      <h2 className="flex items-center gap-2 text-xl font-semibold">
         <Users className="h-6 w-6" />
         Assign To
       </h2>

@@ -84,7 +84,7 @@ export function GroupSetsCard({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <Layers className="h-5 w-5" />
           Groups
         </h2>

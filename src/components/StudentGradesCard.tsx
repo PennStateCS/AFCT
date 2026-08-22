@@ -90,7 +90,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
   return (
     <Card>
       <CardHeader className="pb-0">
-        <CardTitle className="flex items-center gap-2 text-2xl">
+        <CardTitle className="flex items-center gap-2 text-xl">
           <Table className="h-5 w-5" />
           Grades
         </CardTitle>
@@ -143,7 +143,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                         </div>
                       </Link>
                       <div className="flex items-center gap-2 text-right">
-                        <p className="grid grid-cols-[4rem_minmax(4rem,auto)_4rem] items-center gap-2 text-xs tracking-[0.12em] uppercase">
+                        <p className="grid grid-cols-[4rem_minmax(4rem,auto)_4rem] items-center gap-2 text-xs tracking-widest uppercase">
                           <span className="text-foreground text-sm font-semibold">Grade</span>
                           <span className="text-foreground text-left text-sm font-semibold">
                             {(assignment.grade === null ? '-' : `${assignment.grade}`) +

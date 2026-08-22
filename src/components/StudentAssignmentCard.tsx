@@ -21,7 +21,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-2xl">
+        <CardTitle className="text-xl">
           <div className="flex items-center gap-2">
             <BookOpen className="h-6 w-6" />
             Assignments

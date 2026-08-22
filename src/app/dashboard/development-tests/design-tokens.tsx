@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 // A class name shown as copy-ready code.
 function Cls({ children }: { children: string }) {
   return (
-    <code className="bg-muted text-foreground rounded px-1 py-0.5 font-mono text-[11px]">
+    <code className="bg-muted text-foreground rounded px-1 py-0.5 font-mono text-2xs">
       {children}
     </code>
   );

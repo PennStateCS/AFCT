@@ -436,7 +436,7 @@ export default function LoginForm({
       {/* DEV BADGE */}
       {isDev && (
         <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center justify-center">
-          <div className="flex items-center gap-2 rounded-full border border-white/50 bg-white/95 px-4 py-1.5 text-[0.68rem] font-semibold tracking-[0.25em] text-[#2F4A8A] uppercase shadow-xl backdrop-blur-lg">
+          <div className="flex items-center gap-2 rounded-full border border-white/50 bg-white/95 px-4 py-1.5 text-2xs font-semibold tracking-[0.25em] text-[#2F4A8A] uppercase shadow-xl backdrop-blur-lg">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#2F4A8A] text-white shadow">
               <Wrench className="h-3.5 w-3.5" strokeWidth={2.3} />
             </span>
@@ -449,7 +449,7 @@ export default function LoginForm({
       <div className="relative z-10 mx-4 w-full max-w-[430px]">
         <div className="rounded-2xl bg-white p-8 shadow-[0_25px_60px_rgba(0,0,0,0.25)]">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold text-gray-800">AFCT Dashboard</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-gray-800">AFCT Dashboard</h1>
             <p className="mt-1 text-base text-gray-700">Automated Feedback for Computing Theory</p>
           </div>
 
@@ -680,7 +680,7 @@ export default function LoginForm({
 
         {isDev && (
           <div className="fixed top-6 right-6 z-40 w-32 rounded-2xl border border-white/40 bg-white/95 p-4 text-gray-700 shadow-2xl backdrop-blur-md">
-            <span className="mb-3 block text-center text-[0.65rem] font-semibold tracking-[0.35em] text-gray-500 uppercase">
+            <span className="mb-3 block text-center text-2xs font-semibold tracking-[0.35em] text-gray-500 uppercase">
               Test Logins
             </span>
             <div className="flex w-full flex-col gap-2 text-xs font-semibold">

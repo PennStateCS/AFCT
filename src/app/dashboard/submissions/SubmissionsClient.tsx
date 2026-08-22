@@ -616,7 +616,7 @@ export default function SubmissionsClient() {
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <CardTitle role="heading" aria-level={1} className="text-2xl">
+            <CardTitle role="heading" aria-level={1} className="text-2xl tracking-tight">
               Submissions
             </CardTitle>
           </div>
