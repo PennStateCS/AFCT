@@ -167,10 +167,13 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           {/* Restore is green (the recovery action the admin wants), Delete is red.
               Restore is still guarded by type-to-confirm in its dialog, since a
               downgrade discards data. */}
+          {/* Not `success`: green says the action is a good outcome, and the comment above
+              says this one discards data and is guarded by type-to-confirm. Neutral beside
+              the red Delete, which is the actual destructive one. */}
           <Button
             type="button"
             size="sm"
-            variant="success"
+            variant="outline"
             aria-label={`Restore version ${row.original.version}`}
             disabled={disabled || downgradeBusy || upgradeInProgress}
             onClick={() =>

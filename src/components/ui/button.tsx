@@ -9,9 +9,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Cobalt. The foreground was --secondary-foreground, which happens to be the
-        // same near-white in both themes, so this is a correctness fix rather than a
-        // repaint: nothing stopped --secondary drifting away from it.
+        // Cobalt. Pair --primary with --primary-foreground and nothing else: this used to
+        // read --secondary-foreground, which merely happened to be the same near-white.
+        // When --secondary became a pale neutral its foreground went dark, and every place
+        // still relying on that coincidence turned into dark text on a cobalt fill.
         default: 'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90',
         destructive:
           'bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',

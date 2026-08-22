@@ -40,14 +40,7 @@ export function AssignmentsCard({
               <Download /> Import Assignment
             </Button>
           )}
-          <Button
-            style={{
-              backgroundColor: 'var(--color-primary)',
-              color: 'var(--color-secondary-foreground)',
-            }}
-            onClick={onCreateAssignment}
-            hidden={courseIsArchived}
-          >
+          <Button onClick={onCreateAssignment} hidden={courseIsArchived}>
             <Plus /> Create Assignment
           </Button>
         </div>
