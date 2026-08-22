@@ -18,7 +18,6 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +36,9 @@ import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsF
 import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentStatisticsPanel';
 import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { TabBar } from '@/components/course/course-tabs';
+import { cn } from '@/lib/utils';
+import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { useConfirmIfDirty } from '@/components/unsaved-changes/UnsavedChangesProvider';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
@@ -127,6 +128,10 @@ function normalizeProblem(p: Problem) {
   };
 }
 
+// Sections that are a form get a readable measure; everything else is a table, a chart
+// or a comparison and takes the full column.
+const FORM_TABS = new Set(['description', 'type', 'assign-to', 'settings']);
+
 type PrivilegeAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
   initialAssignments?: AssignmentSummary[];
@@ -137,6 +142,8 @@ export default function AssignmentDashboardPage({
   initialAssignments,
 }: PrivilegeAssignmentViewProps) {
   const { timezone } = useEffectiveTimezone();
+  // xl rather than lg: a rail plus a submissions table needs the room.
+  const railNav = useIsDesktopNav(1280);
   const { id, aid } = useParams<{ id: string; aid: string }>();
   const epsSymbol = useEmptyStringSymbol(id);
   const searchParams = useSearchParams();
@@ -518,20 +525,24 @@ export default function AssignmentDashboardPage({
 
   return (
     <div className="mx-auto w-full text-sm">
-      <Tabs value={tab} onValueChange={handleTabChange}>
-        <Card>
-          <CardHeader>
+      <Tabs
+        value={tab}
+        onValueChange={handleTabChange}
+        orientation={railNav ? 'vertical' : 'horizontal'}
+        className="space-y-6"
+      >
+        {/* Header on the workspace itself: the page-sized card wrapped a header, a tab
+            strip and eight panels in one border, which said they were one object. */}
+        <section className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
-              <CardTitle
-                role="heading"
-                aria-level={1}
+              <h1
                 className="flex min-w-0 flex-wrap items-center gap-2 text-2xl tracking-tight break-words"
               >
                 <span className="font-semibold">Assignment:</span>{' '}
                 <span className="min-w-0 [overflow-wrap:anywhere] break-words">
                   {assignment.title}
                 </span>
-              </CardTitle>
+              </h1>
               {/* Publish toggle sits next to the title; server enforces the guards
                   (e.g. no unpublish after submissions). */}
               <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
@@ -610,9 +621,15 @@ export default function AssignmentDashboardPage({
                     : ''}
               </Link>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Tab selector, matching the underline style used on the course page. */}
+        </section>
+
+        {/* Below xl this is a plain stack, so the strip sits above the panels as it did.
+            At xl the rail takes a fixed column beside them. One control at a time: two
+            tablists under one Tabs root would duplicate its ARIA wiring. */}
+        <div className="space-y-6 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
+          {railNav ? (
+            <TabRail tabs={assignmentTabs} ariaLabel="Assignment sections" />
+          ) : (
             <TabBar
               ariaLabel="Assignment sections"
               selectId="assignment-tab-select"
@@ -620,6 +637,12 @@ export default function AssignmentDashboardPage({
               onValueChange={handleTabChange}
               tabs={assignmentTabs}
             />
+          )}
+
+          {/* Form sections stay a readable measure; the data sections (Problems,
+              Submissions, Statistics, Similarity) take the whole column, since they are
+              tables, charts and comparisons. */}
+          <div className={cn('min-w-0', FORM_TABS.has(tab) && 'max-w-3xl')}>
             <TabsContent value="description">
               <div className="space-y-4">
                 <h2 className="flex items-center gap-2 text-xl font-semibold">
@@ -753,8 +776,8 @@ export default function AssignmentDashboardPage({
                 />
               ) : null}
             </TabsContent>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </Tabs>
       {/* Submission viewer dialog, keyed off the problem type. */}
       {viewerOpen && viewerSrc && (
