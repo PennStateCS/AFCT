@@ -8,7 +8,7 @@ import DashboardClient from './DashboardClient';
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
-vi.mock('@/lib/date-format', () => ({ formatDateTimeInTimeZone: () => 'DATE' }));
+vi.mock('@/lib/date-format', () => ({ formatDateInTimeZone: () => 'DATE' }));
 vi.mock('@/lib/course-status', () => ({
   getCourseStatusTag: () => ({ status: 'Open', variant: 'success' }),
 }));
@@ -50,7 +50,7 @@ describe('DashboardClient per-course role', () => {
 
     expect(screen.getByText('Published Course')).toBeInTheDocument();
     expect(screen.queryByText('Hidden Course')).not.toBeInTheDocument();
-    expect(screen.queryByText('Enrollment:')).not.toBeInTheDocument();
+    expect(screen.queryByText('3 students')).not.toBeInTheDocument();
   });
 
   it('a non-admin faculty member sees their own unpublished course and its enrollment', () => {
@@ -59,14 +59,14 @@ describe('DashboardClient per-course role', () => {
     ]);
 
     expect(screen.getByText('Faculty Course')).toBeInTheDocument();
-    expect(screen.getByText('Enrollment:')).toBeInTheDocument();
+    expect(screen.getByText('3 students')).toBeInTheDocument();
   });
 
   it('a TA likewise sees their unpublished course and its enrollment', () => {
     renderDash([course({ id: 't', name: 'TA Course', isPublished: false, userRole: 'TA' })]);
 
     expect(screen.getByText('TA Course')).toBeInTheDocument();
-    expect(screen.getByText('Enrollment:')).toBeInTheDocument();
+    expect(screen.getByText('3 students')).toBeInTheDocument();
   });
 
   it('a system admin sees an unpublished course + enrollment regardless of course role', () => {
@@ -76,6 +76,6 @@ describe('DashboardClient per-course role', () => {
     );
 
     expect(screen.getByText('Admin View Course')).toBeInTheDocument();
-    expect(screen.getByText('Enrollment:')).toBeInTheDocument();
+    expect(screen.getByText('3 students')).toBeInTheDocument();
   });
 });

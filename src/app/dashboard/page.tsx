@@ -222,6 +222,17 @@ export default async function DashboardPage({
     .filter((a) => a.dueDate > now)
     .sort((x, y) => x.dueDate.getTime() - y.dueDate.getTime());
 
+  // Counted off the two arrays this page already built, so the summary costs no query.
+  const courseSummary =
+    currentCourses.length === 1 ? '1 current course' : `${currentCourses.length} current courses`;
+  const upcomingCount = assignments.length;
+  const assignmentSummary =
+    upcomingCount === 0
+      ? 'No upcoming assignments'
+      : upcomingCount === 1
+        ? '1 upcoming assignment'
+        : `${upcomingCount} upcoming assignments`;
+
   return (
     <>
       {/* Replaces the sr-only "Dashboard" h1. Sits above the grid so it spans the course
@@ -231,13 +242,13 @@ export default async function DashboardPage({
           {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
         </h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Here&apos;s what&apos;s happening in your courses today.
+          {courseSummary} &middot; {assignmentSummary}
         </p>
       </div>
 
       {/* A fixed rail rather than a quarter of the viewport: at 25% the two modules kept
           growing on a wide monitor while the courses beside them stayed the same size. */}
-      <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
         <section className="min-w-0">
           {/* Renders nothing unless an LMS launch sent them here, which is most of the time. */}
           <LaunchNotice notice={lms} courseTitle={lmsCourseTitle} />

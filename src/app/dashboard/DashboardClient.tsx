@@ -8,7 +8,7 @@ import { getCourseStatusTag } from '@/lib/course-status';
 import type { EnrolledUser } from '@/lib/course-roster';
 import { formatInstructorNames, getStudentCount, getTAs } from '@/lib/course-roster';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { formatDateTimeInTimeZone } from '@/lib/date-format';
+import { formatDateInTimeZone } from '@/lib/date-format';
 
 type DashboardCourse = {
   id: string;
@@ -53,10 +53,18 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
     // boundary too many. It also carried `h-full`, which stretched an almost-empty
     // section down the whole viewport when somebody had no courses.
     <section className="space-y-4" aria-labelledby="current-courses-title">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4">
         <h2 id="current-courses-title" className="text-2xl font-semibold tracking-tight">
           {title}
         </h2>
+        {/* A quiet way out to the full list, not an action. Everyone who reaches the
+            dashboard can open /dashboard/courses; the page scopes itself per viewer. */}
+        <Link
+          href="/dashboard/courses"
+          className="text-muted-foreground hover:text-foreground shrink-0 text-sm hover:underline"
+        >
+          View all courses <span aria-hidden="true">&rarr;</span>
+        </Link>
       </div>
 
       {visibleCourses.length === 0 ? (
@@ -75,7 +83,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                 <div className="group border-border bg-card hover:border-primary hover:bg-primary/5 flex h-full cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md">
                   {/* Vertical colored bar */}
                   <div
-                    className={`w-[15px] ${
+                    className={`w-1.5 shrink-0 ${
                       !course.isPublished
                         ? 'bg-status-warning-solid'
                         : isUpcoming
@@ -85,13 +93,13 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                   />
 
                   {/* Content area */}
-                  <div className="flex w-full flex-col px-4 py-4 sm:p-5">
+                  <div className="flex w-full min-w-0 flex-col px-4 py-3.5">
                     {/* Top Row: Title and Badge */}
-                    <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                      <div className="truncate text-base font-semibold">
-                        {course.name}
-                        <div className="text-muted-foreground mb-2 text-sm">
-                          {course.code} • {course.semester} • {course.credits} credits
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">{course.name}</div>
+                        <div className="text-muted-foreground truncate text-sm">
+                          {course.code} &middot; {course.semester} &middot; {course.credits} credits
                         </div>
                       </div>
 
@@ -101,31 +109,45 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                       })()}
                     </div>
 
-                    <div className="space-y-1 text-sm">
+                    {/* The same facts as before, with the role carried by a trailing label
+                        rather than a bold prefix on every line: four bold words down the
+                        left edge outweighed the course name above them. */}
+                    <div className="text-muted-foreground mt-3 space-y-0.5 text-sm">
+                      {/* Staff only. A student must not learn the size of the roster. */}
                       {canManageCourse(course) && (
                         <div>
-                          <span className="font-semibold">Enrollment:</span>{' '}
-                          {getStudentCount(course.enrolled)}
+                          {getStudentCount(course.enrolled)}{' '}
+                          {getStudentCount(course.enrolled) === 1 ? 'student' : 'students'}
                         </div>
                       )}
-                      <div>
-                        <span className="font-semibold">Faculty:</span>{' '}
-                        {formatInstructorNames(course.enrolled)}
+                      <div className="truncate">
+                        {formatInstructorNames(course.enrolled)}{' '}
+                        <span aria-hidden="true">&middot;</span> Faculty
                       </div>
+                      {(() => {
+                        const tas = getTAs(course.enrolled);
+                        const taNames = tas
+                          .map((ta) => `${ta.firstName ?? ''} ${ta.lastName ?? ''}`.trim())
+                          .filter(Boolean)
+                          .join(', ');
+                        // "No TAs assigned" rather than dropping the line: the absence of a
+                        // TA is information, and the old card said "TA(s): None".
+                        return (
+                          <div className="truncate">
+                            {taNames ? (
+                              <>
+                                {taNames} <span aria-hidden="true">&middot;</span>{' '}
+                                {tas.length === 1 ? 'TA' : 'TAs'}
+                              </>
+                            ) : (
+                              'No TAs assigned'
+                            )}
+                          </div>
+                        );
+                      })()}
                       <div>
-                        <span className="font-semibold">TA(s):</span>{' '}
-                        {(() => {
-                          const taNames = getTAs(course.enrolled)
-                            .map((ta) => `${ta.firstName ?? ''} ${ta.lastName ?? ''}`.trim())
-                            .filter(Boolean)
-                            .join(', ');
-                          return taNames || 'None';
-                        })()}
-                      </div>
-                      <div>
-                        <span className="font-semibold">Dates:</span>{' '}
-                        {formatDateTimeInTimeZone(course.startDate, timezone)} to{' '}
-                        {formatDateTimeInTimeZone(course.endDate, timezone)}
+                        {formatDateInTimeZone(course.startDate, timezone)} &ndash;{' '}
+                        {formatDateInTimeZone(course.endDate, timezone)}
                       </div>
                     </div>
                   </div>

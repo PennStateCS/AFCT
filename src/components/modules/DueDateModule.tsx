@@ -76,7 +76,7 @@ export function DueDateModule({ assignments }: Props) {
                     />
                     <Link
                       href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
-                      className="text-foreground truncate font-medium hover:underline"
+                      className="text-foreground truncate text-sm font-medium hover:underline"
                     >
                       {assignment.title}
                     </Link>
