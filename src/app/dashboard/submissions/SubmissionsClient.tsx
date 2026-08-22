@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { ColumnDef, OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import {
-  ChevronDown,
+  CircleCheckBig,
+  EllipsisVertical,
   Download,
   ExternalLink,
   Eye,
@@ -16,7 +17,6 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -524,7 +524,9 @@ export default function SubmissionsClient() {
       },
       {
         id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
+        // Visible now rather than sr-only: the trigger used to say "Manage" on its face,
+        // so the column named itself. A bare ellipsis does not.
+        header: 'Actions',
         enableSorting: false,
         meta: { align: 'right', priority: 1 },
         cell: ({ row }) => {
@@ -540,13 +542,14 @@ export default function SubmissionsClient() {
             <div className="flex justify-end">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
+                  {/* Every row carries one of these, so the label names the row: a dozen
+                      buttons all called "More" is what a screen reader would hear. */}
                   <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Manage submission by ${student}`}
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Actions for the submission by ${student}`}
                   >
-                    <ChevronDown />
-                    Manage
+                    <EllipsisVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -612,37 +615,50 @@ export default function SubmissionsClient() {
   );
 
   return (
-    <Card className="p-4">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <CardTitle role="heading" aria-level={1} className="text-2xl tracking-tight">
-              Submissions
-            </CardTitle>
-          </div>
-          {/* No bulk rerun here. It re-ran whatever the page's own selection held, which
-              stopped matching what the table showed once status filtering moved into the
-              table, so the button could not honestly describe what it was about to do.
-              Rerunning one submission lives in its row's Manage menu. */}
+    <div className="space-y-5">
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+          {/* Decorative: the heading beside it already says what this is. The icon the
+              sidebar already uses for this page, on the neutral surface the other admin
+              pages use. */}
+          <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <CircleCheckBig className="size-5" aria-hidden="true" />
+          </span>
+          <span>Submissions</span>
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          Review and manage submissions across courses, assignments, and problems.
+        </p>
+      </div>
+
+      {/* No bulk rerun here. It re-ran whatever the page's own selection held, which
+          stopped matching what the table showed once status filtering moved into the
+          table, so the button could not honestly describe what it was about to do.
+          Rerunning one submission lives in its row's Actions menu. */}
+      {/* A panel rather than three loose pickers, with Clear inside it: the button resets
+          these three and nothing else, and sitting above them it read as a page action. */}
+      <section
+        className="bg-muted/30 space-y-3 rounded-lg border p-4"
+        aria-labelledby="submission-filters"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="submission-filters" className="text-sm font-medium">
+            Filters
+          </h2>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={handleClearFilters}
+            disabled={!anyFilterActive}
+          >
+            Clear filters
+          </Button>
         </div>
 
         {/* No "Select All" any more. An empty picker now means every course, assignment and
             problem, so selecting all of them would have been the same view by a longer
             route, and it was the thing that made the page enumerate every id on load. */}
-        <div className="mt-3 flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={handleClearFilters}
-            disabled={!anyFilterActive}
-          >
-            Clear Filters
-          </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
         {/* Stacked until there is genuinely room for three. Three equal tracks at the `sm`
             breakpoint left each filter narrower than its own label, so they now go side by
             side only from `lg`. Each track is `minmax(0,1fr)` so a long selection truncates
@@ -681,9 +697,10 @@ export default function SubmissionsClient() {
             disabled={loadingProblems || selectedAssignments.length === 0}
           />
         </div>
+      </section>
 
-        <DataTable
-          columns={columns}
+      <DataTable
+        columns={columns}
           data={submissions}
           loading={loadingSubmissions}
           loadingMessage="Loading submissions, please wait..."
@@ -805,7 +822,6 @@ export default function SubmissionsClient() {
           onOpenChange={setFeedbackDialogOpen}
           feedbackText={activeFeedback}
         />
-      </CardContent>
-    </Card>
+    </div>
   );
 }

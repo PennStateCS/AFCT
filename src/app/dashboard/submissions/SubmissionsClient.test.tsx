@@ -375,7 +375,7 @@ describe('SubmissionsClient', () => {
     }
   });
 
-  it('offers the row actions in a manage menu, including a link into submission review', async () => {
+  it('offers the row actions in an actions menu, including a link into submission review', async () => {
     installFetchRouter();
     renderWithClient(<SubmissionsClient />);
     await waitFor(() => expect(screen.getByText('ada@example.com')).toBeInTheDocument());
@@ -383,7 +383,7 @@ describe('SubmissionsClient', () => {
     // One Manage control per row, named after the student so screen reader users can
     // tell two rows apart.
     expect(
-      screen.getByRole('button', { name: 'Manage submission by Lovelace, Ada' }),
+      screen.getByRole('button', { name: 'Actions for the submission by Lovelace, Ada' }),
     ).toBeInTheDocument();
 
     // Every action the old icon row offered still exists, plus the review link.
