@@ -67,7 +67,7 @@ import {
 import { getInitials } from '@/app/utils/initials';
 
 const menuButtonStyles =
-  'text-sidebar-foreground hover:bg-brand-teal focus-visible:bg-brand-teal active:bg-brand-teal data-[active=true]:bg-brand-teal data-[active=true]:text-white';
+  'text-sidebar-foreground focus-visible:bg-sidebar-accent';
 
 type Course = {
   id: string;
@@ -189,7 +189,7 @@ function CollapsibleSidebarGroup({
   return (
     <SidebarGroup>
       {/* Color/size go on SidebarGroupLabel's className so tailwind-merge overrides its
-          dimmed `text-sidebar-foreground/70 text-xs` base, matching the submenu items. */}
+          muted `text-sidebar-muted-foreground text-xs` base, matching the submenu items. */}
       {/* The toggle sits inside a heading (WAI-ARIA accordion pattern) so screen reader
           users can jump between sidebar sections by heading, not just by button.
           Tailwind's preflight strips the h3's default margin/size, so this is
@@ -204,7 +204,7 @@ function CollapsibleSidebarGroup({
             onClick={onToggle}
             aria-expanded={open}
             aria-controls={contentId}
-            className="hover:bg-brand-teal flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
+            className="hover:bg-sidebar-accent flex h-full w-full items-center gap-1 rounded-md p-2 whitespace-nowrap"
           >
             <span className="overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
             <ChevronDown
@@ -461,7 +461,7 @@ export default function DashboardSidebarMenu() {
                           role="alert"
                           className="flex w-full flex-col items-start gap-1 px-2 py-1.5"
                         >
-                          <span className="text-sidebar-foreground/70 text-sm">
+                          <span className="text-sidebar-muted-foreground text-sm">
                             Could not load courses.
                           </span>
                           <button
@@ -477,7 +477,7 @@ export default function DashboardSidebarMenu() {
                       <SidebarMenuItem>
                         {/* Plain text, not a button: aria-disabled on a generic div is
                             invalid and this is not an interactive control. */}
-                        <div className="text-sidebar-foreground/60 flex w-full items-center gap-2 px-2 py-1.5 text-sm">
+                        <div className="text-sidebar-muted-foreground flex w-full items-center gap-2 px-2 py-1.5 text-sm">
                           <Book aria-hidden="true" className="h-4 w-4 shrink-0" />
                           <span className="overflow-hidden text-ellipsis whitespace-nowrap">
                             No courses
@@ -578,7 +578,7 @@ export default function DashboardSidebarMenu() {
                   // plus the visible span) and never said what activating it does.
                   aria-label={`Open account menu for ${user.name}`}
                   className={cn(
-                    'hover:bg-brand-teal data-[state=open]:bg-brand-teal/70 bg-sidebar-foreground/10 h-14 px-3 py-3 transition-colors data-[state=open]:text-white',
+                    'hover:bg-sidebar-accent data-[state=open]:bg-sidebar-primary bg-sidebar-foreground/10 h-14 px-3 py-3 transition-colors data-[state=open]:text-sidebar-primary-foreground',
                     // In the icon rail the button shrinks to 32px; drop the padding and
                     // center so the 32px avatar fills the tile as a clean circle instead
                     // of overflowing an 8px-padded 16px box behind the (hidden) name.
