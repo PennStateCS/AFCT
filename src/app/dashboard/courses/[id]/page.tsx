@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { CourseRole } from '@prisma/client';
 import { notFound } from 'next/navigation';
 import CourseClient from './CourseClient';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { courseLmsLinks } from '@/lib/lti/links';
@@ -126,10 +127,13 @@ export default async function AdminCoursePage({ params, searchParams }: Props) {
   };
 
   return (
-    <>
+    // A work page: one continuous white surface, staff view and student view alike. The
+    // wrapper sits here rather than inside CourseClient so the launch notice lands on the
+    // surface too; the surface bleeds upward, and would otherwise ride over it.
+    <WorkspaceSurface>
       {/* Renders nothing unless a launch sent them here, which is nearly always. */}
       <LaunchNotice notice={lms} courseTitle={noticeSubject} />
       <CourseClient initialCourse={initialCourse} />
-    </>
+    </WorkspaceSurface>
   );
 }

@@ -167,7 +167,7 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     return <LoadingSpinner label="Loading" fullScreen={false} className="min-h-[70vh]" />;
 
   return (
-    <div className="space-y-6 p-0">
+    <div className="space-y-6">
       <h1 className="sr-only">
         {course.code}: {course.name}
       </h1>

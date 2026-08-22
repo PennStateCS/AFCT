@@ -75,7 +75,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   page sideways instead of scrolling inside its own container. */}
                 <div className="flex min-w-0 flex-1 flex-col p-4">
                   <Navbar />
-                  <main id="main-content" tabIndex={-1} lang="en">
+                  {/* flex-1 so a page-level surface (see WorkspaceSurface) can fill the
+                      viewport instead of stopping where its content does. Purely a sizing
+                      change: main paints nothing, so pages that do not use one look the
+                      same. */}
+                  <main id="main-content" tabIndex={-1} lang="en" className="flex flex-1 flex-col">
                     {children}
                   </main>
                 </div>

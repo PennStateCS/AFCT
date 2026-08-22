@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { columns } from './course-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 // On demand: the create wizard carries the form stack and is not open on arrival.
 const CreateCourseDialog = dynamic(
   () => import('@/components/dialogs/CreateCourseDialog').then((m) => m.CreateCourseDialog),
@@ -65,47 +66,49 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
   const columnsMemo = useMemo(() => columns(refresh, refresh, timezone), [refresh, timezone]);
 
   return (
-    // The page is the workspace: no outer card. The table brings its own border, so
-    // wrapping the whole page in one only nested a bounded thing inside a bounded thing
-    // and cost the table two gutters of width. A real <h1> replaces the CardTitle that
-    // was carrying role="heading" aria-level={1}, which is the same thing said properly.
-    <section className="space-y-6" aria-labelledby="courses-title">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 id="courses-title" className="text-2xl font-semibold tracking-tight">
-          Courses
-        </h1>
-        <Button onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
-          <BookPlus /> Create Course
-        </Button>
-      </div>
-
-      {isError && (
-        <div className="border-status-danger-border bg-status-danger-bg text-status-danger flex items-center justify-between rounded-md border p-3 text-sm">
-          <span>Failed to refresh courses. Please try again.</span>
-          <Button size="sm" variant="outline" onClick={refresh}>
-            Retry
-          </Button>
-        </div>
-      )}
-
-      <DataTable
-        columns={columnsMemo}
-        data={courses}
-        loading={isLoading}
-        tableLabel="Courses table"
-        defaultSorting={[{ id: 'startDate', desc: false }]}
-        emptyTitle="No courses yet"
-        emptyDescription="Create a course to get started."
-        emptyIcon={BookOpen}
-        loadingMessage="Loading courses, please wait..."
-        emptyAction={
+    // A work page, so it sits on the white surface rather than the slate canvas. Still
+    // not a card: the table brings its own border, and wrapping the page in one only
+    // nested a bounded thing inside a bounded thing. A real <h1> replaces the CardTitle
+    // that was carrying role="heading" aria-level={1}, which says the same thing properly.
+    <WorkspaceSurface>
+      <section className="space-y-6" aria-labelledby="courses-title">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 id="courses-title" className="text-2xl font-semibold tracking-tight">
+            Courses
+          </h1>
           <Button onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
             <BookPlus /> Create Course
           </Button>
-        }
-      />
+        </div>
 
-      {createMounted && <CreateCourseDialog open={open} setOpen={setOpen} onSuccess={refresh} />}
-    </section>
+        {isError && (
+          <div className="border-status-danger-border bg-status-danger-bg text-status-danger flex items-center justify-between rounded-md border p-3 text-sm">
+            <span>Failed to refresh courses. Please try again.</span>
+            <Button size="sm" variant="outline" onClick={refresh}>
+              Retry
+            </Button>
+          </div>
+        )}
+
+        <DataTable
+          columns={columnsMemo}
+          data={courses}
+          loading={isLoading}
+          tableLabel="Courses table"
+          defaultSorting={[{ id: 'startDate', desc: false }]}
+          emptyTitle="No courses yet"
+          emptyDescription="Create a course to get started."
+          emptyIcon={BookOpen}
+          loadingMessage="Loading courses, please wait..."
+          emptyAction={
+            <Button onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>
+              <BookPlus /> Create Course
+            </Button>
+          }
+        />
+
+          {createMounted && <CreateCourseDialog open={open} setOpen={setOpen} onSuccess={refresh} />}
+      </section>
+    </WorkspaceSurface>
   );
 }
