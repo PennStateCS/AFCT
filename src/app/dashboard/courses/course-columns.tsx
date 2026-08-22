@@ -182,7 +182,13 @@ export const columns = (
     accessorKey: 'regCode',
     meta: { priority: 2 },
     header: 'Registration Code',
-    cell: ({ row }) => <span>{formatRegistrationCode(row.getValue<string>('regCode'))}</span>,
+    cell: ({ row }) => (
+      // Mono: a registration code is something people read out and type in, so the
+      // characters want fixed widths.
+      <span className="font-mono text-sm">
+        {formatRegistrationCode(row.getValue<string>('regCode'))}
+      </span>
+    ),
   },
   {
     accessorKey: 'startDate',
@@ -228,7 +234,7 @@ export const columns = (
     cell: ({ row }) => {
       const names = row.original.lmsNames ?? [];
       if (names.length === 0) {
-        return <span className="text-muted-foreground italic">Not connected</span>;
+        return <span className="text-muted-foreground">Not connected</span>;
       }
       // Named rather than a tick: which LMS matters when an institution runs more than one,
       // and a word reads the same to everybody.

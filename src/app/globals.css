@@ -165,7 +165,10 @@
   /* Gray-700: the same family as the rail, so the divider reads as part of it. */
   --sidebar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
   --sidebar-ring: oklch(0.9842 0.0034 247.858);
-  --table-header: oklch(0.9067 0 0);
+  /* Matched to --muted. A mid grey band competed with the header text; this reads as a
+     surface. Kept a solid colour, not a tint: the header row is sticky in several tables
+     and body rows would scroll through anything translucent. */
+  --table-header: oklch(0.967 0.001 286.375);
   --table-header-foreground: oklch(0 0 0);
   --table-highlight: oklch(0.9431 0 0);
   --table-background: oklch(1 0 0);

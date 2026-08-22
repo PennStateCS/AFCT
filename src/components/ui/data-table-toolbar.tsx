@@ -128,7 +128,7 @@ export function DataTableToolbar<TData>({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" aria-label="Columns">
+            <Button variant="secondary" aria-label="Columns">
               <Columns3Cog className="h-4 w-4" aria-hidden="true" />
               <span className="hidden sm:inline">Columns</span>
             </Button>

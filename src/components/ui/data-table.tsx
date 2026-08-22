@@ -477,7 +477,7 @@ export function DataTable<TData, TValue>({
                           <button
                             type="button"
                             onClick={handleSortClick}
-                            className={`flex w-full cursor-pointer items-center select-none ${flexClass || 'text-left'}`}
+                            className={`group/sort flex w-full cursor-pointer items-center select-none ${flexClass || 'text-left'}`}
                             /*
                              * When the header renders plain text, that text IS the button's
                              * accessible name -- an aria-label here would override it, and
@@ -499,8 +499,15 @@ export function DataTable<TData, TValue>({
                             {sorted === 'desc' && (
                               <ArrowDown className="ml-1 h-3 w-3" aria-hidden />
                             )}
+                            {/* Only while pointing at or focused on the header. Twelve
+                                permanent double-arrows made every column look sorted and
+                                none of them look sorted. aria-sort on the cell is what
+                                actually reports the state. */}
                             {!sorted && (
-                              <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" aria-hidden />
+                              <ArrowUpDown
+                                className="ml-1 h-3 w-3 opacity-0 transition-opacity group-hover/sort:opacity-40 group-focus-visible/sort:opacity-40"
+                                aria-hidden
+                              />
                             )}
                           </button>
                         ) : (

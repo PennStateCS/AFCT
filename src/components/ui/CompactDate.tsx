@@ -15,7 +15,7 @@ export function CompactDate({
   const parsed = parseValidDate(value);
   if (!parsed) return <span className="text-muted-foreground">—</span>;
   return (
-    <div className="leading-tight whitespace-nowrap">
+    <div className="leading-tight tabular-nums whitespace-nowrap">
       <div>{formatDateInTimeZone(parsed, timeZone)}</div>
       <div className="text-muted-foreground text-xs">{formatTimeInTimeZone(parsed, timeZone)}</div>
     </div>
