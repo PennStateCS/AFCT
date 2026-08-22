@@ -106,9 +106,9 @@ export function DueDateModule({ assignments }: Props) {
           View all <span aria-hidden="true">&rarr;</span>
         </Link>
       </CardHeader>
-      <CardContent className="px-5">
+      <CardContent className="px-0">
         {visible.length === 0 ? (
-          <p className="text-muted-foreground text-sm">None</p>
+          <p className="text-muted-foreground px-5 text-sm">None</p>
         ) : (
           <ul aria-label="Deadlines list">
             {visible.map((assignment, index) => {
@@ -121,12 +121,11 @@ export function DueDateModule({ assignments }: Props) {
               const { month, day } = formatShortDateParts(assignment.dueDate, timezone);
 
               return (
+                // border-t on every row rather than border-b on all but the last, so the
+                // list is fenced off from the header the way the Courses module's is.
                 <li
                   key={assignment.id}
-                  className={cn(
-                    'flex items-center gap-3 py-3',
-                    index < visible.length - 1 && 'border-border border-b',
-                  )}
+                  className="border-border flex items-center gap-3 border-t px-5 py-3"
                 >
                   {/* aria-hidden: the same date is already in the row's text, and the
                       tint says nothing a reader needs. Month and day inherit the tile's
@@ -185,7 +184,7 @@ export function DueDateModule({ assignments }: Props) {
         {hiddenCount > 0 && (
           <Link
             href="/dashboard/calendar"
-            className="text-muted-foreground hover:text-foreground mt-3 block text-sm hover:underline"
+            className="text-muted-foreground hover:text-foreground mt-3 block px-5 text-sm hover:underline"
           >
             {hiddenCount} more on the calendar
           </Link>
