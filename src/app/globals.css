@@ -111,7 +111,11 @@
 }
 :root {
   --radius: 0.65rem;
-  --background: oklch(0.9401 0 0);
+  /* Slate-50. Lighter than the old neutral grey, which suits pages that are now mostly
+     canvas rather than one big card. Cards and tables stay pure white; they separate
+     from this by 1.05:1 on fill alone, so their border does most of that work now
+     (it reads 1.21:1 against this canvas, up from 1.06:1 against the old one). */
+  --background: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
   --foreground: oklch(0 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0 0 0);
