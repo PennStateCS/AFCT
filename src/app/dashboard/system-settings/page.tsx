@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import SystemSettingsClient from './SystemSettingsClient';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 
 export const metadata: Metadata = {
   title: 'System Settings',
@@ -15,5 +16,12 @@ export default async function SystemSettingsPage() {
     notFound();
   }
 
-  return <SystemSettingsClient />;
+  // A work page, so it sits on the white surface rather than the slate canvas, the same
+  // way Courses and a course do. The wrapper lives here rather than inside the client
+  // component because it bleeds through the layout's gutter; see WorkspaceSurface.
+  return (
+    <WorkspaceSurface>
+      <SystemSettingsClient />
+    </WorkspaceSurface>
+  );
 }

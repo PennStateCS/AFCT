@@ -541,7 +541,7 @@ export default function SystemSettingsClient() {
   const railNav = useIsDesktopNav(1280);
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4">
       <p className="sr-only" aria-live="polite">
         {loading ? 'Loading system settings' : saving ? 'Saving system settings' : ''}
       </p>
