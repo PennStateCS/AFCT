@@ -28,7 +28,7 @@ const SIDEBAR_WIDTH_ICON = '3rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 // At or above this width the sidebar follows the saved preference (expanded by
 // default); between the mobile drawer breakpoint (768px) and this, it starts collapsed
-// to the icon rail so the 18rem sidebar doesn't crowd the content on tablets and
+// to the icon rail so the expanded sidebar doesn't crowd the content on tablets and
 // smaller laptop windows.
 const SIDEBAR_AUTO_EXPAND_WIDTH = 1024;
 
