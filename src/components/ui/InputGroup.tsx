@@ -145,11 +145,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
       {/* The marker sits beside the label, not inside it, so the label text stays the
           bare field name for both the accessible name and label-based queries. */}
       <div className="flex items-center">
-        <Label
-          id={labelId}
-          htmlFor={inputId}
-          className={cn('mb-1.5', labelClassName)}
-        >
+        <Label id={labelId} htmlFor={inputId} className={cn('mb-1.5', labelClassName)}>
           {label}
         </Label>
         {_requiredMark && <RequiredMark className="mb-1.5" />}
@@ -175,11 +171,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           // and the transition all live on Input; repeating them here meant two places to
           // change and two chances to disagree. labelClassName is NOT in this list: it
           // used to be, so `labelClassName="text-gray-800"` recoloured the typed text too.
-          className={cn(
-            'h-11',
-            type === 'number' && 'appearance-auto',
-            inputPaddingRight,
-          )}
+          className={cn('h-11', type === 'number' && 'appearance-auto', inputPaddingRight)}
         />
 
         {/* STATUS + EYE */}
@@ -211,7 +203,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
                  */
                 aria-label="Show password"
                 aria-pressed={pwdVisible}
-                className="text-muted-foreground transition-opacity hover:opacity-80"
+                className="text-muted-foreground flex size-6 items-center justify-center transition-opacity hover:opacity-80"
               >
                 {pwdVisible ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -239,7 +231,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
               onClick={handleToggleEye}
               aria-label={pwdVisible ? 'Hide password' : 'Show password'}
               aria-pressed={pwdVisible}
-              className="text-muted-foreground transition-opacity hover:opacity-80"
+              className="text-muted-foreground flex size-6 items-center justify-center transition-opacity hover:opacity-80"
             >
               {pwdVisible ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
