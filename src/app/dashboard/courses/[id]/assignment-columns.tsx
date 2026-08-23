@@ -99,7 +99,7 @@ export function DueDateCell({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="border-status-info-border bg-status-info-bg text-status-info hover:bg-status-info-bg/70 focus-visible:ring-ring/70 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
+              className="border-status-info-border bg-status-info-bg text-status-info hover:border-status-info focus-visible:ring-ring/70 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
               aria-label={`Multiple due dates (${overrides.length} override${overrides.length === 1 ? '' : 's'}); show details`}
             >
               <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
@@ -224,7 +224,7 @@ export function OverrideAwareCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="border-status-info-border bg-status-info-bg text-status-info hover:bg-status-info-bg/70 focus-visible:ring-ring/70 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
+          className="border-status-info-border bg-status-info-bg text-status-info hover:border-status-info focus-visible:ring-ring/70 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
           aria-label={`Multiple ${label.toLowerCase()} values; show details`}
         >
           <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
