@@ -4,7 +4,7 @@ import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { DockerStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, Section, useStatusQuery, copy } from '../status-ui';
+import { Loading, Stat, StatGrid, Section, useStatusQuery, copy } from '../status-ui';
 import { formatBytes } from '../status-format';
 
 // The resource-limit fields are tri-state: a number is the cap, `null` means the
@@ -49,21 +49,28 @@ export default function DockerTab({
 
   return (
     <Section title="Docker">
-      <div className="max-w-xl space-y-3">
-        <Stat
-          label="Container ID"
-          value={docker.containerIdShort ?? docker.containerId ?? '—'}
-          onCopy={docker.containerId ? () => copy(docker.containerId) : undefined}
-        />
-        <Stat label="Hostname" value={docker.envHostname ?? docker.hostname ?? '—'} />
-        <Stat label="Running version" value={docker.imageTag ?? '—'} />
-        <Stat label="Memory limit" value={formatMemoryLimit(docker.memoryLimitBytes)} />
-        <Stat label="CPU limit" value={formatCpuLimit(docker.cpuLimit)} />
-        <Stat label="cgroup version" value={docker.cgroupVersion ?? '—'} />
-        <Stat
-          label="Indicators"
-          value={docker.indicators?.length ? docker.indicators.join(', ') : '—'}
-        />
+      <div className="space-y-4">
+        {/* Deliberately not widened to match the other tabs. Seven short attributes do not
+            become easier to read with 1400px behind them, and this is the one tab where the
+            content genuinely wants less room than the workspace has. */}
+        <StatGrid className="max-w-3xl">
+          <Stat
+            label="Container ID"
+            value={docker.containerIdShort ?? docker.containerId ?? '—'}
+            onCopy={docker.containerId ? () => copy(docker.containerId) : undefined}
+          />
+          <Stat label="Hostname" value={docker.envHostname ?? docker.hostname ?? '—'} />
+          <Stat label="Running version" value={docker.imageTag ?? '—'} />
+          <Stat label="Memory limit" value={formatMemoryLimit(docker.memoryLimitBytes)} />
+          <Stat label="CPU limit" value={formatCpuLimit(docker.cpuLimit)} />
+          <Stat label="cgroup version" value={docker.cgroupVersion ?? '—'} />
+          <Stat
+            label="Indicators"
+            value={docker.indicators?.length ? docker.indicators.join(', ') : '—'}
+          />
+        </StatGrid>
+        {/* The exception on this tab: cgroup paths are long, break mid-word, and are read
+            character by character when something is wrong, so they get the width. */}
         <div>
           <div className="text-muted-foreground mb-1 text-sm">Cgroup</div>
           {docker.cgroupPaths?.length ? (

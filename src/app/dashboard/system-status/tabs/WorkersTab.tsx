@@ -7,7 +7,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import type { WorkItem, WorkersStatusResponse } from '@/lib/status/workers';
-import { Loading, Stat, Section, useStatusQuery } from '../status-ui';
+import { Loading, Stat, StatGrid, Section, useStatusQuery } from '../status-ui';
 
 /** How long something has been running, in the shortest form that is still honest. */
 function elapsed(ms: number): string {
@@ -118,17 +118,18 @@ export default function WorkersTab({
         {announcement}
       </span>
       <Section title="Evaluator">
-        {/* Capped like every other status tab: full-width rows put each value an inch from
-            the right edge of the display, a long way from the label it belongs to. */}
-        <div className="max-w-xl space-y-2">
+        {/* Four readings as two pairs, not one column. Still capped: `Stat` puts the value
+            at the far end of whatever it is given, so a full-width row leaves it an inch from
+            the edge of the display and a long way from its label. */}
+        <StatGrid className="max-w-4xl">
           <Stat label="Status" value={<Badge variant={health.variant}>{health.text}</Badge>} />
           <Stat label="Grading now" value={`${data.busy} of ${data.configured} slots`} />
           <Stat label="Waiting to be graded" value={data.queue.pending} />
           <Stat label="Failed in the last hour" value={data.queue.failedLastHour} />
-        </div>
+        </StatGrid>
 
         {data.health === 'stalled' ? (
-          <p role="status" className="text-destructive max-w-xl text-sm">
+          <p role="status" className="text-destructive max-w-3xl text-sm">
             {data.queue.pending} submission{data.queue.pending === 1 ? ' has' : 's have'} been
             waiting {elapsed(data.oldestPendingMs ?? 0)} with nothing grading. Check that the
             evaluator container is running.
@@ -136,7 +137,7 @@ export default function WorkersTab({
         ) : null}
 
         {data.health === 'stuck' ? (
-          <p role="status" className="text-muted-foreground max-w-xl text-sm">
+          <p role="status" className="text-muted-foreground max-w-3xl text-sm">
             Work below is past the evaluator timeout. The worker returns overdue submissions to the
             queue by itself, so this usually clears; the same submission appearing repeatedly points
             at one the evaluator cannot finish.
@@ -146,7 +147,7 @@ export default function WorkersTab({
         {data.health === 'idle' ? (
           // Said carefully. An empty queue proves there is nothing to do; it says nothing about
           // whether anything is there to do it, and the page must not imply otherwise.
-          <p className="text-muted-foreground max-w-xl text-sm">
+          <p className="text-muted-foreground max-w-3xl text-sm">
             Nothing is queued, so there is nothing for the evaluator to pick up. A quiet queue does
             not confirm the evaluator is running: submit something to test it.
           </p>

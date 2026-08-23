@@ -8,7 +8,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { DataTable } from '@/components/ui/data-table';
 import type { SessionsStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, Section, useStatusQuery, copy } from '../status-ui';
+import { Loading, Section, useStatusQuery, copy } from '../status-ui';
 
 type SessionRow = SessionsStatusResponse['activeSessions'][number];
 
@@ -97,15 +97,27 @@ export default function SessionsTab({
 
   const summary = data.summary;
 
+  const figures = [
+    { label: 'Total (24h)', value: summary.total24h },
+    { label: 'Unique users', value: summary.uniqUsers24h },
+    { label: 'Last 5m', value: summary.last5m },
+    { label: 'Last 15m', value: summary.last15m },
+    { label: 'Last 60m', value: summary.last60m },
+  ];
+
   return (
     <Section title="Sessions">
       <div className="space-y-6">
-        <div className="max-w-xl space-y-2">
-          <Stat label="Total (24h)" value={summary.total24h} />
-          <Stat label="Unique users" value={summary.uniqUsers24h} />
-          <Stat label="Last 5m" value={summary.last5m} />
-          <Stat label="Last 15m" value={summary.last15m} />
-          <Stat label="Last 60m" value={summary.last60m} />
+        {/* Five figures across, in the same tiles as the summary at the top of the page,
+            rather than five label/value rows down a narrow column. They are one reading
+            taken over five spans, so they are meant to be compared at a glance. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {figures.map((f) => (
+            <div key={f.label} className="bg-card rounded-lg border p-3">
+              <div className="text-muted-foreground text-xs">{f.label}</div>
+              <div className="mt-1 text-lg font-semibold">{f.value}</div>
+            </div>
+          ))}
         </div>
 
         <DataTable
