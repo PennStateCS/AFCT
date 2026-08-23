@@ -152,7 +152,7 @@ export default function FileUploadInput({
                 <div className="text-left">
                   <p className="text-foreground text-sm font-medium">
                     <span className="inline-flex items-center gap-2">
-                      <Upload className="h-3 w-3 text-green-600 dark:text-green-400" aria-hidden="true" />
+                      <Upload className="text-status-success h-3 w-3" aria-hidden="true" />
                       <span className="truncate" title={value.name}>
                         {value.name}
                       </span>

@@ -57,7 +57,7 @@ function RegistrationCode({ code }: { code: string }) {
         title="Copy registration code"
       >
         {copied === 'code' ? (
-          <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+          <Check className="text-status-success h-3.5 w-3.5" />
         ) : (
           <Copy className="h-3.5 w-3.5" />
         )}
@@ -72,7 +72,7 @@ function RegistrationCode({ code }: { code: string }) {
         title="Copy invite link"
       >
         {copied === 'link' ? (
-          <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+          <Check className="text-status-success h-3.5 w-3.5" />
         ) : (
           <LinkIcon className="h-3.5 w-3.5" />
         )}

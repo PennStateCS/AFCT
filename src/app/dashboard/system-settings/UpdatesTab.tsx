@@ -468,7 +468,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                   <dt className="text-muted-foreground">Update service health</dt>
                   <dd>
                     {updaterAvailable ? (
-                      <span className="text-green-700 dark:text-green-400">Running</span>
+                      <span className="text-status-success">Running</span>
                     ) : (
                       <span className="text-status-warning">Not running</span>
                     )}

@@ -536,7 +536,7 @@ export default function AssignmentDashboardPage({
         <section className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
               <h1
-                className="flex min-w-0 flex-wrap items-center gap-2 text-2xl tracking-tight break-words"
+                className="flex min-w-0 flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight break-words"
               >
                 <span className="font-semibold">Assignment:</span>{' '}
                 <span className="min-w-0 [overflow-wrap:anywhere] break-words">

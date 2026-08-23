@@ -150,7 +150,7 @@ export function DueDateModule({ assignments }: Props) {
                         {assignment.title}
                       </Link>
                       {isDraft && (
-                        <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        <span className="bg-status-warning-bg text-status-warning border-status-warning-border shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium">
                           Draft
                         </span>
                       )}
