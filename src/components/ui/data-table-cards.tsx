@@ -1,5 +1,11 @@
 'use client';
 
+/* eslint-disable jsx-a11y/no-redundant-roles -- role="list" is not redundant here.
+   Tailwind's preflight sets `list-style: none` on every list, and Safari with VoiceOver
+   drops list semantics from a list that has no markers, so the explicit role is what puts
+   "list, 3 items" back. It also settles axe's aria-prohibited-attr warning, which is that
+   naming a bare <ul> has patchy support. Remove the role only if the marker reset goes. */
+
 import { useState, useEffect, type ComponentType, type ReactNode } from 'react';
 import type { Row, Table as TanstackTable, Column as TanstackColumn } from '@tanstack/react-table';
 import { flexRender } from '@tanstack/react-table';
@@ -51,7 +57,7 @@ export function DataTableCards<TData>({
   }
 
   return (
-    <ul className="space-y-3" aria-label={tableLabel} aria-busy={loading}>
+    <ul role="list" className="space-y-3" aria-label={tableLabel} aria-busy={loading}>
       {rows.map((row: Row<TData>) => {
         const cells = row.getVisibleCells();
         const actionsCell = cells.find((c) => c.column.id === 'actions');

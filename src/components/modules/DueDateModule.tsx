@@ -1,15 +1,17 @@
 'use client';
 
+/* eslint-disable jsx-a11y/no-redundant-roles -- role="list" is not redundant here.
+   Tailwind's preflight sets `list-style: none` on every list, and Safari with VoiceOver
+   drops list semantics from a list that has no markers, so the explicit role is what puts
+   "list, 3 items" back. It also settles axe's aria-prohibited-attr warning, which is that
+   naming a bare <ul> has patchy support. Remove the role only if the marker reset goes. */
+
 import React from 'react';
 import Link from 'next/link';
 import { CalendarClock } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import {
-  daysUntilInTimeZone,
-  formatShortDateParts,
-  formatTimeInTimeZone,
-} from '@/lib/date-format';
+import { daysUntilInTimeZone, formatShortDateParts, formatTimeInTimeZone } from '@/lib/date-format';
 import { cn } from '@/lib/utils';
 
 type DueDateAssignment = {
@@ -110,14 +112,13 @@ export function DueDateModule({ assignments }: Props) {
         {visible.length === 0 ? (
           <p className="text-muted-foreground px-5 text-sm">None</p>
         ) : (
-          <ul aria-label="Deadlines list">
+          <ul role="list" aria-label="Deadlines list">
             {visible.map((assignment, index) => {
               const isDraft = assignment.isPublished === false;
               const courseCode = assignment.course?.code;
               // Unchanged: 48 hours is what marks a row urgent, and it is what decides
               // the colour. The wording above it is a separate, calendar-day question.
-              const dueSoon =
-                new Date(assignment.dueDate).getTime() - now.getTime() <= DUE_SOON_MS;
+              const dueSoon = new Date(assignment.dueDate).getTime() - now.getTime() <= DUE_SOON_MS;
               const { month, day } = formatShortDateParts(assignment.dueDate, timezone);
 
               return (

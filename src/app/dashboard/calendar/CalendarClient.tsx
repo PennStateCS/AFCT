@@ -441,6 +441,13 @@ export default function CalendarClient({
     }).format(currentMonth);
   }, [currentMonth, timezone]);
 
+  // What the single live region says. Both facts in one string so a month change and the
+  // fetch that follows it are one announcement rather than two, and so the end of the
+  // fetch is announced at all.
+  const calendarStatus = loading
+    ? `${monthLabel}. Loading assignments.`
+    : `${monthLabel}. ${visibleAssignments.length} assignment${visibleAssignments.length === 1 ? '' : 's'}.`;
+
   const goToPreviousMonth = () => {
     const nextMonth = subMonths(currentMonth, 1);
     setCurrentMonth(nextMonth);
@@ -519,22 +526,37 @@ export default function CalendarClient({
               </Button>
             </div>
           ) : null}
-          {/* Mounted whether or not it is loading. Created together with its message, a
-              live region is not reliably announced, so changing month said nothing while
-              the fetch ran. Positioned against this column (hence its `relative`) and
-              floated over the top of the month grid, clear of the toolbar's controls. */}
+          {/* The ONLY live region on this page, and it carries the whole state: which month
+              is on screen, and whether its assignments have arrived.
+
+              There used to be two polite regions, this one and the month label in the
+              toolbar. Pressing Next fired both, so the month and "Loading assignments"
+              queued as separate announcements, and nothing at all was said when the fetch
+              finished: the region simply emptied. One region, one message per change, and
+              it ends with a count so "done" is audible.
+
+              Mounted whether or not it is loading. Created together with its message, a
+              live region is not reliably announced. Positioned against this column (hence
+              its `relative`) and floated over the top of the month grid, clear of the
+              toolbar's controls. */}
           <div
             role="status"
             aria-live="polite"
+            aria-atomic="true"
             className={
               loading
                 ? 'border-border bg-card pointer-events-none absolute inset-x-0 top-24 z-10 mx-auto w-fit rounded-md border px-2 py-1 shadow-sm'
                 : 'sr-only'
             }
           >
+            {/* aria-hidden so the visible chip is not announced a second time; the
+                sr-only line below is the announcement. */}
             {loading ? (
-              <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
+              <p aria-hidden="true" className="text-muted-foreground text-xs italic">
+                Loading assignments...
+              </p>
             ) : null}
+            <span className="sr-only">{calendarStatus}</span>
           </div>
           {/* A control bar, not three stacked CTAs: month navigation is a utility, so
               the buttons are outline rather than the filled primaries they were.
@@ -563,11 +585,9 @@ export default function CalendarClient({
                 Today
               </Button>
             </div>
-            <div
-              aria-live="polite"
-              aria-atomic="true"
-              className="min-w-0 truncate px-1 text-center text-base font-semibold sm:px-4 sm:text-lg"
-            >
+            {/* Plain text now. The status region above announces the month change, so a
+                second live region here only produced a competing announcement. */}
+            <div className="min-w-0 truncate px-1 text-center text-base font-semibold sm:px-4 sm:text-lg">
               {monthLabel}
             </div>
             <Button

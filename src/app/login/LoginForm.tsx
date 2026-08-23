@@ -436,7 +436,7 @@ export default function LoginForm({
       {/* DEV BADGE */}
       {isDev && (
         <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center justify-center">
-          <div className="flex items-center gap-2 rounded-full border border-white/50 bg-white/95 px-4 py-1.5 text-2xs font-semibold tracking-[0.25em] text-[#2F4A8A] uppercase shadow-xl backdrop-blur-lg">
+          <div className="text-2xs flex items-center gap-2 rounded-full border border-white/50 bg-white/95 px-4 py-1.5 font-semibold tracking-[0.25em] text-[#2F4A8A] uppercase shadow-xl backdrop-blur-lg">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#2F4A8A] text-white shadow">
               <Wrench className="h-3.5 w-3.5" strokeWidth={2.3} />
             </span>
@@ -461,231 +461,233 @@ export default function LoginForm({
               The admin reset-password dialog is the deliberate exception: there an
               administrator is setting someone else's password. */}
           <LazyMotion features={loadMotionFeatures}>
-          <AnimatePresence mode="wait" initial={false}>
-            {mode === 'login' ? (
-              <m.form
-                key="login"
-                id="login-panel"
-                {...panelMotion}
-                onSubmit={handleLogin}
-                className="space-y-5"
-              >
-                {/* Not a live region: each field's error <p> now carries role="alert",
-                    so announcing here too would double-speak. Kept as static context. */}
-                <p className="sr-only">
-                  {Object.values(loginErrors)[0]
-                    ? `Form error: ${Object.values(loginErrors)[0]}`
-                    : ''}
-                </p>
-                <InputGroup
-                  id="login-email"
-                  label="Email"
-                  // Kept deliberately. This card is a hardcoded bg-white with no dark:
-                  // classes, but next-themes puts .dark on <html> for every page, so
-                  // text-foreground would go near-white on a white card. Only the label
-                  // is affected now: this used to leak onto the typed text as well.
-                  labelClassName="text-gray-800"
-                  name="login-email"
-                  required
-                  requiredMark
-                  autoComplete="username"
-                  value={loginEmail}
-                  setValue={setLoginEmail}
-                  type="email"
-                  error={loginErrors.email}
-                />
-
-                <InputGroup
-                  label="Password"
-                  // Same reason as the email field above.
-                  labelClassName="text-gray-800"
-                  name="login-password"
-                  required
-                  requiredMark
-                  autoComplete="current-password"
-                  value={loginPassword}
-                  setValue={setLoginPassword}
-                  type="password"
-                  showEye
-                  isPasswordVisible={showLoginPassword}
-                  togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
-                  error={loginErrors.password}
-                />
-
-                {renderCaptchaGate()}
-
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  aria-disabled={loading}
-                  className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
+            <AnimatePresence mode="wait" initial={false}>
+              {mode === 'login' ? (
+                <m.form
+                  key="login"
+                  id="login-panel"
+                  {...panelMotion}
+                  onSubmit={handleLogin}
+                  className="space-y-5"
                 >
-                  {loading ? 'Logging in...' : 'Sign In'}
-                </Button>
+                  {/* Not a live region: each field's error <p> now carries role="alert",
+                    so announcing here too would double-speak. Kept as static context. */}
+                  <p className="sr-only">
+                    {Object.values(loginErrors)[0]
+                      ? `Form error: ${Object.values(loginErrors)[0]}`
+                      : ''}
+                  </p>
+                  <InputGroup
+                    id="login-email"
+                    label="Email"
+                    // Kept deliberately. This card is a hardcoded bg-white with no dark:
+                    // classes, but next-themes puts .dark on <html> for every page, so
+                    // text-foreground would go near-white on a white card. Only the label
+                    // is affected now: this used to leak onto the typed text as well.
+                    labelClassName="text-gray-800"
+                    name="login-email"
+                    required
+                    requiredMark
+                    autoComplete="username"
+                    value={loginEmail}
+                    setValue={setLoginEmail}
+                    type="email"
+                    error={loginErrors.email}
+                  />
 
-                {/* Shown only when a provider is configured, so the button never leads
+                  <InputGroup
+                    label="Password"
+                    // Same reason as the email field above.
+                    labelClassName="text-gray-800"
+                    name="login-password"
+                    required
+                    requiredMark
+                    autoComplete="current-password"
+                    value={loginPassword}
+                    setValue={setLoginPassword}
+                    type="password"
+                    showEye
+                    isPasswordVisible={showLoginPassword}
+                    togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
+                    error={loginErrors.password}
+                  />
+
+                  {renderCaptchaGate()}
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    aria-disabled={loading}
+                    className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
+                  >
+                    {loading ? 'Logging in...' : 'Sign In'}
+                  </Button>
+
+                  {/* Shown only when a provider is configured, so the button never leads
                     somewhere that cannot work. Local sign-in stays above it and keeps working
                     whatever is configured here. */}
-                {oidcButtonLabel ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span className="h-px flex-1 bg-gray-200" />
-                      or
-                      <span className="h-px flex-1 bg-gray-200" />
+                  {oidcButtonLabel ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span className="h-px flex-1 bg-gray-200" />
+                        or
+                        <span className="h-px flex-1 bg-gray-200" />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        // The same sanitised destination the password form uses. Somebody sent to
+                        // the login page from a course link should land on that link, whichever way
+                        // they sign in.
+                        onClick={() => void signIn('oidc', { callbackUrl })}
+                      >
+                        {oidcButtonLabel}
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      // The same sanitised destination the password form uses. Somebody sent to
-                      // the login page from a course link should land on that link, whichever way
-                      // they sign in.
-                      onClick={() => void signIn('oidc', { callbackUrl })}
-                    >
-                      {oidcButtonLabel}
-                    </Button>
-                  </div>
-                ) : null}
+                  ) : null}
 
-                {/* Only offered where the site can actually send it. Without mail configured
+                  {/* Only offered where the site can actually send it. Without mail configured
                     this link leads to a page that can only apologise. */}
-                {mailConfigured ? (
-                  <div className="text-center text-sm">
-                    <Link
-                      href="/forgot-password"
-                      className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
-                    >
-                      Forgot your password?
-                    </Link>
-                  </div>
-                ) : null}
+                  {mailConfigured ? (
+                    <div className="text-center text-sm">
+                      <Link
+                        href="/forgot-password"
+                        className="font-semibold text-[#2F4A8A] underline decoration-1 underline-offset-2"
+                      >
+                        Forgot your password?
+                      </Link>
+                    </div>
+                  ) : null}
 
-                {allowSignup ? (
+                  {allowSignup ? (
+                    <div className="text-center text-sm text-gray-600">
+                      <span className="font-semibold text-gray-500">
+                        Don&apos;t have an account?
+                      </span>{' '}
+                      <button
+                        type="button"
+                        className="font-semibold text-[#2F4A8A] underline decoration-1 underline-offset-2"
+                        onClick={() => setMode('signup')}
+                      >
+                        Sign up
+                      </button>
+                    </div>
+                  ) : null}
+                </m.form>
+              ) : (
+                <m.form
+                  key="signup"
+                  id="signup-panel"
+                  {...panelMotion}
+                  onSubmit={handleSignup}
+                  className="space-y-5"
+                >
+                  {/* Not a live region: each field's error <p> now carries role="alert",
+                    so announcing here too would double-speak. Kept as static context. */}
+                  <p className="sr-only">
+                    {Object.values(signupErrors)[0]
+                      ? `Form error: ${Object.values(signupErrors)[0]}`
+                      : ''}
+                  </p>
+                  <InputGroup
+                    id="signup-first"
+                    label="First Name"
+                    name="signup-first"
+                    required
+                    requiredMark
+                    autoComplete="given-name"
+                    value={signupFirst}
+                    setValue={setSignupFirst}
+                    error={signupErrors.first}
+                  />
+
+                  <InputGroup
+                    label="Last Name"
+                    name="signup-last"
+                    required
+                    requiredMark
+                    autoComplete="family-name"
+                    value={signupLast}
+                    setValue={setSignupLast}
+                    error={signupErrors.last}
+                  />
+
+                  <InputGroup
+                    label="Email"
+                    name="signup-email"
+                    required
+                    requiredMark
+                    autoComplete="username"
+                    value={signupEmail}
+                    setValue={setSignupEmail}
+                    type="email"
+                    error={signupErrors.email}
+                  />
+
+                  <InputGroup
+                    label="Password"
+                    name="signup-password"
+                    required
+                    requiredMark
+                    autoComplete="new-password"
+                    value={signupPassword}
+                    setValue={setSignupPassword}
+                    type="password"
+                    showEye
+                    isPasswordVisible={showSignupPassword}
+                    togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
+                    additionalDescribedBy={passwordHelperId}
+                    error={signupErrors.password}
+                  />
+
+                  <InputGroup
+                    label="Confirm Password"
+                    name="signup-confirm"
+                    required
+                    requiredMark
+                    autoComplete="new-password"
+                    value={signupConfirm}
+                    setValue={setSignupConfirm}
+                    type="password"
+                    showEye
+                    isPasswordVisible={showSignupConfirm}
+                    togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
+                    error={signupErrors.confirm}
+                  />
+
+                  <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
+
+                  {renderCaptchaGate()}
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    aria-disabled={loading}
+                    className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
+                  >
+                    {loading ? 'Signing up...' : 'Create Account'}
+                  </Button>
+
                   <div className="text-center text-sm text-gray-600">
-                    <span className="font-semibold text-gray-500">Don&apos;t have an account?</span>{' '}
+                    <span className="font-semibold text-gray-500">Already have an account?</span>{' '}
                     <button
                       type="button"
-                      className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
-                      onClick={() => setMode('signup')}
+                      className="font-semibold text-[#2F4A8A] underline decoration-1 underline-offset-2"
+                      onClick={() => setMode('login')}
                     >
-                      Sign up
+                      Login
                     </button>
                   </div>
-                ) : null}
-              </m.form>
-            ) : (
-              <m.form
-                key="signup"
-                id="signup-panel"
-                {...panelMotion}
-                onSubmit={handleSignup}
-                className="space-y-5"
-              >
-                {/* Not a live region: each field's error <p> now carries role="alert",
-                    so announcing here too would double-speak. Kept as static context. */}
-                <p className="sr-only">
-                  {Object.values(signupErrors)[0]
-                    ? `Form error: ${Object.values(signupErrors)[0]}`
-                    : ''}
-                </p>
-                <InputGroup
-                  id="signup-first"
-                  label="First Name"
-                  name="signup-first"
-                  required
-                  requiredMark
-                  autoComplete="given-name"
-                  value={signupFirst}
-                  setValue={setSignupFirst}
-                  error={signupErrors.first}
-                />
-
-                <InputGroup
-                  label="Last Name"
-                  name="signup-last"
-                  required
-                  requiredMark
-                  autoComplete="family-name"
-                  value={signupLast}
-                  setValue={setSignupLast}
-                  error={signupErrors.last}
-                />
-
-                <InputGroup
-                  label="Email"
-                  name="signup-email"
-                  required
-                  requiredMark
-                  autoComplete="username"
-                  value={signupEmail}
-                  setValue={setSignupEmail}
-                  type="email"
-                  error={signupErrors.email}
-                />
-
-                <InputGroup
-                  label="Password"
-                  name="signup-password"
-                  required
-                  requiredMark
-                  autoComplete="new-password"
-                  value={signupPassword}
-                  setValue={setSignupPassword}
-                  type="password"
-                  showEye
-                  isPasswordVisible={showSignupPassword}
-                  togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
-                  additionalDescribedBy={passwordHelperId}
-                  error={signupErrors.password}
-                />
-
-                <InputGroup
-                  label="Confirm Password"
-                  name="signup-confirm"
-                  required
-                  requiredMark
-                  autoComplete="new-password"
-                  value={signupConfirm}
-                  setValue={setSignupConfirm}
-                  type="password"
-                  showEye
-                  isPasswordVisible={showSignupConfirm}
-                  togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
-                  error={signupErrors.confirm}
-                />
-
-                <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
-
-                {renderCaptchaGate()}
-
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  aria-disabled={loading}
-                  className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
-                >
-                  {loading ? 'Signing up...' : 'Create Account'}
-                </Button>
-
-                <div className="text-center text-sm text-gray-600">
-                  <span className="font-semibold text-gray-500">Already have an account?</span>{' '}
-                  <button
-                    type="button"
-                    className="font-semibold text-[#2F4A8A] underline-offset-2 hover:underline"
-                    onClick={() => setMode('login')}
-                  >
-                    Login
-                  </button>
-                </div>
-              </m.form>
-            )}
-          </AnimatePresence>
+                </m.form>
+              )}
+            </AnimatePresence>
           </LazyMotion>
         </div>
 
         {isDev && (
           <div className="fixed top-6 right-6 z-40 w-32 rounded-2xl border border-white/40 bg-white/95 p-4 text-gray-700 shadow-2xl backdrop-blur-md">
-            <span className="mb-3 block text-center text-2xs font-semibold tracking-[0.35em] text-gray-500 uppercase">
+            <span className="text-2xs mb-3 block text-center font-semibold tracking-[0.35em] text-gray-500 uppercase">
               Test Logins
             </span>
             <div className="flex w-full flex-col gap-2 text-xs font-semibold">

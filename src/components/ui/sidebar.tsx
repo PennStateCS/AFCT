@@ -427,7 +427,7 @@ function SidebarGroupLabel({
       data-slot="sidebar-group-label"
       data-sidebar="group-label"
       className={cn(
-        'text-sidebar-muted-foreground ring-sidebar-ring flex h-9 shrink-0 items-center rounded-md px-2 text-xs font-medium outline-hidden transition-[margin,opacity] duration-200 ease-in-out motion-reduce:transition-none focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
+        'text-sidebar-muted-foreground ring-sidebar-ring flex h-9 shrink-0 items-center rounded-md px-2 text-xs font-medium outline-hidden transition-[margin,opacity] duration-200 ease-in-out focus-visible:ring-2 motion-reduce:transition-none [&>svg]:size-4 [&>svg]:shrink-0',
         'group-data-[collapsible=icon]:-mt-9 group-data-[collapsible=icon]:opacity-0',
         className,
       )}
@@ -584,8 +584,12 @@ function SidebarMenuAction({
       data-slot="sidebar-menu-action"
       data-sidebar="menu-action"
       className={cn(
-        'text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer-hover/menu-button:text-sidebar-accent-foreground absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-md p-0 outline-hidden transition-transform focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
-        // Increases the hit area of the button on mobile.
+        // w-6, not the w-5 this shipped with: 20x20 is under the 24x24 floor WCAG 2.2's
+        // 2.5.8 Target Size (Minimum) sets, and the hit-area extension below was hidden
+        // from `md` up, so a pointer user on a desktop got the 20px box. The icon inside
+        // stays size-4; only the target grew.
+        'text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer-hover/menu-button:text-sidebar-accent-foreground absolute top-1.5 right-1 flex aspect-square w-6 items-center justify-center rounded-md p-0 outline-hidden transition-transform focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
+        // Extends the hit area further on a touch screen, where fingers are not cursors.
         'after:absolute after:-inset-2 md:after:hidden',
         'peer-data-[size=sm]/menu-button:top-1',
         'peer-data-[size=default]/menu-button:top-1.5',

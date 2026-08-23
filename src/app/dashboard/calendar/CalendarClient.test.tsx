@@ -142,6 +142,31 @@ describe('CalendarClient', () => {
     });
   });
 
+  it('announces the month and the outcome from one live region', async () => {
+    renderWithClient(
+      <CalendarClient
+        initialAssignments={[
+          {
+            id: 'a1',
+            title: 'A1',
+            courseId: 'c1',
+            dueDate: new Date('2026-03-10T12:00:00.000Z'),
+            course: { id: 'c1', code: 'CS101', name: 'One' },
+          },
+        ]}
+        initialMonth={new Date('2026-03-01T00:00:00.000Z').toISOString()}
+      />,
+    );
+
+    // Exactly one: the month label used to be a second polite region, so a month change
+    // queued two announcements and the end of the fetch was never announced at all.
+    const live = document.querySelectorAll('[aria-live]');
+    expect(live).toHaveLength(1);
+    expect(live[0]).toHaveAttribute('role', 'status');
+    // The message carries both facts, and ends with a count so "done" is audible.
+    expect(live[0]).toHaveTextContent('March 2026. 1 assignment.');
+  });
+
   it('shows loading message while request is in flight', async () => {
     let resolveAssignments: ((value: unknown) => void) | null = null;
     fetchMock().mockImplementation((url: string) => {
