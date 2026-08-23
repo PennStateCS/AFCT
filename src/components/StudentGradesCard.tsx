@@ -4,10 +4,10 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Table } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { formatDateInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import LoadingSpinner from '@/components/ui/loading-spinner';
@@ -88,20 +88,19 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
   );
 
   return (
-    <Card>
-      <CardHeader className="pb-0">
-        <CardTitle className="flex items-center gap-2 text-xl">
-          <Table className="h-5 w-5" />
-          Grades
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 px-3 py-3">
+    // No outer Card: this is the page's active panel, and wrapping it put a bounded thing
+    // inside a bounded thing. The rows keep their own borders; they are real objects.
+    <section className="space-y-4" aria-labelledby="student-grades-title">
+      <h2 id="student-grades-title" className="text-xl font-semibold">
+        Grades
+      </h2>
+      <div className="space-y-2">
         {loading ? (
           <LoadingSpinner label="Loading grades" fullScreen={false} className="min-h-32" />
         ) : error ? (
           <div role="alert" className="text-destructive text-sm">
-          {error}
-        </div>
+            {error}
+          </div>
         ) : assignments.length === 0 ? (
           <div className="text-muted-foreground text-sm">No graded assignments available yet.</div>
         ) : (
@@ -119,7 +118,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                         : current.filter((id) => id !== assignment.id),
                     )
                   }
-                  className="border-border/80 bg-card hover:border-primary hover:bg-primary/5 overflow-hidden rounded-xl border border-l-4 border-l-blue-600 shadow-sm transition hover:shadow-md"
+                  className="border-border border-l-primary bg-card hover:border-primary/50 hover:bg-primary/5 overflow-hidden rounded-lg border border-l-4 shadow-xs transition-colors"
                 >
                   <CardHeader className="p-0">
                     <div className="flex items-center justify-between gap-3 px-3 py-1">
@@ -219,13 +218,13 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="border-border rounded-full border px-2 py-1 text-xs font-semibold text-foreground">
+                            <span className="border-border text-foreground rounded-full border px-2 py-1 text-xs font-semibold">
                               {problem.grade === null
                                 ? `-/${problem.maxPoints}`
                                 : `${problem.grade}/${problem.maxPoints}`}{' '}
                               pts
                             </span>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <ChevronRight className="text-muted-foreground h-4 w-4" />
                           </div>
                         </button>
                       ))}
@@ -236,7 +235,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

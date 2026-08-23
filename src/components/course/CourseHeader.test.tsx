@@ -4,7 +4,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CourseHeader } from './CourseHeader';
+import { CourseHeaderContent } from './CourseHeader';
 import type { FullCourse } from '@/types/course';
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -59,9 +59,9 @@ const mockCourse: FullCourse = {
   ],
 };
 
-describe('CourseHeader', () => {
+describe('CourseHeaderContent', () => {
   it('renders course metadata, status, and staff info for instructors', () => {
-    render(<CourseHeader course={mockCourse} isStudent={false} />);
+    render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
 
     expect(screen.getByText(/CMPSC 431/)).toBeInTheDocument();
     expect(screen.getByText('Software Engineering')).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('CourseHeader', () => {
   });
 
   it('hides the staff/date line for students', () => {
-    render(<CourseHeader course={mockCourse} isStudent />);
+    render(<CourseHeaderContent course={mockCourse} isStudent />);
 
     // Title and badges still render, but the faculty/TA line does not.
     expect(screen.getByText('Software Engineering')).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe('CourseHeader', () => {
   });
 
   it('omits the TAs label when the course has no TAs', () => {
-    render(<CourseHeader course={mockCourse} isStudent={false} />);
+    render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
     expect(screen.queryByText('TAs:')).not.toBeInTheDocument();
   });
 
@@ -94,7 +94,7 @@ describe('CourseHeader', () => {
         { id: 'ta-1', firstName: 'Alan', lastName: 'Turing', role: 'STUDENT', courseRole: 'TA' },
       ],
     };
-    render(<CourseHeader course={withTa} isStudent={false} />);
+    render(<CourseHeaderContent course={withTa} isStudent={false} />);
     expect(screen.getByText('TAs:')).toBeInTheDocument();
     expect(screen.getByText('Alan Turing')).toBeInTheDocument();
   });
@@ -103,7 +103,7 @@ describe('CourseHeader', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<CourseHeader course={mockCourse} isStudent={false} />);
+    render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
 
     // Displayed grouped as ABCD-2345 for readability.
     expect(screen.getByText('ABCD-2345')).toBeInTheDocument();

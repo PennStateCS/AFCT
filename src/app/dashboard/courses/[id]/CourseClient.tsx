@@ -15,7 +15,6 @@ import {
 } from '@/hooks/use-course';
 import { useCourseHandlers } from '@/lib/course-handlers';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { CourseHeader } from '@/components/course/CourseHeader';
 import { StudentCourseView } from '@/components/course/StudentCourseView';
 import { AdminCourseView } from '@/components/course/AdminCourseView';
 import LoadingSpinner from '@/components/ui/loading-spinner';
@@ -167,16 +166,12 @@ export default function CourseClient({ initialCourse }: { initialCourse?: FullCo
     return <LoadingSpinner label="Loading" fullScreen={false} className="min-h-[70vh]" />;
 
   return (
+    // No sr-only <h1> here. CourseHeaderContent's title already carries
+    // role="heading" aria-level={1}, so this one made every course page announce two
+    // level-one headings with the same text. Both views render that header now.
     <div className="space-y-6">
-      <h1 className="sr-only">
-        {course.code}: {course.name}
-      </h1>
-
       {isStudent ? (
-        <>
-          <CourseHeader course={course} isStudent={isStudent} />
-          <StudentCourseView course={course} tab={tab as TabType} onTabChange={handleTabChange} />
-        </>
+        <StudentCourseView course={course} tab={tab as TabType} onTabChange={handleTabChange} />
       ) : (
         <AdminCourseView
           course={course}

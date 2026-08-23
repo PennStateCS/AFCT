@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Book, Check, Copy, Link as LinkIcon } from 'lucide-react';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { FullCourse } from '@/types/course';
@@ -183,16 +183,5 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
         </div>
       )}
     </>
-  );
-}
-
-/** Standalone header card (student view; the admin view embeds the tab bar). */
-export function CourseHeader({ course, isStudent }: CourseHeaderProps) {
-  return (
-    <Card>
-      <CardHeader className="grid grid-cols-1 gap-3">
-        <CourseHeaderContent course={course} isStudent={isStudent} />
-      </CardHeader>
-    </Card>
   );
 }
