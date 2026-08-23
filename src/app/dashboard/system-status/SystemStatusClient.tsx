@@ -10,6 +10,7 @@ import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import {
+  Activity,
   Server,
   Database,
   Container,
@@ -144,7 +145,15 @@ export default function SystemStatusClient() {
           workspace itself: the page-sized card put a dashboard inside a card. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">System Status</h1>
+          <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+            {/* Decorative: the heading beside it already says what this is. Activity, the
+                icon the sidebar uses for this route, in the neutral muted tile the other
+                system pages use. */}
+            <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+              <Activity className="size-5" aria-hidden="true" />
+            </span>
+            <span>System Status</span>
+          </h1>
             <Badge variant={dbOk ? 'success' : 'danger'} title={summary?.db.message || ''}>
               DB {dbOk ? 'OK' : 'DOWN'}
               {summary?.db.message ? (

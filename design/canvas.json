@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1280, "h": 900, "title": "A · Focused practice" },
+    { "file": "Workbench.dc.html", "x": 1400, "y": 0, "w": 1280, "h": 900, "title": "B · Workbench" },
+    { "file": "Progress.dc.html", "x": 2800, "y": 0, "w": 1280, "h": 900, "title": "C · Progress first" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -190,
+      "w": 520,
+      "text": "Three directions for the student's assignment screen.\n\nSame tokens as the app (Geist, 0.65rem radii, the blue primary and brand teal), so the difference you are judging is layout and hierarchy, not palette.\n\nPick one and I will build it out properly."
+    },
+    {
+      "id": "note-a",
+      "x": 0,
+      "y": 960,
+      "w": 380,
+      "text": "A · Focused practice\n\nOne problem at a time, and the autograder's counterexample is the biggest thing on the page.\n\nFor: the feedback loop is the product, and this makes it unmissable.\nAgainst: no sense of the whole assignment; you navigate blind."
+    },
+    {
+      "id": "note-b",
+      "x": 1400,
+      "y": 960,
+      "w": 380,
+      "text": "B · Workbench\n\nThree panes: every problem on the left, attempt history in the middle, the facts you keep checking on the right.\n\nFor: nothing is ever more than one click away, and attempt history is first-class.\nAgainst: dense, and the least forgiving on a narrow screen."
+    },
+    {
+      "id": "note-c",
+      "x": 2800,
+      "y": 960,
+      "w": 380,
+      "text": "C · Progress first\n\nA card per problem. The one needing attention is twice the size and carries its counterexample inline.\n\nFor: you see where you stand the moment you land, and it scales down to one column cleanly.\nAgainst: the feedback is a summary, so real work still happens a click deeper."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

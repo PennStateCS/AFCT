@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Geist, ui-sans-serif, system-ui, sans-serif; background: oklch(0.9401 0 0); color: oklch(0 0 0); }
+    a { color: oklch(0.37 0.1221 262.228); } a:hover { color: oklch(0.30 0.12 262.228); }
+    .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+    .card { background: oklch(1 0 0); border: 1px solid oklch(0.92 0.004 286.32); border-radius: 12px; }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 900px; display: flex; flex-direction: column; overflow: hidden;">
+
+  <!-- Header carries the state of the whole assignment, not just a title. -->
+  <div style="padding: 28px 44px 22px; background: oklch(1 0 0); border-bottom: 1px solid oklch(0.92 0.004 286.32); display: flex; align-items: flex-end; gap: 28px;">
+    <div style="flex-grow: 1;">
+      <div style="font-size: 13px; color: oklch(0.329 0 0); margin-bottom: 6px;">Theory of Computation</div>
+      <h1 style="margin: 0 0 12px; font-size: 28px; font-weight: 600; letter-spacing: -0.02em;">Finite Automata</h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="display: flex; gap: 4px;">
+          <div style="width: 54px; height: 6px; border-radius: 3px; background: oklch(0.55 0.14 150);"></div>
+          <div style="width: 54px; height: 6px; border-radius: 3px; background: oklch(0.55 0.14 150);"></div>
+          <div style="width: 54px; height: 6px; border-radius: 3px; background: oklch(0.75 0.16 27.325);"></div>
+          <div style="width: 54px; height: 6px; border-radius: 3px; background: oklch(0.88 0.01 286);"></div>
+          <div style="width: 54px; height: 6px; border-radius: 3px; background: oklch(0.88 0.01 286);"></div>
+        </div>
+        <div style="font-size: 13px; color: oklch(0.329 0 0);">2 of 5 solved</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 30px; padding-bottom: 4px;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <div style="font-size: 12px; color: oklch(0.329 0 0);">Due</div>
+        <div style="font-size: 15px; font-weight: 500;">Friday, 5:00 PM</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <div style="font-size: 12px; color: oklch(0.329 0 0);">Earned so far</div>
+        <div style="font-size: 15px; font-weight: 500;">40 of 100</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-grow: 1; padding: 26px 44px; overflow: hidden;">
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px;">
+
+      <!-- Solved: quiet, done, out of the way. -->
+      <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(0.55 0.14 150)" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg>
+          <div style="font-size: 13px; font-weight: 600; color: oklch(0.45 0.13 150);">Solved</div>
+          <div style="flex-grow: 1;"></div>
+          <div style="font-size: 13px; color: oklch(0.329 0 0);">20 / 20</div>
+        </div>
+        <div style="font-size: 16px; font-weight: 500;">Even number of 1s</div>
+        <div style="font-size: 13px; color: oklch(0.329 0 0);">Correct on the first attempt.</div>
+      </div>
+
+      <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(0.55 0.14 150)" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg>
+          <div style="font-size: 13px; font-weight: 600; color: oklch(0.45 0.13 150);">Solved</div>
+          <div style="flex-grow: 1;"></div>
+          <div style="font-size: 13px; color: oklch(0.329 0 0);">20 / 20</div>
+        </div>
+        <div style="font-size: 16px; font-weight: 500;">Ends in a double letter</div>
+        <div style="font-size: 13px; color: oklch(0.329 0 0);">Correct after 2 attempts.</div>
+      </div>
+
+      <!-- The one that needs you: taller, louder, carries the counterexample inline. -->
+      <div style="grid-row: span 2; background: oklch(1 0 0); border: 1.5px solid oklch(0.80 0.09 27.325); border-radius: 12px; padding: 22px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(0.50 0.20 27.325)" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+          <div style="font-size: 13px; font-weight: 600; color: oklch(0.45 0.20 27.325);">Needs another look</div>
+          <div style="flex-grow: 1;"></div>
+          <div style="font-size: 13px; color: oklch(0.329 0 0);">1 try left</div>
+        </div>
+        <div style="font-size: 18px; font-weight: 600;">Strings ending in 01</div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.55; color: oklch(0.329 0 0); text-wrap: pretty;">A deterministic automaton over {0, 1} accepting exactly the strings ending in 01.</p>
+
+        <div style="background: oklch(0.98 0.012 27.325); border: 1px solid oklch(0.88 0.03 27.325); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="font-size: 12px; font-weight: 600; letter-spacing: 0.05em; color: oklch(0.45 0.20 27.325);">FROM YOUR LAST ATTEMPT</div>
+          <div style="font-size: 14px; line-height: 1.55;">Accepts <span class="mono" style="background: oklch(1 0 0); border: 1px solid oklch(0.88 0.03 27.325); border-radius: 5px; padding: 1px 6px; font-size: 13px;">0101</span> but should not.</div>
+        </div>
+
+        <div style="flex-grow: 1;"></div>
+        <button style="font-family: inherit; font-size: 14px; font-weight: 600; height: 44px; border-radius: 10px; border: none; background: oklch(0.37 0.1221 262.228); color: #fff; cursor: pointer; width: 100%;">Open this problem</button>
+      </div>
+
+      <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(0.329 0 0)" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+          <div style="font-size: 13px; font-weight: 500; color: oklch(0.329 0 0);">Not started</div>
+          <div style="flex-grow: 1;"></div>
+          <div style="font-size: 13px; color: oklch(0.329 0 0);">20 pts</div>
+        </div>
+        <div style="font-size: 16px; font-weight: 500;">Divisible by three</div>
+        <div style="font-size: 13px; color: oklch(0.329 0 0);">3 attempts allowed.</div>
+      </div>
+
+      <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(0.329 0 0)" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+          <div style="font-size: 13px; font-weight: 500; color: oklch(0.329 0 0);">Not started</div>
+          <div style="flex-grow: 1;"></div>
+          <div style="font-size: 13px; color: oklch(0.329 0 0);">20 pts</div>
+        </div>
+        <div style="font-size: 16px; font-weight: 500;">No two consecutive 0s</div>
+        <div style="font-size: 13px; color: oklch(0.329 0 0);">3 attempts allowed.</div>
+      </div>
+
+      <div class="card" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(0.329 0 0)" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+          <div style="font-size: 13px; font-weight: 500; color: oklch(0.329 0 0);">Not started</div>
+          <div style="flex-grow: 1;"></div>
+          <div style="font-size: 13px; color: oklch(0.329 0 0);">20 pts</div>
+        </div>
+        <div style="font-size: 16px; font-weight: 500;">Binary palindromes</div>
+        <div style="font-size: 13px; color: oklch(0.329 0 0);">Unlimited attempts.</div>
+      </div>
+
+      <div class="card" style="padding: 20px; display: flex; align-items: center; gap: 12px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(0.329 0 0)" stroke-width="1.8"><path d="M12 8v8M8 12h8"/><circle cx="12" cy="12" r="9"/></svg>
+        <div style="font-size: 13px; color: oklch(0.329 0 0); line-height: 1.5;">Submit from the AFCT Submission Center in JFLAP.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

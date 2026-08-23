@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bug, Palette, Type as TypeIcon, FileText } from 'lucide-react';
+import { Bug, Palette, Type as TypeIcon, FileText, Wrench } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -147,8 +147,17 @@ export default function DevelopmentTestsClient() {
     <div className="space-y-6">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 id="development-tests-title" className="text-2xl font-semibold tracking-tight">
-            Development Tests
+          <h1
+            id="development-tests-title"
+            className="flex items-center gap-3 text-2xl font-semibold tracking-tight"
+          >
+            {/* Decorative: the heading beside it already says what this is. Wrench, the icon
+                the sidebar uses for this route, in the neutral muted tile the other system
+                pages use. */}
+            <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+              <Wrench className="size-5" aria-hidden="true" />
+            </span>
+            <span>Development Tests</span>
           </h1>
           <Badge variant="info">Dev Only</Badge>
         </div>
@@ -186,8 +195,8 @@ export default function DevelopmentTestsClient() {
 
             <TabsContent value="tokens" className="space-y-4">
               <SectionHeading id="design-tokens-title" title="Design Tokens">
-                Live reference for the semantic colour tokens. Toggle the theme to compare light
-                and dark.
+                Live reference for the semantic colour tokens. Toggle the theme to compare light and
+                dark.
               </SectionHeading>
               <DesignTokens />
             </TabsContent>

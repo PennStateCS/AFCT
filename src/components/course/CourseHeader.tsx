@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Check, Copy, Link as LinkIcon } from 'lucide-react';
+import { Book, Check, Copy, Link as LinkIcon } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -138,11 +138,19 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
           id="course-page-title"
           role="heading"
           aria-level={1}
-          className="text-2xl leading-tight font-semibold tracking-tight"
+          className="flex items-center gap-3 text-2xl leading-tight font-semibold tracking-tight"
         >
-          <span className="text-muted-foreground">{course.code}</span>
-          <span className="text-muted-foreground">: </span>
-          {course.name}
+          {/* Decorative: the heading beside it already names the course. The same emerald
+              Book as the Courses list and the dashboard's Courses module, so a course reads
+              as the same kind of thing wherever it appears. */}
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <Book className="size-5" aria-hidden="true" />
+          </span>
+          <span>
+            <span className="text-muted-foreground">{course.code}</span>
+            <span className="text-muted-foreground">: </span>
+            {course.name}
+          </span>
         </CardTitle>
 
         <div className="flex flex-wrap items-center gap-2">
