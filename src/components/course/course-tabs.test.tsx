@@ -169,6 +169,35 @@ describe('TabRail collapse', () => {
     expect(screen.getAllByRole('tab')).toHaveLength(3);
   });
 
+  it('renders the rail as one card of full-bleed rows, not a tray of pills', () => {
+    const { container } = renderRail();
+    const shell = container.querySelector('[data-slot="tabs-list"]')?.parentElement as HTMLElement;
+    // The shell owns the surface and the radius; the rows own neither.
+    expect(shell.className).toContain('bg-card');
+    expect(shell.className).toContain('overflow-hidden');
+    expect(shell.className).not.toContain('bg-muted/40');
+
+    const alpha = screen.getByRole('tab', { name: 'Alpha, 3' });
+    expect(alpha.className).toContain('rounded-none');
+    expect(alpha.className).toContain('h-14');
+    // The active row tints across the whole width and marks its left edge with a 3px bar,
+    // rather than floating a rounded pill inside a padded panel.
+    expect(alpha.className).toContain('data-[state=active]:bg-primary/10');
+    expect(alpha.className).toContain('data-[state=active]:before:bg-primary');
+    // Separators between rows, closed off by the shell's own border at the bottom.
+    expect(alpha.className).toContain('border-b');
+    expect(alpha.className).toContain('last:border-b-0');
+  });
+
+  it('keeps the left marker on the active row while collapsed', () => {
+    renderRail();
+    fireEvent.click(collapseButton());
+    // aria-selected, not data-state: the tooltip wrapper owns data-state here.
+    expect(screen.getByRole('tab', { name: 'Alpha, 3' }).className).toContain(
+      'aria-selected:before:bg-primary',
+    );
+  });
+
   it('drops the header label entirely when collapsed', () => {
     renderRail();
     fireEvent.click(collapseButton());
@@ -296,7 +325,7 @@ describe('LocalNavLayout', () => {
 
     // The grid column is driven by this variable, so the rail and the workspace beside it
     // can never disagree about how much room it takes.
-    expect(layout().style.getPropertyValue('--local-nav-width')).toBe('12rem');
+    expect(layout().style.getPropertyValue('--local-nav-width')).toBe('15rem');
     fireEvent.click(screen.getByRole('button', { name: 'Collapse demo menu' }));
     expect(layout().style.getPropertyValue('--local-nav-width')).toBe('3.5rem');
   });

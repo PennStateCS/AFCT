@@ -211,25 +211,44 @@ export function TabBar({
   );
 }
 
-// The vertical rail (see {@link CourseTabBar}). Light and quiet on purpose: the global
-// sidebar is the dark one, and two charcoal columns would read as two applications. That
-// holds when it is collapsed too: it narrows to the sidebar's rhythm but keeps its own
-// muted surface, so the hierarchy between global and local navigation survives.
+// The vertical rail (see {@link CourseTabBar}).
+//
+// One navigation card, not a tray of pills. It used to be a muted panel with 10px of inset
+// and seven rounded rows floating inside it, which read as a widget parked beside the page.
+// It is now the card surface with full-bleed rows and hairline separators, so it reads as a
+// menu. Light in both themes on purpose: the global sidebar is the dark one, and two
+// charcoal columns would look like two applications.
 const RAIL_TRIGGER_CLASS = [
   // `group` so the count badge can react to the item's own active state.
   // flex-none matters: the base TabsTrigger carries flex-1, and in a COLUMN flex container
-  // that makes flex-basis govern the main axis, which is height. h-10 was being ignored and
-  // every row sat at its content height instead.
-  'group flex h-10 w-full flex-none items-center gap-2 rounded-md text-sm',
+  // that makes flex-basis govern the main axis, which is height. h-14 would be ignored and
+  // every row would sit at its content height instead.
+  // `relative` anchors the active indicator; rounded-none because the shell owns the radius.
+  'group relative flex h-14 w-full flex-none items-center gap-3 rounded-none text-sm',
   'whitespace-nowrap',
-  'text-muted-foreground hover:bg-accent hover:text-foreground',
-  // Active: a soft tint of the primary, not a filled row. The dark pair is spelled out
-  // because primary at 10% behind primary text is 2.8:1 on a dark card, under the floor.
-  // Unchanged when collapsed: a full cobalt fill would outrank the global sidebar.
-  'data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:font-medium',
+  // Hairline between rows. The shell's own border closes the bottom, so the last row drops
+  // its divider rather than doubling up on it.
+  'border-x-0 border-t-0 border-b border-border/60 last:border-b-0',
+  // Readable at rest. These were muted, which left seven quiet grey labels looking disabled
+  // beside the workspace; the dark value is spelled out because the base trigger mutes it
+  // there. Only the ACTIVE row is coloured.
+  'text-foreground dark:text-foreground font-medium',
+  'hover:bg-muted/50 hover:text-foreground',
+  // Active: the whole row tints, rather than a pill inset inside a panel. The dark pair is
+  // spelled out because primary at 10% behind primary text is 2.8:1 on a dark card, under
+  // the floor.
+  'data-[state=active]:bg-primary/10 data-[state=active]:text-primary',
   'dark:data-[state=active]:bg-blue-950/40 dark:data-[state=active]:text-blue-300',
   'data-[state=active]:shadow-none',
-  'border-0 bg-transparent transition-colors',
+  // The 3px marker at the very left edge of the active row. A pseudo-element so it costs
+  // the row no width and cannot shift the icon: the row's own padding stays put whether or
+  // not it is active.
+  "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:content-['']",
+  'data-[state=active]:before:bg-primary dark:data-[state=active]:before:bg-blue-300',
+  // The shell clips (overflow-hidden), so a ring drawn outside a full-bleed row would lose
+  // its left and right edges. Inset, and at full strength since it is now on the card.
+  'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
+  'bg-transparent transition-colors',
 ].join(' ');
 
 // The same active treatment, keyed off aria-selected instead of data-state.
@@ -244,8 +263,9 @@ const RAIL_TRIGGER_CLASS = [
 // a modifier with the base trigger so tailwind-merge drops the base's active background.
 // Change that and the base bg-background comes back and wins on source order.
 const RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS = [
-  'aria-selected:bg-primary/10 aria-selected:text-primary aria-selected:font-medium',
+  'aria-selected:bg-primary/10 aria-selected:text-primary',
   'dark:aria-selected:bg-blue-950/40 dark:aria-selected:text-blue-300',
+  'aria-selected:before:bg-primary dark:aria-selected:before:bg-blue-300',
 ].join(' ');
 
 /**
@@ -283,9 +303,11 @@ export function TabRail({
   const collapsed = collapse?.collapsed ?? false;
 
   return (
-    // A surface rather than a rule down the page: the divider split the workspace in two
-    // instead of grouping the items. self-start so it stays the height of its own list
-    // rather than stretching beside a long table.
+    // One card. No padding of its own: the rows run edge to edge, which is what makes the
+    // active tint and its marker reach the rail's own border instead of stopping short.
+    // overflow-hidden is what keeps them inside the radius (and why the rows above use an
+    // inset focus ring). self-start so it stays the height of its own list rather than
+    // stretching beside a long table.
     //
     // The container is a plain div, not the TabsList: the collapse control is not a tab,
     // and a non-tab child of role="tablist" is a real accessibility problem rather than a
@@ -298,11 +320,11 @@ export function TabRail({
     //
     // w-full throughout: the width is the grid column's, set by LocalNavLayout, so the rail
     // and the workspace beside it can never disagree about how much room it is taking.
-    <div className="bg-muted/40 border-border/60 flex w-full flex-col gap-1 self-start overflow-hidden rounded-lg border p-2.5 lg:sticky lg:top-6">
+    <div className="bg-card border-border flex w-full flex-col self-start overflow-hidden rounded-lg border p-0 shadow-xs lg:sticky lg:top-6">
       <RailHeader menuLabel={menuLabel} collapsed={collapsed} onToggle={collapse?.toggle} />
       <TabsList
         aria-label={ariaLabel}
-        className="h-auto w-full flex-col items-stretch justify-start gap-1 border-0 bg-transparent p-0"
+        className="h-auto w-full flex-col items-stretch justify-start gap-0 rounded-none border-0 bg-transparent p-0"
       >
         {tabs.map(({ value: tabValue, label, Icon, count }) => {
           const trigger = (
@@ -311,7 +333,7 @@ export function TabRail({
               value={tabValue}
               className={cn(
                 RAIL_TRIGGER_CLASS,
-                collapsed ? `justify-center px-0 ${RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS}` : 'px-2.5',
+                collapsed ? `justify-center px-0 ${RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS}` : 'px-5',
               )}
               {...(linkPanels
                 ? { id: `tab-${tabValue}`, 'aria-controls': `panel-${tabValue}` }
@@ -321,14 +343,14 @@ export function TabRail({
               // collapsed rather than being dropped.
               aria-label={count === undefined ? undefined : `${label}, ${count}`}
             >
-              {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
+              {Icon ? <Icon className="size-5 shrink-0" aria-hidden="true" /> : null}
               <span className={collapsed ? 'sr-only' : 'truncate'}>{label}</span>
               {count !== undefined && !collapsed ? (
-                // Filled and borderless at rest: the outline made seven quiet counts read
-                // as seven controls. Only the active row's count picks up the tint. Dropped
-                // entirely when collapsed: a pill beside a centred icon at 36px is a
-                // smudge, and the count is already in the name and the tooltip.
-                <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary ml-auto min-w-5 rounded-full border-0 px-1.5 text-center text-xs leading-5 font-medium dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300">
+                // Filled and borderless: the outline made seven quiet counts read as seven
+                // controls. Only the active row's count picks up the tint. Dropped entirely
+                // when collapsed: a pill beside a centred icon at 56px is a smudge, and the
+                // count is already in the name and the tooltip.
+                <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full border-0 px-1.5 text-xs font-medium dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300">
                   {count}
                 </span>
               ) : null}
@@ -354,8 +376,8 @@ export function TabRail({
 
 /**
  * The rail's header: its name on the left, the collapse control on the right, in one row
- * the same height as a nav item. The toggle used to sit alone on a row of its own, which
- * read as an unfinished corner rather than a deliberate header.
+ * above the list. The toggle used to sit alone on a row of its own, which read as an
+ * unfinished corner rather than a deliberate header.
  *
  * The same control in both states, so focus stays exactly where it was when it is pressed:
  * only the icon and the name change. Collapsed, the label is not rendered at all (rather
@@ -381,15 +403,15 @@ function RailHeader({
   return (
     <div
       className={cn(
-        'flex h-10 flex-none items-center',
-        collapsed ? 'justify-center' : 'justify-between pr-1 pl-2.5',
+        'border-border/60 flex h-12 flex-none items-center border-b',
+        collapsed ? 'justify-center' : 'justify-between pr-2 pl-4',
       )}
     >
       {/* Plain text, not a heading: it names the control beside it, and the tablist below
-          already carries its own accessible name. A step down from the nav rows' text-sm
-          so it reads as a label rather than an eighth item. */}
+          already carries its own accessible name. Same size as a nav row but bolder, so it
+          reads as the menu's title without competing with the page heading. */}
       {collapsed ? null : (
-        <span className="text-muted-foreground truncate text-xs font-semibold">{menuLabel}</span>
+        <span className="text-foreground truncate text-sm font-semibold">{menuLabel}</span>
       )}
       {onToggle ? (
         <Tooltip>

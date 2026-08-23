@@ -21,10 +21,14 @@ import { cn } from '@/lib/utils';
 /** Where the preference is remembered. One key, so the choice follows the user between pages. */
 export const LOCAL_NAV_COLLAPSED_KEY = 'afct:local-nav-collapsed';
 
-// 12rem is the rail's established width. 3.5rem matches the global sidebar's icon rail, so
-// the two collapsed columns share a rhythm: 56px holds a 40px row with the rail's own
-// 10px padding either side, which centres a size-4 icon without clipping its focus ring.
-const EXPANDED_WIDTH = '12rem';
+// 15rem gives the rail nearly the presence of the global sidebar while staying clearly
+// secondary to it. It was 12rem, sized for a rail that had to justify every pixel it took
+// from a wide table; that argument went away when the rail became collapsible, and anyone
+// who wants the width back can take all of it rather than the 3rem this costs.
+//
+// 3.5rem matches the global sidebar's icon rail, so the two collapsed columns share a
+// rhythm: 56px centres a size-5 icon in a full-width row with room for its focus ring.
+const EXPANDED_WIDTH = '15rem';
 const COLLAPSED_WIDTH = '3.5rem';
 
 type LocalNavCollapseValue = {
