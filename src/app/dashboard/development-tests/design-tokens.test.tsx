@@ -99,7 +99,11 @@ describe('DesignTokens', () => {
       'bg-status-info-solid',
       'bg-status-neutral-solid',
     ]) {
-      expect(container.querySelector(`.${cls.replace(/\//g, '\\/')}`)).not.toBeNull();
+      // CSS.escape, not a hand-rolled replace: the previous `.replace(/\//g, '\\/')`
+      // escaped forward slashes and nothing else, which CodeQL correctly flagged as an
+      // incomplete escape. These class names contain no slashes at all, so it was never
+      // doing anything; this is simply the right way to ask.
+      expect(container.querySelector(`.${CSS.escape(cls)}`)).not.toBeNull();
     }
   });
 
