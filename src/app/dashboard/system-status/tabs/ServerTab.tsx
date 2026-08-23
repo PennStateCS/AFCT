@@ -6,7 +6,16 @@ import { Button } from '@/components/ui/button';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { ServerStatusResponse, IpAddr } from '@/lib/status/types';
-import { Loading, Stat, Meter, Section, Sparkline, useStatusQuery, copy } from '../status-ui';
+import {
+  Loading,
+  Stat,
+  StatGrid,
+  Meter,
+  Section,
+  Sparkline,
+  useStatusQuery,
+  copy,
+} from '../status-ui';
 import { formatBytes, formatUptime, toTitleCase } from '../status-format';
 import { hostCheckedMessage, hostNotices, hostUnavailableMessage } from '../host-notices';
 import { readHistory } from '../use-trends';
@@ -49,87 +58,102 @@ export default function ServerTab({
   }
 
   return (
-    <div className="max-w-xl space-y-8">
+    // The tab as a whole, not each section. Below this the individual sections narrow
+    // themselves to what they hold: readings want to sit near their labels, notices want a
+    // readable line, and neither wants the full width of a 1920px monitor.
+    <div className="max-w-5xl space-y-8">
       <Section title="Performance">
-        <div className="space-y-2">
-          <Stat
-            label="Arch / CPUs"
-            value={`${system.arch ?? '—'} / ${system.cpuCount ?? system.cpus?.length ?? '—'}`}
-          />
-          <Stat label="Uptime" value={formatUptime(system.uptime)} />
-          <Stat
-            label="Memory"
-            value={
-              system.memory
-                ? `${formatBytes(system.memory.total)} total — ${formatBytes(system.memory.free)} free`
-                : '—'
-            }
-          />
-          <Stat
-            label="Disk IO"
-            value={
-              s?.diskIo
-                ? `${formatBytes(s.diskIo.readBytesPerSec)}/s read — ${formatBytes(s.diskIo.writeBytesPerSec)}/s write`
-                : '—'
-            }
-          />
-        </div>
+        {/* Readings and their meters on one side, the trend over the chosen window on the
+            other. Stacked below lg, where two of either would be too narrow to read. */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Stat
+                label="Arch / CPUs"
+                value={`${system.arch ?? '—'} / ${system.cpuCount ?? system.cpus?.length ?? '—'}`}
+              />
+              <Stat label="Uptime" value={formatUptime(system.uptime)} />
+              <Stat
+                label="Memory"
+                value={
+                  system.memory
+                    ? `${formatBytes(system.memory.total)} total, ${formatBytes(system.memory.free)} free`
+                    : '—'
+                }
+              />
+              <Stat
+                label="Disk IO"
+                value={
+                  s?.diskIo
+                    ? `${formatBytes(s.diskIo.readBytesPerSec)}/s read, ${formatBytes(s.diskIo.writeBytesPerSec)}/s write`
+                    : '—'
+                }
+              />
+            </div>
 
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">CPU (process)</span>
-              <span>{Math.round(s?.cpuProcessPct ?? 0)}%</span>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">CPU (process)</span>
+                  <span>{Math.round(s?.cpuProcessPct ?? 0)}%</span>
+                </div>
+                <Meter pct={s?.cpuProcessPct} label="CPU process usage" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Memory (process / system)</span>
+                  <span>{(s?.memProcessPctOfSystem ?? 0).toFixed(1)}%</span>
+                </div>
+                <Meter pct={s?.memProcessPctOfSystem} label="Process memory usage" />
+              </div>
             </div>
-            <Meter pct={s?.cpuProcessPct} label="CPU process usage" />
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Memory (process / system)</span>
-              <span>{(s?.memProcessPctOfSystem ?? 0).toFixed(1)}%</span>
-            </div>
-            <Meter pct={s?.memProcessPctOfSystem} label="Process memory usage" />
-          </div>
-        </div>
 
-        <div className="space-y-3">
-          <div className="space-y-2 rounded border p-3">
-            <div className="text-muted-foreground text-xs font-semibold">
-              CPU % (last {windowHours}h)
+          {/* The SVG is a fixed size rather than a fluid one, so the width here is chosen to
+              fit the narrowest this column gets: 1280 with both the sidebar and the status
+              rail open. Widen it and it overflows the card there rather than reflowing. */}
+          <div className="space-y-3">
+            <div className="space-y-2 rounded border p-3">
+              <div className="text-muted-foreground text-xs font-semibold">
+                CPU % (last {windowHours}h)
+              </div>
+              <Sparkline points={sparklines.cpu} width={240} />
             </div>
-            <Sparkline points={sparklines.cpu} />
-          </div>
-          <div className="space-y-2 rounded border p-3">
-            <div className="text-muted-foreground text-xs font-semibold">
-              Mem % (last {windowHours}h)
+            <div className="space-y-2 rounded border p-3">
+              <div className="text-muted-foreground text-xs font-semibold">
+                Mem % (last {windowHours}h)
+              </div>
+              <Sparkline points={sparklines.mem} width={240} />
             </div>
-            <Sparkline points={sparklines.mem} />
-          </div>
-          <div className="space-y-2 rounded border p-3">
-            <div className="text-muted-foreground text-xs font-semibold">
-              Latency (ms) (last {windowHours}h)
+            <div className="space-y-2 rounded border p-3">
+              <div className="text-muted-foreground text-xs font-semibold">
+                Latency (ms) (last {windowHours}h)
+              </div>
+              <Sparkline points={sparklines.latency} width={240} />
             </div>
-            <Sparkline points={sparklines.latency} />
           </div>
         </div>
       </Section>
 
       <Section title="This server">
         {host.available ? (
-          <ul className="space-y-2">
+          <ul className="max-w-3xl space-y-2">
             {hostNotices(host).map((notice) => (
               <li
                 key={notice.id}
                 role={notice.tone === 'warn' ? 'alert' : undefined}
+                // Warning colours, not destructive ones. A pending restart or a waiting
+                // security update is something to schedule; red is reserved for what has
+                // already gone wrong, and spending it here leaves nothing louder for that.
                 className={
                   notice.tone === 'warn'
-                    ? 'border-destructive/40 bg-destructive/5 space-y-1 rounded border p-4'
+                    ? 'border-status-warning-border bg-status-warning-bg space-y-1 rounded border p-4'
                     : 'space-y-1 rounded border p-4'
                 }
               >
                 <div className="flex items-center gap-2 font-medium">
                   {notice.tone === 'warn' ? (
-                    <TriangleAlert className="size-4" aria-hidden />
+                    <TriangleAlert className="text-status-warning size-4" aria-hidden />
                   ) : notice.tone === 'ok' ? (
                     <CheckCircle2 className="size-4" aria-hidden />
                   ) : (
@@ -142,20 +166,20 @@ export default function ServerTab({
             ))}
           </ul>
         ) : (
-          <p className="text-muted-foreground text-sm">{hostUnavailableMessage(host)}</p>
+          <p className="text-muted-foreground max-w-3xl text-sm">{hostUnavailableMessage(host)}</p>
         )}
         {host.available && (
-          <div className="space-y-2">
+          <div className="max-w-3xl space-y-2">
             <Stat label="Operating system" value={host.osName ?? '—'} />
-            <p className="text-muted-foreground text-sm">
-              {hostCheckedMessage(host, Date.now())}
-            </p>
+            <p className="text-muted-foreground text-sm">{hostCheckedMessage(host, Date.now())}</p>
           </div>
         )}
       </Section>
 
       <Section title="Software">
-        <div className="space-y-2">
+        {/* Eight versions is a list to scan, not to read in order, so it pairs up rather than
+            running down the page. */}
+        <StatGrid className="max-w-4xl">
           <Stat label="Deployment Environment" value={toTitleCase(software?.deployEnv)} />
           <Stat label="Next.js" value={software?.nextVersion ?? '—'} />
           <Stat
@@ -167,13 +191,15 @@ export default function ServerTab({
           <Stat label="Java" value={software?.javaVersion ?? '—'} />
           {software?.buildHash && <Stat label="Build" value={software.buildHash} />}
           {software?.imageTag && <Stat label="Image" value={software.imageTag} />}
-        </div>
+        </StatGrid>
       </Section>
 
       <Section title="Network Interfaces">
-        <Stat label="Hostname" value={system.hostname ?? '—'} />
+        <div className="max-w-4xl">
+          <Stat label="Hostname" value={system.hostname ?? '—'} />
+        </div>
         {(system.ipAddresses?.length ?? 0) > 0 ? (
-          <ul className="divide-y rounded border">
+          <ul className="max-w-4xl divide-y rounded border">
             {(system.ipAddresses as IpAddr[]).map((ip, i) => (
               <li key={i} className="flex items-center justify-between gap-3 p-2">
                 <div className="text-sm">
