@@ -443,7 +443,11 @@ export default function LoginForm({
 
       <div className="auth-form-surface flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
         <div className="mb-6 flex w-full max-w-[680px] flex-col items-center text-center lg:hidden">
-          <AuthBrandMark className="text-primary size-11" />
+          <AuthBrandMark
+            className="text-primary size-12"
+            // Navy on the white card: the same two-tone the other way up.
+            accentClassName="text-foreground"
+          />
           {/* Not a heading: the form's own title is the page's one h1, and a second one here
               would put the product name above the thing the page is for. */}
           <p className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">AFCT Dashboard</p>

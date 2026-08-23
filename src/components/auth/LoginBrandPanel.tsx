@@ -69,7 +69,12 @@ export function LoginBrandPanel({ className }: { className?: string }) {
         <div className="flex items-center gap-4">
           {/* Cobalt, set here rather than in the mark: the same component is the compact
               header on a phone, where it sits on a light card and takes the primary colour. */}
-          <AuthBrandMark className="size-14 shrink-0 text-blue-400 xl:size-16" />
+          <AuthBrandMark
+            className="size-16 shrink-0 text-blue-400 xl:size-20"
+            // Near-white against the cobalt frame, which is the reference's navy-on-
+            // white two-tone inverted for a dark surface.
+            accentClassName="text-sidebar-foreground"
+          />
           <div>
             {/* The wordmark carries the weight the accent rule used to, so it is a step up
                 at each size; the mark grows with it to keep the lockup's proportion. */}
