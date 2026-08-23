@@ -7,8 +7,12 @@ import { cn } from '@/lib/utils';
  * The seeded accounts, which all share one password. Development builds only.
  *
  * The colours are categorical, not semantic: they say "these are four different accounts",
- * and nothing here means success or danger. Green and red are left out for that reason, and
- * every fill carries white at 6.3:1 or better, hover states included.
+ * and nothing here means success or danger. Green and red are left out for that reason.
+ *
+ * Spread by hue rather than picked one at a time. The first attempt used blue, violet and
+ * indigo, and indigo sits BETWEEN the other two (264 / 277 / 293), so three of the four read
+ * as the same blue. These are 260 / 264 / 302 / 324, which is about double the separation.
+ * Every fill carries white at 6.3:1 or better, and at 4.7:1 or better on hover.
  */
 const TEST_LOGIN_ROLES = [
   {
@@ -24,12 +28,12 @@ const TEST_LOGIN_ROLES = [
   {
     role: 'ta',
     label: 'TA',
-    classes: 'border-violet-700 bg-violet-700 hover:border-violet-600 hover:bg-violet-600',
+    classes: 'border-purple-700 bg-purple-700 hover:border-purple-600 hover:bg-purple-600',
   },
   {
     role: 'student',
     label: 'Student',
-    classes: 'border-indigo-700 bg-indigo-700 hover:border-indigo-600 hover:bg-indigo-600',
+    classes: 'border-fuchsia-700 bg-fuchsia-700 hover:border-fuchsia-600 hover:bg-fuchsia-600',
   },
 ] as const;
 
