@@ -2,7 +2,7 @@
 
 import type React from 'react';
 
-import { SETTINGS_BOX_CLASS } from './system-settings-shared';
+import { SETTINGS_STANDARD, SETTINGS_READABLE, SettingsSection } from './settings-layout';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
@@ -17,24 +17,6 @@ import {
   MAX_ACTIVITY_LOG_RETENTION_DAYS,
 } from '@/lib/system-settings';
 import type { FormSnapshot, SetField } from './system-settings-shared';
-
-/** A stable id from the visible title, so the heading and its section stay associated. */
-function sectionId(title: string) {
-  return `settings-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-}
-
-/** One titled group of settings. The box matches every other tab's; only the heading is new. */
-function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
-  const id = sectionId(title);
-  return (
-    <section className={`bg-card ${SETTINGS_BOX_CLASS}`} aria-labelledby={id}>
-      <h3 id={id} className="text-base font-semibold">
-        {title}
-      </h3>
-      {children}
-    </section>
-  );
-}
 
 /** General tab: server defaults for time, uploads, and sign-in. */
 export function GeneralTab({
@@ -54,7 +36,7 @@ export function GeneralTab({
 }) {
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
         Server defaults for time, uploads, and sign-in.
       </p>
 
@@ -62,7 +44,7 @@ export function GeneralTab({
           now, and "where do I change the lockout" is a category question. Nothing moved
           between tabs; only the arrangement within this one changed. */}
       <div className="space-y-6">
-        <SettingsSection title="Server Configuration">
+        <SettingsSection title="Server Configuration" className={SETTINGS_STANDARD}>
           {/* Read-only: NEXTAUTH_URL is a server-level env var, not a stored
               setting. Shown for reference with instructions to change it. */}
           <div className="space-y-1">
@@ -80,19 +62,24 @@ export function GeneralTab({
               value, restarts the stack, and preserves your data and secrets.
             </p>
           </div>
-          <SelectField
-            label="Timezone"
-            name="timezone"
-            id="timezone"
-            requiredMark
-            placeholder={loading ? 'Loading timezone...' : 'Select timezone'}
-            value={loading ? '' : form.timezone}
-            onValueChange={(val) => setField('timezone', val)}
-            disabled={disabled}
-            description="Default timezone for the server. Users can override this in their profile."
-            options={timezoneOptions}
-            triggerClassName="border-input"
-          />
+          {/* A timezone name is short; a select stretched across the section reads as a
+              mistake. The read-only URL above it keeps the full width, because that is a
+              value you inspect. */}
+          <div className="max-w-2xl">
+            <SelectField
+              label="Timezone"
+              name="timezone"
+              id="timezone"
+              requiredMark
+              placeholder={loading ? 'Loading timezone...' : 'Select timezone'}
+              value={loading ? '' : form.timezone}
+              onValueChange={(val) => setField('timezone', val)}
+              disabled={disabled}
+              description="Default timezone for the server. Users can override this in their profile."
+              options={timezoneOptions}
+              triggerClassName="border-input"
+            />
+          </div>
           <SwitchField
             id="clock-24-hour"
             name="clock-24-hour"
@@ -106,7 +93,7 @@ export function GeneralTab({
           />
         </SettingsSection>
 
-        <SettingsSection title="Uploads &amp; Retention">
+        <SettingsSection title="Uploads &amp; Retention" className={SETTINGS_STANDARD}>
           {/* Both are ceilings on what the server stores: how big one upload may be, and
               how long the audit trail is kept. */}
           <div className="grid gap-5 md:grid-cols-2">
@@ -143,10 +130,10 @@ export function GeneralTab({
           </div>
         </SettingsSection>
 
-        <SettingsSection title="Sign-in &amp; Security">
+        <SettingsSection title="Sign-in &amp; Security" className={SETTINGS_STANDARD}>
           {/* Short numeric fields pair up; the domain list stays full-width because it is
               a comma-separated string that wraps. */}
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             <InputGroup
               label="Session timeout (minutes)"
               name="sessionTimeoutMinutes"

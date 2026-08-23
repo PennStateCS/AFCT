@@ -1,6 +1,6 @@
 'use client';
 
-import { SETTINGS_BOX_CLASS } from './system-settings-shared';
+import { SETTINGS_READABLE, SETTINGS_STANDARD, SettingsSection } from './settings-layout';
 import InputGroup from '@/components/ui/InputGroup';
 import {
   MIN_SUBMISSION_EVAL_TIMEOUT_MS,
@@ -30,89 +30,95 @@ export function EvaluatorTab({
 }) {
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
         How the autograder evaluates and rate-limits submissions.
       </p>
-      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
-        <InputGroup
-          label="Evaluation timeout (seconds)"
-          name="evalTimeoutSec"
-          type="number"
-          required
-          requiredMark
-          min={msToSec(MIN_SUBMISSION_EVAL_TIMEOUT_MS)}
-          max={msToSec(MAX_SUBMISSION_EVAL_TIMEOUT_MS)}
-          value={form.evalTimeoutSec === '' ? '' : String(form.evalTimeoutSec)}
-          setValue={(val) => setField('evalTimeoutSec', val === '' ? '' : Number(val))}
-          disabled={disabled}
-          description={`Max time per submission. ${msToSec(MIN_SUBMISSION_EVAL_TIMEOUT_MS)}–${msToSec(MAX_SUBMISSION_EVAL_TIMEOUT_MS)} s.`}
-        />
-        <InputGroup
-          label="Resubmit cooldown (seconds)"
-          name="resubmitCooldownSec"
-          type="number"
-          required
-          requiredMark
-          min={msToSec(MIN_SUBMISSION_RESUBMIT_COOLDOWN_MS)}
-          max={msToSec(MAX_SUBMISSION_RESUBMIT_COOLDOWN_MS)}
-          value={form.resubmitCooldownSec === '' ? '' : String(form.resubmitCooldownSec)}
-          setValue={(val) => setField('resubmitCooldownSec', val === '' ? '' : Number(val))}
-          disabled={disabled}
-          description="Wait between resubmits to a problem. 0 disables."
-        />
-        <InputGroup
-          label="Evaluator memory cap (MB)"
-          name="evalMaxMemoryMb"
-          type="number"
-          required
-          requiredMark
-          min={MIN_SUBMISSION_EVAL_MAX_MEMORY_MB}
-          max={MAX_SUBMISSION_EVAL_MAX_MEMORY_MB}
-          value={form.evalMaxMemoryMb === '' ? '' : String(form.evalMaxMemoryMb)}
-          setValue={(val) => setField('evalMaxMemoryMb', val === '' ? '' : Number(val))}
-          disabled={disabled}
-          description={`JVM heap per evaluation. ${MIN_SUBMISSION_EVAL_MAX_MEMORY_MB}–${MAX_SUBMISSION_EVAL_MAX_MEMORY_MB} MB.`}
-        />
-        <InputGroup
-          label="Max concurrent evaluations"
-          name="maxConcurrent"
-          type="number"
-          required
-          requiredMark
-          min={MIN_SUBMISSION_MAX_CONCURRENT}
-          max={MAX_SUBMISSION_MAX_CONCURRENT}
-          value={form.maxConcurrent === '' ? '' : String(form.maxConcurrent)}
-          setValue={(val) => setField('maxConcurrent', val === '' ? '' : Number(val))}
-          disabled={disabled}
-          description={`Run at once. ${MIN_SUBMISSION_MAX_CONCURRENT}–${MAX_SUBMISSION_MAX_CONCURRENT}. Applies within ~30s.`}
-        />
-        <InputGroup
-          label="Max retry attempts"
-          name="maxAttempts"
-          type="number"
-          required
-          requiredMark
-          min={MIN_SUBMISSION_MAX_ATTEMPTS}
-          max={MAX_SUBMISSION_MAX_ATTEMPTS}
-          value={form.maxAttempts === '' ? '' : String(form.maxAttempts)}
-          setValue={(val) => setField('maxAttempts', val === '' ? '' : Number(val))}
-          disabled={disabled}
-          description={`Retries before failing. ${MIN_SUBMISSION_MAX_ATTEMPTS}–${MAX_SUBMISSION_MAX_ATTEMPTS}.`}
-        />
-        <InputGroup
-          label="Analyzer exploration limit"
-          name="analyzerLimit"
-          type="number"
-          required
-          requiredMark
-          min={MIN_SUBMISSION_ANALYZER_LIMIT}
-          max={MAX_SUBMISSION_ANALYZER_LIMIT}
-          value={form.analyzerLimit === '' ? '' : String(form.analyzerLimit)}
-          setValue={(val) => setField('analyzerLimit', val === '' ? '' : Number(val))}
-          disabled={disabled}
-          description={`Depth of the cfganalyzer equivalence check. Higher is more thorough but slower. ${MIN_SUBMISSION_ANALYZER_LIMIT}–${MAX_SUBMISSION_ANALYZER_LIMIT}.`}
-        />
-      </div>
+      {/* Six short numeric settings. As one narrow column they were a tall stack with a
+          screen of empty space beside it; paired, the whole group is visible at once.
+          lg rather than md: below that the rail and the sidebar leave too little room and
+          two columns would just cramp the labels. */}
+      <SettingsSection title="Evaluation limits" className={SETTINGS_STANDARD}>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <InputGroup
+            label="Evaluation timeout (seconds)"
+            name="evalTimeoutSec"
+            type="number"
+            required
+            requiredMark
+            min={msToSec(MIN_SUBMISSION_EVAL_TIMEOUT_MS)}
+            max={msToSec(MAX_SUBMISSION_EVAL_TIMEOUT_MS)}
+            value={form.evalTimeoutSec === '' ? '' : String(form.evalTimeoutSec)}
+            setValue={(val) => setField('evalTimeoutSec', val === '' ? '' : Number(val))}
+            disabled={disabled}
+            description={`Max time per submission. ${msToSec(MIN_SUBMISSION_EVAL_TIMEOUT_MS)}–${msToSec(MAX_SUBMISSION_EVAL_TIMEOUT_MS)} s.`}
+          />
+          <InputGroup
+            label="Resubmit cooldown (seconds)"
+            name="resubmitCooldownSec"
+            type="number"
+            required
+            requiredMark
+            min={msToSec(MIN_SUBMISSION_RESUBMIT_COOLDOWN_MS)}
+            max={msToSec(MAX_SUBMISSION_RESUBMIT_COOLDOWN_MS)}
+            value={form.resubmitCooldownSec === '' ? '' : String(form.resubmitCooldownSec)}
+            setValue={(val) => setField('resubmitCooldownSec', val === '' ? '' : Number(val))}
+            disabled={disabled}
+            description="Wait between resubmits to a problem. 0 disables."
+          />
+          <InputGroup
+            label="Evaluator memory cap (MB)"
+            name="evalMaxMemoryMb"
+            type="number"
+            required
+            requiredMark
+            min={MIN_SUBMISSION_EVAL_MAX_MEMORY_MB}
+            max={MAX_SUBMISSION_EVAL_MAX_MEMORY_MB}
+            value={form.evalMaxMemoryMb === '' ? '' : String(form.evalMaxMemoryMb)}
+            setValue={(val) => setField('evalMaxMemoryMb', val === '' ? '' : Number(val))}
+            disabled={disabled}
+            description={`JVM heap per evaluation. ${MIN_SUBMISSION_EVAL_MAX_MEMORY_MB}–${MAX_SUBMISSION_EVAL_MAX_MEMORY_MB} MB.`}
+          />
+          <InputGroup
+            label="Max concurrent evaluations"
+            name="maxConcurrent"
+            type="number"
+            required
+            requiredMark
+            min={MIN_SUBMISSION_MAX_CONCURRENT}
+            max={MAX_SUBMISSION_MAX_CONCURRENT}
+            value={form.maxConcurrent === '' ? '' : String(form.maxConcurrent)}
+            setValue={(val) => setField('maxConcurrent', val === '' ? '' : Number(val))}
+            disabled={disabled}
+            description={`Run at once. ${MIN_SUBMISSION_MAX_CONCURRENT}–${MAX_SUBMISSION_MAX_CONCURRENT}. Applies within ~30s.`}
+          />
+          <InputGroup
+            label="Max retry attempts"
+            name="maxAttempts"
+            type="number"
+            required
+            requiredMark
+            min={MIN_SUBMISSION_MAX_ATTEMPTS}
+            max={MAX_SUBMISSION_MAX_ATTEMPTS}
+            value={form.maxAttempts === '' ? '' : String(form.maxAttempts)}
+            setValue={(val) => setField('maxAttempts', val === '' ? '' : Number(val))}
+            disabled={disabled}
+            description={`Retries before failing. ${MIN_SUBMISSION_MAX_ATTEMPTS}–${MAX_SUBMISSION_MAX_ATTEMPTS}.`}
+          />
+          <InputGroup
+            label="Analyzer exploration limit"
+            name="analyzerLimit"
+            type="number"
+            required
+            requiredMark
+            min={MIN_SUBMISSION_ANALYZER_LIMIT}
+            max={MAX_SUBMISSION_ANALYZER_LIMIT}
+            value={form.analyzerLimit === '' ? '' : String(form.analyzerLimit)}
+            setValue={(val) => setField('analyzerLimit', val === '' ? '' : Number(val))}
+            disabled={disabled}
+            description={`Depth of the cfganalyzer equivalence check. Higher is more thorough but slower. ${MIN_SUBMISSION_ANALYZER_LIMIT}–${MAX_SUBMISSION_ANALYZER_LIMIT}.`}
+          />
+        </div>
+      </SettingsSection>
     </>
   );
 }

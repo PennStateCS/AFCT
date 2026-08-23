@@ -23,6 +23,7 @@ import {
 } from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
+import { SETTINGS_READABLE, SETTINGS_STANDARD, SETTINGS_WIDE } from './settings-layout';
 
 // Colour the self-update banner by outcome via the semantic status tokens: success on a
 // completed update, danger on a real failure, warning while working / timed out / when the
@@ -222,9 +223,11 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
         </p>
       </div>
 
-      <div className="max-w-2xl space-y-5 xl:max-w-4xl">
+      {/* The live log inside this carries long build output, so the panel opens up a step
+          beyond the prose above it. */}
+      <div className={`space-y-5 ${SETTINGS_STANDARD}`}>
         <div className="space-y-2">
-          <h2 className="text-sm font-medium">Current version</h2>
+          <h2 className="text-base font-semibold">Current version</h2>
           {/* Same card as Update status below, so the two read as one pair rather than a
               bare badge above a panel. The health badge repeats the phase deliberately:
               this line answers "what am I running and is it well", which is the question
@@ -379,7 +382,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             it runs so the updater's transient self-update phases don't show here too. */}
         {upgradeInfo?.status?.phase && selfUpdate.phase === 'idle' && (
           <div className="space-y-2" ref={upgradeStatusRef} tabIndex={-1}>
-            <h2 className="text-sm font-medium">Update status</h2>
+            <h2 className="text-base font-semibold">Update status</h2>
             {/* role="status": phase changes arrive via background polling,
                 so announce them to screen readers as they happen. */}
             <div
@@ -586,9 +589,10 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
 
       {/* Restore / downgrade: destructive, so kept visually separate. */}
       {restorePoints.length > 0 && (
-        <div className="mt-8 max-w-2xl space-y-3 border-t pt-6 xl:max-w-4xl">
-          <h2 className="text-destructive text-sm font-semibold">Restore a previous version</h2>
-          <p className="text-muted-foreground text-sm">
+        <div className={`mt-8 space-y-3 border-t pt-6 ${SETTINGS_WIDE}`}>
+          <h2 className="text-destructive text-base font-semibold">Restore a previous version</h2>
+          {/* The table below wants the width; this warning does not. */}
+          <p className={`text-muted-foreground text-sm ${SETTINGS_READABLE}`}>
             Downgrading restores the database backup taken before that version was replaced. It{' '}
             <span className="text-destructive font-medium">
               permanently discards everything created since that backup

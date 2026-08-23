@@ -7,6 +7,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { LtiPlatformSchema } from '@/schemas/lti';
+import { SETTINGS_READABLE, SETTINGS_STANDARD } from './settings-layout';
 
 type Platform = {
   id: string;
@@ -150,15 +151,15 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
 
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
         Let people open AFCT from your LMS. There are two ways to set this up. If your LMS offers
         automatic registration, use it: AFCT and your LMS then exchange everything they need between
         themselves. Otherwise copy the values across by hand.
       </p>
 
       <div className="mb-6 space-y-2">
-        <h2 className="text-sm font-medium">Register automatically</h2>
-        <div className="max-w-2xl space-y-3 rounded-md border p-3">
+        <h2 className="text-base font-semibold">Register automatically</h2>
+        <div className={`${SETTINGS_STANDARD} space-y-3 rounded-md border p-3`}>
           <p className="text-muted-foreground text-sm">
             Create a link, then paste it into your LMS where it asks for a registration or tool URL.
             Canvas, Moodle and Brightspace all call this something slightly different; look for
@@ -202,8 +203,8 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
       </div>
 
       <div className="mb-6 space-y-2">
-        <h2 className="text-sm font-medium">Or give these to your LMS by hand</h2>
-        <div className="max-w-2xl space-y-3 rounded-md border p-3">
+        <h2 className="text-base font-semibold">Or give these to your LMS by hand</h2>
+        <div className={`${SETTINGS_STANDARD} space-y-3 rounded-md border p-3`}>
           <InputGroup
             label="Target link URI"
             name="ltiTargetLinkUri"
@@ -243,7 +244,7 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
       {/* Button beside the heading rather than pushed to the far edge, where it reads as
           belonging to the page rather than to this list. */}
       <div className="mb-3 flex items-center gap-3">
-        <h2 className="text-sm font-medium">Registered LMSs</h2>
+        <h2 className="text-base font-semibold">Registered LMSs</h2>
         {!adding && (
           <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -255,11 +256,11 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
       {platforms === null ? (
         <p className="text-muted-foreground text-sm">Loading...</p>
       ) : platforms.length === 0 ? (
-        <p className="text-muted-foreground mb-4 text-sm">
+        <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
           No LMS is registered, so nobody can open AFCT from one yet.
         </p>
       ) : (
-        <ul className="mb-4 max-w-2xl divide-y rounded-md border">
+        <ul className={`mb-4 ${SETTINGS_STANDARD} divide-y rounded-md border`}>
           {platforms.map((platform) => (
             <li key={platform.id} className="flex items-start justify-between gap-3 p-3">
               <div className="min-w-0">
@@ -284,37 +285,41 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
       )}
 
       {adding && (
-        <div className="max-w-2xl space-y-4 rounded-md border p-4">
-          <h3 className="text-sm font-medium">Add an LMS</h3>
+        <div className={`${SETTINGS_STANDARD} space-y-4 rounded-md border p-4`}>
+          <h3 className="text-sm font-semibold">Add an LMS</h3>
           <p className="text-muted-foreground text-xs">
             Your LMS gives you these when you create a developer key for AFCT.
           </p>
 
-          <InputGroup
-            label="Name"
-            name="lti-name"
-            value={draft.name}
-            setValue={set('name')}
-            placeholder="Penn State Canvas"
-          />
+          {/* Short identifiers pair up; the URLs below stay full rows, because half a
+              URL is harder to check than a taller form. */}
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <InputGroup
+              label="Name"
+              name="lti-name"
+              value={draft.name}
+              setValue={set('name')}
+              placeholder="Penn State Canvas"
+            />
+            <InputGroup
+              label="Client ID"
+              name="lti-client-id"
+              value={draft.clientId}
+              setValue={set('clientId')}
+            />
+            <InputGroup
+              label="Deployment ID"
+              name="lti-deployment-id"
+              value={draft.deploymentId}
+              setValue={set('deploymentId')}
+            />
+          </div>
           <InputGroup
             label="Platform issuer"
             name="lti-issuer"
             value={draft.issuer}
             setValue={set('issuer')}
             placeholder="https://canvas.instructure.com"
-          />
-          <InputGroup
-            label="Client ID"
-            name="lti-client-id"
-            value={draft.clientId}
-            setValue={set('clientId')}
-          />
-          <InputGroup
-            label="Deployment ID"
-            name="lti-deployment-id"
-            value={draft.deploymentId}
-            setValue={set('deploymentId')}
           />
           <InputGroup
             label="Authorization URL"

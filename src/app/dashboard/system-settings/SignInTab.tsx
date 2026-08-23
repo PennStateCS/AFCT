@@ -5,6 +5,13 @@ import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
 import { SETTINGS_BOX_CLASS } from './system-settings-shared';
+import {
+  SETTINGS_COMPACT,
+  SETTINGS_READABLE,
+  SETTINGS_STANDARD,
+  SettingsSection,
+  SettingsStatusPanel,
+} from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 /**
@@ -55,14 +62,13 @@ export function SignInTab({
 }) {
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
         Let people sign in with their institution&apos;s account. Your IT department will give you
         these values, and will need the redirect URL below.
       </p>
 
-      <div className="mb-5 space-y-2">
-        <h2 className="text-sm font-medium">Current status</h2>
-        <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+      <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
+        <SettingsStatusPanel>
           <Badge
             variant={!enabled ? 'warning' : clientSecretReadable ? 'success' : 'destructive'}
             className="w-fit"
@@ -76,10 +82,10 @@ export function SignInTab({
                 ? 'People can sign in with their institution. AFCT passwords still work as well.'
                 : 'The saved client secret cannot be read, so the institution button is not shown and nobody can sign in that way. This usually means the encryption key this AFCT was set up with has changed. Save the secret again, or restore the key.'}
           </p>
-        </div>
-      </div>
+        </SettingsStatusPanel>
+      </SettingsSection>
 
-      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
+      <div className={`${SETTINGS_STANDARD} ${SETTINGS_BOX_CLASS} bg-card`}>
         <SwitchField
           id="oidc-enabled"
           name="oidc-enabled"
@@ -144,8 +150,8 @@ export function SignInTab({
         />
       </div>
 
-      <div className="mt-6 max-w-md space-y-3 border-t pt-5">
-        <h2 className="text-sm font-medium">Give this to your IT department</h2>
+      <div className={`mt-6 space-y-3 border-t pt-5 ${SETTINGS_READABLE}`}>
+        <h2 className="text-base font-semibold">Give this to your IT department</h2>
         <p className="text-muted-foreground text-xs">
           The redirect URL AFCT will use. Registration usually fails without it, with an error about
           a mismatched redirect.
@@ -159,8 +165,8 @@ export function SignInTab({
         />
       </div>
 
-      <div className="mt-6 max-w-md space-y-3 border-t pt-5">
-        <h2 className="text-sm font-medium">Matching people to accounts</h2>
+      <div className={`mt-6 space-y-3 border-t pt-5 ${SETTINGS_READABLE}`}>
+        <h2 className="text-base font-semibold">Matching people to accounts</h2>
         <p className="text-muted-foreground text-xs">
           When somebody signs in for the first time, AFCT attaches their institutional identity to
           an existing account with the same email address, but only if the provider states that the
@@ -195,7 +201,7 @@ export function SignInTab({
         </p>
       </div>
       <div className="mt-6 space-y-2">
-        <h2 className="text-sm font-medium">AFCT passwords</h2>
+        <h2 className="text-base font-semibold">AFCT passwords</h2>
         <div className={SETTINGS_BOX_CLASS}>
           <SwitchField
             id="allow-linked-account-passwords"

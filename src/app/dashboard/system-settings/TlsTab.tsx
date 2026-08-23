@@ -18,6 +18,7 @@ import FileUploadInput from '@/components/FileUploadInput';
 import { useTlsCertificate } from './useTlsCertificate';
 import { StepList } from './StepList';
 import { deriveAcmeSteps } from './system-settings-shared';
+import { SETTINGS_READABLE, SETTINGS_STANDARD } from './settings-layout';
 
 /** TLS Certificate tab: current status plus the upload / CSR / self-signed / Let's Encrypt flows. */
 export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined }) {
@@ -66,15 +67,15 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
         The certificate the server presents over HTTPS.
       </p>
 
       <div className="space-y-5">
         {/* Current status */}
         <div className="space-y-2">
-          <h2 className="text-sm font-medium">Current certificate</h2>
-          <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+          <h2 className="text-base font-semibold">Current certificate</h2>
+          <div className={`bg-muted ${SETTINGS_STANDARD} space-y-2 rounded-md border p-4 text-sm`}>
             {tls?.installed ? (
               <>
                 <div className="flex flex-wrap items-center gap-2">
@@ -158,7 +159,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
         {/* Method chooser */}
         <div className="space-y-2">
-          <h2 className="text-sm font-medium">Set up a certificate</h2>
+          <h2 className="text-base font-semibold">Set up a certificate</h2>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Certificate setup method">
             <Button
               type="button"

@@ -8,6 +8,13 @@ import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
 import { SMTP_SECURITY, SMTP_SECURITY_LABELS, type SmtpSecurity } from '@/schemas/smtp';
 import { SETTINGS_BOX_CLASS } from './system-settings-shared';
+import {
+  SETTINGS_COMPACT,
+  SETTINGS_READABLE,
+  SETTINGS_STANDARD,
+  SettingsSection,
+  SettingsStatusPanel,
+} from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 type TestState =
@@ -86,14 +93,13 @@ export function EmailTab({
 
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
         The mail server AFCT sends from. Used for password reset links, so people can recover their
         own accounts without an administrator.
       </p>
 
-      <div className="mb-5 space-y-2">
-        <h2 className="text-sm font-medium">Current status</h2>
-        <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+      <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
+        <SettingsStatusPanel>
           <Badge
             variant={!enabled ? 'warning' : passwordReadable ? 'success' : 'destructive'}
             className="w-fit"
@@ -107,10 +113,10 @@ export function EmailTab({
                 ? 'AFCT is set up to send email. Send a test message below to check that it arrives; a reset request that cannot be delivered fails quietly, because the sign-in page must not say whether an account exists.'
                 : 'The saved mail password cannot be read, so nothing can be sent and reset requests will fail quietly. This usually means the encryption key this AFCT was set up with has changed. Enter the password again, or restore the key.'}
           </p>
-        </div>
-      </div>
+        </SettingsStatusPanel>
+      </SettingsSection>
 
-      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
+      <div className={`${SETTINGS_STANDARD} ${SETTINGS_BOX_CLASS} bg-card`}>
         <SwitchField
           id="smtp-enabled"
           name="smtp-enabled"
@@ -121,24 +127,28 @@ export function EmailTab({
           descriptionPlacement="inline"
           description="Off until a mail server is configured below."
         />
-        <InputGroup
-          label="Mail server"
-          name="smtpHost"
-          value={host}
-          setValue={(v) => setField('smtpHost', v)}
-          disabled={disabled}
-          placeholder="smtp.your-university.edu"
-          description="Your institution's SMTP server. Ask your IT department if you are unsure."
-        />
-        <InputGroup
-          label="Port"
-          name="smtpPort"
-          type="number"
-          value={String(port)}
-          setValue={(v) => setField('smtpPort', Number(v))}
-          disabled={disabled}
-          description="587 for STARTTLS, 465 for TLS."
-        />
+        {/* Host and port belong together, and the port is capped so it does not inherit a
+            text field's width just because it shares a row with one. */}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <InputGroup
+            label="Mail server"
+            name="smtpHost"
+            value={host}
+            setValue={(v) => setField('smtpHost', v)}
+            disabled={disabled}
+            placeholder="smtp.your-university.edu"
+            description="Your institution's SMTP server. Ask your IT department if you are unsure."
+          />
+          <InputGroup
+            label="Port"
+            name="smtpPort"
+            type="number"
+            value={String(port)}
+            setValue={(v) => setField('smtpPort', Number(v))}
+            disabled={disabled}
+            description="587 for STARTTLS, 465 for TLS."
+          />
+        </div>
         <SelectField
           label="Encryption"
           name="smtpSecurity"
@@ -184,32 +194,34 @@ export function EmailTab({
             description="Deletes the stored password when you save."
           />
         )}
-        <InputGroup
-          label="From address"
-          name="smtpFromAddress"
-          type="email"
-          // The institution's sending address, not the admin's own.
-          autoComplete="off"
-          value={fromAddress}
-          setValue={(v) => setField('smtpFromAddress', v)}
-          disabled={disabled}
-          placeholder="afct@your-university.edu"
-          description="Institutions usually require this to be an address they host."
-        />
-        <InputGroup
-          label="From name"
-          name="smtpFromName"
-          value={fromName}
-          setValue={(v) => setField('smtpFromName', v)}
-          disabled={disabled}
-          placeholder="AFCT"
-          description="Shown beside the address in the recipient's inbox."
-        />
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <InputGroup
+            label="From address"
+            name="smtpFromAddress"
+            type="email"
+            // The institution's sending address, not the admin's own.
+            autoComplete="off"
+            value={fromAddress}
+            setValue={(v) => setField('smtpFromAddress', v)}
+            disabled={disabled}
+            placeholder="afct@your-university.edu"
+            description="Institutions usually require this to be an address they host."
+          />
+          <InputGroup
+            label="From name"
+            name="smtpFromName"
+            value={fromName}
+            setValue={(v) => setField('smtpFromName', v)}
+            disabled={disabled}
+            placeholder="AFCT"
+            description="Shown beside the address in the recipient's inbox."
+          />
+        </div>
       </div>
 
       {/* Prove it works now, rather than when someone is locked out. */}
-      <div className="mt-6 max-w-md space-y-3 border-t pt-5">
-        <h2 className="text-sm font-medium">Send a test message</h2>
+      <div className={`mt-6 space-y-3 border-t pt-5 ${SETTINGS_COMPACT}`}>
+        <h2 className="text-base font-semibold">Send a test message</h2>
         {savedHost ? (
           <>
             <p className="text-muted-foreground text-xs">

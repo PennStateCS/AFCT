@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
+import { SETTINGS_STANDARD, SETTINGS_WORKSPACE } from './settings-layout';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -571,10 +572,12 @@ export default function SystemSettingsClient() {
         orientation={railNav ? 'vertical' : 'horizontal'}
         className="w-full gap-6"
       >
-        {/* max-w-3xl: the form was pinned to a narrow column inside a full-width card,
-            so it wrapped help text into slivers. Readable measure, not the whole monitor. */}
+        {/* The WORKSPACE is wide; the content inside it is not. Pinning the whole page to
+            max-w-3xl left a 1920px monitor two thirds empty and still wrapped help text
+            into slivers, so each section picks its own measure instead (see
+            settings-layout). */}
         <LocalNavLayout
-          contentClassName="max-w-3xl"
+          contentClassName={SETTINGS_WORKSPACE}
           nav={
             railNav ? (
               <TabRail
@@ -689,7 +692,9 @@ export default function SystemSettingsClient() {
           {/* Save action, under the section it saves. Hidden on tabs with no savable
                 fields (TLS, Updates), which run their own actions instead. */}
           {showSave && (
-            <div className="mt-6 flex items-center justify-start gap-3 border-t pt-4">
+            <div
+              className={`mt-6 flex items-center justify-start gap-3 border-t pt-4 ${SETTINGS_STANDARD}`}
+            >
               <Button
                 type="submit"
                 form="system-settings-form"

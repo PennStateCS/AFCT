@@ -7,6 +7,12 @@ import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { SETTINGS_BOX_CLASS } from './system-settings-shared';
+import {
+  SETTINGS_COMPACT,
+  SETTINGS_READABLE,
+  SettingsSection,
+  SettingsStatusPanel,
+} from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 /** Captcha tab: hCaptcha keys + a live "test my keys" flow. */
@@ -58,14 +64,13 @@ export function CaptchaTab({
 
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
+      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
         Optional bot protection, shown as a challenge after repeated failed logins.
       </p>
 
       {/* Current status */}
-      <div className="mb-5 space-y-2">
-        <h2 className="text-sm font-medium">Current status</h2>
-        <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
+      <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
+        <SettingsStatusPanel>
           <Badge variant={hcaptchaEnabled ? 'success' : 'warning'} className="w-fit">
             {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
           </Badge>
@@ -74,10 +79,10 @@ export function CaptchaTab({
               ? 'Bot protection is on. After repeated failed logins, users are shown an hCaptcha challenge.'
               : 'Bot protection is off. Add your hCaptcha keys below to turn it on.'}
           </p>
-        </div>
-      </div>
+        </SettingsStatusPanel>
+      </SettingsSection>
 
-      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
+      <div className={`${SETTINGS_COMPACT} ${SETTINGS_BOX_CLASS} bg-card`}>
         <InputGroup
           label="hCaptcha site key"
           name="hcaptchaSiteKey"
@@ -113,8 +118,8 @@ export function CaptchaTab({
         )}
       </div>
       {/* Verify the saved keys actually work before relying on them. */}
-      <div className="mt-6 max-w-md space-y-3 border-t pt-5">
-        <h2 className="text-sm font-medium">Verify your keys</h2>
+      <div className={`mt-6 space-y-3 border-t pt-5 ${SETTINGS_COMPACT}`}>
+        <h2 className="text-base font-semibold">Verify your keys</h2>
         {savedSiteKey && secretConfigured ? (
           <>
             <p className="text-muted-foreground text-xs">
