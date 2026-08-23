@@ -189,6 +189,29 @@ describe('TabRail collapse', () => {
     expect(alpha.className).toContain('last:border-b-0');
   });
 
+  it('left-aligns every expanded row, whether or not it carries a count', () => {
+    renderRail();
+    // The base TabsTrigger centres its content, which is right for a horizontal strip and
+    // wrong here. Asserted on the MERGED class list, so this covers tailwind-merge actually
+    // resolving the conflict rather than both classes surviving.
+    for (const name of ['Alpha, 3', 'Bravo', 'Charlie']) {
+      const row = screen.getByRole('tab', { name });
+      expect(row.className).toContain('justify-start');
+      expect(row.className).not.toContain('justify-center');
+      // The rail's own icon/label gap, not the strip's.
+      expect(row.className).toContain('gap-3');
+      expect(row.className).not.toContain('gap-1.5');
+    }
+  });
+
+  it('centres collapsed rows instead', () => {
+    renderRail();
+    fireEvent.click(collapseButton());
+    const row = screen.getByRole('tab', { name: 'Alpha, 3' });
+    expect(row.className).toContain('justify-center');
+    expect(row.className).not.toContain('justify-start');
+  });
+
   it('keeps the left marker on the active row while collapsed', () => {
     renderRail();
     fireEvent.click(collapseButton());

@@ -333,7 +333,15 @@ export function TabRail({
               value={tabValue}
               className={cn(
                 RAIL_TRIGGER_CLASS,
-                collapsed ? `justify-center px-0 ${RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS}` : 'px-5',
+                // justify-start is not redundant: the base TabsTrigger carries justify-center,
+                // which is right for a horizontal strip and wrong for a rail. Without it the
+                // rows with a count only LOOKED left-aligned, because `ml-auto` on the count
+                // shoved the icon and label to the left as a side effect; the four rows with
+                // no count sat centred. Alignment has to be stated, not inherited from
+                // whether a row happens to carry a badge.
+                collapsed
+                  ? `justify-center px-0 ${RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS}`
+                  : 'justify-start px-5',
               )}
               {...(linkPanels
                 ? { id: `tab-${tabValue}`, 'aria-controls': `panel-${tabValue}` }
@@ -344,13 +352,13 @@ export function TabRail({
               aria-label={count === undefined ? undefined : `${label}, ${count}`}
             >
               {Icon ? <Icon className="size-5 shrink-0" aria-hidden="true" /> : null}
-              <span className={collapsed ? 'sr-only' : 'truncate'}>{label}</span>
+              <span className={collapsed ? 'sr-only' : 'min-w-0 truncate'}>{label}</span>
               {count !== undefined && !collapsed ? (
                 // Filled and borderless: the outline made seven quiet counts read as seven
                 // controls. Only the active row's count picks up the tint. Dropped entirely
                 // when collapsed: a pill beside a centred icon at 56px is a smudge, and the
                 // count is already in the name and the tooltip.
-                <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full border-0 px-1.5 text-xs font-medium dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300">
+                <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary ml-auto inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border-0 px-1.5 text-xs font-medium dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300">
                   {count}
                 </span>
               ) : null}
