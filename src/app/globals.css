@@ -29,6 +29,16 @@
   --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  /* The dashboard header. Its own family rather than the sidebar's or the page's: it is
+     light chrome in two themes and dark in one, and nothing else in the app flips that
+     way. See the notes on --navbar in the :root block. */
+  --color-navbar: var(--navbar);
+  --color-navbar-foreground: var(--navbar-foreground);
+  --color-navbar-muted-foreground: var(--navbar-muted-foreground);
+  --color-navbar-border: var(--navbar-border);
+  --color-navbar-accent: var(--navbar-accent);
+  --color-navbar-accent-foreground: var(--navbar-accent-foreground);
+  --color-navbar-ring: var(--navbar-ring);
   /* Data visualisation, and only that. Two families, and the difference is the whole
      point of having them separate:
 
@@ -220,6 +230,38 @@
   /* Gray-700: the same family as the rail, so the divider reads as part of it. */
   --sidebar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
   --sidebar-ring: oklch(0.9842 0.0034 247.858);
+  /* The dashboard header. Its own family rather than the page tokens, because it is a
+     surface in its own right and has to work out which way up it is in three themes.
+
+     One step DOWN from the page canvas, not up:
+
+       sidebar   #111827   the dark rail
+       navbar    #EEF1F4   this band
+       canvas    #F8FAFC   the page
+       card      #FFFFFF   what content sits on
+
+     Given the card colour it vanished into the page it is supposed to cap. Given a dark
+     one it merged with the rail into a single L-shaped block. A step below the canvas
+     leaves it recognisably its own band while still reading as chrome rather than
+     content. It is only 1.08:1 from the canvas, so --navbar-border does most of the
+     separating and is deliberately the strongest value in this family. */
+  --navbar: oklch(0.9567 0.0052 247.878); /* #EEF1F4 */
+  --navbar-foreground: oklch(0.2077 0.0398 265.755); /* #0F172A, 15.8:1 on the band */
+  /* Ancestor breadcrumbs and separators: present, and clearly behind the current page.
+     A fixed value rather than the foreground at some opacity, for the same reason the
+     rail uses one: an alpha blends with whatever is behind it, so its contrast would
+     move with the hover state underneath. 6.7:1. */
+  --navbar-muted-foreground: oklch(0.4455 0.0374 257.281); /* #475569 */
+  /* Hover surface for the two controls. Both put the full foreground on it: 14.0:1. */
+  --navbar-accent: oklch(0.9168 0.0098 252.815); /* #DFE4EA */
+  --navbar-accent-foreground: oklch(0.2077 0.0398 265.755); /* #0F172A */
+  /* The one value here doing real work. With the band and the canvas 1.08:1 apart, this
+     rule is what says where the header ends: 1.6:1 against the band above it and 1.7:1
+     against the page below. Lighten it and the header floats; this is the lever. */
+  --navbar-border: oklch(0.81 0.0202 252.907); /* #B8C2CE */
+  /* The page ring reads fine on a light band, so it is the same cobalt. Named anyway, so
+     the dark and high-contrast blocks have somewhere to differ. 5.9:1 against the band. */
+  --navbar-ring: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
   /* Matched to --muted. A mid grey band competed with the header text; this reads as a
      surface. Kept a solid colour, not a tint: the header row is sticky in several tables
      and body rows would scroll through anything translucent. */
@@ -370,6 +412,17 @@
   --sidebar-accent-foreground: oklch(0.9842 0.0034 247.858);
   --sidebar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
   --sidebar-ring: oklch(0.9842 0.0034 247.858);
+  /* The same move as light, upside down: one rung away from the surfaces around it
+     rather than a colour of its own. Slate-800, which puts it above both the card
+     (#0F172A) and the rail (#111827) and clear of the page (#020617). The steps are
+     small here too, so the border again carries the separation. */
+  --navbar: oklch(0.2795 0.0368 260.031); /* #1E293B */
+  --navbar-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 14.0:1 on the band */
+  --navbar-muted-foreground: oklch(0.7107 0.0351 256.788); /* #94A3B8, 5.7:1 */
+  --navbar-accent: oklch(0.3717 0.0392 257.287); /* #334155, full foreground 9.9:1 */
+  --navbar-accent-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
+  --navbar-border: oklch(0.4141 0.0427 260.212); /* #3E4C63, 1.7:1 on the band */
+  --navbar-ring: oklch(0.8091 0.0956 251.813); /* #93C5FD, 8.1:1 */
   /* Tables sit on the card surface, with the header one rung up and the row highlight
      between the two, mirroring how light mode spaces them. */
   --table-background: oklch(0.2077 0.0398 265.755); /* #0F172A, the card */
@@ -478,6 +531,17 @@
   --sidebar-border: oklch(1 0 89.8756); /* #FFFFFF */
   --sidebar-ring: oklch(1 0 89.8756); /* #FFFFFF */
 
+  /* The header gives up decoration entirely and keeps only the job: a light grey band
+     that is not the white page, carrying black text at 17.6:1, with a full black rule
+     under it. Nothing here depends on a particular tint. */
+  --navbar: oklch(0.9401 0 89.8756); /* #EBEBEB */
+  --navbar-foreground: oklch(0 0 0); /* #000000, 17.6:1 */
+  --navbar-muted-foreground: oklch(0.3211 0 89.8756); /* #333333, 10.6:1 */
+  --navbar-accent: oklch(0.8761 0 89.8756); /* #D6D6D6, black on it 14.5:1 */
+  --navbar-accent-foreground: oklch(0 0 0); /* #000000 */
+  --navbar-border: oklch(0 0 0); /* #000000 */
+  --navbar-ring: oklch(0.4118 0.1759 262.7938); /* #0F3FA8, 7.7:1 */
+
   /* Tables. */
   --table-background: oklch(1 0 89.8756); /* #FFFFFF */
   --table-header: oklch(0.9401 0 89.8756); /* #EBEBEB */
@@ -525,7 +589,6 @@
   --chart-sequential-5: oklch(0.2697 0.1124 264.9241); /* #0A1F5C */
   --grid-color: oklch(0 0 0); /* #000000 */
 }
-
 
 @layer base {
   * {
