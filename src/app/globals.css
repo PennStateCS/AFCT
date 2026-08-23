@@ -118,11 +118,14 @@
      from this by 1.05:1 on fill alone, so their border does most of that work now
      (it reads 1.21:1 against this canvas, up from 1.06:1 against the old one). */
   --background: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
-  --foreground: oklch(0 0 0);
+  /* Slate-950, not pure black. One value for every normal-text token below, so the
+     primary/muted split does the hierarchy rather than a mix of blacks. 17.9:1 on a white
+     card, well past AA; the old pure black was 21:1 and read harsher for it. */
+  --foreground: oklch(0.2077 0.0398 265.755); /* #0F172A */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0 0 0);
+  --card-foreground: oklch(0.2077 0.0398 265.755);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
+  --popover-foreground: oklch(0.2077 0.0398 265.755);
   --primary: oklch(0.37 0.1221 262.228);
   --primary-foreground: oklch(1 0.0001 271.152);
   /* Slate-200. A neutral surface for secondary controls: this was the brand teal, which
@@ -174,7 +177,7 @@
      surface. Kept a solid colour, not a tint: the header row is sticky in several tables
      and body rows would scroll through anything translucent. */
   --table-header: oklch(0.967 0.001 286.375);
-  --table-header-foreground: oklch(0 0 0);
+  --table-header-foreground: oklch(0.2077 0.0398 265.755); /* 16.2:1 on the header surface */
   --table-highlight: oklch(0.9431 0 0);
   --table-background: oklch(1 0 0);
   --node-color: oklch(0.9588 0.1093 102.632);
