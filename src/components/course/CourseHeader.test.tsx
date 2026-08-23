@@ -63,8 +63,11 @@ describe('CourseHeaderContent', () => {
   it('renders course metadata, status, and staff info for instructors', () => {
     render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
 
-    expect(screen.getByText(/CMPSC 431/)).toBeInTheDocument();
-    expect(screen.getByText('Software Engineering')).toBeInTheDocument();
+    // One heading, one string: the code and the name are the same title now, not a muted
+    // code beside a foreground name.
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('CMPSC 431: Software Engineering');
+    expect(heading).toHaveAttribute('id', 'course-page-title');
     expect(screen.getByText('Fall 2025')).toBeInTheDocument();
     expect(screen.getByText('3 credits')).toBeInTheDocument();
     // Course status badge lives next to the metadata badges.
@@ -77,7 +80,9 @@ describe('CourseHeaderContent', () => {
     render(<CourseHeaderContent course={mockCourse} isStudent />);
 
     // Title and badges still render, but the faculty/TA line does not.
-    expect(screen.getByText('Software Engineering')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'CMPSC 431: Software Engineering',
+    );
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
   });
 
@@ -112,5 +117,36 @@ describe('CourseHeaderContent', () => {
     fireEvent.click(screen.getByRole('button', { name: /copy registration code/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('ABCD2345'));
     expect(toastMock.success).toHaveBeenCalled();
+  });
+
+  it('is a single page-level heading, whichever view renders it', () => {
+    const { unmount } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    unmount();
+
+    render(<CourseHeaderContent course={mockCourse} isStudent />);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('keeps the decorative panel out of the accessibility tree', () => {
+    const { container } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
+    // The tint and the arcs carry no meaning, so they must not be reachable or clickable.
+    const decorations = container.querySelectorAll('[aria-hidden="true"].pointer-events-none');
+    expect(decorations.length).toBeGreaterThanOrEqual(3);
+    // The panel is a named region, so the heading names it rather than the tint doing so.
+    const panel = container.querySelector('section[aria-labelledby="course-page-title"]');
+    expect(panel).not.toBeNull();
+  });
+
+  it('never truncates the course title', () => {
+    const longCourse = {
+      ...mockCourse,
+      name: 'Advanced Topics in Programming Languages and Software Engineering',
+    };
+    render(<CourseHeaderContent course={longCourse} isStudent={false} />);
+    const heading = screen.getByRole('heading', { level: 1 });
+    // This is the one place the whole name belongs: it wraps rather than clipping.
+    expect(heading.className).not.toContain('truncate');
+    expect(heading).toHaveTextContent(longCourse.name);
   });
 });

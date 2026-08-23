@@ -183,9 +183,7 @@ export function AdminCourseView({
         orientation={railNav ? 'vertical' : 'horizontal'}
         className="space-y-6"
       >
-        <section className="grid grid-cols-1 gap-3">
-          <CourseHeaderContent course={course} isStudent={false} />
-        </section>
+        <CourseHeaderContent course={course} isStudent={false} />
 
         {/* Below lg this is a plain stack, so the strip sits above the panels exactly as it
           did. At lg the rail takes a column beside them (LocalNavLayout owns that width, so

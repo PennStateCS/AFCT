@@ -49,11 +49,7 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
       orientation={railNav ? 'vertical' : 'horizontal'}
       className="space-y-6"
     >
-      {/* On the workspace, not in a card. CourseHeaderContent returns a fragment, so the
-          grid that spaced its rows travelled with the CardHeader it used to sit in. */}
-      <section className="grid grid-cols-1 gap-3">
-        <CourseHeaderContent course={course} isStudent />
-      </section>
+      <CourseHeaderContent course={course} isStudent />
 
       {/* One control at a time: two tablists under one Tabs root would emit the same
           `tab-*` ids that each panel points its aria-labelledby at. */}
