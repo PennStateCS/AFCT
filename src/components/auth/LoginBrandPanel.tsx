@@ -59,6 +59,9 @@ export function LoginBrandPanel({ className }: { className?: string }) {
           left edge survives. Offset here rather than on the panel's padding, which the
           footer, the automaton's width and the wave all measure themselves against. */}
       <div className="relative mt-3 ml-4 max-w-xl">
+        {/* Identity: the lockup and the words it stands for. The tagline sits under the whole
+            row, not inside the text column beside the mark, so the block squares off on the
+            mark's left edge instead of stepping in by the width of the mark. */}
         <div className="flex items-center gap-4">
           {/* Cobalt, set here rather than in the mark: the same component is the compact
               header on a phone, where it sits on a light card and takes the primary colour. */}
@@ -73,17 +76,19 @@ export function LoginBrandPanel({ className }: { className?: string }) {
           </div>
         </div>
 
-        {/* The gap the rule used to sit inside, kept as one interval now that nothing is
-            drawn in it. Enough that the brand reads as its own block, not so much that the
-            two halves of this corner stop belonging together. */}
-        <div className="mt-10 space-y-3">
-          <p className="text-xl font-semibold tracking-tight xl:text-2xl 2xl:text-3xl">
+        {/* What the letters stand for, and therefore part of the identity rather than part of
+            the greeting: close enough to the lockup to read as one block, and muted, because
+            three coloured lines in a row would leave nothing looking primary. */}
+        <p className="text-sidebar-muted-foreground mt-5 text-sm xl:text-base">
+          Automated Feedback for Computing Theory
+        </p>
+
+        {/* A separate block, and the gap is what says so. The tight case is not the narrow
+            pane but the short one: a 720px-high window at xl leaves 25px between this block
+            and the automaton below, which is what caps this gap rather than the width. */}
+        <div className="mt-10 space-y-3 2xl:mt-12">
+          <p className="text-xl font-semibold tracking-tight text-blue-300 xl:text-2xl 2xl:text-3xl">
             Welcome to AFCT Dashboard
-          </p>
-          {/* Three weights, on purpose: white heading, blue subtitle, muted body. Flat, they
-              read as one paragraph in three pieces. */}
-          <p className="text-base text-blue-300 xl:text-lg">
-            Automated Feedback for Computing Theory
           </p>
           <p className="text-sidebar-muted-foreground max-w-md text-sm leading-relaxed xl:text-base">
             Deliver intelligent feedback, streamline grading, and support student learning in
