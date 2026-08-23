@@ -152,7 +152,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
             x2={xOf(median)}
             y1={M.top}
             y2={M.top + plotH}
-            className="stroke-tertiary"
+            className="stroke-border"
             strokeWidth={1.5}
             strokeDasharray="2 3"
           />
@@ -205,7 +205,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
                   y1="4"
                   x2="20"
                   y2="4"
-                  className="stroke-tertiary"
+                  className="stroke-border"
                   strokeWidth={1.5}
                   strokeDasharray="2 3"
                 />

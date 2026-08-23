@@ -610,7 +610,7 @@ export default function AssignmentDashboardPage({
             {/* Show course name/code as a link to the course page (fallback to courseId) */}
             <Link
               href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-              className="text-primary max-w-full break-all hover:underline"
+              className="text-link hover:text-link-hover max-w-full break-all hover:underline"
             >
               {assignment.course?.name || assignment.courseName || assignment.courseId}
               {assignment.course?.code

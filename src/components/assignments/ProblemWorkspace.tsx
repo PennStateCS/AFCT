@@ -374,7 +374,7 @@ export default function ProblemWorkspace({
           <button
             type="button"
             onClick={() => onViewSubmission(submission)}
-            className="text-primary break-all hover:underline"
+            className="text-link hover:text-link-hover break-all hover:underline"
             title={`Preview ${submission.originalFileName || 'submission'}`}
           >
             {submission.originalFileName || submission.fileName}

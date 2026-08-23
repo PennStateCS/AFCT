@@ -309,7 +309,7 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
     <div className="flex min-w-0 flex-col gap-0.5">
       <Link
         href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
-        className="text-primary block max-w-[8rem] truncate hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
+        className="text-link hover:text-link-hover block max-w-[8rem] truncate hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
         title={assignment.title}
       >
         {assignment.title}
@@ -319,7 +319,7 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
           <button
             type="button"
             onClick={() => setDescOpen(true)}
-            className="text-primary hover:text-primary/80 self-start text-xs underline"
+            className="text-link hover:text-link-hover self-start text-xs underline"
             title="View description"
           >
             View description

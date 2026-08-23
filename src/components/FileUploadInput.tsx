@@ -165,7 +165,7 @@ export default function FileUploadInput({
                 type="button"
                 onClick={handleClear}
                 disabled={disabled}
-                className="text-primary text-xs hover:underline disabled:opacity-50"
+                className="text-link hover:text-link-hover text-xs hover:underline disabled:opacity-50"
               >
                 Clear selection
               </button>

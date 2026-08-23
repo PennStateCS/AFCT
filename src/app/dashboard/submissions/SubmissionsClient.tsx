@@ -408,7 +408,7 @@ export default function SubmissionsClient() {
               <button
                 type="button"
                 onClick={() => handleViewSubmission(submission)}
-                className="text-primary text-xs break-all hover:underline"
+                className="text-link hover:text-link-hover text-xs break-all hover:underline"
                 title={`View ${name}`}
               >
                 {name}

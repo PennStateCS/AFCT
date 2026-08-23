@@ -49,11 +49,17 @@ describe('DesignTokens', () => {
     expect(screen.getByText('border-tab-active')).toBeInTheDocument();
   });
 
-  it('documents tertiary as legacy rather than listing it in the palette', () => {
+  it('no longer mentions tertiary, which was retired with its last consumer', () => {
+    const { container } = render(<DesignTokens />);
+    expect(container.textContent).not.toMatch(/tertiary/i);
+  });
+
+  it('separates a link from a primary accent', () => {
     render(<DesignTokens />);
-    expect(screen.getByText('Legacy / specialized')).toBeInTheDocument();
-    expect(screen.getByText('tertiary')).toBeInTheDocument();
-    expect(screen.queryByText('bg-tertiary')).not.toBeInTheDocument();
+    // Two different jobs: primary is a fill, and as text on the dark card it is 3.45:1.
+    expect(screen.getByText('text-link')).toBeInTheDocument();
+    expect(screen.getByText('text-link-hover')).toBeInTheDocument();
+    expect(screen.getByText('Accent (not a link)')).toBeInTheDocument();
   });
 
   it('renders the real form controls with labels', () => {

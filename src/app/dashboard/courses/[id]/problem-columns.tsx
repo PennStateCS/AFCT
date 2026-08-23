@@ -83,7 +83,7 @@ export const useProblemColumns = ({
               <button
                 type="button"
                 onClick={() => setDescDialog({ open: true, problem: row.original })}
-                className="text-primary hover:text-primary/80 self-start text-xs underline"
+                className="text-link hover:text-link-hover self-start text-xs underline"
                 title="View description"
               >
                 View description
@@ -117,7 +117,7 @@ export const useProblemColumns = ({
             <button
               type="button"
               onClick={() => setOpenDialog({ open: true, problem: row.original })}
-              className="text-primary text-xs break-all hover:underline"
+              className="text-link hover:text-link-hover text-xs break-all hover:underline"
               title={`View ${file}`}
             >
               {file}

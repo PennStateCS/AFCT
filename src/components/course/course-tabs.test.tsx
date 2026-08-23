@@ -182,11 +182,14 @@ describe('TabRail collapse', () => {
     expect(alpha.className).toContain('h-14');
     // The active row tints across the whole width and marks its left edge with a 3px bar,
     // rather than floating a rounded pill inside a padded panel.
-    expect(alpha.className).toContain('data-[state=active]:bg-primary/10');
-    expect(alpha.className).toContain('data-[state=active]:before:bg-primary');
+    expect(alpha.className).toContain('data-[state=active]:bg-tab-active-bg');
+    expect(alpha.className).toContain('data-[state=active]:before:bg-tab-active');
     // Separators between rows, closed off by the shell's own border at the bottom.
     expect(alpha.className).toContain('border-b');
     expect(alpha.className).toContain('last:border-b-0');
+    // The dark active colour comes from --tab-active, not from a blue spelled out here:
+    // the rail and the horizontal strip have to stay the same blue.
+    expect(alpha.className).not.toMatch(/blue-\d/);
   });
 
   it('left-aligns every expanded row, whether or not it carries a count', () => {
@@ -217,7 +220,7 @@ describe('TabRail collapse', () => {
     fireEvent.click(collapseButton());
     // aria-selected, not data-state: the tooltip wrapper owns data-state here.
     expect(screen.getByRole('tab', { name: 'Alpha, 3' }).className).toContain(
-      'aria-selected:before:bg-primary',
+      'aria-selected:before:bg-tab-active',
     );
   });
 
@@ -279,7 +282,7 @@ describe('TabRail collapse', () => {
     // rail reads as inactive while collapsed, which is exactly the bug this pins.
     const alpha = screen.getByRole('tab', { name: 'Alpha, 3' });
     expect(alpha).toHaveAttribute('aria-selected', 'true');
-    expect(alpha.className).toContain('aria-selected:bg-primary/10');
+    expect(alpha.className).toContain('aria-selected:bg-tab-active-bg');
     expect(screen.getByRole('tab', { name: 'Bravo' })).toHaveAttribute('aria-selected', 'false');
   });
 

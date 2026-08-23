@@ -59,12 +59,17 @@
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
-  --color-tertiary-foreground: var(--tertiary-foreground);
-  --color-tertiary: var(--tertiary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  /* Text that navigates. Deliberately NOT --primary, which is a FILL: it is the colour a
+     button is painted, sized for white text on top of it, and on the dark card it is only
+     3.45:1 as text. A link needs the opposite: readable ON the surface. Two tokens rather
+     than an opacity of one, so the value never depends on what is underneath.
+     Usage: text-link, hover:text-link-hover. */
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
   --color-table-header: var(--table-header);
   --color-table-highlight: var(--table-highlight);
   --color-table-background: var(--table-background);
@@ -138,13 +143,15 @@
   --popover-foreground: oklch(0.2077 0.0398 265.755);
   --primary: oklch(0.37 0.1221 262.228);
   --primary-foreground: oklch(1 0.0001 271.152);
+  /* blue-700 / blue-800. A step past --primary so an underlined run of text holds its own
+     against near-black body copy, and the hover is a step past that again. */
+  --link: oklch(0.4882 0.2172 264.3763); /* #1D4ED8, 6.7:1 on the card */
+  --link-hover: oklch(0.4244 0.1809 265.6377); /* #1E40AF, 8.7:1 */
   /* Slate-200. A neutral surface for secondary controls: this was the brand teal, which
      made every "secondary" thing read as a coloured call to action. Cobalt is the action
      colour; this is the quiet one. Foreground flips to dark to suit a pale surface. */
   --secondary: oklch(0.9288 0.0126 255.508); /* #E2E8F0 */
   --secondary-foreground: oklch(0.2077 0.0398 265.755); /* #0F172A */
-  --tertiary: oklch(0.5424 0.1381 45.828);
-  --tertiary-foreground: oklch(1 0 0);
   /* A muted SURFACE, so it sits just off the page background. It used to be a 56%-lightness
      mid grey, which is a foreground value, not a surface one: anything painted with it solid
      (the keyboard-shortcut keys, the equation hover) came out darker than the toolbar, and
@@ -217,7 +224,7 @@
   --status-success: oklch(0.4204 0.1055 138.019); /* tint of --success */
   --status-success-bg: oklch(0.9447 0.0228 128.733);
   --status-success-border: oklch(0.8347 0.0835 129.018);
-  --status-warning: oklch(0.5424 0.1381 45.828); /* = --tertiary */
+  --status-warning: oklch(0.5424 0.1381 45.828);
   --status-warning-bg: oklch(0.9482 0.0135 60.567);
   --status-warning-border: oklch(0.7886 0.0733 61.632);
   --status-danger: oklch(0.4437 0.1613 26.899); /* tint of --destructive */
@@ -285,19 +292,29 @@
      button; white is 5.2:1. */
   --primary: oklch(0.5461 0.2152 262.881); /* #2563EB */
   --primary-foreground: oklch(1 0 0);
+  /* blue-400 / blue-300. Cobalt itself is 3.45:1 as text on this card, which is why links
+     get their own token here rather than borrowing the fill colour. */
+  --link: oklch(0.7137 0.1434 254.624); /* #60A5FA, 7.0:1 on the card */
+  --link-hover: oklch(0.8091 0.0956 251.8128); /* #93C5FD, 9.9:1 */
   /* One step above --accent, so a selected row still reads apart from a hovered one. */
   --secondary: oklch(0.3717 0.0392 257.287); /* #334155 */
   --secondary-foreground: oklch(0.9842 0.0034 247.858);
-  --tertiary: oklch(0.2966 0.0507 205.135);
-  --tertiary-foreground: oklch(1 0 0);
   --muted: oklch(0.2795 0.0368 260.031); /* #1E293B */
-  --muted-foreground: oklch(0.869 0.0198 252.894); /* #CBD5E1, 13.6:1 on the background */
+  /* Slate-400, down from #CBD5E1. At 13.6:1 the old value was barely a step below the
+     near-white foreground, so "secondary" text read as ordinary text and the hierarchy on
+     a dense page flattened out. This still clears AA everywhere it lands: 7.0:1 on the
+     card, 7.9:1 on the background, 5.7:1 on the muted surface. */
+  --muted-foreground: oklch(0.7107 0.0351 256.7878); /* #94A3B8 */
   --accent: oklch(0.2795 0.0368 260.031); /* #1E293B */
   --accent-foreground: oklch(0.9842 0.0034 247.858);
   --destructive: oklch(0.704 0.191 22.216);
   /* Solid slate, not a white veil. The veil put a 1px near-black edge on a field sitting
-     in a card, so inputs disappeared into the surface they were drawn on. */
-  --border: oklch(0.3717 0.0392 257.287); /* #334155 */
+     in a card, so inputs disappeared into the surface they were drawn on.
+     The two used to be the same value, which meant a card edge, a row separator and a text
+     field all drew at the same weight and every surface looked boxed in. Structure is a
+     step quieter now; a form control, which you have to be able to find and click, keeps
+     the stronger one. Light mode already made this distinction. */
+  --border: oklch(0.3268 0.0376 259.4297); /* #293548 */
   --input: oklch(0.3717 0.0392 257.287); /* #334155 */
   /* Light blue rather than the mid blue this was: at 0.488 the ring barely showed on a
      0.13 background. 9.8:1 or better on every dark surface. */
@@ -348,9 +365,8 @@
      --muted, which is the next step up from the card in this palette. */
   --grid-color: oklch(0.2795 0.0368 260.031); /* #1E293B */
   --success: oklch(0.7669 0.1597 134.58);
-  /* Status dark values (explicit tints; can't reuse brand vars, since --tertiary flips to
-     teal in dark). Badges/alerts/toasts inherit these through the aliases defined in
-     :root, so only the status family is overridden here. */
+  /* Status dark values, spelled out rather than derived. Badges/alerts/toasts inherit them
+     through the aliases defined in :root, so only the status family is overridden here. */
   --status-success: oklch(0.7669 0.1597 134.58);
   --status-success-bg: oklch(0.4204 0.1055 138.019 / 25%);
   --status-success-border: oklch(0.7669 0.1597 134.58 / 35%);

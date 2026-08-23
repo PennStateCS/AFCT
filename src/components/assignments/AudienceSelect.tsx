@@ -81,7 +81,7 @@ export function AudienceSelect({
           <button
             type="button"
             onClick={selectAll}
-            className="text-primary text-xs font-medium hover:underline"
+            className="text-link hover:text-link-hover text-xs font-medium hover:underline"
           >
             Select all
           </button>
@@ -151,7 +151,7 @@ export function AudienceSelect({
               <button
                 type="button"
                 onClick={selectAll}
-                className="text-primary text-xs hover:underline"
+                className="text-link hover:text-link-hover text-xs hover:underline"
               >
                 Select all
               </button>

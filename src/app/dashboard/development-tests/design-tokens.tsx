@@ -86,7 +86,9 @@ const SEMANTIC_TEXT = [
     cls: 'text-muted-foreground',
     sample: 'Review and manage submissions across courses.',
   },
-  { role: 'Link / action text', cls: 'text-primary', sample: 'View submission' },
+  { role: 'Link', cls: 'text-link', sample: 'View submission' },
+  { role: 'Link, hovered', cls: 'text-link-hover', sample: 'View submission' },
+  { role: 'Accent (not a link)', cls: 'text-primary', sample: 'Assigned to 3 sections' },
   { role: 'Success', cls: 'text-status-success', sample: 'Saved. Everything is up to date.' },
   { role: 'Warning', cls: 'text-status-warning', sample: 'This group set can no longer change.' },
   { role: 'Danger', cls: 'text-status-danger', sample: 'Failed to load users. Please try again.' },
@@ -300,20 +302,11 @@ export function DesignTokens() {
         </div>
         <p className="text-muted-foreground text-sm">
           <Cls>tab-active</Cls> is navigation and selection state, not a general-purpose surface: it
-          marks the current tab or local-navigation rail item. It is cobalt now, aligned with{' '}
-          <Cls>primary</Cls>, and a lighter blue in dark mode so the label keeps its contrast on the
+          marks the current tab or local-navigation rail item, and the vertical rail reads it from
+          this token rather than spelling out a dark blue of its own. It is cobalt in light, aligned
+          with <Cls>primary</Cls>, and a lighter blue in dark so the label keeps its contrast on the
           dark card.
         </p>
-        <div className="border-border bg-muted/30 space-y-1 rounded-md border p-3">
-          <p className="text-foreground text-sm font-medium">Legacy / specialized</p>
-          <p className="text-muted-foreground text-sm">
-            <Cls>tertiary</Cls> is not part of this palette. It is a burnt orange in light and a
-            dark teal in dark, so it has no stable meaning, and its only live uses are the axis
-            strokes and tick labels in two charts (<Cls>stroke-tertiary</Cls>,{' '}
-            <Cls>fill-tertiary</Cls>) plus <Cls>{'Button variant="menu"'}</Cls>, which currently has
-            no call sites. Do not reach for it in new work.
-          </p>
-        </div>
       </TokenSection>
 
       <TokenSection

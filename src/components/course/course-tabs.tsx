@@ -234,17 +234,18 @@ const RAIL_TRIGGER_CLASS = [
   // there. Only the ACTIVE row is coloured.
   'text-foreground dark:text-foreground font-medium',
   'hover:bg-muted/50 hover:text-foreground',
-  // Active: the whole row tints, rather than a pill inset inside a panel. The dark pair is
-  // spelled out because primary at 10% behind primary text is 2.8:1 on a dark card, under
-  // the floor.
-  'data-[state=active]:bg-primary/10 data-[state=active]:text-primary',
-  'dark:data-[state=active]:bg-blue-950/40 dark:data-[state=active]:text-blue-300',
+  // Active: the whole row tints, rather than a pill inset inside a panel. --tab-active is
+  // the token for exactly this: cobalt in light, a lighter blue in dark (cobalt on the
+  // dark card is 2.8:1 behind a 10% fill, under the floor). It used to be spelled out here
+  // as dark:bg-blue-950/40 + dark:text-blue-300, which is the token's own dark value
+  // written out by hand, so the rail and the horizontal tab strip could drift apart.
+  'data-[state=active]:bg-tab-active-bg data-[state=active]:text-tab-active',
   'data-[state=active]:shadow-none',
   // The 3px marker at the very left edge of the active row. A pseudo-element so it costs
   // the row no width and cannot shift the icon: the row's own padding stays put whether or
   // not it is active.
   "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:content-['']",
-  'data-[state=active]:before:bg-primary dark:data-[state=active]:before:bg-blue-300',
+  'data-[state=active]:before:bg-tab-active',
   // The shell clips (overflow-hidden), so a ring drawn outside a full-bleed row would lose
   // its left and right edges. Inset, and at full strength since it is now on the card.
   'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
@@ -263,9 +264,8 @@ const RAIL_TRIGGER_CLASS = [
 // a modifier with the base trigger so tailwind-merge drops the base's active background.
 // Change that and the base bg-background comes back and wins on source order.
 const RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS = [
-  'aria-selected:bg-primary/10 aria-selected:text-primary',
-  'dark:aria-selected:bg-blue-950/40 dark:aria-selected:text-blue-300',
-  'aria-selected:before:bg-primary dark:aria-selected:before:bg-blue-300',
+  'aria-selected:bg-tab-active-bg aria-selected:text-tab-active',
+  'aria-selected:before:bg-tab-active',
 ].join(' ');
 
 /**
@@ -358,7 +358,7 @@ export function TabRail({
                 // controls. Only the active row's count picks up the tint. Dropped entirely
                 // when collapsed: a pill beside a centred icon at 56px is a smudge, and the
                 // count is already in the name and the tooltip.
-                <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary ml-auto inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border-0 px-1.5 text-xs font-medium dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300">
+                <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-tab-active-bg group-data-[state=active]:text-tab-active ml-auto inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border-0 px-1.5 text-xs font-medium">
                   {count}
                 </span>
               ) : null}

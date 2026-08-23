@@ -20,15 +20,17 @@ const buttonVariants = cva(
           'bg-status-success-solid text-white shadow-xs hover:bg-status-success-solid/90 focus-visible:ring-status-success-solid/30',
         outline:
           'border-border bg-card text-foreground border shadow-xs hover:bg-accent hover:text-accent-foreground',
-        menu: 'bg-tertiary/90 text-tertiary-foreground shadow-xs hover:bg-tertiary/80',
         // --muted rather than --secondary. --secondary is neutral now too, so the two
         // would look alike; this keeps the button a shade quieter than a secondary
         // surface. The dark hover is spelled out because --muted and --accent are the
         // same value there, which would leave the button inert on hover.
-        secondary:
-          'bg-muted text-foreground shadow-xs hover:bg-accent dark:hover:bg-accent/60',
-        ghost: 'text-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
-        link: 'text-primary underline-offset-4 hover:underline',
+        secondary: 'bg-muted text-foreground shadow-xs hover:bg-accent dark:hover:bg-accent/60',
+        ghost:
+          'text-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        // text-link, not text-primary: primary is the colour a button is PAINTED, and as
+        // text on the dark card it is 3.45:1. The `menu` variant that used to sit above
+        // this one is gone with --tertiary; it had no call sites.
+        link: 'text-link hover:text-link-hover underline-offset-4 hover:underline',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

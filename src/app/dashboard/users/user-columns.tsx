@@ -151,7 +151,7 @@ export function getUserColumns(
       cell: ({ row }) => {
         const email = row.getValue<string>('email');
         return (
-          <a href={`mailto:${email}`} className="text-primary hover:underline">
+          <a href={`mailto:${email}`} className="text-link hover:text-link-hover hover:underline">
             {email}
           </a>
         );

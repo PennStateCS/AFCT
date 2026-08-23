@@ -58,7 +58,7 @@ export function BackupsTab({
         enableSorting: false,
         cell: ({ row }) => (
           <a
-            className="text-primary underline"
+            className="text-link hover:text-link-hover underline"
             href={apiPaths.admin.backupDownload({ file: row.original.file })}
           >
             Download ({formatBytes(row.original.size)})

@@ -70,7 +70,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
               <button
                 type="button"
                 onClick={() => openDescription(problem)}
-                className="text-primary self-start text-xs underline hover:text-primary/80"
+                className="text-link hover:text-link-hover self-start text-xs underline"
                 title="View description"
               >
                 View description
@@ -203,7 +203,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
             <button
               type="button"
               onClick={() => openRenderViewer(row.original)}
-              className="text-primary text-xs break-all hover:underline"
+              className="text-link hover:text-link-hover text-xs break-all hover:underline"
               title={`View ${fileName}`}
             >
               {fileName}

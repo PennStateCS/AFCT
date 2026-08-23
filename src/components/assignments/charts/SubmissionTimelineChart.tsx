@@ -115,7 +115,7 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
               x2={centerX(dueIndex)}
               y1={M.top}
               y2={M.top + plotH}
-              className="stroke-tertiary"
+              className="stroke-border"
               strokeWidth={1.5}
               strokeDasharray="4 3"
             />
@@ -123,7 +123,7 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
               x={centerX(dueIndex)}
               y={M.top - 4}
               textAnchor="middle"
-              className="fill-tertiary text-[10px] font-medium"
+              className="fill-muted-foreground text-[10px] font-medium"
             >
               Due
             </text>
