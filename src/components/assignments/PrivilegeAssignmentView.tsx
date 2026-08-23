@@ -632,7 +632,11 @@ export default function AssignmentDashboardPage({
           contentClassName={cn(FORM_TABS.has(tab) && 'max-w-3xl')}
           nav={
             railNav ? (
-              <TabRail tabs={assignmentTabs} ariaLabel="Assignment sections" />
+              <TabRail
+                tabs={assignmentTabs}
+                ariaLabel="Assignment sections"
+                menuLabel="Assignment Menu"
+              />
             ) : (
               <TabBar
                 ariaLabel="Assignment sections"

@@ -115,7 +115,7 @@ export default function AccountClient({
         <LocalNavLayout
           nav={
             railNav ? (
-              <TabRail tabs={tabs} ariaLabel="Account sections" />
+              <TabRail tabs={tabs} ariaLabel="Account sections" menuLabel="Account Menu" />
             ) : (
               <TabBar
                 ariaLabel="Account sections"

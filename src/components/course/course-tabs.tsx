@@ -261,10 +261,19 @@ const RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS = [
 export function TabRail({
   tabs,
   ariaLabel,
+  menuLabel = 'Navigation',
   linkPanels = false,
 }: {
   tabs: readonly TabBarTab[];
   ariaLabel: string;
+  /**
+   * The rail's own visible heading, shown while expanded, e.g. "Course Menu". It also
+   * supplies the collapse control's name ("Collapse course menu"), so it should read as a
+   * noun phrase. Deliberately a prop and not a constant: the same rail runs the course
+   * page and five admin pages, and a hardcoded "Course Menu" would label System Settings
+   * wrongly. The fallback is generic for the same reason.
+   */
+  menuLabel?: string;
   /** Emit explicit `tab-*`/`panel-*` ids. Off for callers that let Radix pair them. */
   linkPanels?: boolean;
 }) {
@@ -289,8 +298,8 @@ export function TabRail({
     //
     // w-full throughout: the width is the grid column's, set by LocalNavLayout, so the rail
     // and the workspace beside it can never disagree about how much room it is taking.
-    <div className="bg-muted/40 flex w-full flex-col gap-1 self-start overflow-hidden rounded-lg p-2.5 lg:sticky lg:top-6">
-      {collapse ? <RailCollapseToggle collapsed={collapsed} onToggle={collapse.toggle} /> : null}
+    <div className="bg-muted/40 border-border/60 flex w-full flex-col gap-1 self-start overflow-hidden rounded-lg border p-2.5 lg:sticky lg:top-6">
+      <RailHeader menuLabel={menuLabel} collapsed={collapsed} onToggle={collapse?.toggle} />
       <TabsList
         aria-label={ariaLabel}
         className="h-auto w-full flex-col items-stretch justify-start gap-1 border-0 bg-transparent p-0"
@@ -344,35 +353,63 @@ export function TabRail({
 }
 
 /**
- * The rail's own collapse control. One button in both states, so focus stays exactly where
- * it was when it is pressed: only the icon and the name change.
+ * The rail's header: its name on the left, the collapse control on the right, in one row
+ * the same height as a nav item. The toggle used to sit alone on a row of its own, which
+ * read as an unfinished corner rather than a deliberate header.
+ *
+ * The same control in both states, so focus stays exactly where it was when it is pressed:
+ * only the icon and the name change. Collapsed, the label is not rendered at all (rather
+ * than hidden in place), so nothing reserves width in a 56px rail.
+ *
+ * `onToggle` is absent outside a LocalNavLayout, where there is no column to collapse; the
+ * header then renders as the label alone.
  */
-function RailCollapseToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const label = collapsed ? 'Expand local navigation' : 'Collapse local navigation';
+function RailHeader({
+  menuLabel,
+  collapsed,
+  onToggle,
+}: {
+  menuLabel: string;
+  collapsed: boolean;
+  onToggle?: () => void;
+}) {
+  // "Collapse course menu" from "Course Menu". One string to keep in step rather than a
+  // second prop that could disagree with the visible one.
+  const toggleLabel = `${collapsed ? 'Expand' : 'Collapse'} ${menuLabel.toLowerCase()}`;
   const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={label}
-          aria-expanded={!collapsed}
-          onClick={onToggle}
-          // Right-aligned when expanded so it sits out of the way of the labels below it,
-          // centred when collapsed because there is nowhere else for it to be.
-          className={cn(
-            'text-muted-foreground hover:text-foreground size-8 shrink-0',
-            collapsed ? 'self-center' : 'self-end',
-          )}
-        >
-          <Icon className="size-4" aria-hidden="true" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
+    <div
+      className={cn(
+        'flex h-10 flex-none items-center',
+        collapsed ? 'justify-center' : 'justify-between pr-1 pl-2.5',
+      )}
+    >
+      {/* Plain text, not a heading: it names the control beside it, and the tablist below
+          already carries its own accessible name. A step down from the nav rows' text-sm
+          so it reads as a label rather than an eighth item. */}
+      {collapsed ? null : (
+        <span className="text-muted-foreground truncate text-xs font-semibold">{menuLabel}</span>
+      )}
+      {onToggle ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={toggleLabel}
+              aria-expanded={!collapsed}
+              onClick={onToggle}
+              className="text-muted-foreground hover:text-foreground size-8 shrink-0"
+            >
+              <Icon className="size-4" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">{toggleLabel}</TooltipContent>
+        </Tooltip>
+      ) : null}
+    </div>
   );
 }
 
@@ -399,7 +436,9 @@ export function CourseTabBar({
   }));
 
   if (rail) {
-    return <TabRail tabs={tabs} ariaLabel="Course content sections" linkPanels />;
+    return (
+      <TabRail tabs={tabs} ariaLabel="Course content sections" menuLabel="Course Menu" linkPanels />
+    );
   }
 
   return (

@@ -139,14 +139,16 @@ describe('TabRail collapse', () => {
   const renderRail = (extra?: React.ReactNode) =>
     render(
       <Tabs value="a" onValueChange={vi.fn()} orientation="vertical">
-        <LocalNavLayout nav={<TabRail tabs={TABS} ariaLabel="Demo sections" />}>
+        <LocalNavLayout
+          nav={<TabRail tabs={TABS} ariaLabel="Demo sections" menuLabel="Demo Menu" />}
+        >
           {extra ?? <div>panel</div>}
         </LocalNavLayout>
       </Tabs>,
     );
 
-  const collapseButton = () => screen.getByRole('button', { name: 'Collapse local navigation' });
-  const expandButton = () => screen.getByRole('button', { name: 'Expand local navigation' });
+  const collapseButton = () => screen.getByRole('button', { name: 'Collapse demo menu' });
+  const expandButton = () => screen.getByRole('button', { name: 'Expand demo menu' });
   const labelSpan = (name: RegExp | string) =>
     within(screen.getByRole('tab', { name })).getByText('Alpha');
 
@@ -154,12 +156,51 @@ describe('TabRail collapse', () => {
     window.localStorage.clear();
   });
 
-  it('starts expanded, with visible labels and a collapse control', () => {
+  it('starts expanded, with a named header, visible labels and a collapse control', () => {
     renderRail();
+    // The header names the rail and carries the toggle on the same row, rather than
+    // leaving it alone above a blank space.
+    expect(screen.getByText('Demo Menu')).toBeInTheDocument();
     expect(collapseButton()).toBeInTheDocument();
     expect(collapseButton()).toHaveAttribute('aria-expanded', 'true');
     // The label is visible text, not screen-reader-only.
     expect(labelSpan('Alpha, 3')).not.toHaveClass('sr-only');
+    // The menu name is not an eighth tab.
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
+  });
+
+  it('drops the header label entirely when collapsed', () => {
+    renderRail();
+    fireEvent.click(collapseButton());
+    // Not hidden in place: nothing should reserve width in a 56px rail.
+    expect(screen.queryByText('Demo Menu')).toBeNull();
+    expect(expandButton()).toBeInTheDocument();
+  });
+
+  it('names the toggle after the menu, so no page says the wrong thing', () => {
+    render(
+      <Tabs value="a" onValueChange={vi.fn()} orientation="vertical">
+        <LocalNavLayout
+          nav={<TabRail tabs={TABS} ariaLabel="Course sections" menuLabel="Course Menu" />}
+        >
+          <div>panel</div>
+        </LocalNavLayout>
+      </Tabs>,
+    );
+    expect(screen.getByRole('button', { name: 'Collapse course menu' })).toBeInTheDocument();
+  });
+
+  it('falls back to a generic menu name rather than borrowing another page name', () => {
+    render(
+      <Tabs value="a" onValueChange={vi.fn()} orientation="vertical">
+        <LocalNavLayout nav={<TabRail tabs={TABS} ariaLabel="Demo sections" />}>
+          <div>panel</div>
+        </LocalNavLayout>
+      </Tabs>,
+    );
+    expect(screen.getByText('Navigation')).toBeInTheDocument();
+    expect(screen.queryByText('Course Menu')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Collapse navigation' })).toBeInTheDocument();
   });
 
   it('hides labels and the count pill when collapsed, keeping icons and names', () => {
@@ -225,10 +266,12 @@ describe('TabRail collapse', () => {
   it('renders no toggle outside a LocalNavLayout, where nothing could act on it', () => {
     render(
       <Tabs value="a" onValueChange={vi.fn()} orientation="vertical">
-        <TabRail tabs={TABS} ariaLabel="Demo sections" />
+        <TabRail tabs={TABS} ariaLabel="Demo sections" menuLabel="Demo Menu" />
       </Tabs>,
     );
-    expect(screen.queryByRole('button', { name: /local navigation/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /demo menu/i })).toBeNull();
+    // The header still names the rail; only the control that could not work is dropped.
+    expect(screen.getByText('Demo Menu')).toBeInTheDocument();
     expect(labelSpan('Alpha, 3')).not.toHaveClass('sr-only');
   });
 });
@@ -243,7 +286,9 @@ describe('LocalNavLayout', () => {
   it('hands the freed width to the workspace when the rail collapses', () => {
     render(
       <Tabs value="a" onValueChange={vi.fn()} orientation="vertical">
-        <LocalNavLayout nav={<TabRail tabs={TABS} ariaLabel="Demo sections" />}>
+        <LocalNavLayout
+          nav={<TabRail tabs={TABS} ariaLabel="Demo sections" menuLabel="Demo Menu" />}
+        >
           <div>panel</div>
         </LocalNavLayout>
       </Tabs>,
@@ -252,7 +297,7 @@ describe('LocalNavLayout', () => {
     // The grid column is driven by this variable, so the rail and the workspace beside it
     // can never disagree about how much room it takes.
     expect(layout().style.getPropertyValue('--local-nav-width')).toBe('12rem');
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse local navigation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse demo menu' }));
     expect(layout().style.getPropertyValue('--local-nav-width')).toBe('3.5rem');
   });
 

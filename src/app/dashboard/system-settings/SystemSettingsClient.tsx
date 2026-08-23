@@ -577,7 +577,11 @@ export default function SystemSettingsClient() {
           contentClassName="max-w-3xl"
           nav={
             railNav ? (
-              <TabRail tabs={settingsTabs} ariaLabel="System settings sections" />
+              <TabRail
+                tabs={settingsTabs}
+                ariaLabel="System settings sections"
+                menuLabel="Settings Menu"
+              />
             ) : (
               <TabBar
                 ariaLabel="System settings sections"

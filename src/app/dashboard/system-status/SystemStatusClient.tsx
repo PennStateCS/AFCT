@@ -234,7 +234,7 @@ export default function SystemStatusClient() {
         className="space-y-4"
         nav={
           railNav ? (
-            <TabRail tabs={statusTabs} ariaLabel="System status sections" />
+            <TabRail tabs={statusTabs} ariaLabel="System status sections" menuLabel="Status Menu" />
           ) : (
             <TabBar
               ariaLabel="System status sections"

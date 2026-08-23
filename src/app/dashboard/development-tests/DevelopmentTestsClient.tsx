@@ -179,7 +179,11 @@ export default function DevelopmentTestsClient() {
           className="space-y-4"
           nav={
             railNav ? (
-              <TabRail tabs={SECTIONS} ariaLabel="Development test sections" />
+              <TabRail
+                tabs={SECTIONS}
+                ariaLabel="Development test sections"
+                menuLabel="Development Menu"
+              />
             ) : (
               <TabBar
                 ariaLabel="Development test sections"
