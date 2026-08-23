@@ -1,6 +1,6 @@
 'use client';
 
-import { BookOpen, Check, FileCheck, LayoutDashboard } from 'lucide-react';
+import { BookOpen, Check, ChevronRight, FileCheck, LayoutDashboard, PanelLeft } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -266,6 +266,53 @@ function SidebarPreview() {
         </li>
         <li>
           Label: <Cls>text-sidebar-muted-foreground</Cls>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The dashboard header, shown next to the rail above because the two are one decision.
+ * It sits one step off the page canvas rather than being a colour of its own, so the only
+ * way to judge it is against the surface it caps: the strip below the band is there to
+ * show exactly that. Non-interactive, like the rail; the hover state is labelled instead.
+ */
+function NavbarPreview() {
+  return (
+    <div className="flex flex-wrap items-start gap-4">
+      <div className="border-navbar-border w-full max-w-md overflow-hidden rounded-lg border">
+        <div className="bg-navbar text-navbar-foreground border-navbar-border flex h-14 items-center gap-3 border-b px-3">
+          <span className="text-navbar-foreground bg-navbar-accent flex size-8 items-center justify-center rounded-md">
+            <PanelLeft className="size-4" aria-hidden="true" />
+          </span>
+          <span className="text-navbar-muted-foreground flex min-w-0 items-center gap-1.5 text-sm">
+            <span>Dashboard</span>
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+            <span>Courses</span>
+            <ChevronRight className="size-3.5" aria-hidden="true" />
+            <span className="text-navbar-foreground truncate font-medium">Automata Theory</span>
+          </span>
+        </div>
+        <div className="bg-background text-muted-foreground px-3 py-2 text-xs">
+          the workspace below
+        </div>
+      </div>
+      <ul className="text-muted-foreground min-w-56 flex-1 space-y-1 text-sm">
+        <li>
+          Surface: <Cls>bg-navbar</Cls> <Cls>border-navbar-border</Cls>
+        </li>
+        <li>
+          Current page: <Cls>text-navbar-foreground</Cls>
+        </li>
+        <li>
+          Trail and separators: <Cls>text-navbar-muted-foreground</Cls>
+        </li>
+        <li>
+          Control hover: <Cls>bg-navbar-accent</Cls> <Cls>text-navbar-accent-foreground</Cls>
+        </li>
+        <li>
+          Focus ring: <Cls>ring-navbar-ring</Cls>
         </li>
       </ul>
     </div>
@@ -600,6 +647,14 @@ export function DesignTokens() {
         description="Its own family, and the same dark surface in both themes. Shown as a miniature rail because these tokens only mean anything in relation to each other."
       >
         <SidebarPreview />
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-navbar"
+        title="Dashboard Header"
+        description="A band one step off the page canvas rather than a colour of its own, and light in two themes and dark in one, so it carries its own family rather than the page tokens."
+      >
+        <NavbarPreview />
       </TokenSection>
 
       <TokenSection

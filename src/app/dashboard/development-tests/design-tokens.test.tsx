@@ -23,6 +23,7 @@ describe('DesignTokens', () => {
       'Status / Feedback',
       'Solid Status Colors',
       'Sidebar',
+      'Dashboard Header',
       'Data Visualization',
       'Typography Roles',
     ]);
@@ -120,6 +121,18 @@ describe('DesignTokens', () => {
     expect(within(rail).getByText('Course')).toBeInTheDocument();
     expect(container.querySelector('.bg-sidebar-primary')).not.toBeNull();
     expect(container.querySelector('.bg-sidebar-accent')).not.toBeNull();
+  });
+
+  it('previews the dashboard header with its own token family', () => {
+    const { container } = render(<DesignTokens />);
+    const header = container.querySelector('.bg-navbar') as HTMLElement;
+    expect(header).not.toBeNull();
+    // The point of the preview is the hierarchy, so both halves of it have to be there:
+    // the current page in the full foreground, the trail behind it in the muted one.
+    expect(within(header).getByText('Automata Theory')).toBeInTheDocument();
+    expect(within(header).getByText('Courses')).toBeInTheDocument();
+    expect(container.querySelector('.bg-navbar-accent')).not.toBeNull();
+    expect(container.querySelector('.text-navbar-muted-foreground')).not.toBeNull();
   });
 
   it('shows six categorical hues, and no teal', () => {
