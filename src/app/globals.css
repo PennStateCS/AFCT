@@ -169,8 +169,18 @@
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.754 0.0001 271.152);
-  --ring: oklch(0.6604 0.1739 249.672);
+  /* The visible edge of a control, and it has to clear WCAG 1.4.11's 3:1 because a field
+     filled with --card on a --card surface has nothing else marking where it is. The old
+     0.754 grey was 2.19:1 on the card. Computed to land near 3.5:1 rather than picking a
+     palette step: 3.64:1 on the card, 3.48:1 on the canvas, 3.30:1 on muted, which keeps
+     margin without making 80-odd outline buttons read as heavy. --border stays quieter on
+     purpose; structure is not a control. */
+  --input: oklch(0.6202 0.0288 259.0418); /* #7C8798 */
+  /* The focus indicator, which 1.4.11 also holds to 3:1. Two things had to move: the token
+     was #2096F7, and controls render it through `ring-ring/70`, so what matters is the
+     BLENDED colour, not this value. At the old token and the old /50 the rendered ring was
+     1.74:1 on the card. Now 3.57:1 on the card, 3.48:1 on the canvas, 3.39:1 on muted. */
+  --ring: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
   /* Six categorical hues, deliberately spread around the wheel. The old set had two
      oranges, a yellow and two teals, so a five-series chart came out as "warm, warm,
      warm, cold, cold" and the legend did all the work. Cobalt first, because it is the
@@ -179,7 +189,7 @@
   --chart-2: oklch(0.5413 0.2466 293.009); /* #7C3AED violet */
   --chart-3: oklch(0.6461 0.1943 41.1158); /* #EA580C orange */
   --chart-4: oklch(0.5858 0.222 17.5846); /* #E11D48 rose */
-  --chart-5: oklch(0.6806 0.1423 75.834); /* #CA8A04 gold */
+  --chart-5: oklch(0.5538 0.1207 66.4416); /* #A16207 gold, 4.9:1 on the card */
   --chart-6: oklch(0.6271 0.1699 149.2138); /* #16A34A green */
 
   /* One blue ramp, light to dark, for anything where colour is a quantity: the activity
@@ -320,7 +330,10 @@
      step quieter now; a form control, which you have to be able to find and click, keeps
      the stronger one. Light mode already made this distinction. */
   --border: oklch(0.3268 0.0376 259.4297); /* #293548 */
-  --input: oklch(0.3717 0.0392 257.287); /* #334155 */
+  /* Slate-500. #334155 was 1.72:1 on the card, well under the 3:1 a control boundary
+     needs, and the fill inside is the card colour itself. 3.75:1 on the card, 4.24:1 on
+     the background, 3.07:1 on muted. */
+  --input: oklch(0.5544 0.0407 257.4166); /* #64748B */
   /* Light blue rather than the mid blue this was: at 0.488 the ring barely showed on a
      0.13 background. 9.8:1 or better on every dark surface. */
   --ring: oklch(0.8091 0.0956 251.813); /* #93C5FD */
@@ -384,9 +397,12 @@
   --status-info: oklch(0.7646 0.0834 259.348);
   --status-info-bg: oklch(0.37 0.1221 262.228 / 30%);
   --status-info-border: oklch(0.7646 0.0834 259.348 / 40%);
-  /* Solid fills carry a white glyph, so they keep the same mid shade in dark (a lighter
-     fill would drop below 3:1 against white); only the grey neutral is lightened here. */
-  --status-neutral-solid: oklch(0.7107 0.0351 256.788);
+  /* Solid fills carry a white glyph, so they keep the same mid shade in dark: a lighter
+     fill drops below 3:1 against white, which is exactly what this token used to do. It
+     was lightened to #94A3B8 to stand out from the dark card and that put white on it at
+     2.56:1. Slate-500 instead: white is 4.76:1 on it, and it is still 3.75:1 against the
+     card, so the fill itself remains visible. */
+  --status-neutral-solid: oklch(0.5544 0.0407 257.4166); /* #64748B */
   /* blue-300 / blue-950 rather than --primary: cobalt text on the dark card is 3.45:1. */
   --tab-active: oklch(0.8091 0.0956 251.813); /* #93C5FD, 9.9:1 on the card */
   --tab-active-bg: oklch(0.2823 0.0874 267.935 / 40%); /* blue-950 / 40% */

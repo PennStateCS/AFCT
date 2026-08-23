@@ -129,7 +129,7 @@ export function TabBarMobileSelect({
         id={id}
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
-        className="border-input bg-card text-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-11 w-full rounded-md border px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
+        className="border-input bg-card text-foreground focus-visible:border-ring focus-visible:ring-ring/70 h-11 w-full rounded-md border px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
       >
         {items.map((item) => (
           <option key={item.value} value={item.value}>

@@ -45,7 +45,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
         // cursor-pointer, because Tailwind v4 dropped the browser default of a hand on buttons
         // and a tab that does not look clickable reads as a label. Button carries the same class
         // for the same reason.
-        "text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:border-border focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring inline-flex h-[calc(100%-1px)] flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 data-[state=active]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:border-border focus-visible:border-ring focus-visible:ring-ring/70 focus-visible:outline-ring inline-flex h-[calc(100%-1px)] flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 data-[state=active]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}

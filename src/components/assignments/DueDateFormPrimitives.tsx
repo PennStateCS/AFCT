@@ -38,7 +38,7 @@ export function DueDateSection({
       <div className="bg-muted flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <span
-            className="bg-primary/10 text-primary mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg"
+            className="bg-status-info-bg text-status-info mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg"
             aria-hidden="true"
           >
             {icon}
@@ -91,7 +91,7 @@ export function OverrideLatePolicyField({
           aria-describedby={descriptionId}
           // bg-card + border-input so it reads like the InputGroup date fields beside it
           // (the default border-input gray made the whole control look gray).
-          className="bg-card h-11 w-full border-input"
+          className="bg-card border-input h-11 w-full"
         >
           <SelectValue />
         </SelectTrigger>

@@ -25,7 +25,13 @@ export default async function DashboardPage({
 
   if (!session?.user) {
     return (
-      <div className="bg-destructive rounded p-4 text-lg text-white">
+      // A callout, not a saturated block. `bg-destructive` with white text is 2.89:1 in
+      // dark, because --destructive lightens there to work as TEXT; the status-danger
+      // triad is the pairing built for a filled message and is theme-aware.
+      <div
+        role="alert"
+        className="border-status-danger-border bg-status-danger-bg text-status-danger rounded border p-4 text-lg"
+      >
         You are not signed in.
       </div>
     );
@@ -215,7 +221,13 @@ export default async function DashboardPage({
         a.overrides,
         id,
       );
-      return { id: a.id, title: a.title, courseId: a.courseId, course: a.course, dueDate: eff.dueDate };
+      return {
+        id: a.id,
+        title: a.title,
+        courseId: a.courseId,
+        course: a.course,
+        dueDate: eff.dueDate,
+      };
     })
     // Drop rows whose effective due has already passed (base was in range but the
     // override moved it into the past).

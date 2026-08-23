@@ -72,11 +72,15 @@ const CORE_SURFACES = [
 ] as const;
 
 // Action fills. `destructive` pairs with literal white rather than a foreground token:
-// that is what Button and Badge do, and the reference should show what ships.
+// that is what Button and Badge do, and the reference should show what ships. That
+// includes the dark half: --destructive lightens in dark so it works as TEXT, which puts
+// white on the SOLID fill at 2.89:1, so Button and Badge both damp it to 60% over the
+// surface behind (5.6 to 6.7:1 depending on the surface). Shown the same way here, or
+// this page would be presenting a failing pairing as an approved one.
 const ACTIONS = [
   { label: 'primary', bg: 'bg-primary', fg: 'text-primary-foreground' },
   { label: 'secondary', bg: 'bg-secondary', fg: 'text-secondary-foreground' },
-  { label: 'destructive', bg: 'bg-destructive', fg: 'text-white' },
+  { label: 'destructive', bg: 'bg-destructive dark:bg-destructive/60', fg: 'text-white' },
 ] as const;
 
 const SEMANTIC_TEXT = [
@@ -398,10 +402,30 @@ export function DesignTokens() {
             <p className="text-muted-foreground text-xs">Form-control edges only.</p>
           </div>
           <div className="border-border bg-card space-y-2 rounded-md border p-3">
-            <div className="ring-ring h-8 rounded ring-[3px]" aria-hidden="true" />
-            <Cls>ring-ring</Cls>
+            <div className="ring-ring/70 h-8 rounded ring-[3px]" aria-hidden="true" />
+            <Cls>ring-ring/70</Cls>
             <p className="text-muted-foreground text-xs">Focus-visible ring.</p>
           </div>
+        </div>
+        <div className="border-border bg-muted/30 space-y-1 rounded-md border p-3">
+          <p className="text-foreground text-sm font-medium">Which border, and why it matters</p>
+          <ul className="text-muted-foreground space-y-1 text-sm">
+            <li>
+              <Cls>border-border</Cls> is structure: card edges, dividers, row separators. It may be
+              quiet, because the content it surrounds is legible without it.
+            </li>
+            <li>
+              <Cls>border-input</Cls> is the boundary of something you operate: fields, selects,
+              textareas, outline buttons. It has to hold 3:1 against the surface behind it (WCAG
+              1.4.11), because a control filled with <Cls>bg-card</Cls> on a card has nothing else
+              showing where it is.
+            </li>
+            <li>
+              <Cls>ring-ring/70</Cls> is the keyboard focus indicator, and 1.4.11 applies to it too.
+              Judge the RENDERED ring: it is drawn through an opacity, so the token&rsquo;s own
+              ratio is not the number that counts. At <Cls>/50</Cls> this blended to 1.7:1.
+            </li>
+          </ul>
         </div>
       </TokenSection>
 
@@ -549,7 +573,7 @@ export function DesignTokens() {
       <TokenSection
         id="tokens-solid-status"
         title="Solid Status Colors"
-        description="Saturated fills for the same states, used where WHITE content sits on the fill (a toast's icon strip, a filled success button). They stay a mid shade in both themes so the glyph keeps its contrast."
+        description="Saturated fills for the same states, used where WHITE content sits on the fill (a toast's icon strip, a filled success button). That is the whole contract: each of these is validated against white, not against the page, so it stays a mid shade in both themes rather than lightening to stand out on a dark card."
       >
         <div className="flex flex-wrap gap-3">
           {SOLID_STATUS.map((s) => (
