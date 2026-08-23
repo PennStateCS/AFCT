@@ -763,4 +763,30 @@ describe('PrivilegeAssignmentView - the LMS badge', () => {
     // courses", and one of those two is a course that may never have received the link.
     expect(await screen.findByText('In Canvas')).toBeInTheDocument();
   });
+
+  it('leads with a single identity panel headed by the assignment title', () => {
+    const { container } = renderView({});
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveAttribute('id', 'assignment-page-title');
+    // The panel is a named region, named by the heading rather than by its tint.
+    expect(
+      container.querySelector('section[aria-labelledby="assignment-page-title"]'),
+    ).not.toBeNull();
+    // The wash and the arcs carry no meaning, so they stay out of the accessibility tree
+    // and cannot swallow a click.
+    const decoration = container.querySelectorAll(
+      'section[aria-labelledby="assignment-page-title"] [aria-hidden="true"].pointer-events-none',
+    );
+    expect(decoration.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps every header control inside the panel', () => {
+    renderView({});
+    // The publish switch, the group badge and the assignment switcher all still work from
+    // the header; the panel is a shell, not a rewrite.
+    expect(screen.getByRole('switch', { name: 'Published' })).toBeInTheDocument();
+    expect(screen.getByText(/assignment$/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Theory/ })).toBeInTheDocument();
+  });
 });

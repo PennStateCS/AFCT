@@ -5,6 +5,7 @@ import LoadingSpinner from '@/components/ui/loading-spinner';
 import {
   AlignLeft,
   BarChart3,
+  BookOpen,
   FileText,
   Fingerprint,
   Package,
@@ -21,6 +22,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { IdentityPanel, IdentityPanelIcon } from '@/components/IdentityPanel';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import {
   Dialog,
@@ -533,81 +535,93 @@ export default function AssignmentDashboardPage({
         orientation={railNav ? 'vertical' : 'horizontal'}
         className="space-y-6"
       >
-        {/* Header on the workspace itself: the page-sized card wrapped a header, a tab
-            strip and eight panels in one border, which said they were one object. */}
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="flex min-w-0 flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight break-words">
-              <span className="font-semibold">Assignment:</span>{' '}
+        {/* The same identity panel the course page leads with, so an assignment reads as
+            the same kind of object one level down. The shell, the wash and the arcs all
+            come from the shared component; only what goes inside differs. */}
+        <IdentityPanel labelledBy="assignment-page-title">
+          <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
+            {/* min-w-0 flex-1 so a long title wraps rather than pushing the controls off
+                the panel. Never truncated: this is the one place the whole title belongs. */}
+            <h1
+              id="assignment-page-title"
+              className="flex min-w-0 flex-1 items-start gap-3 text-2xl leading-tight font-semibold tracking-tight"
+            >
+              {/* BookOpen, the icon the local rail and the course page already use for
+                  assignments, in the identity panel's emerald tile. */}
+              <IdentityPanelIcon icon={BookOpen} />
               <span className="min-w-0 [overflow-wrap:anywhere] break-words">
                 {assignment.title}
               </span>
             </h1>
-            {/* Publish toggle sits next to the title; server enforces the guards
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
+              {/* Publish toggle sits next to the title; server enforces the guards
                   (e.g. no unpublish after submissions). */}
-            <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
-              <Switch
-                aria-label="Published"
-                checked={!!assignment.isPublished}
-                onCheckedChange={(checked) => setPublishTarget(!!checked)}
-                disabled={courseIsArchived}
-              />
-              Published
-            </label>
-            {/* Whether this is group work belongs to the assignment, so it is stated once
+              <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+                <Switch
+                  aria-label="Published"
+                  checked={!!assignment.isPublished}
+                  onCheckedChange={(checked) => setPublishTarget(!!checked)}
+                  disabled={courseIsArchived}
+                />
+                Published
+              </label>
+              {/* Whether this is group work belongs to the assignment, so it is stated once
                   here rather than repeated beside every student on the Submissions tab. The
                   dates are NOT here on purpose: those resolve per student through date
                   overrides, so a single header value would hide an extension. */}
-            {/* Tinted so it registers at a glance. The two tones differ to tell them apart,
+              {/* Tinted so it registers at a glance. The two tones differ to tell them apart,
                   not to say one is better: an icon carries the same distinction for anyone who
                   cannot separate the hues. */}
-            <Badge
-              variant="outline"
-              className={`shrink-0 gap-1.5 text-xs font-normal ${
-                assignment.groupSetId
-                  ? 'bg-status-warning-bg border-status-warning-border text-status-warning'
-                  : 'bg-status-info-bg border-status-info-border text-status-info'
-              }`}
-            >
-              {assignment.groupSetId ? (
-                <Users className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : (
-                <User className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
-              {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
-            </Badge>
-            {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
+              <Badge
+                variant="outline"
+                className={`shrink-0 gap-1.5 text-xs font-normal ${
+                  assignment.groupSetId
+                    ? 'bg-status-warning-bg border-status-warning-border text-status-warning'
+                    : 'bg-status-info-bg border-status-info-border text-status-info'
+                }`}
+              >
+                {assignment.groupSetId ? (
+                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : (
+                  <User className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
+              </Badge>
+              {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
                   Settings holds the detail and the way to remove one. */}
-            <LmsLinkBadge links={confirmedLmsLinks} />
-            {/* Quick jump to another assignment in this course. */}
-            <div className="ml-auto w-56 shrink-0">
-              <SearchableSelect
-                items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
-                onSelect={(assignmentId) => {
-                  // Switching assignments unmounts every form on this page; ask first when
-                  // one of them holds pending edits.
-                  void confirmIfDirty().then((proceed) => {
-                    if (!proceed) return;
-                    // Carry the current tab across the jump so switching assignments keeps
-                    // you on the same view (e.g. staying on Submissions or Statistics).
-                    const tabQuery = `?tab=${encodeURIComponent(tab)}`;
-                    if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
-                    // Without the course id there is no absolute path to push, so this
-                    // falls back to a RELATIVE navigation resolved against the current
-                    // URL. next/navigation's router has no relative form, which is what
-                    // the lint rule below cannot express.
-                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                    else window.location.href = `${assignmentId}${tabQuery}`;
-                  });
-                }}
-                placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
-                searchPlaceholder="Search assignments..."
-                emptyStateText="No assignments found."
-                disabled={assignmentsLoading}
-              />
+              <LmsLinkBadge links={confirmedLmsLinks} />
+              {/* Quick jump to another assignment in this course. */}
+              <div className="w-56 shrink-0">
+                <SearchableSelect
+                  items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
+                  onSelect={(assignmentId) => {
+                    // Switching assignments unmounts every form on this page; ask first when
+                    // one of them holds pending edits.
+                    void confirmIfDirty().then((proceed) => {
+                      if (!proceed) return;
+                      // Carry the current tab across the jump so switching assignments keeps
+                      // you on the same view (e.g. staying on Submissions or Statistics).
+                      const tabQuery = `?tab=${encodeURIComponent(tab)}`;
+                      if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
+                      // Without the course id there is no absolute path to push, so this
+                      // falls back to a RELATIVE navigation resolved against the current
+                      // URL. next/navigation's router has no relative form, which is what
+                      // the lint rule below cannot express.
+                      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                      else window.location.href = `${assignmentId}${tabQuery}`;
+                    });
+                  }}
+                  placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
+                  searchPlaceholder="Search assignments..."
+                  emptyStateText="No assignments found."
+                  disabled={assignmentsLoading}
+                />
+              </div>
             </div>
           </div>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+          {/* Indented to the title's text on wide screens, so the identity block reads as
+              one column, matching the course panel. */}
+          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm sm:pl-[3.75rem]">
             {/* Show course name/code as a link to the course page (fallback to courseId) */}
             <Link
               href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
@@ -621,7 +635,7 @@ export default function AssignmentDashboardPage({
                   : ''}
             </Link>
           </div>
-        </section>
+        </IdentityPanel>
 
         {/* Below xl this is a plain stack, so the strip sits above the panels as it did.
             At xl the rail takes a fixed column beside them. One control at a time: two
