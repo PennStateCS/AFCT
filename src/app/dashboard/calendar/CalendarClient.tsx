@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { CalendarDay, Modifiers } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { addMonths, subMonths } from 'date-fns';
 import DayAssignmentsDialog from '@/components/dialogs/DayAssignmentsDialog';
@@ -504,132 +503,137 @@ export default function CalendarClient({
 
       {/* Same rail widths as the dashboard, so the two pages read as one system. */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
-        <Card className="flex h-full w-full flex-col gap-0 py-0">
-          {/* Tight on purpose. The card's default px-6/py-6 spent 48px of width and 48px of
-              height on air; a month planner wants that for the grid. px-2 on a phone for the
-              same reason, where 48px is most of the difference between a month that fits and
-              one that has to be scrolled. */}
-          <CardContent className="relative flex min-h-0 flex-1 flex-col gap-3 p-2 sm:p-4">
-            {isError ? (
-              <div className="border-status-danger-border bg-status-danger-bg flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                <p role="alert" className="text-status-danger text-sm">
-                  Failed to load calendar assignments. Please try again.
-                </p>
-                <Button variant="outline" size="sm" onClick={refresh}>
-                  Retry
-                </Button>
-              </div>
-            ) : null}
-            {/* Mounted whether or not it is loading. Created together with its message, a
-                live region is not reliably announced, so changing month said nothing while
-                the fetch ran. */}
-            <div
-              role="status"
-              aria-live="polite"
-              className={
-                loading
-                  ? 'border-border bg-card pointer-events-none absolute inset-x-0 top-12 z-10 mx-auto w-fit rounded-md border px-2 py-1 shadow-sm'
-                  : 'sr-only'
-              }
-            >
-              {loading ? (
-                <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
-              ) : null}
+        {/* No Card. The calendar IS the page's work surface (the page itself is the white
+            WorkspaceSurface), so wrapping it in a card put a bounded object inside a
+            bounded object and spent 48px of width and 48px of height on the card's own
+            padding. The one boundary that earns its place is around the month grid
+            below. */}
+        <div className="relative flex min-w-0 flex-col gap-3">
+          {isError ? (
+            <div className="border-status-danger-border bg-status-danger-bg flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <p role="alert" className="text-status-danger text-sm">
+                Failed to load calendar assignments. Please try again.
+              </p>
+              <Button variant="outline" size="sm" onClick={refresh}>
+                Retry
+              </Button>
             </div>
-            {/* A control bar, not three stacked CTAs: month navigation is a utility, so
-                the buttons are outline rather than the filled primaries they were.
-                Three zones rather than a flex row: the left side carries two controls and
-                the right side one, so a plain row put the month label off-centre. The
-                1fr/auto/1fr grid centres it on the card regardless. */}
-            <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
-              <div className="flex items-center gap-2 justify-self-start">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-8 shrink-0 p-0"
-                  onClick={goToPreviousMonth}
-                  aria-label="Previous month"
-                >
-                  <ChevronLeftIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 shrink-0"
-                  onClick={goToToday}
-                >
-                  Today
-                </Button>
-              </div>
-              <div
-                aria-live="polite"
-                aria-atomic="true"
-                className="min-w-0 truncate px-1 text-center text-base font-semibold sm:px-4 sm:text-lg"
-              >
-                {monthLabel}
-              </div>
+          ) : null}
+          {/* Mounted whether or not it is loading. Created together with its message, a
+              live region is not reliably announced, so changing month said nothing while
+              the fetch ran. Positioned against this column (hence its `relative`) and
+              floated over the top of the month grid, clear of the toolbar's controls. */}
+          <div
+            role="status"
+            aria-live="polite"
+            className={
+              loading
+                ? 'border-border bg-card pointer-events-none absolute inset-x-0 top-24 z-10 mx-auto w-fit rounded-md border px-2 py-1 shadow-sm'
+                : 'sr-only'
+            }
+          >
+            {loading ? (
+              <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
+            ) : null}
+          </div>
+          {/* A control bar, not three stacked CTAs: month navigation is a utility, so
+              the buttons are outline rather than the filled primaries they were.
+              Three zones rather than a flex row: the left side carries two controls and
+              the right side one, so a plain row put the month label off-centre. The
+              1fr/auto/1fr grid centres it on the column regardless. */}
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
+            <div className="flex items-center gap-2 justify-self-start">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 w-8 shrink-0 justify-self-end p-0"
-                onClick={goToNextMonth}
-                aria-label="Next month"
+                className="h-8 w-8 shrink-0 p-0"
+                onClick={goToPreviousMonth}
+                aria-label="Previous month"
               >
-                <ChevronRightIcon className="h-4 w-4" />
+                <ChevronLeftIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0"
+                onClick={goToToday}
+              >
+                Today
               </Button>
             </div>
-            <div className="w-full">
-              <p id="calendar-keyboard-help" className="sr-only">
-                Use arrow keys to move between calendar days. Press Enter or Space to open
-                assignments for the focused day.
-              </p>
-              <div aria-describedby="calendar-keyboard-help">
-                <CalendarDayContext.Provider value={dayContextValue}>
-                  <Calendar
-                    mode="single"
-                    selected={selected}
-                    onSelect={setSelected}
-                    formatters={{
-                      formatWeekdayName: (date) =>
-                        new Intl.DateTimeFormat('en-US', {
-                          weekday: 'short',
-                          timeZone: timezone,
-                        }).format(date),
-                    }}
-                    month={currentMonth}
-                    onMonthChange={(month: Date) => {
-                      setCurrentMonth(month);
-                    }}
-                    // Always six rows, so the page does not jump height between a
-                    // five-week month and a six-week one. getMonthRangeIso fetches the
-                    // same six weeks; see the note there.
-                    fixedWeeks
-                    className="text-foreground bg-card mx-auto w-full max-w-6xl p-0 [--cell-size:2.25rem] sm:[--cell-size:3.25rem] md:[--cell-size:3.5rem]"
-                    timeZone={timezone}
-                    classNames={{
-                      nav: 'hidden',
-                      month_caption: 'hidden',
-                      caption_label: 'hidden',
-                      dropdowns: 'hidden',
-                      // A header row rather than seven labels floating above the grid:
-                      // the faint fill and the shared border tie it to the first week.
-                      weekdays:
-                        'flex gap-0 rounded-t-md border border-border/60 bg-muted/30 py-1.5',
-                      weekday:
-                        'text-muted-foreground flex-1 font-semibold text-xs select-none text-center',
-                      day: 'relative box-border -m-px w-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day select-none border border-border/60',
-                      today: 'rounded-none bg-transparent text-inherit',
-                    }}
-                    components={CALENDAR_DAY_COMPONENTS}
-                  />
-                </CalendarDayContext.Provider>
-              </div>
+            <div
+              aria-live="polite"
+              aria-atomic="true"
+              className="min-w-0 truncate px-1 text-center text-base font-semibold sm:px-4 sm:text-lg"
+            >
+              {monthLabel}
             </div>
-          </CardContent>
-        </Card>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 shrink-0 justify-self-end p-0"
+              onClick={goToNextMonth}
+              aria-label="Next month"
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </Button>
+          </div>
+          {/* The single boundary: it wraps the weekday header and the day grid, and
+              nothing else. overflow-hidden matters as well as rounding the corners: day
+              cells carry -m-px, so their outer 1px of border overhangs and is clipped
+              here rather than doubling up against this edge. The width cap lives here
+              rather than on the Calendar inside it, so the border hugs the grid instead
+              of leaving a margin of empty card inside itself on a wide display. */}
+          <div className="border-border mx-auto w-full max-w-6xl overflow-hidden rounded-lg border">
+            <p id="calendar-keyboard-help" className="sr-only">
+              Use arrow keys to move between calendar days. Press Enter or Space to open assignments
+              for the focused day.
+            </p>
+            <div aria-describedby="calendar-keyboard-help">
+              <CalendarDayContext.Provider value={dayContextValue}>
+                <Calendar
+                  mode="single"
+                  selected={selected}
+                  onSelect={setSelected}
+                  formatters={{
+                    formatWeekdayName: (date) =>
+                      new Intl.DateTimeFormat('en-US', {
+                        weekday: 'short',
+                        timeZone: timezone,
+                      }).format(date),
+                  }}
+                  month={currentMonth}
+                  onMonthChange={(month: Date) => {
+                    setCurrentMonth(month);
+                  }}
+                  // Always six rows, so the page does not jump height between a
+                  // five-week month and a six-week one. getMonthRangeIso fetches the
+                  // same six weeks; see the note there.
+                  fixedWeeks
+                  className="text-foreground bg-card w-full p-0 [--cell-size:2.25rem] sm:[--cell-size:3.25rem] md:[--cell-size:3.5rem]"
+                  timeZone={timezone}
+                  classNames={{
+                    nav: 'hidden',
+                    month_caption: 'hidden',
+                    caption_label: 'hidden',
+                    dropdowns: 'hidden',
+                    // A header row rather than seven labels floating above the grid:
+                    // the faint fill and the shared border tie it to the first week.
+                    weekdays: 'flex gap-0 border-b border-border/60 bg-muted/30 py-2',
+                    weekday:
+                      'text-muted-foreground flex-1 font-semibold text-xs select-none text-center',
+                    day: 'relative box-border -m-px w-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day select-none border border-border/60',
+                    today: 'rounded-none bg-transparent text-inherit',
+                  }}
+                  components={CALENDAR_DAY_COMPONENTS}
+                />
+              </CalendarDayContext.Provider>
+            </div>
+          </div>
+        </div>
 
         <div className="w-full space-y-4">
           <CalendarCourseFilter
