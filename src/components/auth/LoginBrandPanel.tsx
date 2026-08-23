@@ -70,11 +70,22 @@ export function LoginBrandPanel({ className }: { className?: string }) {
           </div>
         </div>
 
-        {/* One short rule, and the only divider on the panel. It ties the identity above it
-            to the copy below rather than separating them, which is why it is 64px and not a
-            full-width line. Blue rather than the primary token: it belongs to the same
-            cobalt family as the mark and the DASHBOARD line, not to the app's buttons. */}
-        <div aria-hidden="true" className="mt-10 h-0.5 w-16 rounded-full bg-blue-400/80" />
+        {/* The only rule on the panel, and it runs the width of the brand above it: from the
+            mark's left edge to the right of the T in AFCT, so the two read as one block
+            rather than as a mark with a dash under it.
+
+            Three measured widths rather than one, because AFCT steps 36px -> 48px -> 60px
+            across the breakpoints, and rather than the width of the block above, because
+            that block is sized by the tracked DASHBOARD, which is WIDER than AFCT below 2xl
+            (111 vs 90 at lg). Taking the block's width put the rule 21px past the T.
+            mark + gap + AFCT measures 154 / 192 / 223; these land within 2px of each.
+
+            Blue rather than the primary token: it belongs to the same cobalt family as the
+            mark and the DASHBOARD line, not to the app's buttons. */}
+        <div
+          aria-hidden="true"
+          className="mt-10 h-0.5 w-38 rounded-full bg-blue-400/80 xl:w-48 2xl:w-56"
+        />
 
         <div className="mt-6 space-y-3">
           <p className="text-xl font-semibold tracking-tight xl:text-2xl 2xl:text-3xl">
