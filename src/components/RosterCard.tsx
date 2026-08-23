@@ -121,7 +121,7 @@ export function RosterCard({
   const anyFilterActive = roles.length > 0 || statuses.length > 0 || searchInput.length > 0;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
           fit on a phone, and a single row pushed them off the edge. Same shape as the
           User Accounts header. */}

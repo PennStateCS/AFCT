@@ -82,7 +82,7 @@ export function GroupSetsCard({
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-xl font-semibold">
           <Layers className="h-5 w-5" />

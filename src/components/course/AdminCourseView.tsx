@@ -256,7 +256,7 @@ export function AdminCourseView({
           </CourseTabPanel>
 
           <CourseTabPanel value="settings" active={tab === 'settings'}>
-            <div className="space-y-3">
+            <div className="space-y-6">
               {/* Heading and its explanation are one header block, so the 12px below
                   separates the block from the form rather than the sentence from its
                   title. Same shape the student Assignments panel already uses. */}

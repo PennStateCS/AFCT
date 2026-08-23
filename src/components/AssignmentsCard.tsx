@@ -25,7 +25,11 @@ export function AssignmentsCard({
   isLoading = false,
 }: AssignmentsCardProps) {
   return (
-    <div className="space-y-3">
+    // 24px below the heading/action row, against the 16px DataTable keeps between its own
+    // toolbar and the table. The two numbers differ on purpose: the heading and its buttons
+    // belong to the SECTION, the toolbar belongs to the table, so the larger gap is where
+    // the grouping actually changes. Flat 16/16 made the buttons look glued to the filters.
+    <div className="space-y-6">
       {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
           fit on a phone, and a single row pushed them off the edge. Same shape as the
           User Accounts header. */}
