@@ -7,16 +7,66 @@
  * would notice. It reads q0 --b--> q1, q1 --a--> q2, q2 --b--> q0, with a loop on a at q0:
  * one clean cycle, not a complete DFA, which would need edges that only add clutter here.
  *
+ * Straight edges between states and a curve only where a state points at itself, which is
+ * JFLAP's convention and therefore what the audience for this page is used to reading.
+ *
  * Wide rather than tall (540x270, 2:1). It fills the middle of a panel that is roughly half a
- * screen wide, so the long q0 to q1 transition is what makes the drawing use the space; the
- * earlier version packed the three states into a small triangle and looked cramped however
- * large it was scaled.
+ * screen wide, so the long q0 to q1 edge is what makes the drawing use the space.
  *
  * Static, one inline SVG, no dependency.
  */
 
+type State = { x: number; y: number; r: number };
+
+/** The three states, in one place, because every edge below is derived from them. */
+const Q0: State = { x: 110, y: 125, r: 28 };
+const Q1: State = { x: 395, y: 80, r: 32 };
+const Q2: State = { x: 350, y: 195, r: 28 };
+/** q1 is accepting, so it carries a second ring inside the one the edges stop at. */
+const Q1_INNER = 26;
+
 /**
- * One marker for every arrowhead, so each one follows its path's own tangent rather than
+ * The visible part of the line between two states: from the first circle's edge to just
+ * outside the second's, never centre to centre.
+ *
+ * `endInset` is the room the arrowhead needs. The marker's tip sits two user units past the
+ * end of the line it is on, so three units of inset puts the point on the boundary rather
+ * than inside the state.
+ *
+ * Computed rather than written down so the geometry stays right if a state ever moves. It is
+ * three lines of trigonometry, not the beginning of a layout engine.
+ */
+function edgeBetween(from: State, to: State, endInset = 3) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  const ux = dx / length;
+  const uy = dy / length;
+  const round = (n: number) => Math.round(n * 10) / 10;
+  const x1 = from.x + ux * from.r;
+  const y1 = from.y + uy * from.r;
+  const x2 = to.x - ux * (to.r + endInset);
+  const y2 = to.y - uy * (to.r + endInset);
+  return {
+    /** Spread straight onto a <line>; nothing else in here belongs on the element. */
+    line: { x1: round(x1), y1: round(y1), x2: round(x2), y2: round(y2) },
+    /**
+     * A point `offset` units off the middle of the edge, at right angles to it. The sign
+     * picks the side, so a label is always placed against its own line rather than at a
+     * coordinate that happens to look right today.
+     */
+    labelAt: (offset: number) => ({
+      x: round((x1 + x2) / 2 - uy * offset),
+      y: round((y1 + y2) / 2 + ux * offset),
+    }),
+  };
+}
+
+/** Far enough off the line that the glyph never touches the stroke. */
+const LABEL_OFFSET = -17;
+
+/**
+ * One marker for every arrowhead, so each one follows its own edge's direction rather than
  * being a separate triangle positioned by eye.
  *
  * A fixed id, not `useId`. This renders once per document (`LoginBrandPanel` is mounted once,
@@ -26,7 +76,15 @@
  */
 const ARROW_ID = 'afct-auth-automaton-arrow';
 
+const toQ1 = edgeBetween(Q0, Q1);
+const toQ2 = edgeBetween(Q1, Q2);
+const toQ0 = edgeBetween(Q2, Q0);
+
 export function AuthDecorativeAutomaton({ className }: { className?: string }) {
+  const labelToQ1 = toQ1.labelAt(LABEL_OFFSET);
+  const labelToQ2 = toQ2.labelAt(LABEL_OFFSET);
+  const labelToQ0 = toQ0.labelAt(LABEL_OFFSET);
+
   return (
     <svg
       viewBox="0 0 540 270"
@@ -43,9 +101,7 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
     >
       <defs>
         {/* markerUnits defaults to strokeWidth, so this is 10x10 user units at the stroke
-            weight above, and its tip lands 2 units past the end of the path it is on. Every
-            transition therefore stops just outside its target circle rather than at the
-            centre, and the head touches the boundary without crossing it. */}
+            weight above, and its tip lands 2 units past the end of the line it is on. */}
         <marker
           id={ARROW_ID}
           viewBox="0 0 10 10"
@@ -60,31 +116,17 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
       </defs>
 
       {/* Start indicator, into q0's left edge. */}
-      <path d="M30 125H78" strokeLinecap="round" markerEnd={`url(#${ARROW_ID})`} />
+      <line x1="30" y1={Q0.y} x2={Q0.x - Q0.r - 4} y2={Q0.y} markerEnd={`url(#${ARROW_ID})`} />
 
-      {/* q0 */}
-      <circle cx="110" cy="125" r="28" />
-      <text
-        x="110"
-        y="125"
-        fontSize="18"
-        fill="currentColor"
-        stroke="none"
-        textAnchor="middle"
-        dominantBaseline="central"
-      >
-        q0
-      </text>
-
-      {/* q0 loops back to itself on a. Leaves the top left, rises well clear of the state,
-          returns to the top right; the head follows the curve down into the boundary. */}
+      {/* q0 loops back to itself on a. The one curve in the drawing, because a straight line
+          from a state to itself is not a thing anybody draws. */}
       <path
         d="M89 104C72 50 148 50 131 104"
         strokeLinecap="round"
         markerEnd={`url(#${ARROW_ID})`}
       />
       <text
-        x="110"
+        x={Q0.x}
         y="44"
         fontSize="15"
         fill="currentColor"
@@ -95,16 +137,11 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
         a
       </text>
 
-      {/* q0 to q1, the long one. Barely curved: q1 sits higher, and the lift is enough to
-          keep the line from reading as a ruler. */}
-      <path
-        d="M138 121C220 100 290 88 360 86"
-        strokeLinecap="round"
-        markerEnd={`url(#${ARROW_ID})`}
-      />
+      {/* q0 --b--> q1, the long one. */}
+      <line {...toQ1.line} markerEnd={`url(#${ARROW_ID})`} />
       <text
-        x="250"
-        y="80"
+        x={labelToQ1.x}
+        y={labelToQ1.y}
         fontSize="15"
         fill="currentColor"
         stroke="none"
@@ -114,30 +151,11 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
         b
       </text>
 
-      {/* q1, accepting: two rings with real space between them. */}
-      <circle cx="395" cy="80" r="32" />
-      <circle cx="395" cy="80" r="26" />
+      {/* q1 --a--> q2 */}
+      <line {...toQ2.line} markerEnd={`url(#${ARROW_ID})`} />
       <text
-        x="395"
-        y="80"
-        fontSize="18"
-        fill="currentColor"
-        stroke="none"
-        textAnchor="middle"
-        dominantBaseline="central"
-      >
-        q1
-      </text>
-
-      {/* q1 down to q2, bowing outward so it clears both labels. */}
-      <path
-        d="M383 110C398 135 390 152 361 166"
-        strokeLinecap="round"
-        markerEnd={`url(#${ARROW_ID})`}
-      />
-      <text
-        x="415"
-        y="140"
+        x={labelToQ2.x}
+        y={labelToQ2.y}
         fontSize="15"
         fill="currentColor"
         stroke="none"
@@ -147,30 +165,11 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
         a
       </text>
 
-      {/* q2 */}
-      <circle cx="350" cy="195" r="28" />
+      {/* q2 --b--> q0, closing the cycle. */}
+      <line {...toQ0.line} markerEnd={`url(#${ARROW_ID})`} />
       <text
-        x="350"
-        y="195"
-        fontSize="18"
-        fill="currentColor"
-        stroke="none"
-        textAnchor="middle"
-        dominantBaseline="central"
-      >
-        q2
-      </text>
-
-      {/* q2 back to q0, closing the cycle through the empty bottom of the frame rather than
-          straight across the middle, which is what gives the drawing its shape. */}
-      <path
-        d="M324 205C270 250 175 240 131 148"
-        strokeLinecap="round"
-        markerEnd={`url(#${ARROW_ID})`}
-      />
-      <text
-        x="228"
-        y="252"
+        x={labelToQ0.x}
+        y={labelToQ0.y}
         fontSize="15"
         fill="currentColor"
         stroke="none"
@@ -178,6 +177,47 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
         dominantBaseline="central"
       >
         b
+      </text>
+
+      {/* The states last, so a circle always paints over the end of the line meeting it. */}
+      <circle cx={Q0.x} cy={Q0.y} r={Q0.r} />
+      <text
+        x={Q0.x}
+        y={Q0.y}
+        fontSize="18"
+        fill="currentColor"
+        stroke="none"
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        q0
+      </text>
+
+      <circle cx={Q1.x} cy={Q1.y} r={Q1.r} />
+      <circle cx={Q1.x} cy={Q1.y} r={Q1_INNER} />
+      <text
+        x={Q1.x}
+        y={Q1.y}
+        fontSize="18"
+        fill="currentColor"
+        stroke="none"
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        q1
+      </text>
+
+      <circle cx={Q2.x} cy={Q2.y} r={Q2.r} />
+      <text
+        x={Q2.x}
+        y={Q2.y}
+        fontSize="18"
+        fill="currentColor"
+        stroke="none"
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        q2
       </text>
     </svg>
   );
