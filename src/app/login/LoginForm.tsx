@@ -480,6 +480,10 @@ export default function LoginForm({
                 <InputGroup
                   id="login-email"
                   label="Email"
+                  // Kept deliberately. This card is a hardcoded bg-white with no dark:
+                  // classes, but next-themes puts .dark on <html> for every page, so
+                  // text-foreground would go near-white on a white card. Only the label
+                  // is affected now: this used to leak onto the typed text as well.
                   labelClassName="text-gray-800"
                   name="login-email"
                   required
@@ -493,6 +497,7 @@ export default function LoginForm({
 
                 <InputGroup
                   label="Password"
+                  // Same reason as the email field above.
                   labelClassName="text-gray-800"
                   name="login-password"
                   required

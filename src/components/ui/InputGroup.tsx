@@ -148,7 +148,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
         <Label
           id={labelId}
           htmlFor={inputId}
-          className={`mb-1.5 text-sm font-medium ${labelClassName}`}
+          className={cn('mb-1.5', labelClassName)}
         >
           {label}
         </Label>
@@ -171,16 +171,14 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           aria-invalid={!!error || undefined}
           aria-required={_requiredMark || undefined}
           aria-describedby={describedByAttr || undefined}
+          // Only what this wrapper owns. Surface, border, focus, the aria-invalid border
+          // and the transition all live on Input; repeating them here meant two places to
+          // change and two chances to disagree. labelClassName is NOT in this list: it
+          // used to be, so `labelClassName="text-gray-800"` recoloured the typed text too.
           className={cn(
-            'h-11 transition-all duration-150',
-            // border-input only. The opaque surface used to be forced here, because the
-            // base Input was translucent and read gray on a tinted panel; the primitive
-            // carries bg-card in both themes now, so this no longer has to.
-            'border-input',
-            error && 'border-destructive',
+            'h-11',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,
-            labelClassName,
           )}
         />
 
