@@ -35,6 +35,19 @@ import { cn } from '@/lib/utils';
 // Local
 import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
 
+/**
+ * The two controls that sit on the header band rather than on a page.
+ *
+ * Button's own hover and focus colours are the page's, and the band is not the page: its
+ * hover has to separate from #EEF1F4 rather than from a white card, and in dark mode the
+ * band is lighter than the surface those defaults assume. Call-site classes on purpose.
+ * Nothing about the shared Button or SidebarTrigger changes, because both are used on
+ * ordinary surfaces elsewhere.
+ */
+const NAVBAR_CONTROL_CLASS =
+  'text-navbar-foreground hover:bg-navbar-accent hover:text-navbar-accent-foreground ' +
+  'dark:hover:bg-navbar-accent focus-visible:border-navbar-ring focus-visible:ring-navbar-ring/70';
+
 const Navbar: React.FC = () => {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
@@ -109,23 +122,28 @@ const Navbar: React.FC = () => {
   }, [pathname, courseLabel, assignmentLabel]);
 
   return (
-    // Chrome, not a banner: the teal block competed with the page heading under it. A
-    // white utility bar spanning the whole workspace, so its divider reaches both edges;
-    // the page gutter lives on <main> below, not around this.
+    // Chrome, not content: a band one step off the page canvas, spanning the whole content
+    // column so its divider reaches both edges. The page gutter lives on <main> below, not
+    // around this.
+    //
+    // Every colour comes from the --navbar family rather than the page tokens. The band and
+    // the canvas are close together on purpose, which makes the border the thing that says
+    // where the header ends; see the notes on --navbar in globals.css for the steps and the
+    // contrast figures.
     //
     // shrink-0 is load-bearing. This is a flex child of the column that also holds <main>,
     // and flex items shrink by default, so a tall page squeezed the header below its own
     // h-14: the bar was 56px on the dashboard and shorter on Submissions.
-    <header className="border-border bg-card flex h-14 shrink-0 items-center justify-between border-b px-4">
+    <header className="bg-navbar text-navbar-foreground border-navbar-border flex h-14 shrink-0 items-center justify-between border-b px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
-        <EnhancedSidebarTrigger />
+        <EnhancedSidebarTrigger className={NAVBAR_CONTROL_CLASS} />
         {/* min-w-0 + flex-1: the trail gets whatever the header has left after the two
             fixed controls, so collapsing the sidebar hands it that width automatically.
             It used to be capped at 50/60vw, which is why a long title still truncated on a
             1920px screen with hundreds of spare pixels: the cap, not the space, was the
             limit. Nothing here measures anything; flexbox decides. */}
         <Breadcrumb aria-label="Breadcrumb" className="min-w-0 flex-1 overflow-hidden">
-          <BreadcrumbList className="w-full min-w-0 flex-nowrap overflow-hidden text-sm">
+          <BreadcrumbList className="text-navbar-muted-foreground w-full min-w-0 flex-nowrap overflow-hidden text-sm">
             {crumbs.map((crumb, index) => {
               const isLast = !!crumb.isPage;
 
@@ -153,7 +171,9 @@ const Navbar: React.FC = () => {
               return (
                 <React.Fragment key={crumb.href}>
                   {index > 0 && (
-                    <BreadcrumbSeparator className={`${separatorVisibility} shrink-0`} />
+                    <BreadcrumbSeparator
+                      className={`${separatorVisibility} text-navbar-muted-foreground shrink-0`}
+                    />
                   )}
                   <BreadcrumbItem
                     className={cn(
@@ -169,14 +189,21 @@ const Navbar: React.FC = () => {
                       // title= so the whole label is readable on hover when CSS clips it.
                       // The text itself is never shortened, so the accessible name stays
                       // complete either way.
-                      <BreadcrumbPage title={crumb.label} className="block truncate font-medium">
+                      <BreadcrumbPage
+                        title={crumb.label}
+                        className="text-navbar-foreground block truncate font-medium"
+                      >
                         {crumb.label}
                       </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink
                         href={crumb.href}
                         title={crumb.flexible ? crumb.label : undefined}
-                        className="block truncate hover:underline"
+                        // Not TEXT_LINK_CLASS. That is for a link inside a document, and
+                        // its cobalt is unreadable here; this is navigation drawn on dark
+                        // chrome, where the trail's own shape is the affordance and the
+                        // underline on hover is the non-colour cue.
+                        className="text-navbar-muted-foreground hover:text-navbar-foreground block truncate hover:underline"
                       >
                         {crumb.label}
                       </BreadcrumbLink>
@@ -196,7 +223,7 @@ const Navbar: React.FC = () => {
               its static spot, which the old wide button happened to have room for; in a
               square icon button it would hang off the right edge. */}
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-foreground relative">
+            <Button variant="ghost" size="icon" className={cn('relative', NAVBAR_CONTROL_CLASS)}>
               <Sun className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
               <Moon className="absolute top-1/2 left-1/2 h-[1.2rem] w-[1.2rem] -translate-x-1/2 -translate-y-1/2 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
               <span className="sr-only">Toggle theme</span>
