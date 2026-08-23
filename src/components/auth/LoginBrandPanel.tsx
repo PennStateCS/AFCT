@@ -55,39 +55,28 @@ export function LoginBrandPanel({ className }: { className?: string }) {
       {/* The wave along the foot, behind everything that carries words. */}
       <AuthDecorativeWave className="pointer-events-none absolute inset-x-0 bottom-0 h-40 w-full xl:h-44" />
 
-      <div className="relative max-w-xl">
+      {/* The brand and the copy under it are one block and move as one, so their shared
+          left edge survives. Offset here rather than on the panel's padding, which the
+          footer, the automaton's width and the wave all measure themselves against. */}
+      <div className="relative mt-3 ml-4 max-w-xl">
         <div className="flex items-center gap-4">
           {/* Cobalt, set here rather than in the mark: the same component is the compact
               header on a phone, where it sits on a light card and takes the primary colour. */}
-          <AuthBrandMark className="size-12 shrink-0 text-blue-400 xl:size-14" />
+          <AuthBrandMark className="size-14 shrink-0 text-blue-400 xl:size-16" />
           <div>
-            <p className="text-4xl leading-none font-semibold tracking-tight xl:text-5xl 2xl:text-6xl">
-              AFCT
-            </p>
+            {/* The wordmark carries the weight the accent rule used to, so it is a step up
+                at each size; the mark grows with it to keep the lockup's proportion. */}
+            <p className="text-5xl leading-none font-semibold tracking-tight xl:text-6xl">AFCT</p>
             <p className="mt-2 text-xs font-medium tracking-[0.32em] text-blue-300 uppercase xl:text-sm 2xl:text-base">
               Dashboard
             </p>
           </div>
         </div>
 
-        {/* The only rule on the panel, and it runs the width of the brand above it: from the
-            mark's left edge to the right of the T in AFCT, so the two read as one block
-            rather than as a mark with a dash under it.
-
-            Three measured widths rather than one, because AFCT steps 36px -> 48px -> 60px
-            across the breakpoints, and rather than the width of the block above, because
-            that block is sized by the tracked DASHBOARD, which is WIDER than AFCT below 2xl
-            (111 vs 90 at lg). Taking the block's width put the rule 21px past the T.
-            mark + gap + AFCT measures 154 / 192 / 223; these land within 2px of each.
-
-            Blue rather than the primary token: it belongs to the same cobalt family as the
-            mark and the DASHBOARD line, not to the app's buttons. */}
-        <div
-          aria-hidden="true"
-          className="mt-10 h-0.5 w-38 rounded-full bg-blue-400/80 xl:w-48 2xl:w-56"
-        />
-
-        <div className="mt-6 space-y-3">
+        {/* The gap the rule used to sit inside, kept as one interval now that nothing is
+            drawn in it. Enough that the brand reads as its own block, not so much that the
+            two halves of this corner stop belonging together. */}
+        <div className="mt-10 space-y-3">
           <p className="text-xl font-semibold tracking-tight xl:text-2xl 2xl:text-3xl">
             Welcome to AFCT Dashboard
           </p>
