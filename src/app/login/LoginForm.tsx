@@ -441,7 +441,7 @@ export default function LoginForm({
           narrow form is neither one thing nor the other. The compact header below stands in. */}
       <LoginBrandPanel className="hidden lg:sticky lg:top-0 lg:grid" />
 
-      <div className="flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
+      <div className="auth-form-surface flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
         <div className="mb-6 flex w-full max-w-[680px] flex-col items-center text-center lg:hidden">
           <AuthBrandMark className="text-primary size-11" />
           {/* Not a heading: the form's own title is the page's one h1, and a second one here
@@ -460,7 +460,7 @@ export default function LoginForm({
               below is a grid of controls and takes the full 560. */}
           <section
             aria-labelledby="auth-heading"
-            className="bg-card mx-auto w-full max-w-[520px] rounded-2xl border p-5 shadow-sm sm:p-6 lg:p-8"
+            className="bg-card mx-auto w-full max-w-[520px] rounded-2xl border p-5 shadow-md sm:p-6 lg:p-8"
           >
             {/* Outside the animated panels, so switching mode retitles the page rather than
                 replacing its h1: one h1 that changes its words, not two that take turns. */}

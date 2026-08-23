@@ -346,6 +346,39 @@
   --badge-neutral-border: oklch(0.8699 0 0);
 }
 
+/**
+ * The two places the signed-out pages deliberately differ from the light palette above.
+ *
+ * Kept to a short list on purpose: everything else about the auth surface is the ordinary
+ * light theme, and a second full palette would be a second thing to keep in step. High
+ * contrast still outranks this, because `.high-contrast .auth-light` is the more specific
+ * selector whatever the order here.
+ */
+.auth-light {
+  /* A step down from the page canvas, not the same white as the card. On the dashboard a
+     card sits among other cards and its edges are obvious; here one card floats alone in a
+     large empty pane, and at 1.05:1 against --background it had nothing to sit on. 1.23:1
+     is small but it is a surface change rather than a rounding error. */
+  --background: oklch(0.9288 0.0126 255.508); /* #E2E8F0 */
+}
+
+/**
+ * The sign-in form's half of that screen, and only that half.
+ *
+ * Cobalt rather than the app's deep navy: the left pane is built from blue-400 and blue-300,
+ * and a navy Sign In button beside it reads as a control borrowed from somewhere else. This
+ * is --link's value, so the button and the links on this surface finally agree. White on it
+ * is 6.7:1, and 5.5:1 on the /90 hover, which is why it is not the brighter #2563EB, whose
+ * hover lands at 4.3:1.
+ *
+ * Scoped to the form rather than to `.auth-light` because the brand panel paints its own
+ * gradient with `to-primary/50`. Changing the variable at the root would have relit that
+ * gradient too, which is a change to the half of the screen nobody asked to change.
+ */
+.auth-form-surface {
+  --primary: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
+}
+
 .dark {
   /* Slate/navy, chosen to sit under the charcoal sidebar rather than beside it. Dark
      surfaces climb an elevation ladder so layered states read apart:
