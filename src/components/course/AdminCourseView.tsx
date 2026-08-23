@@ -256,19 +256,24 @@ export function AdminCourseView({
           </CourseTabPanel>
 
           <CourseTabPanel value="settings" active={tab === 'settings'}>
-            <div className="space-y-4">
-              <h2 className="flex items-center gap-2 text-xl font-semibold">
-                <Settings className="h-5 w-5" />
-                Course Settings
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Edit the course name, code, dates, timezone, and self-registration settings.
-              </p>
-              {course.isArchived ? (
-                <p className="text-muted-foreground text-xs">
-                  This course is archived and read-only. Unarchive it to make changes.
+            <div className="space-y-3">
+              {/* Heading and its explanation are one header block, so the 12px below
+                  separates the block from the form rather than the sentence from its
+                  title. Same shape the student Assignments panel already uses. */}
+              <div className="space-y-1">
+                <h2 className="flex items-center gap-2 text-xl font-semibold">
+                  <Settings className="h-5 w-5" />
+                  Course Settings
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  Edit the course name, code, dates, timezone, and self-registration settings.
                 </p>
-              ) : null}
+                {course.isArchived ? (
+                  <p className="text-muted-foreground text-xs">
+                    This course is archived and read-only. Unarchive it to make changes.
+                  </p>
+                ) : null}
+              </div>
               {/* Form on the left; the immediate-effect status switches sit in their
                 own card to the right (stacked below on narrow screens). */}
               <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">

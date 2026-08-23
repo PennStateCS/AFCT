@@ -25,7 +25,7 @@ export function AssignmentsCard({
   isLoading = false,
 }: AssignmentsCardProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
           fit on a phone, and a single row pushed them off the edge. Same shape as the
           User Accounts header. */}

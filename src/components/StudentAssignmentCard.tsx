@@ -28,7 +28,7 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
     `${formatDateInTimeZone(date, timezone)} at ${formatTimeInTimeZone(date, timezone)}`;
 
   return (
-    <section className="space-y-4" aria-labelledby="student-assignments-title">
+    <section className="space-y-3" aria-labelledby="student-assignments-title">
       <div className="space-y-1">
         <h2 id="student-assignments-title" className="text-xl font-semibold">
           Assignments

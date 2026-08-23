@@ -381,7 +381,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   }, [assignments]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-y-1">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">

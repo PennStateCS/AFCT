@@ -121,7 +121,7 @@ export function RosterCard({
   const anyFilterActive = roles.length > 0 || statuses.length > 0 || searchInput.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
           fit on a phone, and a single row pushed them off the edge. Same shape as the
           User Accounts header. */}
@@ -149,7 +149,7 @@ export function RosterCard({
       </div>
 
       {isError ? (
-        <div className="border-status-danger-border bg-status-danger-bg mb-4 flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+        <div className="border-status-danger-border bg-status-danger-bg flex items-center justify-between gap-3 rounded-md border px-3 py-2">
           <p role="alert" className="text-status-danger text-sm">
             Failed to load the roster. Please try again.
           </p>

@@ -90,7 +90,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
   return (
     // No outer Card: this is the page's active panel, and wrapping it put a bounded thing
     // inside a bounded thing. The rows keep their own borders; they are real objects.
-    <section className="space-y-4" aria-labelledby="student-grades-title">
+    <section className="space-y-3" aria-labelledby="student-grades-title">
       <h2 id="student-grades-title" className="text-xl font-semibold">
         Grades
       </h2>
