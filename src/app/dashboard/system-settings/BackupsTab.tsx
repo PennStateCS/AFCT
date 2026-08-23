@@ -21,6 +21,7 @@ import {
   type FormSnapshot,
   type SetField,
 } from './system-settings-shared';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 
 /** Backups tab: schedule settings plus the available-backups list and "Back up now". */
 export function BackupsTab({
@@ -58,7 +59,7 @@ export function BackupsTab({
         enableSorting: false,
         cell: ({ row }) => (
           <a
-            className="text-link hover:text-link-hover underline"
+            className={TEXT_LINK_CLASS}
             href={apiPaths.admin.backupDownload({ file: row.original.file })}
           >
             Download ({formatBytes(row.original.size)})

@@ -30,6 +30,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 const typeLabels: Record<string, string> = {
   FA: 'Finite Automaton',
@@ -83,7 +85,7 @@ export const useProblemColumns = ({
               <button
                 type="button"
                 onClick={() => setDescDialog({ open: true, problem: row.original })}
-                className="text-link hover:text-link-hover self-start text-xs underline"
+                className={cn(TEXT_LINK_CLASS, 'self-start text-xs')}
                 title="View description"
               >
                 View description
@@ -117,7 +119,7 @@ export const useProblemColumns = ({
             <button
               type="button"
               onClick={() => setOpenDialog({ open: true, problem: row.original })}
-              className="text-link hover:text-link-hover text-xs break-all hover:underline"
+              className={cn(TEXT_LINK_CLASS, 'text-xs break-all')}
               title={`View ${file}`}
             >
               {file}
@@ -177,11 +179,7 @@ export const useProblemColumns = ({
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Actions for ${row.original.title}`}
-              >
+              <Button variant="ghost" size="icon" aria-label={`Actions for ${row.original.title}`}>
                 <EllipsisVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

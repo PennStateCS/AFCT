@@ -37,6 +37,8 @@ import { getTimingStatusChip, getReviewStatusChip, type StatusChip } from '@/lib
 import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 type Problem = {
   id: string;
@@ -374,7 +376,7 @@ export default function ProblemWorkspace({
           <button
             type="button"
             onClick={() => onViewSubmission(submission)}
-            className="text-link hover:text-link-hover break-all hover:underline"
+            className={cn(TEXT_LINK_CLASS, 'break-all')}
             title={`Preview ${submission.originalFileName || 'submission'}`}
           >
             {submission.originalFileName || submission.fileName}

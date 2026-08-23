@@ -49,6 +49,8 @@ import {
   type SubmissionsQuery,
 } from './submissions-data';
 import { useSubmissionFilters } from './use-submission-filters';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 // A stable empty array, so `data ?? EMPTY_ROWS` keeps a constant identity between renders.
 const EMPTY_ROWS: SubmissionItem[] = [];
@@ -232,10 +234,7 @@ export default function SubmissionsClient() {
   };
 
   const anyFilterActive =
-    anyScopeActive ||
-    timing.length > 0 ||
-    statusFilter.length > 0 ||
-    searchInput.length > 0;
+    anyScopeActive || timing.length > 0 || statusFilter.length > 0 || searchInput.length > 0;
 
   const handleRerunSubmission = async (submission: SubmissionItem) => {
     await rerunSubmission({
@@ -292,7 +291,9 @@ export default function SubmissionsClient() {
         cell: ({ row }) => {
           const due = dueDateFor(row.original);
           return (
-            <StatusBadge chip={getTimingStatusChip(row.original as ProblemSubmission, !!due, due)} />
+            <StatusBadge
+              chip={getTimingStatusChip(row.original as ProblemSubmission, !!due, due)}
+            />
           );
         },
         meta: { priority: 2 },
@@ -408,7 +409,7 @@ export default function SubmissionsClient() {
               <button
                 type="button"
                 onClick={() => handleViewSubmission(submission)}
-                className="text-link hover:text-link-hover text-xs break-all hover:underline"
+                className={cn(TEXT_LINK_CLASS, 'text-xs break-all')}
                 title={`View ${name}`}
               >
                 {name}
@@ -504,7 +505,7 @@ export default function SubmissionsClient() {
           s.autograderEnabled
             ? getReviewStatusChip(s as ProblemSubmission).label
             : 'Not autograded',
-        cell: ({ row }) => (
+        cell: ({ row }) =>
           row.original.autograderEnabled ? (
             <StatusBadge chip={getReviewStatusChip(row.original as ProblemSubmission)} />
           ) : (
@@ -518,8 +519,7 @@ export default function SubmissionsClient() {
                 title: 'The autograder is switched off for this problem.',
               }}
             />
-          )
-        ),
+          ),
         meta: { priority: 1 },
       },
       {
@@ -701,127 +701,127 @@ export default function SubmissionsClient() {
 
       <DataTable
         columns={columns}
-          data={submissions}
-          loading={loadingSubmissions}
-          loadingMessage="Loading submissions, please wait..."
-          // Suffixed each time the column set changes: a saved layout wins over these
-          // defaults, so a browser holding the old one would keep showing the recorded
-          // grade in place of the per-attempt one.
-          storageKey="autograder-columns-v3"
-          tableLabel="Submissions"
-          // The browser holds one page, so an export from here would silently write that
-          // page and call it the table. Dropped rather than left to mislead, matching the
-          // other server-paginated tables.
-          showExportButton={false}
-          // Due is off by default: the deadline matters far less than arrival order when
-          // you are working a queue, and the Timing column already flags late work.
-          // Recorded grade is off because it repeats the same number down every attempt
-          // by one student; the Grade column shows what each attempt itself earned. The
-          // Columns menu turns either back on, remembered per browser.
-          defaultColumnVisibility={{ due: false, grade: false }}
-          emptyIcon={FileCode2}
-          {...(anyFilterActive
-            ? {
-                // Distinguish "nothing has been submitted" from "your filters hide
-                // everything": the fix for the second is a filter change, not more work.
-                emptyTitle: 'No submissions match your filters',
-                emptyDescription: 'Try clearing a course, assignment, problem or status filter.',
-              }
-            : {
-                emptyTitle: 'No submissions yet',
-                emptyDescription: 'Work submitted for a problem will show up here.',
-              })}
-          actionButtons={
-            <DataTableFilterMenu
-              groups={[
-                {
-                  key: 'timing',
-                  label: 'Timing',
-                  options: [
-                    { label: 'On time', value: 'ontime' },
-                    { label: 'Late', value: 'late' },
-                  ],
-                  selected: timing,
-                  onChange: onFilter(setTiming),
-                },
-                {
-                  /*
-                   * One group, shown as two headings. Where a submission has got to
-                   * (Pending / Processing / Failed) and how it turned out (Correct /
-                   * Incorrect) are different questions, so they get their own lists. They
-                   * stay one group because a row has exactly one of these five values: as
-                   * two groups the server would AND them, and any cross-heading pick (say
-                   * Failed plus Correct) could only ever return nothing. Sharing the group
-                   * keeps that pick meaning "either".
-                   *
-                   * Timing IS its own group, because timing and result are independent and
-                   * should AND: Late plus Incorrect finds late wrong answers.
-                   */
-                  key: 'status',
-                  label: 'Status',
-                  sections: [
-                    {
-                      label: 'Status',
-                      options: [
-                        { label: 'Pending', value: 'pending' },
-                        { label: 'Processing', value: 'processing' },
-                        { label: 'Failed', value: 'failed' },
-                      ],
-                    },
-                    {
-                      label: 'Submission',
-                      options: [
-                        { label: 'Correct', value: 'correct' },
-                        { label: 'Incorrect', value: 'incorrect' },
-                      ],
-                    },
-                  ],
-                  selected: statusFilter,
-                  onChange: onFilter(setStatusFilter),
-                },
-              ]}
-            />
-          }
-          manualPagination
-          pageCount={pageCount}
-          rowCount={total}
-          pagination={{ pageIndex, pageSize }}
-          onPaginationChange={handlePaginationChange}
-          manualFiltering
-          globalFilter={searchInput}
-          onGlobalFilterChange={setSearchInput}
-          searchScopeOptions={SEARCH_FIELDS}
-          searchScope={searchField}
-          onSearchScopeChange={(v) => {
-            setSearchField(v);
-            setPageIndex(0);
-          }}
-          manualSorting
-          sorting={sorting}
-          onSortingChange={handleSortingChange}
-        />
-        <SubmissionViewerDialog
-          open={jffViewerOpen}
-          onOpenChange={(open) => {
-            setJffViewerOpen(open);
-            if (!open) {
-              setJffViewerSrc(null);
-              setJffViewerTitle(null);
-              setJffViewerCourseId(null);
-              setViewerProblemType(null);
+        data={submissions}
+        loading={loadingSubmissions}
+        loadingMessage="Loading submissions, please wait..."
+        // Suffixed each time the column set changes: a saved layout wins over these
+        // defaults, so a browser holding the old one would keep showing the recorded
+        // grade in place of the per-attempt one.
+        storageKey="autograder-columns-v3"
+        tableLabel="Submissions"
+        // The browser holds one page, so an export from here would silently write that
+        // page and call it the table. Dropped rather than left to mislead, matching the
+        // other server-paginated tables.
+        showExportButton={false}
+        // Due is off by default: the deadline matters far less than arrival order when
+        // you are working a queue, and the Timing column already flags late work.
+        // Recorded grade is off because it repeats the same number down every attempt
+        // by one student; the Grade column shows what each attempt itself earned. The
+        // Columns menu turns either back on, remembered per browser.
+        defaultColumnVisibility={{ due: false, grade: false }}
+        emptyIcon={FileCode2}
+        {...(anyFilterActive
+          ? {
+              // Distinguish "nothing has been submitted" from "your filters hide
+              // everything": the fix for the second is a filter change, not more work.
+              emptyTitle: 'No submissions match your filters',
+              emptyDescription: 'Try clearing a course, assignment, problem or status filter.',
             }
-          }}
-          problemType={viewerProblemType}
-          src={jffViewerSrc ?? ''}
-          title={jffViewerTitle ?? 'Submission'}
-          epsSymbol={jffEpsSymbol}
-        />
+          : {
+              emptyTitle: 'No submissions yet',
+              emptyDescription: 'Work submitted for a problem will show up here.',
+            })}
+        actionButtons={
+          <DataTableFilterMenu
+            groups={[
+              {
+                key: 'timing',
+                label: 'Timing',
+                options: [
+                  { label: 'On time', value: 'ontime' },
+                  { label: 'Late', value: 'late' },
+                ],
+                selected: timing,
+                onChange: onFilter(setTiming),
+              },
+              {
+                /*
+                 * One group, shown as two headings. Where a submission has got to
+                 * (Pending / Processing / Failed) and how it turned out (Correct /
+                 * Incorrect) are different questions, so they get their own lists. They
+                 * stay one group because a row has exactly one of these five values: as
+                 * two groups the server would AND them, and any cross-heading pick (say
+                 * Failed plus Correct) could only ever return nothing. Sharing the group
+                 * keeps that pick meaning "either".
+                 *
+                 * Timing IS its own group, because timing and result are independent and
+                 * should AND: Late plus Incorrect finds late wrong answers.
+                 */
+                key: 'status',
+                label: 'Status',
+                sections: [
+                  {
+                    label: 'Status',
+                    options: [
+                      { label: 'Pending', value: 'pending' },
+                      { label: 'Processing', value: 'processing' },
+                      { label: 'Failed', value: 'failed' },
+                    ],
+                  },
+                  {
+                    label: 'Submission',
+                    options: [
+                      { label: 'Correct', value: 'correct' },
+                      { label: 'Incorrect', value: 'incorrect' },
+                    ],
+                  },
+                ],
+                selected: statusFilter,
+                onChange: onFilter(setStatusFilter),
+              },
+            ]}
+          />
+        }
+        manualPagination
+        pageCount={pageCount}
+        rowCount={total}
+        pagination={{ pageIndex, pageSize }}
+        onPaginationChange={handlePaginationChange}
+        manualFiltering
+        globalFilter={searchInput}
+        onGlobalFilterChange={setSearchInput}
+        searchScopeOptions={SEARCH_FIELDS}
+        searchScope={searchField}
+        onSearchScopeChange={(v) => {
+          setSearchField(v);
+          setPageIndex(0);
+        }}
+        manualSorting
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
+      />
+      <SubmissionViewerDialog
+        open={jffViewerOpen}
+        onOpenChange={(open) => {
+          setJffViewerOpen(open);
+          if (!open) {
+            setJffViewerSrc(null);
+            setJffViewerTitle(null);
+            setJffViewerCourseId(null);
+            setViewerProblemType(null);
+          }
+        }}
+        problemType={viewerProblemType}
+        src={jffViewerSrc ?? ''}
+        title={jffViewerTitle ?? 'Submission'}
+        epsSymbol={jffEpsSymbol}
+      />
 
-        <FeedbackDialog
-          open={feedbackDialogOpen}
-          onOpenChange={setFeedbackDialogOpen}
-          feedbackText={activeFeedback}
-        />
+      <FeedbackDialog
+        open={feedbackDialogOpen}
+        onOpenChange={setFeedbackDialogOpen}
+        feedbackText={activeFeedback}
+      />
     </div>
   );
 }

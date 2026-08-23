@@ -86,8 +86,18 @@ const SEMANTIC_TEXT = [
     cls: 'text-muted-foreground',
     sample: 'Review and manage submissions across courses.',
   },
-  { role: 'Link', cls: 'text-link', sample: 'View submission' },
-  { role: 'Link, hovered', cls: 'text-link-hover', sample: 'View submission' },
+  // Shown as it actually ships, underline included: a swatch of plain blue text would be
+  // demonstrating the bug this rule exists to prevent.
+  {
+    role: 'Link',
+    cls: 'text-link underline decoration-1 underline-offset-2',
+    sample: 'View submission',
+  },
+  {
+    role: 'Link, hovered',
+    cls: 'text-link-hover underline decoration-1 underline-offset-2',
+    sample: 'View submission',
+  },
   { role: 'Accent (not a link)', cls: 'text-primary', sample: 'Assigned to 3 sections' },
   { role: 'Success', cls: 'text-status-success', sample: 'Saved. Everything is up to date.' },
   { role: 'Warning', cls: 'text-status-warning', sample: 'This group set can no longer change.' },
@@ -363,6 +373,18 @@ export function DesignTokens() {
               </span>
             </div>
           ))}
+        </div>
+        <div className="border-border bg-muted/30 space-y-1 rounded-md border p-3">
+          <p className="text-foreground text-sm font-medium">Links are underlined at rest</p>
+          <p className="text-muted-foreground text-sm">
+            A conventional text link carries an underline before you hover it, so its state is not
+            conveyed by colour alone (WCAG 1.4.1). Colour cannot carry it: the link token is 2.7:1
+            against body text and about 1:1 against <Cls>text-muted-foreground</Cls>, so a file name
+            beside its upload date would be indistinguishable. Use <Cls>TEXT_LINK_CLASS</Cls> from{' '}
+            <Cls>lib/link-styles</Cls>. Structural navigation — tabs, breadcrumbs, menus, the rail,
+            sidebar items — needs no underline, because its role is already obvious from where it
+            sits.
+          </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="border-border bg-card space-y-2 rounded-md border p-3">

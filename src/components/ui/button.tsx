@@ -34,7 +34,13 @@ const buttonVariants = cva(
         // text-link, not text-primary: primary is the colour a button is PAINTED, and as
         // text on the dark card it is 3.45:1. The `menu` variant that used to sit above
         // this one is gone with --tertiary; it had no call sites.
-        link: 'text-link hover:text-link-hover underline-offset-4 hover:underline',
+        //
+        // Underlined at rest, matching TEXT_LINK_CLASS in lib/link-styles: this variant
+        // exists to look like a hyperlink, so it needs a hyperlink's non-colour cue. The
+        // offset is 4 rather than the 2 that inline text links use, because this sits in a
+        // button's own box on its own line and has the room. See the note in that file for
+        // why colour cannot carry this alone.
+        link: 'text-link underline decoration-1 underline-offset-4 hover:text-link-hover',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

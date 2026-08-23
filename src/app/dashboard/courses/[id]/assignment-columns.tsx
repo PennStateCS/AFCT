@@ -44,6 +44,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 // Lazily fetches the assignment's max points when the row doesn't already have it.
 // Shares the assignment.shell cache entry with StudentAssignmentView/StudentNavigator,
@@ -309,7 +311,10 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
     <div className="flex min-w-0 flex-col gap-0.5">
       <Link
         href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
-        className="text-link hover:text-link-hover block max-w-[8rem] truncate hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
+        className={cn(
+          TEXT_LINK_CLASS,
+          'block max-w-[8rem] truncate sm:max-w-[12rem] lg:max-w-[16rem]',
+        )}
         title={assignment.title}
       >
         {assignment.title}
@@ -319,7 +324,7 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
           <button
             type="button"
             onClick={() => setDescOpen(true)}
-            className="text-link hover:text-link-hover self-start text-xs underline"
+            className={cn(TEXT_LINK_CLASS, 'self-start text-xs')}
             title="View description"
           >
             View description

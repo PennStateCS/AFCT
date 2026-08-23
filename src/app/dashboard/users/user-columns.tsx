@@ -66,6 +66,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 
 /** Human "5m", "40s" for a millisecond duration. Coarse on purpose; this is a hint. */
 function formatRemaining(ms: number): string {
@@ -151,7 +152,7 @@ export function getUserColumns(
       cell: ({ row }) => {
         const email = row.getValue<string>('email');
         return (
-          <a href={`mailto:${email}`} className="text-link hover:text-link-hover hover:underline">
+          <a href={`mailto:${email}`} className={TEXT_LINK_CLASS}>
             {email}
           </a>
         );

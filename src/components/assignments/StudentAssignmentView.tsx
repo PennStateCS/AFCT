@@ -25,6 +25,8 @@ import type {
   StudentProblemComment,
   StudentProblemSubmission,
 } from '@/lib/assignment-details';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 type StudentAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
@@ -386,7 +388,7 @@ export default function StudentAssignmentPage({
             {assignment.course || assignment.courseName ? (
               <Link
                 href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                className="text-link hover:text-link-hover max-w-full break-all hover:underline"
+                className={cn(TEXT_LINK_CLASS, 'max-w-full break-all')}
               >
                 {assignment.course?.name || assignment.courseName || assignment.courseId}
                 {assignment.course?.code

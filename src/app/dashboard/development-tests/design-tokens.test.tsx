@@ -54,12 +54,16 @@ describe('DesignTokens', () => {
     expect(container.textContent).not.toMatch(/tertiary/i);
   });
 
-  it('separates a link from a primary accent', () => {
-    render(<DesignTokens />);
+  it('separates a link from a primary accent, and shows the link underlined', () => {
+    const { container } = render(<DesignTokens />);
     // Two different jobs: primary is a fill, and as text on the dark card it is 3.45:1.
-    expect(screen.getByText('text-link')).toBeInTheDocument();
-    expect(screen.getByText('text-link-hover')).toBeInTheDocument();
     expect(screen.getByText('Accent (not a link)')).toBeInTheDocument();
+    // The sample has to carry the underline, or the reference is demonstrating the very
+    // bug the rule exists to prevent: a link told apart from body text by colour alone.
+    const chips = Array.from(container.querySelectorAll('code')).map((c) => c.textContent);
+    expect(chips.some((c) => c?.startsWith('text-link ') && c.includes('underline'))).toBe(true);
+    expect(container.querySelector('.text-link.underline')).not.toBeNull();
+    expect(screen.getByText('Links are underlined at rest')).toBeInTheDocument();
   });
 
   it('renders the real form controls with labels', () => {

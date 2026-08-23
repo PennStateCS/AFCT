@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ChevronDown, Pencil, X } from 'lucide-react';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
 
 export type AudienceItem = { id: string; label: string };
@@ -81,7 +82,7 @@ export function AudienceSelect({
           <button
             type="button"
             onClick={selectAll}
-            className="text-link hover:text-link-hover text-xs font-medium hover:underline"
+            className={cn(TEXT_LINK_CLASS, 'text-xs font-medium')}
           >
             Select all
           </button>
@@ -148,11 +149,7 @@ export function AudienceSelect({
               className="mb-2 h-9 shrink-0 text-sm"
             />
             <div className="mb-1 flex items-center justify-between px-1">
-              <button
-                type="button"
-                onClick={selectAll}
-                className="text-link hover:text-link-hover text-xs hover:underline"
-              >
+              <button type="button" onClick={selectAll} className={cn(TEXT_LINK_CLASS, 'text-xs')}>
                 Select all
               </button>
               <button
@@ -169,7 +166,9 @@ export function AudienceSelect({
               className="min-h-0 flex-1 overflow-auto rounded border"
             >
               {filtered.length === 0 ? (
-                <div className="text-muted-foreground p-3 text-center text-sm">{emptyStateText}</div>
+                <div className="text-muted-foreground p-3 text-center text-sm">
+                  {emptyStateText}
+                </div>
               ) : (
                 filtered.map((item) => (
                   <label
@@ -190,7 +189,7 @@ export function AudienceSelect({
       </div>
 
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-destructive">
+        <p id={errorId} role="alert" className="text-destructive mt-1 text-xs">
           {error}
         </p>
       ) : null}

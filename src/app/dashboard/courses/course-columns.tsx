@@ -33,6 +33,7 @@ import { formatRegistrationCode } from '@/lib/format-registration-code';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, mutateWithToast } from '@/lib/api/fetch-client';
 import { truncate } from '@/lib/truncate';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 
 /**
  * On demand, and rendered per row: the duplicate wizard carries the form stack, and a course
@@ -136,7 +137,7 @@ export const columns = (
       return (
         <Link
           href={`/dashboard/courses/${course.id}`}
-          className="text-link hover:text-link-hover hover:underline"
+          className={TEXT_LINK_CLASS}
           title={course.name}
           aria-label={course.name}
         >

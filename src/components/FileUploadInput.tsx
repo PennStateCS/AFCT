@@ -3,6 +3,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { X, Upload } from 'lucide-react';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 export type FileUploadInputProps = {
   id: string;
@@ -142,7 +144,7 @@ export default function FileUploadInput({
           // Only reference nodes that actually render: the error when present, the
           // help text only when a hint was passed (otherwise the IDREF would dangle).
           aria-invalid={hasError || undefined}
-        aria-describedby={hasError ? `${id}-error` : hint ? `${id}-help` : undefined}
+          aria-describedby={hasError ? `${id}-error` : hint ? `${id}-help` : undefined}
         />
 
         <div className="flex flex-col items-center justify-center gap-3 p-6 text-center">
@@ -165,7 +167,7 @@ export default function FileUploadInput({
                 type="button"
                 onClick={handleClear}
                 disabled={disabled}
-                className="text-link hover:text-link-hover text-xs hover:underline disabled:opacity-50"
+                className={cn(TEXT_LINK_CLASS, 'text-xs disabled:opacity-50')}
               >
                 Clear selection
               </button>
@@ -175,7 +177,9 @@ export default function FileUploadInput({
               <div>
                 <p className="text-sm font-medium">
                   <span className="inline-flex items-center gap-2">
-                    <Upload className={`h-3 w-3 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <Upload
+                      className={`h-3 w-3 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`}
+                    />
                     <span>Drop file here or click to select</span>
                   </span>
                 </p>

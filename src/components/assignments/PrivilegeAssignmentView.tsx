@@ -36,7 +36,6 @@ import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsF
 import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentStatisticsPanel';
 import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
@@ -57,6 +56,8 @@ import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
 import { AssignmentLmsLinksCard } from '@/components/lti/AssignmentLmsLinksCard';
 import { fetchAssignmentLmsLinks, type AssignmentLmsLink } from '@/lib/lti/fetch-assignment-links';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 /**
  * The dialogs and the settings tab load on demand. Between them they were the only things
@@ -610,7 +611,7 @@ export default function AssignmentDashboardPage({
             {/* Show course name/code as a link to the course page (fallback to courseId) */}
             <Link
               href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-              className="text-link hover:text-link-hover max-w-full break-all hover:underline"
+              className={cn(TEXT_LINK_CLASS, 'max-w-full break-all')}
             >
               {assignment.course?.name || assignment.courseName || assignment.courseId}
               {assignment.course?.code

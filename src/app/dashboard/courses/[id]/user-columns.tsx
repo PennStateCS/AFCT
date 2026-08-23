@@ -56,6 +56,7 @@ import {
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { useEffect, useState } from 'react';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 
 type RosterUser = User & {
   role?: string;
@@ -392,7 +393,7 @@ export const userColumns = (
       cell: ({ row }) => {
         const email = row.original.email;
         return (
-          <a href={`mailto:${email}`} className="text-link hover:text-link-hover hover:underline">
+          <a href={`mailto:${email}`} className={TEXT_LINK_CLASS}>
             {email}
           </a>
         );
