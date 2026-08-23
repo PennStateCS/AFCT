@@ -10,7 +10,7 @@ import { LazyMotion, m, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Building2, ShieldCheck } from 'lucide-react';
 import { AuthBrandMark } from '@/components/auth/AuthBrandMark';
 import { LoginBrandPanel } from '@/components/auth/LoginBrandPanel';
-import { DevLoginPanel } from '@/components/auth/DevLoginPanel';
+import { DevLoginToolbar } from '@/components/auth/DevLoginToolbar';
 import InputGroup from '@/components/ui/InputGroup';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
@@ -442,7 +442,7 @@ export default function LoginForm({
       <LoginBrandPanel className="hidden lg:sticky lg:top-0 lg:flex" />
 
       <div className="flex min-h-dvh w-full flex-col items-center px-4 py-8 sm:px-6 lg:py-10">
-        <div className="mb-6 flex w-full max-w-[560px] flex-col items-center text-center lg:hidden">
+        <div className="mb-6 flex w-full max-w-[680px] flex-col items-center text-center lg:hidden">
           <AuthBrandMark className="text-primary size-11" />
           {/* Not a heading: the form's own title is the page's one h1, and a second one here
               would put the product name above the thing the page is for. */}
@@ -452,7 +452,9 @@ export default function LoginForm({
           </p>
         </div>
 
-        <div className="flex w-full max-w-[560px] flex-1 flex-col justify-center">
+        {/* Wider than the card inside it, so the development strip has room for four buttons
+            on one line without the form growing to match. */}
+        <div className="flex w-full max-w-[680px] flex-1 flex-col justify-center">
           {/* Narrower than the column it sits in. A form is read down a single measure, so it
               stops at a comfortable one however wide the screen gets; the development panel
               below is a grid of controls and takes the full 560. */}
@@ -710,7 +712,7 @@ export default function LoginForm({
 
           {/* Rendered, not merely hidden. A production build contains no markup for this at
               all, which is the point: the four seeded accounts share one password. */}
-          {isDev ? <DevLoginPanel onSelect={applyTestLogin} className="mt-6" /> : null}
+          {isDev ? <DevLoginToolbar onSelectRole={applyTestLogin} className="mt-4" /> : null}
         </div>
       </div>
     </div>
