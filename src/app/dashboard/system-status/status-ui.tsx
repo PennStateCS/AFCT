@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { Badge } from '@/components/ui/badge';
 import { DataTableLoading } from '@/components/ui/data-table-status';
+import { cn } from '@/lib/utils';
 
 /**
  * Shared query for a status tab: fetches its endpoint only while the tab is the
@@ -115,6 +116,26 @@ export const Stat = ({
   </div>
 );
 
+/**
+ * Two columns of `Stat` rows on anything but a phone.
+ *
+ * `Stat` puts its label and value at opposite ends of whatever box it is given, which is why
+ * its callers cap the width: across a 1400px workspace the value ends up an inch from the
+ * screen edge and a long way from the label it belongs to. A tall single column has the
+ * opposite problem, so the tabs that hold a dozen readings pair them up instead. The cap
+ * still belongs to the caller, through `className`: how wide these should be depends on what
+ * is in them.
+ */
+export const StatGrid = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) => (
+  <div className={cn('grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2', className)}>{children}</div>
+);
+
 /** A titled section for the in-card tab content (replaces per-panel Cards). */
 export const Section = ({
   title,
@@ -134,10 +155,28 @@ export const Section = ({
   </section>
 );
 
-export const TrendBadge = ({ delta }: { delta: number }) => {
+/**
+ * Which direction is the good one for a given reading.
+ *
+ * There is no general answer, which is the whole point: CPU climbing is bad, a database
+ * that has stopped growing may be broken, and more sessions is neither. The badge used to
+ * paint every rise green and every fall red, so a server running out of memory reported it
+ * as a success. Callers say what the number means; `neutral` is the default because most
+ * readings do not have a good direction.
+ */
+export type Polarity = 'up-bad' | 'up-good' | 'neutral';
+
+export const TrendBadge = ({
+  delta,
+  polarity = 'neutral',
+}: {
+  delta: number;
+  polarity?: Polarity;
+}) => {
   const up = delta > 0;
   const flat = Math.abs(delta) < 0.1;
-  const variant = flat ? 'neutral' : up ? 'success' : 'danger';
+  const good = polarity === 'up-bad' ? !up : up;
+  const variant = flat || polarity === 'neutral' ? 'neutral' : good ? 'success' : 'danger';
   const arrow = flat ? '•' : up ? '▲' : '▼';
   const direction = flat ? 'no change' : up ? 'up' : 'down';
   const mag = Math.abs(delta) < 1 ? delta.toFixed(1) : Math.round(delta);
@@ -149,6 +188,13 @@ export const TrendBadge = ({ delta }: { delta: number }) => {
   );
 };
 
+/**
+ * A trend line whose end dot is coloured by direction, assuming a rise is the bad one.
+ *
+ * That assumption holds for every reading this draws today (CPU, memory, latency) and is
+ * the reason it is written down: give this a series where climbing is fine and the dot
+ * says the opposite. Take `Polarity` from `TrendBadge` if that day comes.
+ */
 export const Sparkline = ({
   points,
   height = 30,

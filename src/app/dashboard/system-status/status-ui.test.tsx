@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { Loading } from './status-ui';
+import { Loading, TrendBadge } from './status-ui';
 
 /**
  * The status tabs used to show flat text while they fetched, so a tab that had to load looked
@@ -30,5 +30,54 @@ describe('Loading', () => {
     render(<Loading />);
 
     expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The trend badge painted every rise green and every fall red, so a server climbing towards
+ * running out of memory reported it as a success and a quiet day looked like a fault. What
+ * a direction means belongs to the reading, not to the badge, so the caller says.
+ */
+describe('TrendBadge', () => {
+  const variantOf = (container: HTMLElement) => container.firstElementChild?.className ?? '';
+
+  it('treats a rise in a bad-when-rising reading as bad', () => {
+    const { container } = render(<TrendBadge delta={12} polarity="up-bad" />);
+
+    expect(variantOf(container)).toContain('badge-danger');
+    expect(screen.getByText('(up)', { exact: false })).toBeInTheDocument();
+  });
+
+  it('treats a fall in the same reading as good', () => {
+    const { container } = render(<TrendBadge delta={-12} polarity="up-bad" />);
+
+    expect(variantOf(container)).toContain('badge-success');
+  });
+
+  it('keeps a reading with no better direction neutral, whichever way it went', () => {
+    const up = render(<TrendBadge delta={40} polarity="neutral" />);
+    expect(variantOf(up.container)).toContain('badge-neutral');
+
+    const down = render(<TrendBadge delta={-40} polarity="neutral" />);
+    expect(variantOf(down.container)).toContain('badge-neutral');
+  });
+
+  it('defaults to neutral, so a caller that has not thought about it cannot claim a win', () => {
+    const { container } = render(<TrendBadge delta={40} />);
+
+    expect(variantOf(container)).toContain('badge-neutral');
+  });
+
+  it('reads a rise as good where rising is the good direction', () => {
+    const { container } = render(<TrendBadge delta={40} polarity="up-good" />);
+
+    expect(variantOf(container)).toContain('badge-success');
+  });
+
+  it('stays neutral when nothing has really moved', () => {
+    const { container } = render(<TrendBadge delta={0.05} polarity="up-bad" />);
+
+    expect(variantOf(container)).toContain('badge-neutral');
+    expect(screen.getByText('(no change)', { exact: false })).toBeInTheDocument();
   });
 });
