@@ -85,7 +85,7 @@ export function DueDateModule({ assignments }: Props) {
   // Compact shell: the shared Card's py-6/gap-6 is right for a full-width module and
   // too airy for a narrow rail one. A local override, not a change to the primitive.
   return (
-    <Card className="w-full gap-4 py-5" aria-labelledby="deadlines-title">
+    <Card role="group" className="w-full gap-4 py-5" aria-labelledby="deadlines-title">
       <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 px-5">
         <CardTitle
           id="deadlines-title"

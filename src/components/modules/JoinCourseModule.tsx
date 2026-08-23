@@ -78,7 +78,7 @@ export function JoinCourseModule() {
 
   // Same compact shell as the Deadlines card beside it, so the rail has one rhythm.
   return (
-    <Card className="w-full gap-4 py-5" aria-labelledby="join-course-title">
+    <Card role="group" className="w-full gap-4 py-5" aria-labelledby="join-course-title">
       <CardHeader className="px-5">
         <CardTitle
           id="join-course-title"
