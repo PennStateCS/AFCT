@@ -2,9 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { getInitials } from '@/app/utils/initials';
 import { DataTable } from '@/components/ui/data-table';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { ColumnDef, OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -48,10 +46,6 @@ type StudentRow = {
   email: string;
   firstName?: string;
   lastName?: string;
-  avatar?: string;
-  cropX?: number;
-  cropY?: number;
-  zoom?: number;
   enrollmentStatus?: string;
   assigned: Record<string, boolean>;
   grades: Record<string, number | null>;
@@ -270,32 +264,6 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
     };
 
     const cols: ColumnDef<StudentRow, unknown>[] = [
-      {
-        id: 'avatar',
-        header: '',
-        accessorKey: 'avatar',
-        enableSorting: false,
-        cell: ({ row }) => {
-          const user = row.original;
-          return (
-            <div className="flex items-center justify-center">
-              <Avatar className="h-10 w-10">
-                <AvatarImage
-                  src={user.avatar ? apiPaths.files.pfp(String(user.avatar)) : undefined}
-                  alt={`${user.firstName} ${user.lastName}`}
-                  cropX={user.cropX ?? 0.5}
-                  cropY={user.cropY ?? 0.5}
-                  zoom={user.zoom ?? 1}
-                />
-                <AvatarFallback>
-                  {getInitials(user.firstName, user.lastName, user.email)}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-          );
-        },
-        meta: { priority: 1, align: 'center' },
-      },
       {
         accessorKey: 'lastName',
         header: 'Last Name',

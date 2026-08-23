@@ -65,10 +65,7 @@ vi.mock('@/components/ui/data-table', () => ({
     <div>
       <div data-testid="table-loading">{String(!!loading)}</div>
       <div data-testid="table-rows">{data.length}</div>
-      <input
-        data-testid="global-filter"
-        onChange={(e) => onGlobalFilterChange?.(e.target.value)}
-      />
+      <input data-testid="global-filter" onChange={(e) => onGlobalFilterChange?.(e.target.value)} />
       <button
         type="button"
         onClick={() =>
@@ -174,12 +171,14 @@ describe('PrivilegeGradesCard', () => {
     expect(screen.getByText('8.00')).toBeInTheDocument();
     expect(screen.queryByText('/10')).toBeNull();
 
-    // Leading columns are avatar, then Last Name, then First Name.
+    // The matrix leads with the names. No avatar column: a photo says nothing about a
+    // grade, and it cost a column in a table that is already mostly columns.
     const leadCols = Array.from(document.querySelectorAll('[data-col]'))
       .map((el) => el.getAttribute('data-col'))
-      .filter((c) => c === 'avatar' || c === 'lastName' || c === 'firstName')
-      .slice(0, 3);
-    expect(leadCols).toEqual(['avatar', 'lastName', 'firstName']);
+      .filter((c) => c === 'lastName' || c === 'firstName')
+      .slice(0, 2);
+    expect(leadCols).toEqual(['lastName', 'firstName']);
+    expect(document.querySelector('[data-col="avatar"]')).toBeNull();
   });
 
   it('keeps the current page on screen while the next one loads', async () => {
