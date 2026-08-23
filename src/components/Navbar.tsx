@@ -156,6 +156,9 @@ const Navbar: React.FC = () => {
               <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+              {/* Derived from light, not a third surface ladder: AAA text contrast and
+                  full-strength boundaries. See the .high-contrast block in globals.css. */}
+              <DropdownMenuRadioItem value="high-contrast">High contrast</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>

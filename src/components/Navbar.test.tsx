@@ -22,8 +22,6 @@ vi.mock('./ui/EnhancedSidebarTrigger', () => ({
   EnhancedSidebarTrigger: () => <div data-testid="sidebar-trigger" />,
 }));
 
-
-
 vi.mock('@/components/ui/dropdown-menu', () => {
   return {
     DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -120,13 +118,14 @@ describe('Navbar', () => {
     renderNavbar();
 
     // Positive first, so this cannot pass by rendering nothing at all: the only buttons
-    // the navbar has left are the theme trigger and its three options (the sidebar trigger
+    // the navbar has left are the theme trigger and its four options (the sidebar trigger
     // is mocked as a div). Re-adding an account trigger would land in this list and fail.
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
       'Toggle theme',
       'Light',
       'Dark',
       'System',
+      'High contrast',
     ]);
     expect(screen.getByLabelText('Breadcrumb')).toBeInTheDocument();
     expect(screen.getByText('System Settings')).toBeInTheDocument();
@@ -157,9 +156,12 @@ describe('Navbar', () => {
     fireEvent.click(screen.getByText('Light'));
     fireEvent.click(screen.getByText('Dark'));
     fireEvent.click(screen.getByText('System'));
+    fireEvent.click(screen.getByText('High contrast'));
 
     expect(setThemeMock).toHaveBeenCalledWith('light');
     expect(setThemeMock).toHaveBeenCalledWith('dark');
     expect(setThemeMock).toHaveBeenCalledWith('system');
+    // The value has to be the class name the .high-contrast block uses, hyphen included.
+    expect(setThemeMock).toHaveBeenCalledWith('high-contrast');
   });
 });

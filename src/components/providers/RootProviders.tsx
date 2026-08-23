@@ -13,7 +13,16 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider';
  */
 export function RootProviders({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+    // `themes` has to list every value, including the two next-themes assumes: without it
+    // "high-contrast" is not recognised and the class never lands. `system` stays implicit,
+    // supplied by enableSystem.
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="light"
+      enableSystem
+      disableTransitionOnChange
+      themes={['light', 'dark', 'high-contrast']}
+    >
       <SessionProvider>
         <AppToaster />
         {children}

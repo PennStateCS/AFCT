@@ -19,7 +19,8 @@ import { Textarea } from '@/components/ui/textarea';
 /**
  * A live reference for the app's semantic design tokens, rendered with the real Tailwind
  * token utilities and the real shared components so it always reflects the current theme.
- * Toggle light/dark to compare. Nothing here is a hardcoded hex or a lookalike control:
+ * Switch between Light, Dark and High contrast in the navbar to compare: nothing on this
+ * page names a theme, so every swatch below simply follows whichever is active. Nothing here is a hardcoded hex or a lookalike control:
  * when globals.css changes, this page changes with it, which is the only way it stays
  * honest. Reach for these tokens instead of palette classes (bg-red-50, text-gray-500);
  * they carry their own dark-mode values and are the single place a colour changes for a

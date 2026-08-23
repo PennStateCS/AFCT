@@ -202,8 +202,8 @@ export default function DevelopmentTestsClient() {
 
           <TabsContent value="tokens" className="space-y-4">
             <SectionHeading id="design-tokens-title" title="Design Tokens">
-              Live reference for the semantic colour tokens. Toggle the theme to compare light and
-              dark.
+              Live reference for the semantic colour tokens. Switch theme in the navbar to compare
+              light, dark and high contrast.
             </SectionHeading>
             <DesignTokens />
           </TabsContent>

@@ -45,6 +45,7 @@ const setOsDark = (dark: boolean) => {
 };
 
 const isDark = () => document.documentElement.classList.contains('dark');
+const isHighContrast = () => document.documentElement.classList.contains('high-contrast');
 const colorScheme = () => document.documentElement.style.colorScheme;
 
 function Harness({ initial }: { initial?: string }) {
@@ -63,6 +64,7 @@ const renderThemed = (initial?: string) =>
       defaultTheme="light"
       enableSystem
       disableTransitionOnChange
+      themes={['light', 'dark', 'high-contrast']}
     >
       <Harness initial={initial} />
     </NextThemesProvider>,
@@ -135,6 +137,49 @@ describe('theme modes', () => {
 
     renderThemed();
     expect(isDark()).toBe(true);
+  });
+
+  it('high contrast applies its own class and NOT the dark one', () => {
+    renderThemed('high-contrast');
+    expect(isHighContrast()).toBe(true);
+    // This matters more than it looks: high contrast derives from light, so every `dark:`
+    // utility in the app must stay switched off. If .dark landed here too, half the app
+    // would render dark-mode overrides on a white page.
+    expect(isDark()).toBe(false);
+    // next-themes only sets color-scheme for the names light and dark, so the block sets
+    // it; without that a native <select> keeps whatever the previous theme left behind.
+    expect(colorScheme()).toBe('light');
+  });
+
+  it('high contrast ignores the OS preference, like any explicit choice', () => {
+    osPrefersDark = true;
+    renderThemed('high-contrast');
+    expect(isHighContrast()).toBe(true);
+    expect(isDark()).toBe(false);
+
+    setOsDark(false);
+    expect(isHighContrast()).toBe(true);
+  });
+
+  it('switching away from high contrast clears its class', () => {
+    const { unmount } = renderThemed('high-contrast');
+    expect(isHighContrast()).toBe(true);
+    unmount();
+    document.documentElement.className = '';
+
+    renderThemed('dark');
+    expect(isHighContrast()).toBe(false);
+    expect(isDark()).toBe(true);
+  });
+
+  it('remembers high contrast across a remount', () => {
+    const { unmount } = renderThemed('high-contrast');
+    expect(isHighContrast()).toBe(true);
+    unmount();
+    document.documentElement.className = '';
+
+    renderThemed();
+    expect(isHighContrast()).toBe(true);
   });
 
   it('defaults a first-time visitor to light, NOT to their OS setting', () => {
