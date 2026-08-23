@@ -7,7 +7,7 @@ import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { LazyMotion, m, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Building2, ShieldCheck } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { AuthBrandMark } from '@/components/auth/AuthBrandMark';
 import { LoginBrandPanel } from '@/components/auth/LoginBrandPanel';
 import { DevLoginToolbar } from '@/components/auth/DevLoginToolbar';
@@ -464,11 +464,13 @@ export default function LoginForm({
           >
             {/* Outside the animated panels, so switching mode retitles the page rather than
                 replacing its h1: one h1 that changes its words, not two that take turns. */}
+            {/* The heading starts the card. There was a shield tile above it, and it was
+                doing two unhelpful things: taking 76px before anyone reached the words, and
+                promising security this page cannot vouch for. A verified-shield over "Create
+                your account" made even less sense. If something belongs here later it should
+                be the product's own mark, which states an identity rather than a guarantee. */}
             <div className="mb-6 flex flex-col items-center text-center">
-              <span className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-xl">
-                <ShieldCheck className="size-6" aria-hidden="true" />
-              </span>
-              <h1 id="auth-heading" className="mt-4 text-2xl font-semibold tracking-tight">
+              <h1 id="auth-heading" className="text-2xl font-semibold tracking-tight">
                 {mode === 'login' ? 'Sign in to your account' : 'Create your account'}
               </h1>
               <p className="text-muted-foreground mt-1 text-sm">
