@@ -1,7 +1,7 @@
 import { Code2 } from 'lucide-react';
 
 import { AuthBrandMark } from './AuthBrandMark';
-import { AuthDecorativeAutomaton } from './AuthDecorativeAutomaton';
+import { RotatingAuthAutomaton } from './RotatingAuthAutomaton';
 import { AuthDecorativeWave } from './AuthDecorativeWave';
 import { cn } from '@/lib/utils';
 
@@ -34,7 +34,11 @@ export function LoginBrandPanel({ className }: { className?: string }) {
         'bg-sidebar text-sidebar-foreground relative overflow-hidden',
         // Sticky rather than its own scroller. Signup is taller than the viewport, and two
         // independently scrolling panes is the layout that always ends up trapping a scroll.
-        'grid h-dvh grid-rows-[auto_minmax(0,1fr)_auto]',
+        // minmax(0,1fr) on the column, not just the rows. Without it the single implicit
+        // column is sized by its widest content, and the automaton's fixed width pushed the
+        // column past the panel's own padding: the drawing sat right of centre at lg and was
+        // saved from showing outside the panel only by `overflow-hidden`.
+        'grid h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]',
         // The lg step is set by a 1366x768 laptop, where the panel is under 500px wide and
         // there is no spare height; xl and up get the more generous treatment.
         'p-8 xl:p-12 2xl:p-14',
@@ -105,9 +109,10 @@ export function LoginBrandPanel({ className }: { className?: string }) {
           height is left between the copy and the footer and centres in it, so the same markup
           is a comfortable composition on a 768px laptop and on a 1440px display.
           Nudged up a notch off dead centre: there is more usable air above it than below,
-          where the wave is already occupying the bottom of the frame. */}
+          where the wave is already occupying the bottom of the frame. The diagram itself
+          changes every few minutes; see RotatingAuthAutomaton. */}
       <div className="relative flex min-h-0 items-center justify-center">
-        <AuthDecorativeAutomaton className="pointer-events-none h-auto max-h-full w-[30rem] max-w-[96%] -translate-y-4 text-blue-300 opacity-[0.22] xl:w-[35rem] 2xl:w-[40rem]" />
+        <RotatingAuthAutomaton className="pointer-events-none aspect-[444/234] max-h-full w-[30rem] max-w-[96%] -translate-y-5 text-blue-300 opacity-[0.22] xl:w-[35rem] 2xl:w-[40rem]" />
       </div>
 
       {/* In flow and after the wave, so it paints over it rather than needing a scrim. */}
