@@ -2,7 +2,7 @@
 
 import type React from 'react';
 
-import { SETTINGS_STANDARD, SETTINGS_READABLE, SettingsSection } from './settings-layout';
+import { SETTINGS_STANDARD, SettingsSection } from './settings-layout';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
@@ -36,10 +36,6 @@ export function GeneralTab({
 }) {
   return (
     <>
-      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-        Server defaults for time, uploads, and sign-in.
-      </p>
-
       {/* Three groups rather than one column of nine fields: this is a settings workspace
           now, and "where do I change the lockout" is a category question. Nothing moved
           between tabs; only the arrangement within this one changed. */}

@@ -10,7 +10,6 @@ import { SMTP_SECURITY, SMTP_SECURITY_LABELS, type SmtpSecurity } from '@/schema
 import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 import {
   SETTINGS_COMPACT,
-  SETTINGS_READABLE,
   SETTINGS_STANDARD,
   SettingsSection,
   SettingsStatusPanel,
@@ -93,11 +92,6 @@ export function EmailTab({
 
   return (
     <>
-      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-        The mail server AFCT sends from. Used for password reset links, so people can recover their
-        own accounts without an administrator.
-      </p>
-
       <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
         <SettingsStatusPanel>
           <Badge

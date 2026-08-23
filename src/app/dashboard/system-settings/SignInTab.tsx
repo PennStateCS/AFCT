@@ -62,11 +62,6 @@ export function SignInTab({
 }) {
   return (
     <>
-      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-        Let people sign in with their institution&apos;s account. Your IT department will give you
-        these values, and will need the redirect URL below.
-      </p>
-
       <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
         <SettingsStatusPanel>
           <Badge

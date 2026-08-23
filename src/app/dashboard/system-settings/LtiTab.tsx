@@ -151,12 +151,6 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
 
   return (
     <>
-      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-        Let people open AFCT from your LMS. There are two ways to set this up. If your LMS offers
-        automatic registration, use it: AFCT and your LMS then exchange everything they need between
-        themselves. Otherwise copy the values across by hand.
-      </p>
-
       <div className="mb-6 space-y-2">
         <h2 className="text-base font-semibold">Register automatically</h2>
         <div className={`${SETTINGS_STANDARD} space-y-3 rounded-md border p-3`}>

@@ -18,7 +18,7 @@ import FileUploadInput from '@/components/FileUploadInput';
 import { useTlsCertificate } from './useTlsCertificate';
 import { StepList } from './StepList';
 import { deriveAcmeSteps } from './system-settings-shared';
-import { SETTINGS_READABLE, SETTINGS_STANDARD } from './settings-layout';
+import { SETTINGS_STANDARD } from './settings-layout';
 
 /** TLS Certificate tab: current status plus the upload / CSR / self-signed / Let's Encrypt flows. */
 export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined }) {
@@ -67,10 +67,6 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
   return (
     <>
-      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-        The certificate the server presents over HTTPS.
-      </p>
-
       <div className="space-y-5">
         {/* Current status */}
         <div className="space-y-2">

@@ -4,12 +4,7 @@ import { useMemo } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
-import {
-  SETTINGS_READABLE,
-  SETTINGS_STANDARD,
-  SETTINGS_WIDE,
-  SettingsSection,
-} from './settings-layout';
+import { SETTINGS_STANDARD, SETTINGS_WIDE, SettingsSection } from './settings-layout';
 import SwitchField from '@/components/ui/SwitchField';
 import { DataTable } from '@/components/ui/data-table';
 import { apiPaths } from '@/lib/api-paths';
@@ -91,10 +86,6 @@ export function BackupsTab({
 
   return (
     <>
-      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-        Automatic database backups. Dumps are taken on the server and pruned after the retention
-        window.
-      </p>
       {/* Two content types, two measures. The schedule is three short controls; the table
           below is the thing that actually wants the monitor. */}
       <SettingsSection title="Backup schedule" className={`${SETTINGS_STANDARD} mb-6`}>

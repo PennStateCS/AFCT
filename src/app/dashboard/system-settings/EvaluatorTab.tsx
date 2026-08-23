@@ -1,6 +1,6 @@
 'use client';
 
-import { SETTINGS_READABLE, SETTINGS_STANDARD, SettingsSection } from './settings-layout';
+import { SETTINGS_STANDARD, SettingsSection } from './settings-layout';
 import InputGroup from '@/components/ui/InputGroup';
 import {
   MIN_SUBMISSION_EVAL_TIMEOUT_MS,
@@ -30,9 +30,6 @@ export function EvaluatorTab({
 }) {
   return (
     <>
-      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-        How the autograder evaluates and rate-limits submissions.
-      </p>
       {/* Six short numeric settings. As one narrow column they were a tall stack with a
           screen of empty space beside it; paired, the whole group is visible at once.
           lg rather than md: below that the rail and the sidebar leave too little room and

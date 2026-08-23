@@ -7,12 +7,7 @@ import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { SETTINGS_BOX_CLASS } from './system-settings-shared';
-import {
-  SETTINGS_COMPACT,
-  SETTINGS_READABLE,
-  SettingsSection,
-  SettingsStatusPanel,
-} from './settings-layout';
+import { SETTINGS_COMPACT, SettingsSection, SettingsStatusPanel } from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 /** Captcha tab: hCaptcha keys + a live "test my keys" flow. */
@@ -64,10 +59,6 @@ export function CaptchaTab({
 
   return (
     <>
-      <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-        Optional bot protection, shown as a challenge after repeated failed logins.
-      </p>
-
       {/* Current status */}
       <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
         <SettingsStatusPanel>
