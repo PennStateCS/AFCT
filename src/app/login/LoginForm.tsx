@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import { AuthPageBackground } from '@/components/auth/AuthPageBackground';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { LazyMotion, m, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Wrench } from 'lucide-react';
+import { Building2, ShieldCheck } from 'lucide-react';
+import { AuthBrandMark } from '@/components/auth/AuthBrandMark';
+import { LoginBrandPanel } from '@/components/auth/LoginBrandPanel';
+import { DevLoginPanel } from '@/components/auth/DevLoginPanel';
 import InputGroup from '@/components/ui/InputGroup';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
@@ -17,14 +19,6 @@ import { safeCallbackUrl } from '@/lib/safe-callback';
 import { oidcRefusalMessage } from '@/lib/oidc-refusal-message';
 import { isValidEmail } from '@/lib/email';
 import { SignupFormSchema } from '@/schemas/auth';
-
-// Dev-only quick login shortcuts so QA can impersonate common roles fast.
-const testLoginButtons = [
-  { role: 'admin', label: 'Admin', classes: 'bg-[#406669] text-white hover:bg-[#335556]' },
-  { role: 'faculty', label: 'Faculty', classes: 'bg-[#588a87] text-white hover:bg-[#47776f]' },
-  { role: 'ta', label: 'TA', classes: 'bg-[#375087] text-white hover:bg-[#2c3b73]' },
-  { role: 'student', label: 'Student', classes: 'bg-[#1b2a52] text-white hover:bg-[#162043]' },
-];
 
 type LoginField = 'email' | 'password';
 type SignupField = 'first' | 'last' | 'email' | 'password' | 'confirm';
@@ -407,9 +401,12 @@ export default function LoginForm({
   const renderCaptchaGate = () => {
     if (!shouldRenderCaptcha) return null;
     return (
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-        <p className="mb-2 font-semibold text-gray-800">Complete the security check to continue.</p>
-        <div className="flex justify-center">
+      <div className="bg-muted text-foreground rounded-xl border p-3 text-sm">
+        <p className="mb-2 font-semibold">Complete the security check to continue.</p>
+        {/* The widget has a fixed pixel width of its own, so the container scrolls rather
+            than the page: a 302px iframe in a 288px column is how the whole layout ends up
+            wider than a phone. */}
+        <div className="flex justify-center overflow-x-auto">
           <HCaptcha
             sitekey={captchaSiteKey as string}
             onVerify={handleCaptchaVerify}
@@ -430,280 +427,291 @@ export default function LoginForm({
   };
 
   return (
-    <div className="relative flex min-h-dvh w-full items-start justify-center overflow-x-hidden pt-24 md:pt-[14vh]">
-      <AuthPageBackground />
+    /**
+     * A fixed light composition, whatever theme the visitor's dashboard is set to.
+     *
+     * `auth-light` re-declares the light palette for this subtree (see globals.css). Nobody
+     * has a session yet on this page, so following a stored dark preference means a stranger's
+     * choice deciding whether the sign-in form is legible; before this, the card was a
+     * hardcoded white with grey labels bolted on to survive `.dark` on <html>. High contrast
+     * still wins over it, which is deliberate.
+     */
+    <div className="auth-light bg-background text-foreground min-h-dvh w-full lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      {/* Below lg the picture goes entirely rather than shrinking: half a brand panel beside a
+          narrow form is neither one thing nor the other. The compact header below stands in. */}
+      <LoginBrandPanel className="hidden lg:sticky lg:top-0 lg:flex" />
 
-      {/* DEV BADGE */}
-      {isDev && (
-        <div className="fixed top-4 left-1/2 z-50 flex -translate-x-1/2 items-center justify-center">
-          <div className="text-2xs flex items-center gap-2 rounded-full border border-white/50 bg-white/95 px-4 py-1.5 font-semibold tracking-[0.25em] text-[#2F4A8A] uppercase shadow-xl backdrop-blur-lg">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#2F4A8A] text-white shadow">
-              <Wrench className="h-3.5 w-3.5" strokeWidth={2.3} />
-            </span>
-            Development Build
-          </div>
+      <div className="flex min-h-dvh w-full flex-col items-center px-4 py-8 sm:px-6 lg:py-10">
+        <div className="mb-6 flex w-full max-w-[560px] flex-col items-center text-center lg:hidden">
+          <AuthBrandMark className="text-primary size-11" />
+          {/* Not a heading: the form's own title is the page's one h1, and a second one here
+              would put the product name above the thing the page is for. */}
+          <p className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">AFCT Dashboard</p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Automated Feedback for Computing Theory
+          </p>
         </div>
-      )}
 
-      {/* CARD + DEV PANEL */}
-      <div className="relative z-10 mx-4 w-full max-w-[430px]">
-        <div className="rounded-2xl bg-white p-8 shadow-[0_25px_60px_rgba(0,0,0,0.25)]">
-          <div className="mb-6 text-center">
-            <h1 className="text-3xl font-semibold tracking-tight text-gray-800">AFCT Dashboard</h1>
-            <p className="mt-1 text-base text-gray-700">Automated Feedback for Computing Theory</p>
-          </div>
+        <div className="flex w-full max-w-[560px] flex-1 flex-col justify-center">
+          {/* Narrower than the column it sits in. A form is read down a single measure, so it
+              stops at a comfortable one however wide the screen gets; the development panel
+              below is a grid of controls and takes the full 560. */}
+          <section
+            aria-labelledby="auth-heading"
+            className="bg-card mx-auto w-full max-w-[520px] rounded-2xl border p-5 shadow-sm sm:p-6 lg:p-8"
+          >
+            {/* Outside the animated panels, so switching mode retitles the page rather than
+                replacing its h1: one h1 that changes its words, not two that take turns. */}
+            <div className="mb-6 flex flex-col items-center text-center">
+              <span className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-xl">
+                <ShieldCheck className="size-6" aria-hidden="true" />
+              </span>
+              <h1 id="auth-heading" className="mt-4 text-2xl font-semibold tracking-tight">
+                {mode === 'login' ? 'Sign in to your account' : 'Create your account'}
+              </h1>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {mode === 'login'
+                  ? 'Access your AFCT Dashboard'
+                  : 'Set up your AFCT Dashboard account'}
+              </p>
+            </div>
 
-          {/* Neither form sets autoComplete="off". The individual fields carry the
-              right tokens (username / current-password / new-password), and a
-              form-level "off" can stop a password manager filling or saving them in
-              some browsers. Letting the manager do that work is what keeps signing in
-              from being a memory test (WCAG 2.2 SC 3.3.8, Accessible Authentication).
-              The admin reset-password dialog is the deliberate exception: there an
-              administrator is setting someone else's password. */}
-          <LazyMotion features={loadMotionFeatures}>
-            <AnimatePresence mode="wait" initial={false}>
-              {mode === 'login' ? (
-                <m.form
-                  key="login"
-                  id="login-panel"
-                  {...panelMotion}
-                  onSubmit={handleLogin}
-                  className="space-y-5"
-                >
-                  {/* Not a live region: each field's error <p> now carries role="alert",
-                    so announcing here too would double-speak. Kept as static context. */}
-                  <p className="sr-only">
-                    {Object.values(loginErrors)[0]
-                      ? `Form error: ${Object.values(loginErrors)[0]}`
-                      : ''}
-                  </p>
-                  <InputGroup
-                    id="login-email"
-                    label="Email"
-                    // Kept deliberately. This card is a hardcoded bg-white with no dark:
-                    // classes, but next-themes puts .dark on <html> for every page, so
-                    // text-foreground would go near-white on a white card. Only the label
-                    // is affected now: this used to leak onto the typed text as well.
-                    labelClassName="text-gray-800"
-                    name="login-email"
-                    required
-                    requiredMark
-                    autoComplete="username"
-                    value={loginEmail}
-                    setValue={setLoginEmail}
-                    type="email"
-                    error={loginErrors.email}
-                  />
-
-                  <InputGroup
-                    label="Password"
-                    // Same reason as the email field above.
-                    labelClassName="text-gray-800"
-                    name="login-password"
-                    required
-                    requiredMark
-                    autoComplete="current-password"
-                    value={loginPassword}
-                    setValue={setLoginPassword}
-                    type="password"
-                    showEye
-                    isPasswordVisible={showLoginPassword}
-                    togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
-                    error={loginErrors.password}
-                  />
-
-                  {renderCaptchaGate()}
-
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    aria-disabled={loading}
-                    className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
+            {/* Neither form sets autoComplete="off". The individual fields carry the
+                right tokens (username / current-password / new-password), and a
+                form-level "off" can stop a password manager filling or saving them in
+                some browsers. Letting the manager do that work is what keeps signing in
+                from being a memory test (WCAG 2.2 SC 3.3.8, Accessible Authentication).
+                The admin reset-password dialog is the deliberate exception: there an
+                administrator is setting someone else's password. */}
+            <LazyMotion features={loadMotionFeatures}>
+              <AnimatePresence mode="wait" initial={false}>
+                {mode === 'login' ? (
+                  <m.form
+                    key="login"
+                    id="login-panel"
+                    {...panelMotion}
+                    onSubmit={handleLogin}
+                    className="space-y-5"
                   >
-                    {loading ? 'Logging in...' : 'Sign In'}
-                  </Button>
+                    {/* Not a live region: each field's error <p> now carries role="alert",
+                      so announcing here too would double-speak. Kept as static context. */}
+                    <p className="sr-only">
+                      {Object.values(loginErrors)[0]
+                        ? `Form error: ${Object.values(loginErrors)[0]}`
+                        : ''}
+                    </p>
+                    <InputGroup
+                      id="login-email"
+                      label="Email"
+                      name="login-email"
+                      required
+                      requiredMark
+                      autoComplete="username"
+                      placeholder="name@university.edu"
+                      value={loginEmail}
+                      setValue={setLoginEmail}
+                      type="email"
+                      error={loginErrors.email}
+                    />
 
-                  {/* Shown only when a provider is configured, so the button never leads
-                    somewhere that cannot work. Local sign-in stays above it and keeps working
-                    whatever is configured here. */}
-                  {oidcButtonLabel ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <span className="h-px flex-1 bg-gray-200" />
-                        or
-                        <span className="h-px flex-1 bg-gray-200" />
+                    <div className="space-y-2">
+                      <InputGroup
+                        label="Password"
+                        name="login-password"
+                        required
+                        requiredMark
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                        value={loginPassword}
+                        setValue={setLoginPassword}
+                        type="password"
+                        showEye
+                        isPasswordVisible={showLoginPassword}
+                        togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
+                        error={loginErrors.password}
+                      />
+
+                      {/* Only offered where the site can actually send it. Without mail
+                        configured this link leads to a page that can only apologise, and the
+                        row is not rendered at all rather than left empty. */}
+                      {mailConfigured ? (
+                        <div className="flex justify-end">
+                          <Link
+                            href="/forgot-password"
+                            className="text-link hover:text-link-hover text-sm hover:underline"
+                          >
+                            Forgot password?
+                          </Link>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {renderCaptchaGate()}
+
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      aria-disabled={loading}
+                      className="h-11 w-full font-semibold"
+                    >
+                      {loading ? 'Logging in...' : 'Sign In'}
+                    </Button>
+
+                    {/* Shown only when a provider is configured, so the button never leads
+                      somewhere that cannot work, and the divider does not appear on its own.
+                      Local sign-in stays above it and keeps working whatever is set here. */}
+                    {oidcButtonLabel ? (
+                      <div className="space-y-3">
+                        <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                          <span className="bg-border h-px flex-1" />
+                          or
+                          <span className="bg-border h-px flex-1" />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 w-full"
+                          // The same sanitised destination the password form uses. Somebody sent to
+                          // the login page from a course link should land on that link, whichever way
+                          // they sign in.
+                          onClick={() => void signIn('oidc', { callbackUrl })}
+                        >
+                          <Building2 className="size-4" aria-hidden="true" />
+                          {oidcButtonLabel}
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        // The same sanitised destination the password form uses. Somebody sent to
-                        // the login page from a course link should land on that link, whichever way
-                        // they sign in.
-                        onClick={() => void signIn('oidc', { callbackUrl })}
-                      >
-                        {oidcButtonLabel}
-                      </Button>
-                    </div>
-                  ) : null}
+                    ) : null}
 
-                  {/* Only offered where the site can actually send it. Without mail configured
-                    this link leads to a page that can only apologise. */}
-                  {mailConfigured ? (
-                    <div className="text-center text-sm">
-                      <Link
-                        href="/forgot-password"
-                        className="font-semibold text-[#2F4A8A] underline decoration-1 underline-offset-2"
-                      >
-                        Forgot your password?
-                      </Link>
-                    </div>
-                  ) : null}
+                    {allowSignup ? (
+                      <p className="text-muted-foreground text-center text-sm">
+                        Don&apos;t have an account?{' '}
+                        <button
+                          type="button"
+                          className="text-link hover:text-link-hover font-semibold hover:underline"
+                          onClick={() => setMode('signup')}
+                        >
+                          Create account
+                        </button>
+                      </p>
+                    ) : null}
+                  </m.form>
+                ) : (
+                  <m.form
+                    key="signup"
+                    id="signup-panel"
+                    {...panelMotion}
+                    onSubmit={handleSignup}
+                    className="space-y-5"
+                  >
+                    {/* Not a live region: each field's error <p> now carries role="alert",
+                      so announcing here too would double-speak. Kept as static context. */}
+                    <p className="sr-only">
+                      {Object.values(signupErrors)[0]
+                        ? `Form error: ${Object.values(signupErrors)[0]}`
+                        : ''}
+                    </p>
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <InputGroup
+                        id="signup-first"
+                        label="First Name"
+                        name="signup-first"
+                        required
+                        requiredMark
+                        autoComplete="given-name"
+                        value={signupFirst}
+                        setValue={setSignupFirst}
+                        error={signupErrors.first}
+                      />
 
-                  {allowSignup ? (
-                    <div className="text-center text-sm text-gray-600">
-                      <span className="font-semibold text-gray-500">
-                        Don&apos;t have an account?
-                      </span>{' '}
+                      <InputGroup
+                        label="Last Name"
+                        name="signup-last"
+                        required
+                        requiredMark
+                        autoComplete="family-name"
+                        value={signupLast}
+                        setValue={setSignupLast}
+                        error={signupErrors.last}
+                      />
+                    </div>
+
+                    <InputGroup
+                      label="Email"
+                      name="signup-email"
+                      required
+                      requiredMark
+                      autoComplete="username"
+                      placeholder="name@university.edu"
+                      value={signupEmail}
+                      setValue={setSignupEmail}
+                      type="email"
+                      error={signupErrors.email}
+                    />
+
+                    <InputGroup
+                      label="Password"
+                      name="signup-password"
+                      required
+                      requiredMark
+                      autoComplete="new-password"
+                      value={signupPassword}
+                      setValue={setSignupPassword}
+                      type="password"
+                      showEye
+                      isPasswordVisible={showSignupPassword}
+                      togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
+                      additionalDescribedBy={passwordHelperId}
+                      error={signupErrors.password}
+                    />
+
+                    <InputGroup
+                      label="Confirm Password"
+                      name="signup-confirm"
+                      required
+                      requiredMark
+                      autoComplete="new-password"
+                      value={signupConfirm}
+                      setValue={setSignupConfirm}
+                      type="password"
+                      showEye
+                      isPasswordVisible={showSignupConfirm}
+                      togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
+                      error={signupErrors.confirm}
+                    />
+
+                    <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
+
+                    {renderCaptchaGate()}
+
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      aria-disabled={loading}
+                      className="h-11 w-full font-semibold"
+                    >
+                      {loading ? 'Signing up...' : 'Create Account'}
+                    </Button>
+
+                    <p className="text-muted-foreground text-center text-sm">
+                      Already have an account?{' '}
                       <button
                         type="button"
-                        className="font-semibold text-[#2F4A8A] underline decoration-1 underline-offset-2"
-                        onClick={() => setMode('signup')}
+                        className="text-link hover:text-link-hover font-semibold hover:underline"
+                        onClick={() => setMode('login')}
                       >
-                        Sign up
+                        Sign in
                       </button>
-                    </div>
-                  ) : null}
-                </m.form>
-              ) : (
-                <m.form
-                  key="signup"
-                  id="signup-panel"
-                  {...panelMotion}
-                  onSubmit={handleSignup}
-                  className="space-y-5"
-                >
-                  {/* Not a live region: each field's error <p> now carries role="alert",
-                    so announcing here too would double-speak. Kept as static context. */}
-                  <p className="sr-only">
-                    {Object.values(signupErrors)[0]
-                      ? `Form error: ${Object.values(signupErrors)[0]}`
-                      : ''}
-                  </p>
-                  <InputGroup
-                    id="signup-first"
-                    label="First Name"
-                    name="signup-first"
-                    required
-                    requiredMark
-                    autoComplete="given-name"
-                    value={signupFirst}
-                    setValue={setSignupFirst}
-                    error={signupErrors.first}
-                  />
+                    </p>
+                  </m.form>
+                )}
+              </AnimatePresence>
+            </LazyMotion>
+          </section>
 
-                  <InputGroup
-                    label="Last Name"
-                    name="signup-last"
-                    required
-                    requiredMark
-                    autoComplete="family-name"
-                    value={signupLast}
-                    setValue={setSignupLast}
-                    error={signupErrors.last}
-                  />
-
-                  <InputGroup
-                    label="Email"
-                    name="signup-email"
-                    required
-                    requiredMark
-                    autoComplete="username"
-                    value={signupEmail}
-                    setValue={setSignupEmail}
-                    type="email"
-                    error={signupErrors.email}
-                  />
-
-                  <InputGroup
-                    label="Password"
-                    name="signup-password"
-                    required
-                    requiredMark
-                    autoComplete="new-password"
-                    value={signupPassword}
-                    setValue={setSignupPassword}
-                    type="password"
-                    showEye
-                    isPasswordVisible={showSignupPassword}
-                    togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
-                    additionalDescribedBy={passwordHelperId}
-                    error={signupErrors.password}
-                  />
-
-                  <InputGroup
-                    label="Confirm Password"
-                    name="signup-confirm"
-                    required
-                    requiredMark
-                    autoComplete="new-password"
-                    value={signupConfirm}
-                    setValue={setSignupConfirm}
-                    type="password"
-                    showEye
-                    isPasswordVisible={showSignupConfirm}
-                    togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
-                    error={signupErrors.confirm}
-                  />
-
-                  <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
-
-                  {renderCaptchaGate()}
-
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    aria-disabled={loading}
-                    className="w-full bg-[#2F4A8A] text-white disabled:bg-[#2F4A8A] disabled:opacity-80"
-                  >
-                    {loading ? 'Signing up...' : 'Create Account'}
-                  </Button>
-
-                  <div className="text-center text-sm text-gray-600">
-                    <span className="font-semibold text-gray-500">Already have an account?</span>{' '}
-                    <button
-                      type="button"
-                      className="font-semibold text-[#2F4A8A] underline decoration-1 underline-offset-2"
-                      onClick={() => setMode('login')}
-                    >
-                      Login
-                    </button>
-                  </div>
-                </m.form>
-              )}
-            </AnimatePresence>
-          </LazyMotion>
+          {/* Rendered, not merely hidden. A production build contains no markup for this at
+              all, which is the point: the four seeded accounts share one password. */}
+          {isDev ? <DevLoginPanel onSelect={applyTestLogin} className="mt-6" /> : null}
         </div>
-
-        {isDev && (
-          <div className="fixed top-6 right-6 z-40 w-32 rounded-2xl border border-white/40 bg-white/95 p-4 text-gray-700 shadow-2xl backdrop-blur-md">
-            <span className="text-2xs mb-3 block text-center font-semibold tracking-[0.35em] text-gray-500 uppercase">
-              Test Logins
-            </span>
-            <div className="flex w-full flex-col gap-2 text-xs font-semibold">
-              {testLoginButtons.map(({ role, label, classes }) => (
-                <button
-                  key={role}
-                  type="button"
-                  className={`w-full rounded-lg px-4 py-2 transition focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:outline-none ${classes}`}
-                  onClick={() => applyTestLogin(role)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
