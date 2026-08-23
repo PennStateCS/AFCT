@@ -10,8 +10,14 @@
  * Straight edges between states and a curve only where a state points at itself, which is
  * JFLAP's convention and therefore what the audience for this page is used to reading.
  *
- * Wide rather than tall (540x270, 2:1). It fills the middle of a panel that is roughly half a
- * screen wide, so the long q0 to q1 edge is what makes the drawing use the space.
+ * Wide rather than tall (444x234, 1.9:1). It fills the middle of a panel that is roughly half
+ * a screen wide, so the long q0 to q1 edge is what makes the drawing use the space.
+ *
+ * The frame is drawn around the ink rather than chosen first: roughly 22 units of margin on
+ * every side. It used to be 540x270, sized for a sweeping return curve that filled the bottom
+ * right; once that edge was straightened, 113 units of the width and 47 of the height were
+ * empty, and since the box centres in its row and the drawing did not centre in the box, the
+ * whole automaton sat about 55px left of where it looked like it should.
  *
  * Static, one inline SVG, no dependency.
  */
@@ -19,9 +25,9 @@
 type State = { x: number; y: number; r: number };
 
 /** The three states, in one place, because every edge below is derived from them. */
-const Q0: State = { x: 110, y: 125, r: 28 };
-const Q1: State = { x: 395, y: 80, r: 32 };
-const Q2: State = { x: 350, y: 195, r: 28 };
+const Q0: State = { x: 103, y: 112, r: 28 };
+const Q1: State = { x: 388, y: 67, r: 32 };
+const Q2: State = { x: 343, y: 182, r: 28 };
 /** q1 is accepting, so it carries a second ring inside the one the edges stop at. */
 const Q1_INNER = 26;
 
@@ -87,7 +93,7 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
 
   return (
     <svg
-      viewBox="0 0 540 270"
+      viewBox="0 0 444 234"
       className={className}
       aria-hidden="true"
       focusable="false"
@@ -116,18 +122,14 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
       </defs>
 
       {/* Start indicator, into q0's left edge. */}
-      <line x1="30" y1={Q0.y} x2={Q0.x - Q0.r - 4} y2={Q0.y} markerEnd={`url(#${ARROW_ID})`} />
+      <line x1="23" y1={Q0.y} x2={Q0.x - Q0.r - 4} y2={Q0.y} markerEnd={`url(#${ARROW_ID})`} />
 
       {/* q0 loops back to itself on a. The one curve in the drawing, because a straight line
           from a state to itself is not a thing anybody draws. */}
-      <path
-        d="M89 104C72 50 148 50 131 104"
-        strokeLinecap="round"
-        markerEnd={`url(#${ARROW_ID})`}
-      />
+      <path d="M82 91C65 37 141 37 124 91" strokeLinecap="round" markerEnd={`url(#${ARROW_ID})`} />
       <text
         x={Q0.x}
-        y="44"
+        y="31"
         fontSize="15"
         fill="currentColor"
         stroke="none"
