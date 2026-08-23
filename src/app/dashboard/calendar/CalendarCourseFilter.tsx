@@ -1,6 +1,9 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+import { cn } from '@/lib/utils';
+import { courseColor } from './course-colors';
 import { Checkbox } from '@/components/ui/checkbox';
 
 export type FilterCourse = { id: string; code: string; semester?: string };
@@ -44,6 +47,16 @@ export function CalendarCourseFilter({
                       onCheckedChange={() => onToggle(c.id)}
                       aria-label={`Show assignments for ${c.code}${c.semester ? `, ${c.semester}` : ''}`}
                       className="mt-0.5 shrink-0"
+                    />
+                    {/* The same colour this course's chips carry on the grid. Decorative
+                        and aria-hidden: the code beside it is what identifies the course,
+                        so nothing here depends on telling the hues apart. */}
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'mt-1.5 size-2.5 shrink-0 rounded-full',
+                        courseColor(c.id).dot,
+                      )}
                     />
                     {/* Just the code plus the semester keeps rows short (course names can
                         be long) while still telling two offerings of the same course apart

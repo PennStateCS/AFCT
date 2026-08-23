@@ -4,14 +4,15 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { CalendarDay, Modifiers } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { addMonths, subMonths } from 'date-fns';
 import DayAssignmentsDialog from '@/components/dialogs/DayAssignmentsDialog';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { Button } from '@/components/ui/button';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { CalendarDays, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { courseColor } from './course-colors';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
 import {
   getDateKeyInTimeZone,
@@ -142,18 +143,20 @@ function CalendarDayButton(props: DayButtonProps) {
         }
       }}
       className={cn(
-        'box-border grid min-h-0 w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:outline-none',
-        isToday
-          ? 'bg-sky-100 ring-2 ring-sky-500 ring-inset dark:bg-sky-950/60 dark:ring-sky-400'
-          : 'bg-white dark:bg-neutral-900',
-        !isToday && isWeekend && 'bg-slate-50 dark:bg-neutral-800',
+        'box-border grid min-h-0 w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+        // Today is the date badge plus a faint wash, not a ring around the whole cell:
+        // a 2px cobalt border outshouted the events it was meant to frame. Semantic
+        // tokens throughout, so the cells follow the theme like everything else.
+        isToday ? 'bg-primary/5' : 'bg-card',
+        !isToday && isWeekend && 'bg-muted/40',
       )}
       style={{ aspectRatio: '1 / 1' }}
     >
       <span
         className={cn(
           'self-start justify-self-start p-1 text-left text-xs select-none',
-          isToday && 'rounded bg-sky-600 px-1.5 py-0.5 font-semibold text-white dark:bg-sky-500',
+          isToday &&
+            'bg-primary text-primary-foreground m-0.5 flex size-5 items-center justify-center rounded-full p-0 font-semibold',
         )}
       >
         {day.date.getDate()}
@@ -173,8 +176,13 @@ function CalendarDayButton(props: DayButtonProps) {
               key={a.id}
               aria-hidden="true"
               className={cn(
-                'assignment-link box-border block min-h-[1rem] w-full min-w-0 truncate overflow-hidden rounded py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white',
-                isDraft ? 'bg-amber-600 dark:bg-amber-600' : 'bg-sky-700 dark:bg-sky-600',
+                'assignment-link box-border block min-h-[1rem] w-full min-w-0 truncate overflow-hidden rounded-md border py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap',
+                // Tinted by course, matching the dot beside that course in the filter
+                // list. A draft keeps its own warning tint: which course it belongs to
+                // matters less than the fact that nobody can see it yet.
+                isDraft
+                  ? 'border-status-warning-border bg-status-warning-bg text-status-warning'
+                  : courseColor(a.course.id).chip,
                 a.crossedOut && 'line-through opacity-80',
               )}
               title={`${isDraft ? 'Draft: ' : ''}${a.course.code} - ${a.title}`}
@@ -372,6 +380,12 @@ export default function CalendarClient({
     setCurrentMonth(nextMonth);
   };
 
+  // Back to the month containing today. Same state setter as the arrows, so nothing about
+  // navigation or timezone handling differs.
+  const goToToday = () => {
+    setCurrentMonth(new Date());
+  };
+
   // Helper to get a YYYY-MM-DD key in the user's timezone
   const localDateKey = useCallback(
     (date: Date | string) => getDateKeyInTimeZone(date, timezone),
@@ -407,17 +421,17 @@ export default function CalendarClient({
   };
 
   return (
-    <div className="space-y-4 pb-8">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle role="heading" aria-level={1} className="text-2xl tracking-tight">
-            Calendar
-          </CardTitle>
-          <div className="w-8" aria-hidden="true" />
-        </CardHeader>
-      </Card>
+    <div className="space-y-6">
+      <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+        {/* Decorative: the heading beside it already says what this is. */}
+        <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+          <CalendarDays className="size-5" aria-hidden="true" />
+        </span>
+        <span>Calendar</span>
+      </h1>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+      {/* Same rail widths as the dashboard, so the two pages read as one system. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
         <Card className="flex h-full w-full flex-col">
           {/* px-2 on a phone: the card's usual px-6 costs 48px, which is most of the
               difference between a month grid that fits and one that has to be scrolled. */}
@@ -448,16 +462,27 @@ export default function CalendarClient({
                 <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
               ) : null}
             </div>
-            <div className="mx-auto mb-2 flex w-full max-w-6xl items-center justify-center gap-2 px-2">
+            {/* A control bar, not three stacked CTAs: month navigation is a utility, so
+                the buttons are outline rather than the filled primaries they were. */}
+            <div className="mx-auto mb-3 flex w-full max-w-6xl items-center gap-2 px-2">
               <Button
                 type="button"
-                variant="default"
+                variant="outline"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 shrink-0 p-0"
                 onClick={goToPreviousMonth}
                 aria-label="Previous month"
               >
                 <ChevronLeftIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0"
+                onClick={goToToday}
+              >
+                Today
               </Button>
               <div
                 aria-live="polite"
@@ -468,9 +493,9 @@ export default function CalendarClient({
               </div>
               <Button
                 type="button"
-                variant="default"
+                variant="outline"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 shrink-0 p-0"
                 onClick={goToNextMonth}
                 aria-label="Next month"
               >
