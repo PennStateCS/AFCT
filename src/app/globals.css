@@ -29,11 +29,28 @@
   --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  /* Data visualisation, and only that. Two families, and the difference is the whole
+     point of having them separate:
+
+       chart-1..6            CATEGORICAL. Six unrelated series. A colour here means
+                             "series 3", not "warning". Ordered, so series 1 is cobalt on
+                             every chart in the app.
+       chart-sequential-1..5 SEQUENTIAL. One quantity getting bigger. Step 5 is always the
+                             most of something.
+
+     When the colour means success/warning/danger/info, neither of these is right; use the
+     --status-* family, which is what SubmissionStatusBar does. */
+  --color-chart-6: var(--chart-6);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-sequential-5: var(--chart-sequential-5);
+  --color-chart-sequential-4: var(--chart-sequential-4);
+  --color-chart-sequential-3: var(--chart-sequential-3);
+  --color-chart-sequential-2: var(--chart-sequential-2);
+  --color-chart-sequential-1: var(--chart-sequential-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -57,13 +74,6 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-node-color: var(--node-color);
-  /* A CHART hue, not the app's accent. It was the brand teal, used for the navbar, the
-     spinner, avatars, meters and active tabs; all of those are cobalt now. What is left
-     is data: the sequential scales in the heatmap and attempts charts, and the single
-     series in the histogram and timeline. Pinned as a literal so a chart does not change
-     colour between themes. Worth renaming to --color-chart-teal one day; that would touch
-     six chart files, which is why it has not been. */
-  --color-brand-teal: oklch(0.6794 0.0938 203.328);
   --color-badge-success: var(--badge-success);
   --color-badge-success-bg: var(--badge-success-bg);
   --color-badge-success-border: var(--badge-success-border);
@@ -149,11 +159,26 @@
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.754 0.0001 271.152);
   --ring: oklch(0.6604 0.1739 249.672);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* Six categorical hues, deliberately spread around the wheel. The old set had two
+     oranges, a yellow and two teals, so a five-series chart came out as "warm, warm,
+     warm, cold, cold" and the legend did all the work. Cobalt first, because it is the
+     app's own accent and a single-series chart should look like it belongs here. */
+  --chart-1: oklch(0.5461 0.2152 262.8809); /* #2563EB cobalt */
+  --chart-2: oklch(0.5413 0.2466 293.009); /* #7C3AED violet */
+  --chart-3: oklch(0.6461 0.1943 41.1158); /* #EA580C orange */
+  --chart-4: oklch(0.5858 0.222 17.5846); /* #E11D48 rose */
+  --chart-5: oklch(0.6806 0.1423 75.834); /* #CA8A04 gold */
+  --chart-6: oklch(0.6271 0.1699 149.2138); /* #16A34A green */
+
+  /* One blue ramp, light to dark, for anything where colour is a quantity: the activity
+     heatmap and the attempts-to-solve bars. Both used to fake this with one hue at four
+     or five opacities, which put the lightest step at 1.3:1 on the card. Explicit steps
+     instead, so each one is a decision. */
+  --chart-sequential-1: oklch(0.9705 0.0142 254.6042); /* #EFF6FF */
+  --chart-sequential-2: oklch(0.8823 0.0571 254.1284); /* #BFDBFE */
+  --chart-sequential-3: oklch(0.7137 0.1434 254.624); /* #60A5FA */
+  --chart-sequential-4: oklch(0.5461 0.2152 262.8809); /* #2563EB */
+  --chart-sequential-5: oklch(0.4244 0.1809 265.6377); /* #1E40AF */
   /* The sidebar is a dark surface in BOTH themes, so every token here is written for
      light text on it. Three levels that have to stay apart: the rail, a barely-lighter
      hover, and the sky accent for the current page. */
@@ -277,11 +302,27 @@
   /* Light blue rather than the mid blue this was: at 0.488 the ring barely showed on a
      0.13 background. 9.8:1 or better on every dark surface. */
   --ring: oklch(0.8091 0.0956 251.813); /* #93C5FD */
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  /* Same six hues, one step lighter so they carry on the dark card. The hue identity is
+     what must not move: a series that is cobalt in light has to stay cobalt in dark, or a
+     reader's understanding of the chart breaks when they flip the theme. The old dark set
+     reordered the palette outright (chart-2 went from teal to green, chart-4 from yellow
+     to violet), which did exactly that. */
+  --chart-1: oklch(0.7137 0.1434 254.624); /* #60A5FA cobalt */
+  --chart-2: oklch(0.709 0.1592 293.5412); /* #A78BFA violet */
+  --chart-3: oklch(0.7576 0.159 55.9344); /* #FB923C orange */
+  --chart-4: oklch(0.7192 0.169 13.428); /* #FB7185 rose */
+  --chart-5: oklch(0.8606 0.1731 91.9357); /* #FACC15 gold */
+  --chart-6: oklch(0.8003 0.1821 151.711); /* #4ADE80 green */
+
+  /* Low to high is still low to high; what flips is which end is dark. "Darker means
+     more" cannot work on a dark card, where the darkest step would be the background.
+     Step 1 is the deepest navy and step 5 the brightest blue, so the ramp still reads as
+     one quantity increasing. */
+  --chart-sequential-1: oklch(0.2823 0.0874 267.9352); /* #172554 */
+  --chart-sequential-2: oklch(0.3791 0.1378 265.5222); /* #1E3A8A */
+  --chart-sequential-3: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
+  --chart-sequential-4: oklch(0.6231 0.188 259.8145); /* #3B82F6 */
+  --chart-sequential-5: oklch(0.8091 0.0956 251.8128); /* #93C5FD */
   /* Same rail in both themes: it is already a dark surface in light mode, so letting it
      drift here would make the sidebar the one thing that changes identity between
      themes. Kept in step with the light block above; see the notes there. */

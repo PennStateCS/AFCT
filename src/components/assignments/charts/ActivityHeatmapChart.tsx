@@ -16,14 +16,20 @@ const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAYS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
-// Five-level teal ramp. Level 0 (no submissions) is a faint neutral so the whole 7x24
-// grid reads as a continuous matrix, not scattered dots. Levels 1..4 deepen with activity.
+// The shared sequential scale: colour here is a quantity, so it comes from
+// --chart-sequential-* rather than the categorical chart-1..6. Level 0 (no submissions)
+// stays a faint neutral so the whole 7x24 grid reads as a continuous matrix rather than
+// scattered dots, and levels 1..4 take steps 2..5 rather than 1..5 for the same reason:
+// step 1 is nearly white and would be indistinguishable from an empty cell.
+//
+// Full opacity, not one hue at 0.28/0.5/0.72/1 as before. That trick put the lightest
+// active level at 1.3:1 against the card, and it is not a decision anybody can review.
 const LEVEL_STYLE: { bg: string; opacity: number }[] = [
   { bg: 'var(--color-muted-foreground)', opacity: 0.1 },
-  { bg: 'var(--color-brand-teal)', opacity: 0.28 },
-  { bg: 'var(--color-brand-teal)', opacity: 0.5 },
-  { bg: 'var(--color-brand-teal)', opacity: 0.72 },
-  { bg: 'var(--color-brand-teal)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-2)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-3)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-4)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-5)', opacity: 1 },
 ];
 
 /** 24-hour label like "2 PM", "12 AM". */

@@ -108,12 +108,29 @@ describe('DesignTokens', () => {
     expect(container.querySelector('.bg-sidebar-accent')).not.toBeNull();
   });
 
-  it('states the chart-only rule for the retained teal', () => {
-    render(<DesignTokens />);
-    expect(screen.getByText('bg-brand-teal')).toBeInTheDocument();
-    expect(
-      screen.getByText(/retained for categorical and data visualization only/),
-    ).toBeInTheDocument();
+  it('shows six categorical hues, and no teal', () => {
+    const { container } = render(<DesignTokens />);
+    expect(screen.getByText('Categorical Palette')).toBeInTheDocument();
+    // The copy-ready chips, not any mention of the name: the prose names chart-6 too.
+    const chips = Array.from(container.querySelectorAll('code')).map((c) => c.textContent);
+    for (const token of ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6']) {
+      expect(chips).toContain(token);
+      expect(container.querySelector(`.bg-${token}`)).not.toBeNull();
+    }
+    // The token and every trace of it are gone, not renamed.
+    expect(chips).not.toContain('brand-teal');
+    expect(container.querySelector('.bg-brand-teal')).toBeNull();
+  });
+
+  it('shows the sequential scale as a scale, and says what it is for', () => {
+    const { container } = render(<DesignTokens />);
+    expect(screen.getByText('Sequential Scale')).toBeInTheDocument();
+    for (const n of [1, 2, 3, 4, 5]) {
+      expect(container.querySelector(`.bg-chart-sequential-${n}`)).not.toBeNull();
+    }
+    expect(screen.getByText(/One quantity, increasing/)).toBeInTheDocument();
+    // The rule that keeps the two families apart from the status family.
+    expect(screen.getByText(/use the status tokens above/)).toBeInTheDocument();
   });
 
   it('lists the approved typography roles', () => {

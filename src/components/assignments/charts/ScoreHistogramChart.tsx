@@ -121,7 +121,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
               width={Math.max(0, barW)}
               height={Math.max(0, h)}
               rx={2}
-              className="fill-brand-teal outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
+              className="fill-chart-1 outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
               tabIndex={0}
               role="img"
               aria-label={label}

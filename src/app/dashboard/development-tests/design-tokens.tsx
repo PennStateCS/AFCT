@@ -138,13 +138,25 @@ const SOLID_STATUS = [
   { label: 'neutral', cls: 'bg-status-neutral-solid' },
 ] as const;
 
-const CHART_HUES = [
-  { label: 'chart-1', cls: 'bg-chart-1' },
-  { label: 'chart-2', cls: 'bg-chart-2' },
-  { label: 'chart-3', cls: 'bg-chart-3' },
-  { label: 'chart-4', cls: 'bg-chart-4' },
-  { label: 'chart-5', cls: 'bg-chart-5' },
-  { label: 'brand-teal', cls: 'bg-brand-teal' },
+// Six unrelated series. The name beside each one is the hue, not a meaning: chart-6 is
+// "series 6", not "success". Class strings are literal so Tailwind emits them.
+const CHART_CATEGORICAL = [
+  { label: 'Cobalt', cls: 'bg-chart-1', token: 'chart-1' },
+  { label: 'Violet', cls: 'bg-chart-2', token: 'chart-2' },
+  { label: 'Orange', cls: 'bg-chart-3', token: 'chart-3' },
+  { label: 'Rose', cls: 'bg-chart-4', token: 'chart-4' },
+  { label: 'Gold', cls: 'bg-chart-5', token: 'chart-5' },
+  { label: 'Green', cls: 'bg-chart-6', token: 'chart-6' },
+] as const;
+
+// One quantity getting bigger. Shown as a continuous strip rather than six cards, because
+// what matters about a sequential scale is that the steps read in order.
+const CHART_SEQUENTIAL = [
+  { cls: 'bg-chart-sequential-1', token: 'chart-sequential-1' },
+  { cls: 'bg-chart-sequential-2', token: 'chart-sequential-2' },
+  { cls: 'bg-chart-sequential-3', token: 'chart-sequential-3' },
+  { cls: 'bg-chart-sequential-4', token: 'chart-sequential-4' },
+  { cls: 'bg-chart-sequential-5', token: 'chart-sequential-5' },
 ] as const;
 
 // The approved hierarchy, as classes rather than prose, so a heading that drifts off the
@@ -517,25 +529,56 @@ export function DesignTokens() {
       <TokenSection
         id="tokens-data-viz"
         title="Data Visualization"
-        description="Categorical hues for charts. These are the only place colour carries data rather than state."
+        description="Two families, and picking the wrong one is the mistake worth avoiding. These are the only place in the app where colour carries data rather than state."
       >
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
-          {CHART_HUES.map((c) => (
-            <div key={c.cls} className="border-border overflow-hidden rounded-md border">
-              <div className={`h-10 ${c.cls}`} aria-hidden="true" />
-              <div className="bg-card space-y-0.5 p-2">
-                <div className="text-foreground text-xs font-medium">{c.label}</div>
-                <Cls>{c.cls}</Cls>
+        <div className="space-y-3">
+          <div>
+            <h4 className="text-foreground text-sm font-semibold">Categorical Palette</h4>
+            <p className="text-muted-foreground text-sm">
+              Six colours that distinguish unrelated data series. They do not imply status:{' '}
+              <Cls>chart-6</Cls> is series six, not success. Use them in order, so series one is
+              cobalt on every chart in the app.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {CHART_CATEGORICAL.map((c) => (
+              <div key={c.token} className="border-border overflow-hidden rounded-md border">
+                <div className={`h-10 ${c.cls}`} aria-hidden="true" />
+                <div className="bg-card space-y-0.5 p-2">
+                  <div className="text-foreground text-xs font-medium">{c.label}</div>
+                  <Cls>{c.token}</Cls>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
+
+        <div className="space-y-3 pt-2">
+          <div>
+            <h4 className="text-foreground text-sm font-semibold">Sequential Scale</h4>
+            <p className="text-muted-foreground text-sm">
+              One quantity, increasing. Step five is always the most of something. Used by the
+              activity heatmap and the attempts-to-solve bars. In light mode the ramp runs light to
+              dark; in dark mode it runs dark to light, because &ldquo;darker means more&rdquo;
+              cannot work on a dark card. The direction, low to high, is the same in both.
+            </p>
+          </div>
+          <div className="border-border flex overflow-hidden rounded-md border" aria-hidden="true">
+            {CHART_SEQUENTIAL.map((c) => (
+              <div key={c.token} className={`h-10 flex-1 ${c.cls}`} />
+            ))}
+          </div>
+          <div className="text-muted-foreground flex items-center justify-between text-xs">
+            <span>Low</span>
+            <Cls>bg-chart-sequential-1 … -5</Cls>
+            <span>High</span>
+          </div>
+        </div>
+
         <p className="text-muted-foreground text-sm">
-          Teal is retained for categorical and data visualization only. Do not use it for buttons,
-          navigation, loading indicators, avatars, active tabs, or general UI accents. It is pinned
-          to one literal value in both themes so a chart series does not change colour when the
-          theme does, and it survives under the name <Cls>brand-teal</Cls> only because renaming it
-          would touch every chart file.
+          When the colour means success, warning, danger or informational state rather than a data
+          series, neither family is right: use the status tokens above. A submission bar broken down
+          by outcome is status; a line per metric is categorical; a heatmap cell is sequential.
         </p>
       </TokenSection>
 

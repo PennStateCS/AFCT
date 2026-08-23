@@ -82,7 +82,7 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
                 width={barW}
                 height={Math.max(0, M.top + plotH - y)}
                 rx={1.5}
-                className="fill-brand-teal outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
+                className="fill-chart-1 outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
                 tabIndex={0}
                 role="img"
                 aria-label={label}
