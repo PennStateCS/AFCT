@@ -9,12 +9,14 @@ import { cn } from '@/lib/utils';
  * a Card would bring: this is the page, not an object on it.
  *
  * The negative margin is the awkward part and the reason this lives in one place.
- * `dashboard/layout.tsx` puts `p-4` on `<main>`, so a plain background inside it would
- * stop 16px short on every side and read as a rectangle floating on slate. `-m-4` bleeds
- * back through that padding and `p-4` restores it inside, which puts the surface flush
- * against the navbar's divider and the workspace edges.
+ * `dashboard/layout.tsx` puts `px-4 py-4 lg:px-6` on `<main>`, so a plain background
+ * inside it would stop short on every side and read as a rectangle floating on slate.
+ * The negative margins bleed back through that padding and the matching padding restores
+ * it inside, which puts the surface flush against the navbar's divider and the workspace
+ * edges.
  *
- * It is tied to that one value in the layout: change `p-4` there and change it here too.
+ * It is tied to those values in the layout: change the gutter there and change it here
+ * too, including the wider `lg` one.
  * There is no way to express "fill my parent's padding" in CSS alone.
  */
 export function WorkspaceSurface({
@@ -25,7 +27,7 @@ export function WorkspaceSurface({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn('bg-card -m-4 flex-1 p-4', className)}>
+    <div className={cn('bg-card -m-4 flex-1 p-4 lg:-mx-6 lg:px-6', className)}>
       {children}
     </div>
   );

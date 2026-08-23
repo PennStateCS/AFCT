@@ -84,7 +84,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                     id="main-content"
                     tabIndex={-1}
                     lang="en"
-                    className="flex min-w-0 flex-1 flex-col p-4"
+                    className="flex min-w-0 flex-1 flex-col px-4 py-4 lg:px-6"
                   >
                     {children}
                   </main>

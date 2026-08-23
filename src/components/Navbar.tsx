@@ -111,7 +111,7 @@ const Navbar: React.FC = () => {
   return (
     // Chrome, not a banner: the teal block competed with the page heading under it. A
     // white utility bar spanning the whole workspace, so its divider reaches both edges;
-    // the 16px gutter lives on <main> below, not around this.
+    // the page gutter lives on <main> below, not around this.
     //
     // shrink-0 is load-bearing. This is a flex child of the column that also holds <main>,
     // and flex items shrink by default, so a tall page squeezed the header below its own
