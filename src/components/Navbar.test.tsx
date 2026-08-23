@@ -148,6 +148,108 @@ describe('Navbar', () => {
     expect(screen.getByText('Homework 1')).toBeInTheDocument();
   });
 
+  // The bug this replaced: the trail was capped at 50/60vw and each label at 8/14/22rem,
+  // so a long title truncated on a wide screen with hundreds of spare pixels. jsdom does no
+  // layout, so what these can prove is that the caps are gone and the flex sizing that
+  // replaced them is present. Whether text actually fits is a browser question.
+  const LONG_COURSE = 'Introduction to Computer Programming and Problem Solving';
+  const LONG_ASSIGNMENT = 'Programming Assignment 6: Object-Oriented Design and File Processing';
+
+  const renderLongTrail = () => {
+    usePathnameMock.mockReturnValue('/dashboard/courses/course-1/assignment-1');
+    renderNavbar({
+      course: { id: 'course-1', name: LONG_COURSE },
+      assignment: { id: 'assignment-1', title: LONG_ASSIGNMENT },
+    });
+  };
+
+  it('carries no hardcoded width caps on the trail or its labels', () => {
+    renderLongTrail();
+    const nav = screen.getByLabelText('Breadcrumb');
+    const html = nav.outerHTML;
+    for (const cap of [
+      'max-w-[50vw]',
+      'max-w-[60vw]',
+      'max-w-[8rem]',
+      'max-w-[14rem]',
+      'max-w-[22rem]',
+    ]) {
+      expect(html).not.toContain(cap);
+    }
+    // No replacement cap either: moving 22rem to 40rem would only move the bug.
+    expect(html).not.toMatch(/max-w-\[\d/);
+  });
+
+  it('gives the trail the leftover header width rather than a share of the viewport', () => {
+    renderLongTrail();
+    const nav = screen.getByLabelText('Breadcrumb');
+    expect(nav.className).toContain('min-w-0');
+    expect(nav.className).toContain('flex-1');
+    const list = nav.querySelector('[data-slot="breadcrumb-list"]') as HTMLElement;
+    expect(list.className).toContain('flex-nowrap');
+    expect(list.className).toContain('min-w-0');
+  });
+
+  it('keeps the full label in the DOM and as the accessible name when it truncates', () => {
+    renderLongTrail();
+    // Truncation is visual only: the text is never shortened, so a screen reader still
+    // hears the whole thing, and title= surfaces it on hover.
+    const page = screen.getByText(LONG_ASSIGNMENT);
+    expect(page).toHaveAttribute('aria-current', 'page');
+    expect(page).toHaveAttribute('title', LONG_ASSIGNMENT);
+    const courseLink = screen.getByRole('link', { name: LONG_COURSE });
+    expect(courseLink).toHaveAttribute('title', LONG_COURSE);
+    expect(courseLink).toHaveAttribute('href', '/dashboard/courses/course-1');
+  });
+
+  it('gives the current page priority over a long ancestor', () => {
+    renderLongTrail();
+    const page = screen.getByText(LONG_ASSIGNMENT).closest('li') as HTMLElement;
+    const course = screen.getByRole('link', { name: LONG_COURSE }).closest('li') as HTMLElement;
+    // The current page grows into spare width; a long ancestor may only give it up.
+    expect(page.className).toContain('flex-1');
+    expect(course.className).toContain('shrink');
+    expect(course.className).not.toContain('shrink-0');
+    // A short, known ancestor holds its size instead of truncating.
+    const courses = screen.getByRole('link', { name: 'Courses' }).closest('li') as HTMLElement;
+    expect(courses.className).toContain('shrink-0');
+  });
+
+  it('reveals levels progressively, and never leaves an orphan separator', () => {
+    renderLongTrail();
+    const nav = screen.getByLabelText('Breadcrumb');
+    const items = Array.from(nav.querySelectorAll('li'));
+    // Dashboard > Courses > course > assignment, with a separator before each but the first.
+    const separators = items.filter(
+      (el) => el.getAttribute('data-slot') === 'breadcrumb-separator',
+    );
+    const crumbs = items.filter((el) => el.getAttribute('data-slot') === 'breadcrumb-item');
+    expect(crumbs).toHaveLength(4);
+    expect(separators).toHaveLength(3);
+
+    // The current page is the only thing a phone shows, so it is never hidden.
+    expect(crumbs[3].className).not.toContain('hidden');
+    // Dashboard arrives at sm, the middle levels at lg.
+    expect(crumbs[0].className).toContain('hidden sm:inline-flex');
+    expect(crumbs[1].className).toContain('hidden lg:inline-flex');
+    expect(crumbs[2].className).toContain('hidden lg:inline-flex');
+
+    // Every separator appears no earlier than the crumb it introduces, which is what stops
+    // "> Real Life Examples" or "Dashboard > > Real Life Examples".
+    expect(separators[0].className).toContain('hidden lg:inline-flex');
+    expect(separators[1].className).toContain('hidden lg:inline-flex');
+    expect(separators[2].className).toContain('hidden sm:inline-flex');
+    separators.forEach((el) => expect(el.className).toContain('shrink-0'));
+  });
+
+  it('keeps the fixed controls fixed', () => {
+    renderLongTrail();
+    // A long trail must never push the theme control off screen.
+    const themeTrigger = screen.getByRole('button', { name: 'Toggle theme' });
+    const group = themeTrigger.closest('div.shrink-0');
+    expect(group).not.toBeNull();
+  });
+
   it('supports all theme actions', () => {
     usePathnameMock.mockReturnValue('/dashboard/users');
 

@@ -17,7 +17,7 @@ export function EnhancedSidebarTrigger() {
     <SidebarTrigger
       aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
       aria-expanded={isOpen}
-      className="cursor-pointer"
+      className="shrink-0 cursor-pointer"
     >
       <Icon className="h-12 w-12" />
     </SidebarTrigger>

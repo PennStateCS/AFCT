@@ -30,6 +30,8 @@ import {
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb';
 
+import { cn } from '@/lib/utils';
+
 // Local
 import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
 
@@ -50,9 +52,17 @@ const Navbar: React.FC = () => {
     const dashboardIndex = segments.indexOf('dashboard');
     const dashboardSegments = dashboardIndex >= 0 ? segments.slice(dashboardIndex + 1) : segments;
 
-    const nextCrumbs: Array<{ href: string; label: string; isPage?: boolean }> = [
-      { href: '/dashboard', label: 'Dashboard', isPage: dashboardSegments.length === 0 },
-    ];
+    // `flexible` marks a crumb whose label comes from data rather than the route: a course
+    // name or an assignment title, which can be any length. Static crumbs ("Dashboard",
+    // "Courses", "System Settings") are short and known, so they never give up space.
+    // Recorded here rather than inferred from the index later, which would break the
+    // moment the trail gains a level.
+    const nextCrumbs: Array<{
+      href: string;
+      label: string;
+      isPage?: boolean;
+      flexible?: boolean;
+    }> = [{ href: '/dashboard', label: 'Dashboard', isPage: dashboardSegments.length === 0 }];
 
     if (dashboardSegments[0] === 'courses') {
       nextCrumbs.push({
@@ -67,6 +77,7 @@ const Navbar: React.FC = () => {
           href: `/dashboard/courses/${courseId}`,
           label: courseLabel?.id === courseId ? courseLabel.name : toTitleCase(courseId),
           isPage: dashboardSegments.length === 2,
+          flexible: true,
         });
       }
 
@@ -79,6 +90,7 @@ const Navbar: React.FC = () => {
               ? assignmentLabel.title
               : toTitleCase(assignmentId),
           isPage: dashboardSegments.length === 3,
+          flexible: true,
         });
       }
     } else if (dashboardSegments[0] !== undefined) {
@@ -107,30 +119,69 @@ const Navbar: React.FC = () => {
     <header className="border-border bg-card flex h-14 shrink-0 items-center justify-between border-b px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
         <EnhancedSidebarTrigger />
-        <Breadcrumb aria-label="Breadcrumb">
-          <BreadcrumbList className="max-w-[50vw] flex-nowrap overflow-hidden text-sm sm:max-w-[60vw]">
+        {/* min-w-0 + flex-1: the trail gets whatever the header has left after the two
+            fixed controls, so collapsing the sidebar hands it that width automatically.
+            It used to be capped at 50/60vw, which is why a long title still truncated on a
+            1920px screen with hundreds of spare pixels: the cap, not the space, was the
+            limit. Nothing here measures anything; flexbox decides. */}
+        <Breadcrumb aria-label="Breadcrumb" className="min-w-0 flex-1 overflow-hidden">
+          <BreadcrumbList className="w-full min-w-0 flex-nowrap overflow-hidden text-sm">
             {crumbs.map((crumb, index) => {
               const isLast = !!crumb.isPage;
-              const isMobileHidden = index > 0 && !isLast;
-              const mobileVisibility = isMobileHidden ? 'hidden sm:inline-flex' : 'inline-flex';
+
+              // Progressive disclosure. Four long levels do not fit a phone, and four
+              // truncated fragments tell you less than one whole title, so levels arrive
+              // as the width does:
+              //   below sm   the current page alone
+              //   sm to lg   Dashboard > current page
+              //   lg and up  the whole trail
+              const visibility = isLast
+                ? 'inline-flex'
+                : index === 0
+                  ? 'hidden sm:inline-flex'
+                  : 'hidden lg:inline-flex';
+
+              // A separator belongs BEFORE an item, and only when something visible
+              // precedes it. Rendering one after every crumb (as this did) leaves a
+              // dangling chevron the moment its neighbour is hidden. The earliest any
+              // earlier crumb appears is `sm` (Dashboard), so a separator shows at
+              // whichever is later: `sm`, or the breakpoint of the item it introduces.
+              const separatorVisibility = isLast
+                ? 'hidden sm:inline-flex'
+                : 'hidden lg:inline-flex';
 
               return (
                 <React.Fragment key={crumb.href}>
-                  <BreadcrumbItem className={`${mobileVisibility} min-w-0`}>
+                  {index > 0 && (
+                    <BreadcrumbSeparator className={`${separatorVisibility} shrink-0`} />
+                  )}
+                  <BreadcrumbItem
+                    className={cn(
+                      visibility,
+                      // The current page gets first claim on the leftover width, because
+                      // it is the label that says where you are. A long course name can
+                      // shrink; a static one ("Dashboard", "Courses") is short and known,
+                      // so it holds its size and never truncates.
+                      isLast ? 'min-w-0 flex-1' : crumb.flexible ? 'min-w-0 shrink' : 'shrink-0',
+                    )}
+                  >
                     {isLast ? (
-                      <BreadcrumbPage className="max-w-[14rem] truncate font-medium sm:max-w-[22rem]">
+                      // title= so the whole label is readable on hover when CSS clips it.
+                      // The text itself is never shortened, so the accessible name stays
+                      // complete either way.
+                      <BreadcrumbPage title={crumb.label} className="block truncate font-medium">
                         {crumb.label}
                       </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink
                         href={crumb.href}
-                        className="block max-w-[8rem] truncate hover:underline sm:max-w-[14rem]"
+                        title={crumb.flexible ? crumb.label : undefined}
+                        className="block truncate hover:underline"
                       >
                         {crumb.label}
                       </BreadcrumbLink>
                     )}
                   </BreadcrumbItem>
-                  {!isLast && <BreadcrumbSeparator className={mobileVisibility} />}
                 </React.Fragment>
               );
             })}
@@ -138,7 +189,8 @@ const Navbar: React.FC = () => {
         </Breadcrumb>
       </div>
 
-      <div className="ml-2 flex items-center gap-2 text-right sm:gap-4">
+      {/* shrink-0: the theme control is a fixed cost, and the trail is what yields. */}
+      <div className="ml-2 flex shrink-0 items-center gap-2 text-right sm:gap-4">
         <DropdownMenu>
           {/* `relative` so the Moon anchors to the button. It was absolutely positioned at
               its static spot, which the old wide button happened to have room for; in a
