@@ -27,8 +27,8 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatTimeInTimeZone } from '@/lib/date-format';
 import type { SummaryStatus } from '@/lib/status/types';
 import { hostNotices } from './host-notices';
-import { Skel, TrendBadge } from './status-ui';
-import { formatUptime, formatDbSize } from './status-format';
+import { Skel, TrendBadge, type Polarity } from './status-ui';
+import { formatUptime, formatDbSize, latencyTone } from './status-format';
 import { useTrends, type HistoryPoint } from './use-trends';
 import ServerTab from './tabs/ServerTab';
 import DatabaseTab from './tabs/DatabaseTab';
@@ -109,11 +109,24 @@ export default function SystemStatusClient() {
   const provider = summary?.db.provider ?? 'unknown';
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
-  const tiles = useMemo(
+  // `polarity` is what makes the trend arrows mean anything: only three of these readings
+  // have a direction that is actually better, and painting the rest green or red was reading
+  // a busier day as an improvement and a growing database as a fault.
+  const tiles: { label: string; value: string; delta: number; polarity?: Polarity }[] = useMemo(
     () => [
       { label: 'Uptime', value: formatUptime(summary?.uptime), delta: 0 },
-      { label: 'Proc CPU', value: `${Math.round(summary?.procCpuPct ?? 0)}%`, delta: trends.cpu },
-      { label: 'Proc Mem', value: `${(summary?.procMemPct ?? 0).toFixed(1)}%`, delta: trends.mem },
+      {
+        label: 'Proc CPU',
+        value: `${Math.round(summary?.procCpuPct ?? 0)}%`,
+        delta: trends.cpu,
+        polarity: 'up-bad',
+      },
+      {
+        label: 'Proc Mem',
+        value: `${(summary?.procMemPct ?? 0).toFixed(1)}%`,
+        delta: trends.mem,
+        polarity: 'up-bad',
+      },
       {
         label: 'DB Tables',
         value: summary?.dbTables == null ? '—' : String(summary.dbTables),
@@ -122,7 +135,12 @@ export default function SystemStatusClient() {
       { label: 'DB Size', value: formatDbSize(summary?.dbSizeBytes), delta: trends.dbSize },
       { label: 'Sessions (24h)', value: String(summary?.sessions24h ?? 0), delta: trends.sessions },
       { label: 'Unique Users', value: String(summary?.uniqueUsers24h ?? 0), delta: 0 },
-      { label: 'Latency (ms)', value: String(summary?.latencyMs ?? '—'), delta: trends.latency },
+      {
+        label: 'Latency (ms)',
+        value: String(summary?.latencyMs ?? '—'),
+        delta: trends.latency,
+        polarity: 'up-bad',
+      },
     ],
     [summary, trends],
   );
@@ -144,7 +162,10 @@ export default function SystemStatusClient() {
     >
       {/* Heading, health badges, refresh controls and the metric tiles all sit on the
           workspace itself: the page-sized card put a dashboard inside a card. */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Stacked until lg. The left side can carry the heading plus four badges and the right
+          side four controls, so at sm they met in the middle and both wrapped; there is only
+          room for one row once the workspace is a laptop wide. */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
             {/* Decorative: the heading beside it already says what this is. Activity, the
@@ -164,12 +185,12 @@ export default function SystemStatusClient() {
             {provider.toUpperCase()}
           </Badge>
           {hostWarnings > 0 && (
-            <Badge variant="danger" title="The server itself needs attention. See the Server tab.">
+            <Badge variant="warning" title="The server itself needs attention. See the Server tab.">
               Server needs attention
             </Badge>
           )}
           {typeof summary?.latencyMs === 'number' && (
-            <Badge variant="warning" title="Summary latency">
+            <Badge variant={latencyTone(summary.latencyMs)} title="Summary latency">
               <span className="sr-only">Summary latency: </span>
               {summary.latencyMs} ms
             </Badge>
@@ -206,8 +227,11 @@ export default function SystemStatusClient() {
         </div>
       </div>
 
-      {/* Eight across only from xl. At lg they were 128px wide and the values wrapped. */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
+      {/* Eight across only from 2xl. A tile has to hold a value and its trend badge side by
+          side, and what it gets is the viewport minus the sidebar, the status rail and the
+          workspace gutters: at 1280 with the sidebar open that is about 90px per tile across
+          eight, which is where the values wrapped. Four across is the desktop layout. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 2xl:grid-cols-8">
         {tiles.map((t) => (
           <div key={t.label} className="bg-card rounded-lg border p-3">
             <div className="text-muted-foreground text-xs">{t.label}</div>
@@ -217,7 +241,7 @@ export default function SystemStatusClient() {
               ) : (
                 <>
                   {t.value}
-                  <TrendBadge delta={t.delta} />
+                  <TrendBadge delta={t.delta} polarity={t.polarity} />
                 </>
               )}
             </div>
