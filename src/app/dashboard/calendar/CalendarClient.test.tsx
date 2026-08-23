@@ -47,6 +47,23 @@ const fetchMock = () => global.fetch as ReturnType<typeof vi.fn>;
 const assignmentCalls = () =>
   fetchMock().mock.calls.filter((c) => String(c[0]).startsWith('/api/me/assignments'));
 
+// Four courses, because the bulk controls only appear once the list is long enough to
+// make them worth finding.
+const fourCourses = ['c1', 'c2', 'c3', 'c4'].map((id, i) => ({
+  id,
+  code: `CS10${i + 1}`,
+  semester: 'Spring 2026',
+  isArchived: false,
+}));
+
+const fourCourseAssignments = fourCourses.map((c, i) => ({
+  id: `a${i + 1}`,
+  title: `A${i + 1}`,
+  courseId: c.id,
+  dueDate: new Date(`2026-03-1${i}T12:00:00.000Z`),
+  course: { id: c.id, code: c.code, name: c.code },
+}));
+
 describe('CalendarClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -187,6 +204,157 @@ describe('CalendarClient', () => {
     // Uncheck CS102 -> only the CS101 assignment remains.
     fireEvent.click(cs102);
     await waitFor(() => expect(screen.getByTestId('due-date-count')).toHaveTextContent('1'));
+  });
+
+  it('goes back to the current month with Today', async () => {
+    renderWithClient(<CalendarClient />);
+    await waitFor(() => expect(assignmentCalls()).toHaveLength(1));
+
+    fireEvent.click(screen.getByLabelText('Next month'));
+    await waitFor(() => expect(assignmentCalls()).toHaveLength(2));
+
+    const thisMonth = new Intl.DateTimeFormat('en-US', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    await waitFor(() => expect(screen.getByText(thisMonth)).toBeInTheDocument());
+  });
+
+  it('hides and shows every listed course with the bulk controls', async () => {
+    fetchMock().mockImplementation((url: string) => {
+      if (String(url).startsWith('/api/me/courses')) return okJson(fourCourses);
+      return okJson([]);
+    });
+
+    renderWithClient(
+      <CalendarClient
+        initialAssignments={fourCourseAssignments}
+        initialMonth={new Date('2026-03-01T00:00:00.000Z').toISOString()}
+      />,
+    );
+
+    expect(screen.getByTestId('due-date-count')).toHaveTextContent('4');
+    const hideAll = await screen.findByRole('button', { name: 'Hide all' });
+
+    fireEvent.click(hideAll);
+    await waitFor(() => expect(screen.getByTestId('due-date-count')).toHaveTextContent('0'));
+    // Every box follows, and the control that would now do nothing is disabled.
+    screen
+      .getAllByRole('checkbox', { name: /Show assignments for/ })
+      .forEach((box) => expect(box).not.toBeChecked());
+    expect(hideAll).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    await waitFor(() => expect(screen.getByTestId('due-date-count')).toHaveTextContent('4'));
+  });
+
+  it('persists a bulk hide through the same storage the checkboxes use', async () => {
+    fetchMock().mockImplementation((url: string) => {
+      if (String(url).startsWith('/api/me/courses')) return okJson(fourCourses);
+      return okJson([]);
+    });
+    const props = {
+      initialAssignments: fourCourseAssignments,
+      initialMonth: new Date('2026-03-01T00:00:00.000Z').toISOString(),
+    };
+
+    const { unmount } = renderWithClient(<CalendarClient {...props} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Hide all' }));
+    await waitFor(() => expect(screen.getByTestId('due-date-count')).toHaveTextContent('0'));
+    unmount();
+
+    renderWithClient(<CalendarClient {...props} />);
+    await waitFor(() => expect(screen.getByTestId('due-date-count')).toHaveTextContent('0'));
+  });
+
+  it('lists only courses whose term overlaps the month on screen', async () => {
+    fetchMock().mockImplementation((url: string) => {
+      if (String(url).startsWith('/api/me/courses')) {
+        return okJson([
+          {
+            id: 'c1',
+            code: 'CS101',
+            semester: 'Spring 2026',
+            isArchived: false,
+            startDate: '2026-01-12T00:00:00.000Z',
+            endDate: '2026-05-01T00:00:00.000Z',
+          },
+          {
+            id: 'c2',
+            code: 'CS102',
+            semester: 'Fall 2026',
+            isArchived: false,
+            startDate: '2026-08-24T00:00:00.000Z',
+            endDate: '2026-12-18T00:00:00.000Z',
+          },
+          // No dates at all: open-ended, so it is never hidden on this basis.
+          { id: 'c3', code: 'CS103', semester: 'Rolling', isArchived: false },
+        ]);
+      }
+      return okJson([]);
+    });
+
+    renderWithClient(
+      <CalendarClient initialMonth={new Date('2026-03-01T00:00:00.000Z').toISOString()} />,
+    );
+
+    await screen.findByRole('checkbox', { name: /Show assignments for CS101/ });
+    expect(
+      screen.getByRole('checkbox', { name: /Show assignments for CS103/ }),
+    ).toBeInTheDocument();
+    // The Fall course has no business in a March list.
+    expect(
+      screen.queryByRole('checkbox', { name: /Show assignments for CS102/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps a course listed when it owns an assignment in the month, whatever its term says', async () => {
+    fetchMock().mockImplementation((url: string) => {
+      if (String(url).startsWith('/api/me/courses')) {
+        return okJson([
+          {
+            id: 'c1',
+            code: 'CS101',
+            semester: 'Spring 2026',
+            isArchived: false,
+            startDate: '2026-01-12T00:00:00.000Z',
+            endDate: '2026-05-01T00:00:00.000Z',
+          },
+          {
+            id: 'c2',
+            code: 'CS102',
+            semester: 'Fall 2025',
+            isArchived: false,
+            startDate: '2025-08-24T00:00:00.000Z',
+            endDate: '2025-12-18T00:00:00.000Z',
+          },
+        ]);
+      }
+      return okJson([]);
+    });
+
+    renderWithClient(
+      <CalendarClient
+        initialAssignments={[
+          {
+            id: 'a1',
+            title: 'Late deadline',
+            courseId: 'c2',
+            dueDate: new Date('2026-03-10T12:00:00.000Z'),
+            course: { id: 'c2', code: 'CS102', name: 'Two' },
+          },
+        ]}
+        initialMonth={new Date('2026-03-01T00:00:00.000Z').toISOString()}
+      />,
+    );
+
+    // Its term ended in December, but you can see its chip, so you must be able to filter it.
+    expect(
+      await screen.findByRole('checkbox', { name: /Show assignments for CS102/ }),
+    ).toBeInTheDocument();
   });
 
   it('remembers unchecked courses across remounts', async () => {

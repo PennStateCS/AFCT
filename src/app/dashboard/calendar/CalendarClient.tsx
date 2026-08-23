@@ -24,7 +24,11 @@ import { CalendarCourseFilter, type FilterCourse } from './CalendarCourseFilter'
 
 // Compact course shape from /api/me/courses?view=nav (student: published only;
 // faculty/TA: their courses even when unpublished; admin: all their enrolments).
-type NavCourse = FilterCourse & { isArchived: boolean; startDate?: string | Date | null };
+type NavCourse = FilterCourse & {
+  isArchived: boolean;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+};
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
 async function fetchAssignmentsInRange(startIso: string, endIso: string, signal?: AbortSignal) {
@@ -143,14 +147,19 @@ function CalendarDayButton(props: DayButtonProps) {
         }
       }}
       className={cn(
-        'box-border grid min-h-0 w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+        'focus-visible:ring-ring box-border grid h-full w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+        // Explicit heights rather than aspect-ratio: 1/1. A square cell takes its height
+        // from its width, so on a wide desktop one week row was ~150px tall and the last
+        // week of the month fell below the fold. These are sized to the chips instead
+        // (about 28px of chrome plus 22px a chip), which is what the cell is actually
+        // for. visibleAssignmentsForWidth mirrors these tiers; change them together.
+        'min-h-14 sm:min-h-20 md:min-h-24 lg:min-h-26 xl:min-h-28',
         // Today is the date badge plus a faint wash, not a ring around the whole cell:
         // a 2px cobalt border outshouted the events it was meant to frame. Semantic
         // tokens throughout, so the cells follow the theme like everything else.
         isToday ? 'bg-primary/5' : 'bg-card',
         !isToday && isWeekend && 'bg-muted/40',
       )}
-      style={{ aspectRatio: '1 / 1' }}
     >
       <span
         className={cn(
@@ -194,13 +203,23 @@ function CalendarDayButton(props: DayButtonProps) {
         })}
         {dayAssignments.length > visibleCount && (
           <>
-            <div
-              aria-hidden={true}
-              className="h-2 w-2 self-center justify-self-center rounded-full bg-blue-500"
-            ></div>
-            {/* On a phone the cell shows no chips at all, so "N more" would be counting from a
-                number nobody was given. The day's own label already announces the total; this
-                only has to say the cell is not showing it. */}
+            {/* On a phone the cell shows no chips at all, so "+N more" would be counting from a
+                number nobody was given: a marker is the honest version there. Everywhere else
+                the count is the useful thing, and it reads without a legend. Text, not a
+                control: the day cell itself is the button that opens the list. */}
+            {visibleCount === 0 ? (
+              <div
+                aria-hidden={true}
+                className="bg-primary size-1.5 self-center justify-self-center rounded-full"
+              />
+            ) : (
+              <div
+                aria-hidden={true}
+                className="text-muted-foreground text-2xs truncate pl-1 leading-tight"
+              >
+                {`+${hiddenAssignmentCount} more`}
+              </div>
+            )}
             <span className="sr-only">
               {visibleCount === 0
                 ? 'Open day to view assignments.'
@@ -284,17 +303,45 @@ export default function CalendarClient({
     },
     staleTime: 60_000,
   });
+  // Courses with an assignment in the month currently on screen. A course whose term
+  // dates say it is over can still own an assignment here (a late deadline, a term date
+  // nobody updated), and a course you can see chips for must stay filterable.
+  const courseIdsWithAssignments = useMemo(
+    () => new Set(assignments.map((a) => a.course.id)),
+    [assignments],
+  );
+
   const filterCourses = useMemo<FilterCourse[]>(() => {
-    const startMs = (v: string | Date | null | undefined) => {
+    const ms = (v: string | Date | null | undefined, fallback: number) => {
       const t = v ? new Date(v).getTime() : NaN;
-      return Number.isNaN(t) ? Infinity : t; // undated courses sort to the end
+      return Number.isNaN(t) ? fallback : t;
     };
+    // The month on screen, in plain local terms. This only decides which courses are
+    // worth listing, so it does not need the timezone precision the assignment range does.
+    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getTime();
+    const monthEnd = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    ).getTime();
+
+    // Show a course whose term overlaps the visible month, so a Spring course does not sit
+    // in the list all August. A missing date is treated as open-ended rather than as a
+    // reason to hide: the nav payload carries startDate/endDate but neither is required.
+    const overlapsVisibleMonth = (c: NavCourse) =>
+      ms(c.startDate, -Infinity) <= monthEnd && ms(c.endDate, Infinity) >= monthStart;
+
     return navCourses
       .filter((c) => !c.isArchived)
+      .filter((c) => overlapsVisibleMonth(c) || courseIdsWithAssignments.has(c.id))
       .slice()
-      .sort((a, b) => startMs(a.startDate) - startMs(b.startDate))
+      .sort((a, b) => ms(a.startDate, Infinity) - ms(b.startDate, Infinity)) // undated last
       .map((c) => ({ id: c.id, code: c.code, semester: c.semester }));
-  }, [navCourses]);
+  }, [navCourses, currentMonth, courseIdsWithAssignments]);
 
   // Courses the viewer has turned OFF. Empty = everything shown, so all boxes start
   // checked and a course we haven't seen yet defaults to visible. Persists across
@@ -316,19 +363,44 @@ export default function CalendarClient({
     }
   }, []);
 
+  // One place that writes the preference, so the single toggle and the bulk controls can
+  // never drift into two storage formats.
+  const persistUnchecked = (ids: Set<string>) => {
+    try {
+      window.localStorage.setItem(HIDDEN_COURSES_KEY, JSON.stringify([...ids]));
+    } catch {
+      // Non-fatal: the choice still works this session, it just won't persist.
+    }
+    return ids;
+  };
+
   const toggleCourse = useCallback((courseId: string) => {
     setUncheckedCourseIds((prev) => {
       const next = new Set(prev);
       if (next.has(courseId)) next.delete(courseId);
       else next.add(courseId);
-      try {
-        window.localStorage.setItem(HIDDEN_COURSES_KEY, JSON.stringify([...next]));
-      } catch {
-        // Non-fatal: the toggle still works this session, it just won't persist.
-      }
-      return next;
+      return persistUnchecked(next);
     });
   }, []);
+
+  // Bulk controls work on the same set the checkboxes do, and only on the courses
+  // currently listed: a course hidden because its term is not on screen keeps whatever
+  // the viewer last chose for it, so navigating months does not quietly re-show it.
+  const showAllCourses = useCallback(() => {
+    setUncheckedCourseIds((prev) => {
+      const next = new Set(prev);
+      filterCourses.forEach((c) => next.delete(c.id));
+      return persistUnchecked(next);
+    });
+  }, [filterCourses]);
+
+  const hideAllCourses = useCallback(() => {
+    setUncheckedCourseIds((prev) => {
+      const next = new Set(prev);
+      filterCourses.forEach((c) => next.add(c.id));
+      return persistUnchecked(next);
+    });
+  }, [filterCourses]);
 
   // Assignments the calendar and the Upcoming list actually render, after the course
   // filter. When nothing is unchecked this is the full list (no needless copy).
@@ -432,12 +504,14 @@ export default function CalendarClient({
 
       {/* Same rail widths as the dashboard, so the two pages read as one system. */}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
-        <Card className="flex h-full w-full flex-col">
-          {/* px-2 on a phone: the card's usual px-6 costs 48px, which is most of the
-              difference between a month grid that fits and one that has to be scrolled. */}
-          <CardContent className="relative flex min-h-0 flex-1 flex-col px-2 pt-6 sm:px-6">
+        <Card className="flex h-full w-full flex-col gap-0 py-0">
+          {/* Tight on purpose. The card's default px-6/py-6 spent 48px of width and 48px of
+              height on air; a month planner wants that for the grid. px-2 on a phone for the
+              same reason, where 48px is most of the difference between a month that fits and
+              one that has to be scrolled. */}
+          <CardContent className="relative flex min-h-0 flex-1 flex-col gap-3 p-2 sm:p-4">
             {isError ? (
-              <div className="border-status-danger-border bg-status-danger-bg mb-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <div className="border-status-danger-border bg-status-danger-bg flex items-center justify-between gap-3 rounded-md border px-3 py-2">
                 <p role="alert" className="text-status-danger text-sm">
                   Failed to load calendar assignments. Please try again.
                 </p>
@@ -454,7 +528,7 @@ export default function CalendarClient({
               aria-live="polite"
               className={
                 loading
-                  ? 'border-border bg-card pointer-events-none absolute top-3 right-3 z-10 rounded-md border px-2 py-1 shadow-sm'
+                  ? 'border-border bg-card pointer-events-none absolute inset-x-0 top-12 z-10 mx-auto w-fit rounded-md border px-2 py-1 shadow-sm'
                   : 'sr-only'
               }
             >
@@ -463,31 +537,36 @@ export default function CalendarClient({
               ) : null}
             </div>
             {/* A control bar, not three stacked CTAs: month navigation is a utility, so
-                the buttons are outline rather than the filled primaries they were. */}
-            <div className="mx-auto mb-3 flex w-full max-w-6xl items-center gap-2 px-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 w-8 shrink-0 p-0"
-                onClick={goToPreviousMonth}
-                aria-label="Previous month"
-              >
-                <ChevronLeftIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 shrink-0"
-                onClick={goToToday}
-              >
-                Today
-              </Button>
+                the buttons are outline rather than the filled primaries they were.
+                Three zones rather than a flex row: the left side carries two controls and
+                the right side one, so a plain row put the month label off-centre. The
+                1fr/auto/1fr grid centres it on the card regardless. */}
+            <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
+              <div className="flex items-center gap-2 justify-self-start">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 p-0"
+                  onClick={goToPreviousMonth}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeftIcon className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0"
+                  onClick={goToToday}
+                >
+                  Today
+                </Button>
+              </div>
               <div
                 aria-live="polite"
                 aria-atomic="true"
-                className="min-w-0 flex-1 truncate px-2 text-center text-base font-medium sm:max-w-56 sm:px-4 sm:text-lg"
+                className="min-w-0 truncate px-1 text-center text-base font-semibold sm:px-4 sm:text-lg"
               >
                 {monthLabel}
               </div>
@@ -495,14 +574,14 @@ export default function CalendarClient({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 w-8 shrink-0 p-0"
+                className="h-8 w-8 shrink-0 justify-self-end p-0"
                 onClick={goToNextMonth}
                 aria-label="Next month"
               >
                 <ChevronRightIcon className="h-4 w-4" />
               </Button>
             </div>
-            <div className="h-full w-full overflow-auto">
+            <div className="w-full">
               <p id="calendar-keyboard-help" className="sr-only">
                 Use arrow keys to move between calendar days. Press Enter or Space to open
                 assignments for the focused day.
@@ -524,16 +603,24 @@ export default function CalendarClient({
                     onMonthChange={(month: Date) => {
                       setCurrentMonth(month);
                     }}
-                    className="text-foreground bg-card mx-auto h-full w-full max-w-6xl p-1 [--cell-size:2.25rem] sm:p-3 sm:[--cell-size:3.25rem] md:[--cell-size:3.5rem]"
+                    // Always six rows, so the page does not jump height between a
+                    // five-week month and a six-week one. getMonthRangeIso fetches the
+                    // same six weeks; see the note there.
+                    fixedWeeks
+                    className="text-foreground bg-card mx-auto w-full max-w-6xl p-0 [--cell-size:2.25rem] sm:[--cell-size:3.25rem] md:[--cell-size:3.5rem]"
                     timeZone={timezone}
                     classNames={{
                       nav: 'hidden',
                       month_caption: 'hidden',
                       caption_label: 'hidden',
                       dropdowns: 'hidden',
+                      // A header row rather than seven labels floating above the grid:
+                      // the faint fill and the shared border tie it to the first week.
+                      weekdays:
+                        'flex gap-0 rounded-t-md border border-border/60 bg-muted/30 py-1.5',
                       weekday:
-                        'text-muted-foreground rounded-md flex-1 font-semibold text-xs select-none text-center',
-                      day: 'relative box-border -m-px w-full h-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day aspect-square select-none border border-border/60',
+                        'text-muted-foreground flex-1 font-semibold text-xs select-none text-center',
+                      day: 'relative box-border -m-px w-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day select-none border border-border/60',
                       today: 'rounded-none bg-transparent text-inherit',
                     }}
                     components={CALENDAR_DAY_COMPONENTS}
@@ -549,6 +636,8 @@ export default function CalendarClient({
             courses={filterCourses}
             uncheckedCourseIds={uncheckedCourseIds}
             onToggle={toggleCourse}
+            onShowAll={showAllCourses}
+            onHideAll={hideAllCourses}
           />
           <DueDateModule assignments={visibleAssignments} />
         </div>
