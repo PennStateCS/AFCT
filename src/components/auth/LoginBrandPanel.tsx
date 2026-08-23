@@ -70,10 +70,11 @@ export function LoginBrandPanel({ className }: { className?: string }) {
           </div>
         </div>
 
-        {/* One short rule, and the only divider on the panel. It ties the identity above it to
-            the copy below rather than separating them, which is why it is 44px and not a
-            full-width line. */}
-        <div aria-hidden="true" className="bg-primary mt-10 h-0.5 w-11 rounded-full" />
+        {/* One short rule, and the only divider on the panel. It ties the identity above it
+            to the copy below rather than separating them, which is why it is 64px and not a
+            full-width line. Blue rather than the primary token: it belongs to the same
+            cobalt family as the mark and the DASHBOARD line, not to the app's buttons. */}
+        <div aria-hidden="true" className="mt-10 h-0.5 w-16 rounded-full bg-blue-400/80" />
 
         <div className="mt-6 space-y-3">
           <p className="text-xl font-semibold tracking-tight xl:text-2xl 2xl:text-3xl">
