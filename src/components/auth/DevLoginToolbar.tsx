@@ -1,34 +1,49 @@
-'use client';
-
-import { useState } from 'react';
 import { Wrench } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-/** The seeded accounts, which all share one password. Development builds only. */
+/**
+ * The seeded accounts, which all share one password. Development builds only.
+ *
+ * The colours are categorical, not semantic: they say "these are four different accounts",
+ * and nothing here means success or danger. Green and red are left out for that reason, and
+ * every fill carries white at 6.3:1 or better, hover states included.
+ */
 const TEST_LOGIN_ROLES = [
-  { role: 'admin', label: 'Admin' },
-  { role: 'faculty', label: 'Faculty' },
-  { role: 'ta', label: 'TA' },
-  { role: 'student', label: 'Student' },
+  {
+    role: 'admin',
+    label: 'Admin',
+    classes: 'border-slate-800 bg-slate-800 hover:border-slate-700 hover:bg-slate-700',
+  },
+  {
+    role: 'faculty',
+    label: 'Faculty',
+    classes: 'border-blue-700 bg-blue-700 hover:border-blue-600 hover:bg-blue-600',
+  },
+  {
+    role: 'ta',
+    label: 'TA',
+    classes: 'border-violet-700 bg-violet-700 hover:border-violet-600 hover:bg-violet-600',
+  },
+  {
+    role: 'student',
+    label: 'Student',
+    classes: 'border-indigo-700 bg-indigo-700 hover:border-indigo-600 hover:bg-indigo-600',
+  },
 ] as const;
 
 /**
- * Quick sign-in shortcuts for the seeded roles, as one quiet strip under the form.
+ * Quick sign-in shortcuts for the seeded roles, as a small dock at the foot of the pane.
  *
  * Rendered only where `process.env.NODE_ENV !== 'production'`, and by the caller rather than
  * here, so a production build contains no markup for it at all: this is not something hidden
  * with CSS. The four accounts and their shared password are development fixtures, and they
  * must never reach a real deployment's HTML.
  *
- * Deliberately unexplained. It said what it was for in two sentences, which made a debugging
- * aid taller than it was useful and gave it the weight of a second card next to the one people
- * are actually here to use. Four buttons under the words "Development build" need no caption.
- *
- * One button treatment for all four roles. They used to be four different colours, which reads
- * as a legend for something; nothing here depends on telling them apart by anything but their
- * label.
+ * No caption and no collapse control. It said what it was for in two sentences and offered to
+ * hide itself, which is a lot of apparatus for four buttons; in a development build these are
+ * always wanted, and in any other build they do not exist.
  */
 export function DevLoginToolbar({
   onSelectRole,
@@ -37,54 +52,35 @@ export function DevLoginToolbar({
   onSelectRole: (role: string) => void;
   className?: string;
 }) {
-  const [open, setOpen] = useState(true);
-
   return (
-    <div className={cn('bg-card rounded-xl border p-3 sm:px-3 sm:py-2', className)}>
-      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-        <span className="flex items-center gap-2 text-sm font-semibold">
-          <Wrench className="text-primary size-4" aria-hidden="true" />
-          Development build
-        </span>
+    <div
+      className={cn(
+        'bg-card w-full rounded-xl border p-3 shadow-md sm:w-auto sm:px-3 sm:py-2',
+        'flex flex-col gap-3 sm:flex-row sm:items-center',
+        className,
+      )}
+    >
+      <span className="flex items-center gap-2 text-sm font-semibold">
+        <Wrench className="text-primary size-4" aria-hidden="true" />
+        Development build
+      </span>
 
-        {/* Reached before the buttons it controls, at every width, which is the one thing that
-            stays constant here: on a phone it sits beside the label on the first row, and from
-            sm it moves to the far end of the strip. */}
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-controls="dev-test-logins"
-          className="text-muted-foreground hover:text-foreground ml-auto sm:order-last"
-        >
-          {open ? 'Hide' : 'Show'}
-        </Button>
+      <span aria-hidden="true" className="bg-border hidden h-6 w-px sm:block" />
 
-        <span aria-hidden="true" className="bg-border hidden h-6 w-px sm:block" />
-
-        <div
-          id="dev-test-logins"
-          hidden={!open}
-          // Full width below sm so the four roles wrap onto their own row as a pair of columns;
-          // side by side with everything else from sm, where the strip is one line.
-          className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center"
-        >
-          {TEST_LOGIN_ROLES.map(({ role, label }) => (
-            <Button
-              key={role}
-              type="button"
-              variant="outline"
-              // Comfortable to tap on a phone, compact on a desktop where it is a debugging aid
-              // sitting under the real form.
-              className="h-11 px-3 sm:h-8"
-              onClick={() => onSelectRole(role)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
+      {/* Two columns below sm so the four roles stay comfortable to tap; one line from sm,
+          where this is a debugging aid rather than something anybody uses on a phone. */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+        {TEST_LOGIN_ROLES.map(({ role, label, classes }) => (
+          <Button
+            key={role}
+            type="button"
+            variant="outline"
+            className={cn('h-11 px-3 text-white hover:text-white sm:h-8', classes)}
+            onClick={() => onSelectRole(role)}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
     </div>
   );

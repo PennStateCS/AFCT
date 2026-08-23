@@ -93,9 +93,11 @@ export function LoginBrandPanel({ className }: { className?: string }) {
 
       {/* The middle row, and the reason the panel is a grid. The automaton takes whatever
           height is left between the copy and the footer and centres in it, so the same markup
-          is a comfortable composition on a 768px laptop and on a 1440px display. */}
+          is a comfortable composition on a 768px laptop and on a 1440px display.
+          Nudged up a notch off dead centre: there is more usable air above it than below,
+          where the wave is already occupying the bottom of the frame. */}
       <div className="relative flex min-h-0 items-center justify-center">
-        <AuthDecorativeAutomaton className="pointer-events-none h-auto max-h-full w-[26rem] max-w-[88%] text-blue-300 opacity-[0.18] xl:w-[30rem] 2xl:w-[34rem]" />
+        <AuthDecorativeAutomaton className="pointer-events-none h-auto max-h-full w-[30rem] max-w-[96%] -translate-y-4 text-blue-300 opacity-[0.22] xl:w-[35rem] 2xl:w-[40rem]" />
       </div>
 
       {/* In flow and after the wave, so it paints over it rather than needing a scrim. */}

@@ -441,7 +441,7 @@ export default function LoginForm({
           narrow form is neither one thing nor the other. The compact header below stands in. */}
       <LoginBrandPanel className="hidden lg:sticky lg:top-0 lg:grid" />
 
-      <div className="flex min-h-dvh w-full flex-col items-center px-4 py-8 sm:px-6 lg:py-10">
+      <div className="flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
         <div className="mb-6 flex w-full max-w-[680px] flex-col items-center text-center lg:hidden">
           <AuthBrandMark className="text-primary size-11" />
           {/* Not a heading: the form's own title is the page's one h1, and a second one here
@@ -709,11 +709,13 @@ export default function LoginForm({
               </AnimatePresence>
             </LazyMotion>
           </section>
-
-          {/* Rendered, not merely hidden. A production build contains no markup for this at
-              all, which is the point: the four seeded accounts share one password. */}
-          {isDev ? <DevLoginToolbar onSelectRole={applyTestLogin} className="mt-4" /> : null}
         </div>
+
+        {/* Outside the card's block and after it, so the flex-1 above pushes it to the foot of
+            the pane: it is a tool that belongs to the page, not a footer on the form. In flow
+            rather than fixed, so a tall signup form or an expanded error simply moves it down
+            instead of having it sit on top of the thing being filled in. */}
+        {isDev ? <DevLoginToolbar onSelectRole={applyTestLogin} className="mt-8" /> : null}
       </div>
     </div>
   );

@@ -36,6 +36,10 @@ export function AuthDecorativeAutomaton({ className }: { className?: string }) {
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
+      // The lines sit a shade under the group opacity the caller sets, and the labels take it
+      // in full. Filled text at the same value as a 2px stroke reads fainter than the line
+      // does, and q0/q1/a/b are the part worth being able to make out.
+      strokeOpacity="0.9"
     >
       <defs>
         {/* markerUnits defaults to strokeWidth, so this is 10x10 user units at the stroke
