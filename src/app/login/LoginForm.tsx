@@ -439,7 +439,7 @@ export default function LoginForm({
     <div className="auth-light bg-background text-foreground min-h-dvh w-full lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
       {/* Below lg the picture goes entirely rather than shrinking: half a brand panel beside a
           narrow form is neither one thing nor the other. The compact header below stands in. */}
-      <LoginBrandPanel className="hidden lg:sticky lg:top-0 lg:flex" />
+      <LoginBrandPanel className="hidden lg:sticky lg:top-0 lg:grid" />
 
       <div className="flex min-h-dvh w-full flex-col items-center px-4 py-8 sm:px-6 lg:py-10">
         <div className="mb-6 flex w-full max-w-[680px] flex-col items-center text-center lg:hidden">
