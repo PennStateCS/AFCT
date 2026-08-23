@@ -81,7 +81,7 @@ export function LoginBrandPanel({ className }: { className?: string }) {
             three coloured lines in a row would leave nothing looking primary. Tracked open a
             little, which is the same trick DASHBOARD uses far harder; at 0.05em it reads as
             a descriptor rather than as a second label competing with it. */}
-        <p className="text-sidebar-muted-foreground mt-5 text-sm tracking-wider xl:text-base">
+        <p className="text-sidebar-muted-foreground mt-3 text-sm tracking-wider xl:text-base">
           Automated Feedback for Computing Theory
         </p>
 
