@@ -59,20 +59,18 @@ export const TAB_BAR_LIST_CLASS =
 // container and produce a phantom vertical scrollbar.
 export const TAB_BAR_TRIGGER_CLASS = [
   'text-muted-foreground hover:text-foreground',
-  // Active tab: the sidebar's own charcoal with a white label, and a cobalt underline via
-  // --tab-active, which matches the vertical rails. The sidebar token rather than a literal,
-  // so the active tab follows the sidebar in both themes instead of drifting from it; white
-  // on that charcoal is comfortably past AA.
-  'data-[state=active]:text-white data-[state=active]:font-semibold',
+  // Active tab: the same --tab-active family the vertical rail uses, so the two shapes of
+  // the SAME navigation read as one system at every width. It used to fill with the global
+  // sidebar's charcoal and a white label, which made a local tab strip look like a piece of
+  // the dark app chrome and had nothing in common with the rail beside it. A soft tint, a
+  // cobalt label and the underline it already had.
+  'data-[state=active]:text-tab-active data-[state=active]:font-semibold',
+  'data-[state=active]:bg-tab-active-bg',
   // `group` so the count badge can react to the tab's own active state.
   'group inline-flex h-auto items-center justify-center gap-1.5 whitespace-nowrap',
   'rounded-none border-0 border-b-4 border-transparent bg-transparent px-2 py-3 text-sm font-medium lg:px-1',
   'transition-colors',
   'data-[state=active]:border-tab-active',
-  // Set for both themes explicitly. The base trigger fills only in dark
-  // (`dark:data-[state=active]:bg-input/30`), which the old `bg-transparent` never cancelled,
-  // so light mode showed the card straight through and the two themes disagreed.
-  'data-[state=active]:bg-sidebar dark:data-[state=active]:bg-sidebar',
   'data-[state=active]:shadow-none',
 ].join(' ');
 
@@ -121,11 +119,17 @@ export function TabBarMobileSelect({
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
+      {/* Still a native <select>, deliberately: it is the right control on a phone and it
+          brings its own keyboard and screen-reader behaviour. Only the surface changed. It
+          was bg-background + border-border, which is the PAGE's colour and the structural
+          border, so on the slate canvas it read as a piece of the page rather than
+          something you operate. Same tokens as Input/Textarea/Select now, including the
+          focus treatment. */}
       <select
         id={id}
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
-        className="border-border bg-background focus-visible:ring-ring h-11 w-full rounded-md border px-3 text-sm shadow-sm focus-visible:ring-2 focus-visible:outline-none"
+        className="border-input bg-card text-foreground focus-visible:border-ring focus-visible:ring-ring/50 h-11 w-full rounded-md border px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
       >
         {items.map((item) => (
           <option key={item.value} value={item.value}>
@@ -199,8 +203,12 @@ export function TabBar({
               <Icon className="hidden size-3.5 opacity-70 lg:inline" aria-hidden="true" />
             ) : null}
             <span className="truncate">{label}</span>
+            {/* The same pill the rail draws: quiet at rest, tinted on the active tab. It
+                used to be tinted on EVERY tab and switch to bg-background when active,
+                which only worked while the active tab was filled with charcoal. Against a
+                soft tint that would have been the page colour on the card. */}
             {count !== undefined ? (
-              <span className="bg-tab-active-bg text-tab-active group-data-[state=active]:bg-background ml-0.5 rounded-full px-1.5 py-0.5 text-xs leading-none font-medium">
+              <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-tab-active-bg group-data-[state=active]:text-tab-active ml-0.5 rounded-full px-1.5 py-0.5 text-xs leading-none font-medium">
                 {count}
               </span>
             ) : null}

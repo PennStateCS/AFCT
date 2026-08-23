@@ -18,8 +18,12 @@ const buttonVariants = cva(
           'bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         success:
           'bg-status-success-solid text-white shadow-xs hover:bg-status-success-solid/90 focus-visible:ring-status-success-solid/30',
+        // border-input, not border-border. The theme now splits the two on purpose:
+        // border-border is structure (a card edge, a divider) and border-input is the edge
+        // of something you operate. An outline button is the second kind, and at
+        // border-border it was 1.27:1 on the card in light, which is barely a boundary.
         outline:
-          'border-border bg-card text-foreground border shadow-xs hover:bg-accent hover:text-accent-foreground',
+          'border-input bg-card text-foreground border shadow-xs hover:bg-accent hover:text-accent-foreground',
         // --muted rather than --secondary. --secondary is neutral now too, so the two
         // would look alike; this keeps the button a shade quieter than a secondary
         // surface. The dark hover is spelled out because --muted and --accent are the

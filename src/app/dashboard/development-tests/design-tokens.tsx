@@ -300,6 +300,42 @@ export function DesignTokens() {
             </div>
           </div>
         </div>
+        {/* The two shapes of the same navigation, beside each other. They drifted once:
+            the strip filled with the sidebar's charcoal while the rail used a soft
+            tab-active tint, and nothing on any page showed the two together. */}
+        <div className="border-border bg-muted/30 space-y-2 rounded-md border p-3">
+          <p className="text-foreground text-sm font-medium">Local navigation, both shapes</p>
+          <p className="text-muted-foreground text-sm">
+            The horizontal strip and the vertical rail are one system at two widths, so they read
+            from the same tokens. If these two stop matching, something has drifted.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="bg-card border-border rounded-md border p-2">
+              <div className="border-border flex items-center gap-2 border-b">
+                <span className="text-tab-active bg-tab-active-bg border-tab-active border-0 border-b-4 px-2 py-2 text-sm font-semibold">
+                  Assignments
+                </span>
+                <span className="text-muted-foreground border-0 border-b-4 border-transparent px-2 py-2 text-sm font-medium">
+                  Problems
+                </span>
+              </div>
+              <p className="text-muted-foreground pt-2 text-xs">Horizontal, active tab</p>
+            </div>
+            <div className="bg-card border-border overflow-hidden rounded-md border">
+              <div className="text-tab-active bg-tab-active-bg relative flex h-10 items-center px-4 text-sm font-medium">
+                <span
+                  className="bg-tab-active absolute inset-y-0 left-0 w-[3px]"
+                  aria-hidden="true"
+                />
+                Assignments
+              </div>
+              <div className="border-border text-foreground flex h-10 items-center border-t px-4 text-sm font-medium">
+                Problems
+              </div>
+              <p className="text-muted-foreground px-4 pt-1 pb-2 text-xs">Vertical, active row</p>
+            </div>
+          </div>
+        </div>
         <p className="text-muted-foreground text-sm">
           <Cls>tab-active</Cls> is navigation and selection state, not a general-purpose surface: it
           marks the current tab or local-navigation rail item, and the vertical rail reads it from

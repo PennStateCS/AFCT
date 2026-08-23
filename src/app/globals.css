@@ -159,7 +159,12 @@
      This is the conventional light-theme value, and --muted-foreground stays dark so text on
      it keeps its contrast. */
   --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.329 0 0);
+  /* Slate-600, up from a near-black 0.329 grey. At 12.3:1 against a 17.9:1 foreground the
+     old value was barely secondary: descriptions, timestamps, emails and table helper text
+     all read at roughly the weight of body copy. This is clearly quieter and still
+     comfortable at text-2xs: 7.6:1 on the card, 7.2:1 on the canvas, 6.9:1 on muted.
+     Slate rather than neutral grey, so it agrees with the rest of the palette. */
+  --muted-foreground: oklch(0.4455 0.0374 257.2808); /* #475569 */
   --accent: oklch(0.9128 0 0);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
