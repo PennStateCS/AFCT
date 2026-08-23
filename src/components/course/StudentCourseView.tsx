@@ -47,7 +47,12 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
       value={tab}
       onValueChange={onTabChange}
       orientation={railNav ? 'vertical' : 'horizontal'}
-      className="space-y-6"
+      // gap-4, not space-y-6. The Tabs primitive is `flex flex-col gap-2`, and a
+      // space-y-* on top of that does not replace the gap, it ADDS to it: tailwind-merge
+      // only reconciles classes that set the same property, and gap and margin are not
+      // the same property. So the panel sat 8px + 24px = 32px above the workspace while
+      // the navbar left only the layout's own 16px above it. One mechanism, one value.
+      className="gap-4"
     >
       <CourseHeaderContent course={course} isStudent />
 
