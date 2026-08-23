@@ -1,28 +1,101 @@
 'use client';
 
+import { BookOpen, Check, FileCheck, LayoutDashboard } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import SelectField from '@/components/ui/SelectField';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 
 /**
- * A live reference for the app's semantic color tokens, rendered with the real Tailwind
- * token utilities so it always reflects the current theme. Toggle light/dark to compare.
- * Reach for these instead of hardcoded palette classes (bg-red-50, text-gray-500, ...);
- * the tokens carry their own dark-mode values and are the single place a colour changes
- * for a refresh or a future high-contrast theme.
+ * A live reference for the app's semantic design tokens, rendered with the real Tailwind
+ * token utilities and the real shared components so it always reflects the current theme.
+ * Toggle light/dark to compare. Nothing here is a hardcoded hex or a lookalike control:
+ * when globals.css changes, this page changes with it, which is the only way it stays
+ * honest. Reach for these tokens instead of palette classes (bg-red-50, text-gray-500);
+ * they carry their own dark-mode values and are the single place a colour changes for a
+ * refresh or a future high-contrast theme.
  */
 
-// A class name shown as copy-ready code.
+// A class name shown as copy-ready code. text-xs rather than text-2xs: this is a
+// developer reference and the class names are the payload, not an annotation.
 function Cls({ children }: { children: string }) {
   return (
-    <code className="bg-muted text-foreground rounded px-1 py-0.5 font-mono text-2xs">
+    <code className="bg-muted text-foreground rounded px-1 py-0.5 font-mono text-xs">
       {children}
     </code>
   );
 }
 
+/** One titled block of the reference. h3 under the page's "Design Tokens" h2. */
+function TokenSection({
+  id,
+  title,
+  description,
+  children,
+}: {
+  id: string;
+  title: string;
+  description: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3" aria-labelledby={id}>
+      <div>
+        <h3 id={id} className="text-base font-semibold">
+          {title}
+        </h3>
+        <p className="text-muted-foreground text-sm">{description}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// Every surface is shown with the foreground it is meant to be paired with, so a
+// mismatched pair is visible rather than something you have to look up.
+const CORE_SURFACES = [
+  { label: 'background', bg: 'bg-background', fg: 'text-foreground' },
+  { label: 'card', bg: 'bg-card', fg: 'text-card-foreground' },
+  { label: 'popover', bg: 'bg-popover', fg: 'text-popover-foreground' },
+  { label: 'muted', bg: 'bg-muted', fg: 'text-muted-foreground' },
+  { label: 'accent', bg: 'bg-accent', fg: 'text-accent-foreground' },
+] as const;
+
+// Action fills. `destructive` pairs with literal white rather than a foreground token:
+// that is what Button and Badge do, and the reference should show what ships.
+const ACTIONS = [
+  { label: 'primary', bg: 'bg-primary', fg: 'text-primary-foreground' },
+  { label: 'secondary', bg: 'bg-secondary', fg: 'text-secondary-foreground' },
+  { label: 'destructive', bg: 'bg-destructive', fg: 'text-white' },
+] as const;
+
+const SEMANTIC_TEXT = [
+  { role: 'Primary text', cls: 'text-foreground', sample: 'Assignment 3: Regular Expressions' },
+  {
+    role: 'Secondary / helper text',
+    cls: 'text-muted-foreground',
+    sample: 'Review and manage submissions across courses.',
+  },
+  { role: 'Link / action text', cls: 'text-primary', sample: 'View submission' },
+  { role: 'Success', cls: 'text-status-success', sample: 'Saved. Everything is up to date.' },
+  { role: 'Warning', cls: 'text-status-warning', sample: 'This group set can no longer change.' },
+  { role: 'Danger', cls: 'text-status-danger', sample: 'Failed to load users. Please try again.' },
+  { role: 'Info', cls: 'text-status-info', sample: 'An in-app upgrade needs a host-side update.' },
+] as const;
+
 const STATUS = [
   {
     variant: 'success',
-    label: 'Success',
     text: 'text-status-success',
     bg: 'bg-status-success-bg',
     border: 'border-status-success-border',
@@ -31,7 +104,6 @@ const STATUS = [
   },
   {
     variant: 'warning',
-    label: 'Warning',
     text: 'text-status-warning',
     bg: 'bg-status-warning-bg',
     border: 'border-status-warning-border',
@@ -40,7 +112,6 @@ const STATUS = [
   },
   {
     variant: 'danger',
-    label: 'Danger',
     text: 'text-status-danger',
     bg: 'bg-status-danger-bg',
     border: 'border-status-danger-border',
@@ -49,7 +120,6 @@ const STATUS = [
   },
   {
     variant: 'info',
-    label: 'Info',
     text: 'text-status-info',
     bg: 'bg-status-info-bg',
     border: 'border-status-info-border',
@@ -58,43 +128,333 @@ const STATUS = [
   },
 ] as const;
 
-// Solid surface / accent tokens, each shown as a swatch with the utility that paints it.
-const SURFACES = [
-  { cls: 'bg-background', label: 'background' },
-  { cls: 'bg-card', label: 'card' },
-  { cls: 'bg-muted', label: 'muted' },
-  { cls: 'bg-accent', label: 'accent' },
-  { cls: 'bg-primary', label: 'primary' },
-  { cls: 'bg-secondary', label: 'secondary' },
-  { cls: 'bg-tertiary', label: 'tertiary' },
-  { cls: 'bg-destructive', label: 'destructive' },
-  { cls: 'bg-tab-active', label: 'tab-active' },
+// Saturated fills that carry white content. Kept apart from the four states above
+// because they answer a different question: what goes behind a white glyph.
+const SOLID_STATUS = [
+  { label: 'success', cls: 'bg-status-success-solid' },
+  { label: 'warning', cls: 'bg-status-warning-solid' },
+  { label: 'danger', cls: 'bg-status-danger-solid' },
+  { label: 'info', cls: 'bg-status-info-solid' },
+  { label: 'neutral', cls: 'bg-status-neutral-solid' },
 ] as const;
 
-// The sidebar has its own family: it is a dark surface in BOTH themes, so it does not
-// follow the tokens above and is worth seeing beside them.
-const SIDEBAR_SURFACES = [
-  { cls: 'bg-sidebar', label: 'sidebar' },
-  { cls: 'bg-sidebar-accent', label: 'sidebar-accent (hover)' },
-  { cls: 'bg-sidebar-primary', label: 'sidebar-primary (active)' },
-  { cls: 'bg-sidebar-foreground', label: 'sidebar-foreground' },
-  { cls: 'bg-sidebar-muted-foreground', label: 'sidebar-muted-foreground' },
-  { cls: 'bg-sidebar-border', label: 'sidebar-border' },
+const CHART_HUES = [
+  { label: 'chart-1', cls: 'bg-chart-1' },
+  { label: 'chart-2', cls: 'bg-chart-2' },
+  { label: 'chart-3', cls: 'bg-chart-3' },
+  { label: 'chart-4', cls: 'bg-chart-4' },
+  { label: 'chart-5', cls: 'bg-chart-5' },
+  { label: 'brand-teal', cls: 'bg-brand-teal' },
 ] as const;
+
+// The approved hierarchy, as classes rather than prose, so a heading that drifts off the
+// scale can be compared against the real thing.
+const TYPE_ROLES = [
+  { role: 'Page Title', cls: 'text-2xl font-semibold tracking-tight', sample: 'Assignments' },
+  { role: 'Section Title', cls: 'text-xl font-semibold', sample: 'Courses' },
+  { role: 'Module Title', cls: 'text-base font-semibold', sample: 'Upcoming deadlines' },
+  { role: 'Primary UI Text', cls: 'text-sm', sample: 'Assignment 3: Regular Expressions' },
+  {
+    role: 'Supporting Description',
+    cls: 'text-sm text-muted-foreground',
+    sample: 'Review and manage submissions across courses.',
+  },
+  {
+    role: 'Metadata / Helper',
+    cls: 'text-xs text-muted-foreground',
+    sample: 'student@psu.edu',
+  },
+  {
+    role: 'Dense Annotation',
+    cls: 'text-2xs text-muted-foreground',
+    sample: 'Dense chart annotation',
+  },
+] as const;
+
+/** A surface swatch that shows its paired foreground instead of a blank rectangle. */
+function PairSwatch({ label, bg, fg }: { label: string; bg: string; fg: string }) {
+  return (
+    <div className="border-border overflow-hidden rounded-md border">
+      <div className={`flex h-14 items-center justify-center ${bg} ${fg}`}>
+        <span className="text-sm font-medium">Aa Sample</span>
+      </div>
+      <div className="bg-card space-y-1 p-2">
+        <div className="text-foreground text-xs font-medium">{label}</div>
+        <div className="flex flex-wrap gap-1">
+          <Cls>{bg}</Cls>
+          <Cls>{fg}</Cls>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A miniature of the real sidebar rather than a strip of isolated colours. The tokens
+ * only mean anything in relation to each other: the active pill has to be readable on
+ * the rail, the hover fill has to separate from it without shouting. Non-interactive on
+ * purpose (dead buttons would be an accessibility regression on a reference page), so
+ * the hover row is labelled in text.
+ */
+function SidebarPreview() {
+  return (
+    <div className="flex flex-wrap items-start gap-4">
+      <div className="bg-sidebar border-sidebar-border w-60 rounded-lg border p-3">
+        <p className="text-sidebar-muted-foreground text-2xs px-2 pb-2 font-medium tracking-wide uppercase">
+          Course
+        </p>
+        <ul className="space-y-1">
+          <li className="text-sidebar-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+            <LayoutDashboard className="size-4" aria-hidden="true" />
+            Dashboard
+          </li>
+          <li className="bg-sidebar-accent text-sidebar-accent-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+            <BookOpen className="size-4" aria-hidden="true" />
+            <span className="flex-1">Courses</span>
+            <span className="text-sidebar-muted-foreground text-2xs">hover</span>
+          </li>
+          <li className="bg-sidebar-primary text-sidebar-primary-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium">
+            <FileCheck className="size-4" aria-hidden="true" />
+            <span className="flex-1">Submissions</span>
+            <span className="text-2xs">active</span>
+          </li>
+        </ul>
+        <hr className="border-sidebar-border my-3" />
+        <p className="text-sidebar-muted-foreground px-2 text-xs">Secondary label</p>
+      </div>
+      <ul className="text-muted-foreground min-w-56 flex-1 space-y-1 text-sm">
+        <li>
+          Rail: <Cls>bg-sidebar</Cls> <Cls>border-sidebar-border</Cls>
+        </li>
+        <li>
+          Item: <Cls>text-sidebar-foreground</Cls>
+        </li>
+        <li>
+          Hover: <Cls>bg-sidebar-accent</Cls> <Cls>text-sidebar-accent-foreground</Cls>
+        </li>
+        <li>
+          Active: <Cls>bg-sidebar-primary</Cls> <Cls>text-sidebar-primary-foreground</Cls>
+        </li>
+        <li>
+          Label: <Cls>text-sidebar-muted-foreground</Cls>
+        </li>
+      </ul>
+    </div>
+  );
+}
 
 export function DesignTokens() {
   return (
     <div className="space-y-8">
-      {/* Status / feedback family */}
-      <section className="space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold">Status / feedback</h3>
+      <TokenSection
+        id="tokens-core-surfaces"
+        title="Core Surfaces"
+        description="The structural fills, each shown with the foreground token it pairs with. If a pair looks wrong here, it is wrong everywhere."
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {CORE_SURFACES.map((s) => (
+            <PairSwatch key={s.label} {...s} />
+          ))}
+        </div>
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-actions"
+        title="Actions & Selection"
+        description="Fills that mean an action or a selected state. Cobalt is the action colour; secondary is the quiet neutral beside it."
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {ACTIONS.map((a) => (
+            <PairSwatch key={a.label} {...a} />
+          ))}
+          {/* tab-active is a FOREGROUND token, not a surface: painting a swatch with
+              bg-tab-active would suggest white text on it, which is unreadable in dark
+              mode where the token is a light blue. Shown as the nav item it actually is. */}
+          <div className="border-border overflow-hidden rounded-md border">
+            <div className="bg-card flex h-14 items-center justify-center p-2">
+              <span className="border-tab-active bg-tab-active-bg text-tab-active rounded-md border px-3 py-1.5 text-sm font-medium">
+                Submissions
+              </span>
+            </div>
+            <div className="bg-card space-y-1 p-2">
+              <div className="text-foreground text-xs font-medium">tab-active</div>
+              <div className="flex flex-wrap gap-1">
+                <Cls>text-tab-active</Cls>
+                <Cls>bg-tab-active-bg</Cls>
+                <Cls>border-tab-active</Cls>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          <Cls>tab-active</Cls> is navigation and selection state, not a general-purpose surface: it
+          marks the current tab or local-navigation rail item. It is cobalt now, aligned with{' '}
+          <Cls>primary</Cls>, and a lighter blue in dark mode so the label keeps its contrast on the
+          dark card.
+        </p>
+        <div className="border-border bg-muted/30 space-y-1 rounded-md border p-3">
+          <p className="text-foreground text-sm font-medium">Legacy / specialized</p>
           <p className="text-muted-foreground text-sm">
-            One family (<Cls>--status-*</Cls>) drives badges, inline status text, alert
-            callouts, and toasts. Each state has a foreground, a soft <Cls>-bg</Cls>, and a{' '}
-            <Cls>-border</Cls>.
+            <Cls>tertiary</Cls> is not part of this palette. It is a burnt orange in light and a
+            dark teal in dark, so it has no stable meaning, and its only live uses are the axis
+            strokes and tick labels in two charts (<Cls>stroke-tertiary</Cls>,{' '}
+            <Cls>fill-tertiary</Cls>) plus <Cls>{'Button variant="menu"'}</Cls>, which currently has
+            no call sites. Do not reach for it in new work.
           </p>
         </div>
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-text"
+        title="Text & Borders"
+        description="The semantic text roles and the structural tokens, all of them theme-aware. Never a hardcoded palette colour."
+      >
+        <div className="border-border bg-card divide-border divide-y rounded-md border">
+          {SEMANTIC_TEXT.map((t) => (
+            <div
+              key={t.cls}
+              className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 p-3"
+            >
+              <span className={`text-sm ${t.cls}`}>{t.sample}</span>
+              <span className="flex items-center gap-2">
+                <span className="text-muted-foreground text-xs">{t.role}</span>
+                <Cls>{t.cls}</Cls>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="border-border bg-card space-y-2 rounded-md border p-3">
+            <div className="border-border h-8 rounded border" aria-hidden="true" />
+            <Cls>border-border</Cls>
+            <p className="text-muted-foreground text-xs">Dividers and card edges.</p>
+          </div>
+          <div className="border-border bg-card space-y-2 rounded-md border p-3">
+            <div className="border-input h-8 rounded border" aria-hidden="true" />
+            <Cls>border-input</Cls>
+            <p className="text-muted-foreground text-xs">Form-control edges only.</p>
+          </div>
+          <div className="border-border bg-card space-y-2 rounded-md border p-3">
+            <div className="ring-ring h-8 rounded ring-[3px]" aria-hidden="true" />
+            <Cls>ring-ring</Cls>
+            <p className="text-muted-foreground text-xs">Focus-visible ring.</p>
+          </div>
+        </div>
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-form-controls"
+        title="Form Controls"
+        description="The real shared controls, deliberately sitting on a muted grouping panel. Controls are bg-card in both themes: if one of these goes transparent the panel shows through and the regression is obvious here first."
+      >
+        <div className="bg-muted/30 border-border space-y-4 rounded-lg border p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="tokens-text-input">Text input</Label>
+              <Input
+                id="tokens-text-input"
+                placeholder="Assignment title"
+                autoComplete="off"
+                readOnly
+              />
+            </div>
+            <SelectField
+              label="Select"
+              name="tokens-select"
+              id="tokens-select"
+              placeholder="Choose a problem type"
+              options={[
+                { value: 'fa', label: 'Finite Automaton' },
+                { value: 're', label: 'Regular Expression' },
+                { value: 'cfg', label: 'Context-Free Grammar' },
+              ]}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="tokens-textarea">Description</Label>
+            <Textarea
+              id="tokens-textarea"
+              placeholder="Describe what students should submit."
+              autoComplete="off"
+              readOnly
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="tokens-input-normal">Normal</Label>
+              <Input id="tokens-input-normal" defaultValue="Ready" autoComplete="off" readOnly />
+              <p className="text-muted-foreground text-xs">
+                <Cls>bg-card</Cls> <Cls>border-input</Cls>
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tokens-input-disabled">Disabled</Label>
+              <Input id="tokens-input-disabled" defaultValue="Locked" autoComplete="off" disabled />
+              <p className="text-muted-foreground text-xs">
+                <Cls>disabled:opacity-50</Cls>
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tokens-input-invalid">Invalid</Label>
+              <Input
+                id="tokens-input-invalid"
+                defaultValue="not-an-email"
+                aria-invalid
+                aria-describedby="tokens-input-invalid-error"
+                autoComplete="off"
+                readOnly
+              />
+              <p id="tokens-input-invalid-error" className="text-status-danger text-xs">
+                Enter a valid email address.
+              </p>
+            </div>
+          </div>
+        </div>
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-tables"
+        title="Tables"
+        description="Tables have their own family so a header can sit one rung above the body without borrowing a surface token. This is the token sample, not a functional table."
+      >
+        <div className="border-border overflow-hidden rounded-md border">
+          <Table className="bg-table-background">
+            <TableHeader>
+              <TableRow className="bg-table-header hover:bg-table-header">
+                <TableHead className="text-table-header-foreground">Name</TableHead>
+                <TableHead className="text-table-header-foreground">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow className="hover:bg-table-highlight">
+                <TableCell>Alpha</TableCell>
+                <TableCell>Active</TableCell>
+              </TableRow>
+              <TableRow className="hover:bg-table-highlight">
+                <TableCell>Beta</TableCell>
+                <TableCell>Pending</TableCell>
+              </TableRow>
+              {/* The highlight applied, rather than only on hover, so the token is visible
+                  without a pointer (and in a screenshot). */}
+              <TableRow className="bg-table-highlight hover:bg-table-highlight">
+                <TableCell>Gamma</TableCell>
+                <TableCell>Closed</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          <Cls>bg-table-background</Cls> body, <Cls>bg-table-header</Cls> with{' '}
+          <Cls>text-table-header-foreground</Cls> for the header, and <Cls>bg-table-highlight</Cls>{' '}
+          for the hovered or highlighted row (shown applied on the last row).
+        </p>
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-status"
+        title="Status / Feedback"
+        description="One family (--status-*) drives badges, inline status text, alert callouts, and toasts. Each state has a foreground, a soft -bg, and a -border."
+      >
         <div className="space-y-2.5">
           {STATUS.map((s) => (
             <div
@@ -109,74 +469,96 @@ export function DesignTokens() {
             </div>
           ))}
         </div>
+        <div className="border-border bg-card flex flex-wrap items-center gap-3 rounded-md border p-3">
+          <Badge variant="neutral">Closed</Badge>
+          <p className="text-muted-foreground text-sm">
+            Neutral is badge and status metadata, not a success/warning/error alert family: it
+            labels a state with no verdict attached. There is no neutral callout or toast, and a
+            general neutral surface is already covered by <Cls>muted</Cls> and <Cls>accent</Cls>.
+          </p>
+        </div>
         <p className="text-muted-foreground text-sm">
-          Badges use the same values through <Cls>{'<Badge variant="success|warning|danger|info|neutral" />'}</Cls>.
+          Badges use the same values through{' '}
+          <Cls>{'<Badge variant="success|warning|danger|info|neutral" />'}</Cls>.
         </p>
-      </section>
+      </TokenSection>
 
-      {/* Neutral + brand surfaces */}
-      <section className="space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold">Surfaces &amp; accents</h3>
-          <p className="text-muted-foreground text-sm">
-            Structural and brand fills. Pair each with its foreground token where text sits
-            on it (e.g. <Cls>bg-card</Cls> with <Cls>text-card-foreground</Cls>).
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {SURFACES.map((s) => (
-            <div key={s.cls} className="border-border overflow-hidden rounded-md border">
-              <div className={`h-12 ${s.cls}`} aria-hidden="true" />
-              <div className="bg-card space-y-0.5 p-2">
-                <div className="text-foreground text-xs font-medium">{s.label}</div>
+      <TokenSection
+        id="tokens-solid-status"
+        title="Solid Status Colors"
+        description="Saturated fills for the same states, used where WHITE content sits on the fill (a toast's icon strip, a filled success button). They stay a mid shade in both themes so the glyph keeps its contrast."
+      >
+        <div className="flex flex-wrap gap-3">
+          {SOLID_STATUS.map((s) => (
+            <div key={s.cls} className="flex items-center gap-2">
+              <span
+                className={`flex size-8 items-center justify-center rounded-full ${s.cls}`}
+                aria-hidden="true"
+              >
+                <Check className="size-4 text-white" />
+              </span>
+              <span className="space-y-0.5">
+                <span className="text-foreground block text-xs font-medium">{s.label}</span>
                 <Cls>{s.cls}</Cls>
+              </span>
+            </div>
+          ))}
+        </div>
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-sidebar"
+        title="Sidebar"
+        description="Its own family, and the same dark surface in both themes. Shown as a miniature rail because these tokens only mean anything in relation to each other."
+      >
+        <SidebarPreview />
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-data-viz"
+        title="Data Visualization"
+        description="Categorical hues for charts. These are the only place colour carries data rather than state."
+      >
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+          {CHART_HUES.map((c) => (
+            <div key={c.cls} className="border-border overflow-hidden rounded-md border">
+              <div className={`h-10 ${c.cls}`} aria-hidden="true" />
+              <div className="bg-card space-y-0.5 p-2">
+                <div className="text-foreground text-xs font-medium">{c.label}</div>
+                <Cls>{c.cls}</Cls>
               </div>
             </div>
           ))}
         </div>
-      </section>
+        <p className="text-muted-foreground text-sm">
+          Teal is retained for categorical and data visualization only. Do not use it for buttons,
+          navigation, loading indicators, avatars, active tabs, or general UI accents. It is pinned
+          to one literal value in both themes so a chart series does not change colour when the
+          theme does, and it survives under the name <Cls>brand-teal</Cls> only because renaming it
+          would touch every chart file.
+        </p>
+      </TokenSection>
 
-      <section className="space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold">Sidebar</h3>
-          <p className="text-muted-foreground text-sm">
-            Its own family, and the same dark surface in both themes.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {SIDEBAR_SURFACES.map((s) => (
-            <div key={s.cls} className="border-border overflow-hidden rounded-md border">
-              <div className={`h-12 ${s.cls}`} aria-hidden="true" />
-              <div className="bg-card space-y-0.5 p-2">
-                <div className="text-foreground text-xs font-medium">{s.label}</div>
-                <Cls>{s.cls}</Cls>
-              </div>
+      <TokenSection
+        id="tokens-typography"
+        title="Typography Roles"
+        description="The approved hierarchy, in Geist. The Fonts tab compares families; this compares roles."
+      >
+        <div className="border-border bg-card divide-border divide-y rounded-md border">
+          {TYPE_ROLES.map((t) => (
+            <div
+              key={t.role}
+              className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 p-3"
+            >
+              <span className={t.cls}>{t.sample}</span>
+              <span className="flex items-center gap-2">
+                <span className="text-muted-foreground text-xs">{t.role}</span>
+                <Cls>{t.cls}</Cls>
+              </span>
             </div>
           ))}
         </div>
-      </section>
-
-      {/* Text + border tokens */}
-      <section className="space-y-3">
-        <div>
-          <h3 className="text-sm font-semibold">Text &amp; borders</h3>
-          <p className="text-muted-foreground text-sm">
-            The neutral tokens that replaced hardcoded grays.
-          </p>
-        </div>
-        <div className="border-border bg-card space-y-2 rounded-md border p-3">
-          <p className="text-foreground text-sm">
-            Primary text — <Cls>text-foreground</Cls>
-          </p>
-          <p className="text-muted-foreground text-sm">
-            Secondary / helper text — <Cls>text-muted-foreground</Cls>
-          </p>
-          <div className="text-muted-foreground flex items-center gap-2 pt-1 text-sm">
-            <span className="border-border h-6 w-16 rounded border" aria-hidden="true" />
-            <Cls>border-border</Cls>
-          </div>
-        </div>
-      </section>
+      </TokenSection>
     </div>
   );
 }

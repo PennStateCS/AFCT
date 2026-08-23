@@ -214,9 +214,11 @@
   --status-info-solid: oklch(0.6231 0.188 259.815);
   --status-neutral-solid: oklch(0.551 0.0234 264.364);
 
-  /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
-     clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
-     a tab's count pill. Interim brand accent until the visual redesign. */
+  /* Active-tab accent: cobalt, aligned with --primary and the vertical local-navigation
+     rails. Light mode uses primary itself, which clears WCAG AA 4.5:1 for 14px active-tab
+     labels on the card; dark mode overrides it with a lighter blue (see .dark), since
+     cobalt on the dark card is only 3.45:1. -bg is the soft fill behind a tab's count
+     pill. */
   --tab-active: oklch(0.37 0.1221 262.228); /* = --primary, 10.6:1 on the card */
   --tab-active-bg: oklch(0.37 0.1221 262.228 / 10%);
 
