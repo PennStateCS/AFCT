@@ -78,8 +78,10 @@ export function LoginBrandPanel({ className }: { className?: string }) {
 
         {/* What the letters stand for, and therefore part of the identity rather than part of
             the greeting: close enough to the lockup to read as one block, and muted, because
-            three coloured lines in a row would leave nothing looking primary. */}
-        <p className="text-sidebar-muted-foreground mt-5 text-sm xl:text-base">
+            three coloured lines in a row would leave nothing looking primary. Tracked open a
+            little, which is the same trick DASHBOARD uses far harder; at 0.05em it reads as
+            a descriptor rather than as a second label competing with it. */}
+        <p className="text-sidebar-muted-foreground mt-5 text-sm tracking-wider xl:text-base">
           Automated Feedback for Computing Theory
         </p>
 
@@ -87,7 +89,9 @@ export function LoginBrandPanel({ className }: { className?: string }) {
             pane but the short one: a 720px-high window at xl leaves 25px between this block
             and the automaton below, which is what caps this gap rather than the width. */}
         <div className="mt-10 space-y-3 2xl:mt-12">
-          <p className="text-xl font-semibold tracking-tight text-blue-300 xl:text-2xl 2xl:text-3xl">
+          {/* A step down from where it started. Blue, bold and the same size as a headline, it
+              was a second focal point in a column that should only have one: AFCT. */}
+          <p className="text-lg font-semibold tracking-tight text-blue-300 xl:text-xl 2xl:text-2xl">
             Welcome to AFCT Dashboard
           </p>
           <p className="text-sidebar-muted-foreground max-w-md text-sm leading-relaxed xl:text-base">
