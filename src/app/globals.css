@@ -136,7 +136,22 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
-:root {
+/**
+ * The light palette, and the one place it is written.
+ *
+ * `.auth-light` shares this block rather than copying it. The signed-out pages are a fixed
+ * light composition (see `src/app/login/layout.tsx`): they are seen before anyone has a
+ * session, so they do not follow a dashboard theme the visitor may not even own. next-themes
+ * still puts `.dark` on <html> for every route, so without this the auth card rendered white
+ * text on a white field. Re-declaring the variables on the auth root hands its whole subtree
+ * the light values by inheritance, which is why this is a selector list and not a second copy:
+ * a copy is how the two quietly stop matching.
+ *
+ * High contrast is the deliberate exception and is handled at the end of that block: somebody
+ * who has asked for it needs it more on the sign-in page than anywhere else.
+ */
+:root,
+.auth-light {
   --radius: 0.65rem;
   /* Slate-50. Lighter than the old neutral grey, which suits pages that are now mostly
      canvas rather than one big card. Cards and tables stay pure white; they separate
@@ -483,7 +498,14 @@
    calendar's course chips, the coloured heading tiles, category-badge, the fixed-light
    auth pages) render their LIGHT values here. Those are AA, not AAA. Moving them onto
    tokens is the follow-up; the token layer is what this theme controls. */
-.high-contrast {
+/**
+ * Also applied inside `.auth-light`. The auth pages pin themselves to the light palette so a
+ * dark dashboard theme cannot make them unreadable, but high contrast is not a preference to
+ * override: it is the one a person cannot do without. The descendant selector outranks the
+ * plain `.auth-light` above, so it wins on the same element.
+ */
+.high-contrast,
+.high-contrast .auth-light {
   color-scheme: light;
 
   /* Surfaces and text. Pure white and pure black, not the slate the light theme uses: this
