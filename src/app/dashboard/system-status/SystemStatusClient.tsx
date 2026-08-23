@@ -183,7 +183,7 @@ export default function SystemStatusClient() {
               <span className="text-sm">Trend window</span>
               <select
                 aria-label="Select trend window"
-                className="bg-background rounded border px-2 py-1 text-sm"
+                className="bg-card border-input rounded border px-2 py-1 text-sm"
                 value={windowHours}
                 onChange={(e) => setHours(Number(e.target.value))}
               >

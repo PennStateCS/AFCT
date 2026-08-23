@@ -110,7 +110,7 @@ export function SearchableMultiSelect({
             aria-describedby={describedBy}
             disabled={disabled}
             className={cn(
-              'border-input text-foreground focus-visible:border-ring focus-visible:ring-ring/40 flex h-11 w-full items-center justify-between rounded-md border bg-transparent px-3 text-sm shadow-xs transition-all duration-150 focus-visible:ring-[3px] focus-visible:outline-none',
+              'border-input bg-card text-foreground focus-visible:border-ring focus-visible:ring-ring/40 flex h-11 w-full items-center justify-between rounded-md border px-3 text-sm shadow-xs transition-all duration-150 focus-visible:ring-[3px] focus-visible:outline-none',
               disabled && 'cursor-not-allowed opacity-60',
               error && 'border-destructive',
             )}

@@ -140,7 +140,7 @@ export default async function DeepLinkPage({
               maxLength={200}
               autoFocus
               placeholder="Problem set 1"
-              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+              className="border-input bg-card h-9 w-full rounded-md border px-3 text-sm"
             />
           </Field>
 
@@ -151,7 +151,7 @@ export default async function DeepLinkPage({
               type="date"
               required
               defaultValue={today}
-              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+              className="border-input bg-card h-9 w-full rounded-md border px-3 text-sm"
             />
           </Field>
 
@@ -164,7 +164,7 @@ export default async function DeepLinkPage({
               id="unlockAt"
               name="unlockAt"
               type="date"
-              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+              className="border-input bg-card h-9 w-full rounded-md border px-3 text-sm"
             />
           </Field>
 
@@ -253,7 +253,7 @@ export default async function DeepLinkPage({
               name="assignmentId"
               required
               defaultValue={assignments[0]?.id ?? unconfirmed[0]?.id}
-              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+              className="border-input bg-card h-9 w-full rounded-md border px-3 text-sm"
             >
               {/* No headings at all in the ordinary case, where every assignment is one nobody
                   has added yet and a heading would only say so. */}

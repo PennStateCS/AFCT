@@ -106,7 +106,7 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
             aria-describedby={describedByAttr || undefined}
             disabled={disabled}
             className={cn(
-              'border-input focus-visible:border-ring focus-visible:ring-ring/50 placeholder:text-muted-foreground data-[placeholder]:text-muted-foreground flex !h-11 w-full min-w-0 items-center justify-between rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+              'border-input focus-visible:border-ring focus-visible:ring-ring/50 placeholder:text-muted-foreground data-[placeholder]:text-muted-foreground bg-card flex !h-11 w-full min-w-0 items-center justify-between rounded-md border px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
               error && 'border-destructive focus-visible:border-destructive',
               triggerClassName,
             )}

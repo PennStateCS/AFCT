@@ -173,11 +173,10 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           aria-describedby={describedByAttr || undefined}
           className={cn(
             'h-11 transition-all duration-150',
-            // Explicit opaque surface: the base Input is bg-transparent in light and
-            // dark:bg-input/30 in dark, either of which reads gray when a field sits on
-            // a tinted panel (e.g. the override rows). dark:bg-card overrides the base
-            // dark fill so the field stays opaque in both themes.
-            'bg-card dark:bg-card border-input',
+            // border-input only. The opaque surface used to be forced here, because the
+            // base Input was translucent and read gray on a tinted panel; the primitive
+            // carries bg-card in both themes now, so this no longer has to.
+            'border-input',
             error && 'border-destructive',
             type === 'number' && 'appearance-auto',
             inputPaddingRight,

@@ -118,7 +118,7 @@ export default function LinkCourseClient({
                   name="courseId"
                   value={selected}
                   onChange={(event) => setSelected(event.target.value)}
-                  className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                  className="border-input bg-card h-9 w-full rounded-md border px-3 text-sm"
                 >
                   {/* No preselection when there is a choice to make: a course chosen by
                       arriving at the page is one nobody decided on, and this decision sends
