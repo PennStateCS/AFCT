@@ -1,9 +1,12 @@
 /** @vitest-environment jsdom */
 
-import { describe, expect, it, vi } from 'vitest';
+import React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { Tabs } from '@/components/ui/tabs';
-import { CourseTabBar, TabBar } from './course-tabs';
+import { CourseTabBar, TabBar, TabRail } from './course-tabs';
+import { LOCAL_NAV_COLLAPSED_KEY, LocalNavLayout } from '@/components/local-nav';
 import { BookOpen } from 'lucide-react';
 
 const TABS = [
@@ -41,7 +44,9 @@ describe('TabBar', () => {
     renderBar(onValueChange);
 
     const select = screen.getByRole('combobox', { name: 'Demo sections' });
-    const options = within(select).getAllByRole('option').map((o) => o.textContent);
+    const options = within(select)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
     expect(options).toEqual(['Alpha (3)', 'Bravo', 'Charlie']);
 
     fireEvent.change(select, { target: { value: 'c' } });
@@ -73,7 +78,11 @@ describe('TabBar', () => {
 describe('CourseTabBar', () => {
   const renderCourseBar = (rail: boolean, onValueChange = vi.fn()) =>
     render(
-      <Tabs value="assignments" onValueChange={onValueChange} orientation={rail ? 'vertical' : 'horizontal'}>
+      <Tabs
+        value="assignments"
+        onValueChange={onValueChange}
+        orientation={rail ? 'vertical' : 'horizontal'}
+      >
         <CourseTabBar
           value="assignments"
           onValueChange={onValueChange}
@@ -117,5 +126,143 @@ describe('CourseTabBar', () => {
     // presence proves which branch ran. Still exactly one tablist either way.
     expect(screen.getByRole('combobox', { name: 'Course content sections' })).toBeInTheDocument();
     expect(screen.getAllByRole('tablist', { name: 'Course content sections' })).toHaveLength(1);
+  });
+});
+
+/**
+ * The rail's collapse behaviour lives in the shared component, so it is tested there
+ * rather than through any one page. jsdom applies no CSS, so what these assert is the
+ * wiring: which classes and attributes are emitted, what survives the toggle, and what is
+ * remembered. Whether 56px actually looks right is a browser question.
+ */
+describe('TabRail collapse', () => {
+  const renderRail = (extra?: React.ReactNode) =>
+    render(
+      <Tabs value="a" onValueChange={vi.fn()} orientation="vertical">
+        <LocalNavLayout nav={<TabRail tabs={TABS} ariaLabel="Demo sections" />}>
+          {extra ?? <div>panel</div>}
+        </LocalNavLayout>
+      </Tabs>,
+    );
+
+  const collapseButton = () => screen.getByRole('button', { name: 'Collapse local navigation' });
+  const expandButton = () => screen.getByRole('button', { name: 'Expand local navigation' });
+  const labelSpan = (name: RegExp | string) =>
+    within(screen.getByRole('tab', { name })).getByText('Alpha');
+
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('starts expanded, with visible labels and a collapse control', () => {
+    renderRail();
+    expect(collapseButton()).toBeInTheDocument();
+    expect(collapseButton()).toHaveAttribute('aria-expanded', 'true');
+    // The label is visible text, not screen-reader-only.
+    expect(labelSpan('Alpha, 3')).not.toHaveClass('sr-only');
+  });
+
+  it('hides labels and the count pill when collapsed, keeping icons and names', () => {
+    renderRail();
+    fireEvent.click(collapseButton());
+
+    // The label stays in the DOM as sr-only: it is what names a tab that has no count.
+    expect(labelSpan('Alpha, 3')).toHaveClass('sr-only');
+    expect(screen.getByRole('tab', { name: 'Bravo' })).toBeInTheDocument();
+    // The count survives in the accessible name even though its pill is gone.
+    expect(screen.getByRole('tab', { name: 'Alpha, 3' })).toBeInTheDocument();
+    const alpha = screen.getByRole('tab', { name: 'Alpha, 3' });
+    expect(within(alpha).queryByText('3')).toBeNull();
+    expect(alpha.querySelector('svg')).not.toBeNull();
+  });
+
+  it('keeps the active tab visibly active through the toggle', () => {
+    renderRail();
+    expect(screen.getByRole('tab', { name: 'Alpha, 3' })).toHaveAttribute('data-state', 'active');
+
+    fireEvent.click(collapseButton());
+    // A collapsed row is wrapped in a Tooltip trigger, and that overwrites data-state, so
+    // the active styling hangs off aria-selected there instead. Without the swap the whole
+    // rail reads as inactive while collapsed, which is exactly the bug this pins.
+    const alpha = screen.getByRole('tab', { name: 'Alpha, 3' });
+    expect(alpha).toHaveAttribute('aria-selected', 'true');
+    expect(alpha.className).toContain('aria-selected:bg-primary/10');
+    expect(screen.getByRole('tab', { name: 'Bravo' })).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('toggles back with the same control, and keeps focus on it', () => {
+    renderRail();
+    const button = collapseButton();
+    act(() => button.focus());
+    fireEvent.click(button);
+
+    // One control in both states, so focus never jumps to the page content.
+    expect(expandButton()).toHaveFocus();
+    fireEvent.click(expandButton());
+    expect(collapseButton()).toHaveFocus();
+  });
+
+  it('shows a tooltip naming the item, with its count, only while collapsed', async () => {
+    renderRail();
+    fireEvent.click(collapseButton());
+
+    // Radix opens on focus as well as hover, which is the path that matters here.
+    fireEvent.focus(screen.getByRole('tab', { name: 'Alpha, 3' }));
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Alpha (3)'));
+  });
+
+  it('remembers the choice, and applies it on the next mount', () => {
+    const { unmount } = renderRail();
+    fireEvent.click(collapseButton());
+    expect(window.localStorage.getItem(LOCAL_NAV_COLLAPSED_KEY)).toBe('true');
+    unmount();
+
+    renderRail();
+    expect(expandButton()).toBeInTheDocument();
+    expect(labelSpan('Alpha, 3')).toHaveClass('sr-only');
+  });
+
+  it('renders no toggle outside a LocalNavLayout, where nothing could act on it', () => {
+    render(
+      <Tabs value="a" onValueChange={vi.fn()} orientation="vertical">
+        <TabRail tabs={TABS} ariaLabel="Demo sections" />
+      </Tabs>,
+    );
+    expect(screen.queryByRole('button', { name: /local navigation/ })).toBeNull();
+    expect(labelSpan('Alpha, 3')).not.toHaveClass('sr-only');
+  });
+});
+
+describe('LocalNavLayout', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  const layout = () => document.querySelector('[style*="--local-nav-width"]') as HTMLElement;
+
+  it('hands the freed width to the workspace when the rail collapses', () => {
+    render(
+      <Tabs value="a" onValueChange={vi.fn()} orientation="vertical">
+        <LocalNavLayout nav={<TabRail tabs={TABS} ariaLabel="Demo sections" />}>
+          <div>panel</div>
+        </LocalNavLayout>
+      </Tabs>,
+    );
+
+    // The grid column is driven by this variable, so the rail and the workspace beside it
+    // can never disagree about how much room it takes.
+    expect(layout().style.getPropertyValue('--local-nav-width')).toBe('12rem');
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse local navigation' }));
+    expect(layout().style.getPropertyValue('--local-nav-width')).toBe('3.5rem');
+  });
+
+  it('animates the column, and stands down for prefers-reduced-motion', () => {
+    render(
+      <LocalNavLayout nav={<div />}>
+        <div>panel</div>
+      </LocalNavLayout>,
+    );
+    expect(layout().className).toContain('xl:transition-[grid-template-columns]');
+    expect(layout().className).toContain('xl:motion-reduce:transition-none');
   });
 });

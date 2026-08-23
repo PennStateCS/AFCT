@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import {
   Activity,
@@ -154,56 +155,51 @@ export default function SystemStatusClient() {
             </span>
             <span>System Status</span>
           </h1>
-            <Badge variant={dbOk ? 'success' : 'danger'} title={summary?.db.message || ''}>
-              DB {dbOk ? 'OK' : 'DOWN'}
-              {summary?.db.message ? (
-                <span className="sr-only"> ({summary.db.message})</span>
-              ) : null}
+          <Badge variant={dbOk ? 'success' : 'danger'} title={summary?.db.message || ''}>
+            DB {dbOk ? 'OK' : 'DOWN'}
+            {summary?.db.message ? <span className="sr-only"> ({summary.db.message})</span> : null}
+          </Badge>
+          <Badge variant="info" title="Database provider">
+            <span className="sr-only">Database provider: </span>
+            {provider.toUpperCase()}
+          </Badge>
+          {hostWarnings > 0 && (
+            <Badge variant="danger" title="The server itself needs attention. See the Server tab.">
+              Server needs attention
             </Badge>
-            <Badge variant="info" title="Database provider">
-              <span className="sr-only">Database provider: </span>
-              {provider.toUpperCase()}
+          )}
+          {typeof summary?.latencyMs === 'number' && (
+            <Badge variant="warning" title="Summary latency">
+              <span className="sr-only">Summary latency: </span>
+              {summary.latencyMs} ms
             </Badge>
-            {hostWarnings > 0 && (
-              <Badge
-                variant="danger"
-                title="The server itself needs attention. See the Server tab."
-              >
-                Server needs attention
-              </Badge>
-            )}
-            {typeof summary?.latencyMs === 'number' && (
-              <Badge variant="warning" title="Summary latency">
-                <span className="sr-only">Summary latency: </span>
-                {summary.latencyMs} ms
-              </Badge>
-            )}
-          </div>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm">Auto-refresh</span>
-              <Switch
-                checked={autoRefresh}
-                onCheckedChange={setAutoRefresh}
-                aria-label="Enable automatic refresh every 15 seconds"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm">Trend window</span>
-              <select
-                aria-label="Select trend window"
-                className="bg-card border-input rounded border px-2 py-1 text-sm"
-                value={windowHours}
-                onChange={(e) => setHours(Number(e.target.value))}
-              >
-                <option value={1}>1h</option>
-                <option value={6}>6h</option>
-                <option value={24}>24h</option>
-              </select>
-            </div>
-            <div className="text-muted-foreground text-xs" aria-live="polite">
-              {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ''}
-            </div>
+            <Switch
+              checked={autoRefresh}
+              onCheckedChange={setAutoRefresh}
+              aria-label="Enable automatic refresh every 15 seconds"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm">Trend window</span>
+            <select
+              aria-label="Select trend window"
+              className="bg-card border-input rounded border px-2 py-1 text-sm"
+              value={windowHours}
+              onChange={(e) => setHours(Number(e.target.value))}
+            >
+              <option value={1}>1h</option>
+              <option value={6}>6h</option>
+              <option value={24}>24h</option>
+            </select>
+          </div>
+          <div className="text-muted-foreground text-xs" aria-live="polite">
+            {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ''}
+          </div>
           <Button size="sm" onClick={refreshAll} disabled={isFetching}>
             {isFetching ? 'Refreshing…' : 'Refresh'}
           </Button>
@@ -214,70 +210,71 @@ export default function SystemStatusClient() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8">
         {tiles.map((t) => (
           <div key={t.label} className="bg-card rounded-lg border p-3">
-                <div className="text-muted-foreground text-xs">{t.label}</div>
-                <div className="mt-1 flex h-7 items-center text-lg font-semibold">
-                  {!summary ? (
-                    <Skel w="w-16" />
-                  ) : (
-                    <>
-                      {t.value}
-                      <TrendBadge delta={t.delta} />
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
+            <div className="text-muted-foreground text-xs">{t.label}</div>
+            <div className="mt-1 flex h-7 items-center text-lg font-semibold">
+              {!summary ? (
+                <Skel w="w-16" />
+              ) : (
+                <>
+                  {t.value}
+                  <TrendBadge delta={t.delta} />
+                </>
+              )}
+            </div>
           </div>
+        ))}
+      </div>
 
       {/* Eight sections is too many for a strip, so above xl they become a rail beside the
           panels. Below that the strip and its select stay as they were. One control at a
           time: two tablists under one Tabs root would duplicate its ARIA wiring. */}
-      <div className="space-y-4 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
-        {railNav ? (
-          <TabRail tabs={statusTabs} ariaLabel="System status sections" />
-        ) : (
-          <TabBar
-            ariaLabel="System status sections"
-            selectId="system-status-tab-select"
-            value={tab}
-            onValueChange={setTab}
-            tabs={statusTabs}
+      {/* No contentClassName, unlike System Settings: this page is metric grids, charts
+          and tables, all of which want the room. */}
+      <LocalNavLayout
+        className="space-y-4"
+        nav={
+          railNav ? (
+            <TabRail tabs={statusTabs} ariaLabel="System status sections" />
+          ) : (
+            <TabBar
+              ariaLabel="System status sections"
+              selectId="system-status-tab-select"
+              value={tab}
+              onValueChange={setTab}
+              tabs={statusTabs}
+            />
+          )
+        }
+      >
+        <TabsContent value="server">
+          <ServerTab
+            active={tab === 'server'}
+            autoRefresh={autoRefresh}
+            windowHours={windowHours}
           />
-        )}
-
-        {/* No max width, unlike System Settings: this page is metric grids, charts and
-            tables, all of which want the room. */}
-        <div className="min-w-0">
-            <TabsContent value="server">
-              <ServerTab
-                active={tab === 'server'}
-                autoRefresh={autoRefresh}
-                windowHours={windowHours}
-              />
-            </TabsContent>
-            <TabsContent value="database">
-              <DatabaseTab active={tab === 'database'} autoRefresh={autoRefresh} />
-            </TabsContent>
-            <TabsContent value="docker">
-              <DockerTab active={tab === 'docker'} autoRefresh={autoRefresh} />
-            </TabsContent>
-            <TabsContent value="network">
-              <NetworkTab active={tab === 'network'} autoRefresh={autoRefresh} />
-            </TabsContent>
-            <TabsContent value="sessions">
-              <SessionsTab active={tab === 'sessions'} autoRefresh={autoRefresh} />
-            </TabsContent>
-            <TabsContent value="files">
-              <FilesTab active={tab === 'files'} autoRefresh={autoRefresh} />
-            </TabsContent>
-            <TabsContent value="rate-limits">
-              <RateLimitsTab active={tab === 'rate-limits'} autoRefresh={autoRefresh} />
-            </TabsContent>
-            <TabsContent value="workers">
-              <WorkersTab active={tab === 'workers'} autoRefresh={autoRefresh} />
-            </TabsContent>
-        </div>
-      </div>
+        </TabsContent>
+        <TabsContent value="database">
+          <DatabaseTab active={tab === 'database'} autoRefresh={autoRefresh} />
+        </TabsContent>
+        <TabsContent value="docker">
+          <DockerTab active={tab === 'docker'} autoRefresh={autoRefresh} />
+        </TabsContent>
+        <TabsContent value="network">
+          <NetworkTab active={tab === 'network'} autoRefresh={autoRefresh} />
+        </TabsContent>
+        <TabsContent value="sessions">
+          <SessionsTab active={tab === 'sessions'} autoRefresh={autoRefresh} />
+        </TabsContent>
+        <TabsContent value="files">
+          <FilesTab active={tab === 'files'} autoRefresh={autoRefresh} />
+        </TabsContent>
+        <TabsContent value="rate-limits">
+          <RateLimitsTab active={tab === 'rate-limits'} autoRefresh={autoRefresh} />
+        </TabsContent>
+        <TabsContent value="workers">
+          <WorkersTab active={tab === 'workers'} autoRefresh={autoRefresh} />
+        </TabsContent>
+      </LocalNavLayout>
     </Tabs>
   );
 }

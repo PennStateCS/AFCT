@@ -38,6 +38,7 @@ import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSi
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { useConfirmIfDirty } from '@/components/unsaved-changes/UnsavedChangesProvider';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
@@ -534,250 +535,249 @@ export default function AssignmentDashboardPage({
         {/* Header on the workspace itself: the page-sized card wrapped a header, a tab
             strip and eight panels in one border, which said they were one object. */}
         <section className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1
-                className="flex min-w-0 flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight break-words"
-              >
-                <span className="font-semibold">Assignment:</span>{' '}
-                <span className="min-w-0 [overflow-wrap:anywhere] break-words">
-                  {assignment.title}
-                </span>
-              </h1>
-              {/* Publish toggle sits next to the title; server enforces the guards
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="flex min-w-0 flex-wrap items-center gap-2 text-2xl font-semibold tracking-tight break-words">
+              <span className="font-semibold">Assignment:</span>{' '}
+              <span className="min-w-0 [overflow-wrap:anywhere] break-words">
+                {assignment.title}
+              </span>
+            </h1>
+            {/* Publish toggle sits next to the title; server enforces the guards
                   (e.g. no unpublish after submissions). */}
-              <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
-                <Switch
-                  aria-label="Published"
-                  checked={!!assignment.isPublished}
-                  onCheckedChange={(checked) => setPublishTarget(!!checked)}
-                  disabled={courseIsArchived}
-                />
-                Published
-              </label>
-              {/* Whether this is group work belongs to the assignment, so it is stated once
+            <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+              <Switch
+                aria-label="Published"
+                checked={!!assignment.isPublished}
+                onCheckedChange={(checked) => setPublishTarget(!!checked)}
+                disabled={courseIsArchived}
+              />
+              Published
+            </label>
+            {/* Whether this is group work belongs to the assignment, so it is stated once
                   here rather than repeated beside every student on the Submissions tab. The
                   dates are NOT here on purpose: those resolve per student through date
                   overrides, so a single header value would hide an extension. */}
-              {/* Tinted so it registers at a glance. The two tones differ to tell them apart,
+            {/* Tinted so it registers at a glance. The two tones differ to tell them apart,
                   not to say one is better: an icon carries the same distinction for anyone who
                   cannot separate the hues. */}
-              <Badge
-                variant="outline"
-                className={`shrink-0 gap-1.5 text-xs font-normal ${
-                  assignment.groupSetId
-                    ? 'bg-status-warning-bg border-status-warning-border text-status-warning'
-                    : 'bg-status-info-bg border-status-info-border text-status-info'
-                }`}
-              >
-                {assignment.groupSetId ? (
-                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                ) : (
-                  <User className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
-              </Badge>
-              {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
+            <Badge
+              variant="outline"
+              className={`shrink-0 gap-1.5 text-xs font-normal ${
+                assignment.groupSetId
+                  ? 'bg-status-warning-bg border-status-warning-border text-status-warning'
+                  : 'bg-status-info-bg border-status-info-border text-status-info'
+              }`}
+            >
+              {assignment.groupSetId ? (
+                <Users className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <User className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
+            </Badge>
+            {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
                   Settings holds the detail and the way to remove one. */}
-              <LmsLinkBadge links={confirmedLmsLinks} />
-              {/* Quick jump to another assignment in this course. */}
-              <div className="ml-auto w-56 shrink-0">
-                <SearchableSelect
-                  items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
-                  onSelect={(assignmentId) => {
-                    // Switching assignments unmounts every form on this page; ask first when
-                    // one of them holds pending edits.
-                    void confirmIfDirty().then((proceed) => {
-                      if (!proceed) return;
-                      // Carry the current tab across the jump so switching assignments keeps
-                      // you on the same view (e.g. staying on Submissions or Statistics).
-                      const tabQuery = `?tab=${encodeURIComponent(tab)}`;
-                      if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
-                      // Without the course id there is no absolute path to push, so this
-                      // falls back to a RELATIVE navigation resolved against the current
-                      // URL. next/navigation's router has no relative form, which is what
-                      // the lint rule below cannot express.
-                      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                      else window.location.href = `${assignmentId}${tabQuery}`;
-                    });
-                  }}
-                  placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
-                  searchPlaceholder="Search assignments..."
-                  emptyStateText="No assignments found."
-                  disabled={assignmentsLoading}
-                />
-              </div>
+            <LmsLinkBadge links={confirmedLmsLinks} />
+            {/* Quick jump to another assignment in this course. */}
+            <div className="ml-auto w-56 shrink-0">
+              <SearchableSelect
+                items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
+                onSelect={(assignmentId) => {
+                  // Switching assignments unmounts every form on this page; ask first when
+                  // one of them holds pending edits.
+                  void confirmIfDirty().then((proceed) => {
+                    if (!proceed) return;
+                    // Carry the current tab across the jump so switching assignments keeps
+                    // you on the same view (e.g. staying on Submissions or Statistics).
+                    const tabQuery = `?tab=${encodeURIComponent(tab)}`;
+                    if (id) router.push(`/dashboard/courses/${id}/${assignmentId}${tabQuery}`);
+                    // Without the course id there is no absolute path to push, so this
+                    // falls back to a RELATIVE navigation resolved against the current
+                    // URL. next/navigation's router has no relative form, which is what
+                    // the lint rule below cannot express.
+                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                    else window.location.href = `${assignmentId}${tabQuery}`;
+                  });
+                }}
+                placeholder={assignmentsLoading ? 'Loading…' : 'Switch assignment'}
+                searchPlaceholder="Search assignments..."
+                emptyStateText="No assignments found."
+                disabled={assignmentsLoading}
+              />
             </div>
-            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
-              {/* Show course name/code as a link to the course page (fallback to courseId) */}
-              <Link
-                href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                className="text-primary max-w-full break-all hover:underline"
-              >
-                {assignment.course?.name || assignment.courseName || assignment.courseId}
-                {assignment.course?.code
-                  ? ` (${assignment.course.code})`
-                  : assignment.courseCode
-                    ? ` (${assignment.courseCode})`
-                    : ''}
-              </Link>
-            </div>
+          </div>
+          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+            {/* Show course name/code as a link to the course page (fallback to courseId) */}
+            <Link
+              href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+              className="text-primary max-w-full break-all hover:underline"
+            >
+              {assignment.course?.name || assignment.courseName || assignment.courseId}
+              {assignment.course?.code
+                ? ` (${assignment.course.code})`
+                : assignment.courseCode
+                  ? ` (${assignment.courseCode})`
+                  : ''}
+            </Link>
+          </div>
         </section>
 
         {/* Below xl this is a plain stack, so the strip sits above the panels as it did.
             At xl the rail takes a fixed column beside them. One control at a time: two
             tablists under one Tabs root would duplicate its ARIA wiring. */}
-        <div className="space-y-6 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
-          {railNav ? (
-            <TabRail tabs={assignmentTabs} ariaLabel="Assignment sections" />
-          ) : (
-            <TabBar
-              ariaLabel="Assignment sections"
-              selectId="assignment-tab-select"
-              value={tab}
-              onValueChange={handleTabChange}
-              tabs={assignmentTabs}
-            />
-          )}
-
-          {/* Form sections stay a readable measure; the data sections (Problems,
-              Submissions, Statistics, Similarity) take the whole column, since they are
-              tables, charts and comparisons. */}
-          <div className={cn('min-w-0', FORM_TABS.has(tab) && 'max-w-3xl')}>
-            <TabsContent value="description">
-              <div className="space-y-4">
-                <h2 className="flex items-center gap-2 text-xl font-semibold">
-                  <AlignLeft className="h-6 w-6" />
-                  Details
-                </h2>
-                <AssignmentBasicsForm
-                  courseId={id}
-                  assignmentId={assignment.id}
-                  initialTitle={assignment.title}
-                  initialDescription={assignment.description ?? ''}
-                  initialDescriptionJson={asRichDescription(assignment.descriptionJson)}
-                  courseIsArchived={courseIsArchived}
-                  onSaved={() => void invalidateAssignment()}
-                />
-              </div>
-            </TabsContent>
-            <TabsContent value="type">
-              <AssignmentTypeCard
+        {/* Form sections stay a readable measure; the data sections (Problems,
+            Submissions, Statistics, Similarity) take the whole column, since they are
+            tables, charts and comparisons. */}
+        <LocalNavLayout
+          contentClassName={cn(FORM_TABS.has(tab) && 'max-w-3xl')}
+          nav={
+            railNav ? (
+              <TabRail tabs={assignmentTabs} ariaLabel="Assignment sections" />
+            ) : (
+              <TabBar
+                ariaLabel="Assignment sections"
+                selectId="assignment-tab-select"
+                value={tab}
+                onValueChange={handleTabChange}
+                tabs={assignmentTabs}
+              />
+            )
+          }
+        >
+          <TabsContent value="description">
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <AlignLeft className="h-6 w-6" />
+                Details
+              </h2>
+              <AssignmentBasicsForm
                 courseId={id}
                 assignmentId={assignment.id}
-                groupSetId={assignment.groupSetId ?? null}
+                initialTitle={assignment.title}
+                initialDescription={assignment.description ?? ''}
+                initialDescriptionJson={asRichDescription(assignment.descriptionJson)}
                 courseIsArchived={courseIsArchived}
-                onChanged={() => void invalidateAssignment()}
+                onSaved={() => void invalidateAssignment()}
               />
-            </TabsContent>
-            <TabsContent
-              value="problems"
-              className="animate-fade-in-up transition-opacity duration-300"
-            >
-              <div className="space-y-4">
-                <div className="flex w-full items-center justify-between">
-                  <h2 className="flex items-center gap-2 text-xl font-semibold">
-                    <FileText className="h-6 w-6" />
-                    Problems
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="default"
-                      aria-label="Create Problem"
-                      onClick={handleCreateProblem}
-                      disabled={problemsLoading}
-                      hidden={courseIsArchived}
-                    >
-                      <Plus />
-                      Create Problem
-                    </Button>
-                    <Button
-                      variant="default"
-                      aria-label="Add Existing Problem"
-                      onClick={handleAddExistingProblem}
-                      disabled={problemsLoading}
-                      hidden={courseIsArchived}
-                    >
-                      <Plus />
-                      Add Existing Problem
-                    </Button>
-                  </div>
+            </div>
+          </TabsContent>
+          <TabsContent value="type">
+            <AssignmentTypeCard
+              courseId={id}
+              assignmentId={assignment.id}
+              groupSetId={assignment.groupSetId ?? null}
+              courseIsArchived={courseIsArchived}
+              onChanged={() => void invalidateAssignment()}
+            />
+          </TabsContent>
+          <TabsContent
+            value="problems"
+            className="animate-fade-in-up transition-opacity duration-300"
+          >
+            <div className="space-y-4">
+              <div className="flex w-full items-center justify-between">
+                <h2 className="flex items-center gap-2 text-xl font-semibold">
+                  <FileText className="h-6 w-6" />
+                  Problems
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="default"
+                    aria-label="Create Problem"
+                    onClick={handleCreateProblem}
+                    disabled={problemsLoading}
+                    hidden={courseIsArchived}
+                  >
+                    <Plus />
+                    Create Problem
+                  </Button>
+                  <Button
+                    variant="default"
+                    aria-label="Add Existing Problem"
+                    onClick={handleAddExistingProblem}
+                    disabled={problemsLoading}
+                    hidden={courseIsArchived}
+                  >
+                    <Plus />
+                    Add Existing Problem
+                  </Button>
                 </div>
-                <p
-                  className="text-muted-foreground max-w-3xl text-sm text-balance"
-                  hidden={courseIsArchived}
-                >
-                  This assignment consists of the following problems. You may add an existing
-                  problem from this course using the <strong>Add Existing Problem</strong> button in
-                  the upper-right corner, or create a new problem using the{' '}
-                  <strong>Create Problem</strong> button.
-                </p>
-                <DataTable
-                  columns={problemColumns}
-                  data={problemTableData}
-                  tableLabel="Assignment problems table"
-                  defaultSorting={[{ id: 'title', desc: false }]}
-                  // Max States and Deterministic are niche; hide them by default. They
-                  // stay available through the Columns menu.
-                  defaultColumnVisibility={{ maxStates: false, isDeterministic: false }}
-                  emptyTitle="No problems on this assignment"
-                  emptyDescription="Add problems so students have something to solve."
-                  emptyIcon={FileText}
-                />
               </div>
-            </TabsContent>
-            <TabsContent value="submissions">
-              <AssignmentSubmissions
-                courseIsArchived={courseIsArchived}
+              <p
+                className="text-muted-foreground max-w-3xl text-sm text-balance"
+                hidden={courseIsArchived}
+              >
+                This assignment consists of the following problems. You may add an existing problem
+                from this course using the <strong>Add Existing Problem</strong> button in the
+                upper-right corner, or create a new problem using the{' '}
+                <strong>Create Problem</strong> button.
+              </p>
+              <DataTable
+                columns={problemColumns}
+                data={problemTableData}
+                tableLabel="Assignment problems table"
+                defaultSorting={[{ id: 'title', desc: false }]}
+                // Max States and Deterministic are niche; hide them by default. They
+                // stay available through the Columns menu.
+                defaultColumnVisibility={{ maxStates: false, isDeterministic: false }}
+                emptyTitle="No problems on this assignment"
+                emptyDescription="Add problems so students have something to solve."
+                emptyIcon={FileText}
+              />
+            </div>
+          </TabsContent>
+          <TabsContent value="submissions">
+            <AssignmentSubmissions
+              courseIsArchived={courseIsArchived}
+              courseId={id}
+              assignmentId={aid}
+              maxAssignmentGrade={assignment.maxPoints}
+              problems={submissionTabProblems}
+            />
+          </TabsContent>
+          <TabsContent value="statistics">
+            <AssignmentStatisticsPanel />
+          </TabsContent>
+          <TabsContent value="similarity">
+            <AssignmentSimilarityPanel />
+          </TabsContent>
+          <TabsContent value="settings">
+            <div className="space-y-4">
+              <GradeSyncCard assignmentId={aid} variant="settings" />
+              <AssignmentLmsLinksCard
                 courseId={id}
                 assignmentId={aid}
-                maxAssignmentGrade={assignment.maxPoints}
-                problems={submissionTabProblems}
+                links={lmsLinks}
+                loading={lmsLinksQuery.isLoading}
+                failed={lmsLinksQuery.isError}
+                onRetry={() => void lmsLinksQuery.refetch()}
+                courseIsArchived={courseIsArchived}
+                onRemoved={(linkId) =>
+                  queryClient.setQueryData(
+                    ['course', id, 'assignment', aid, 'lms-links'],
+                    (current: AssignmentLmsLink[] | undefined) =>
+                      (current ?? []).filter((link) => link.id !== linkId),
+                  )
+                }
               />
-            </TabsContent>
-            <TabsContent value="statistics">
-              <AssignmentStatisticsPanel />
-            </TabsContent>
-            <TabsContent value="similarity">
-              <AssignmentSimilarityPanel />
-            </TabsContent>
-            <TabsContent value="settings">
-              <div className="space-y-4">
-                <GradeSyncCard assignmentId={aid} variant="settings" />
-                <AssignmentLmsLinksCard
-                  courseId={id}
-                  assignmentId={aid}
-                  links={lmsLinks}
-                  loading={lmsLinksQuery.isLoading}
-                  failed={lmsLinksQuery.isError}
-                  onRetry={() => void lmsLinksQuery.refetch()}
-                  courseIsArchived={courseIsArchived}
-                  onRemoved={(linkId) =>
-                    queryClient.setQueryData(
-                      ['course', id, 'assignment', aid, 'lms-links'],
-                      (current: AssignmentLmsLink[] | undefined) =>
-                        (current ?? []).filter((link) => link.id !== linkId),
-                    )
-                  }
-                />
-              </div>
-            </TabsContent>
+            </div>
+          </TabsContent>
 
-            <TabsContent value="assign-to">
-              {settingsAssignment ? (
-                <AssignmentSettingsCard
-                  courseId={id}
-                  courseIsArchived={courseIsArchived}
-                  // Edit the dates in the COURSE's zone (what the server stores them in).
-                  timeZone={assignment.course?.timezone ?? timezone}
-                  assignment={settingsAssignment}
-                  onSaved={() => {
-                    void invalidateAssignment();
-                  }}
-                />
-              ) : null}
-            </TabsContent>
-          </div>
-        </div>
+          <TabsContent value="assign-to">
+            {settingsAssignment ? (
+              <AssignmentSettingsCard
+                courseId={id}
+                courseIsArchived={courseIsArchived}
+                // Edit the dates in the COURSE's zone (what the server stores them in).
+                timeZone={assignment.course?.timezone ?? timezone}
+                assignment={settingsAssignment}
+                onSaved={() => {
+                  void invalidateAssignment();
+                }}
+              />
+            ) : null}
+          </TabsContent>
+        </LocalNavLayout>
       </Tabs>
       {/* Submission viewer dialog, keyed off the problem type. */}
       {viewerOpen && viewerSrc && (

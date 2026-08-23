@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { KeyRound, Link2, Terminal, UserRound } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { PasswordSection } from '@/components/account/PasswordSection';
@@ -111,42 +112,42 @@ export default function AccountClient({
       >
         {/* One control at a time: two tablists under one Tabs root would duplicate its
             ARIA wiring. Below xl the strip and its select stay as they were. */}
-        <div className="space-y-6 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
-          {railNav ? (
-            <TabRail tabs={tabs} ariaLabel="Account sections" />
-          ) : (
-            <TabBar
-              ariaLabel="Account sections"
-              selectId="account-tab-select"
-              value={tab}
-              onValueChange={onTabChange}
-              // Only four sections here. Spreading them across the width reads as a
-              // layout accident rather than a choice.
-              fill={false}
-              tabs={tabs}
-            />
-          )}
-
-          <div className="min-w-0">
-            {/* Profile and Password are forms and keep a readable measure. Connected
+        <LocalNavLayout
+          nav={
+            railNav ? (
+              <TabRail tabs={tabs} ariaLabel="Account sections" />
+            ) : (
+              <TabBar
+                ariaLabel="Account sections"
+                selectId="account-tab-select"
+                value={tab}
+                onValueChange={onTabChange}
+                // Only four sections here. Spreading them across the width reads as a
+                // layout accident rather than a choice.
+                fill={false}
+                tabs={tabs}
+              />
+            )
+          }
+        >
+          {/* Profile and Password are forms and keep a readable measure. Connected
                 accounts and App tokens are lists of rows, so they take the column. */}
-            <TabsContent value="profile" className="max-w-3xl">
-              <ProfileSection user={user} />
-            </TabsContent>
+          <TabsContent value="profile" className="max-w-3xl">
+            <ProfileSection user={user} />
+          </TabsContent>
 
-            <TabsContent value="password" className="max-w-2xl">
-              <PasswordSection onChangePassword={changePassword} />
-            </TabsContent>
+          <TabsContent value="password" className="max-w-2xl">
+            <PasswordSection onChangePassword={changePassword} />
+          </TabsContent>
 
-            <TabsContent value="accounts">
-              <IdentitiesSection providerLabel={oidcLabel} canConnect={oidcAvailable} />
-            </TabsContent>
+          <TabsContent value="accounts">
+            <IdentitiesSection providerLabel={oidcLabel} canConnect={oidcAvailable} />
+          </TabsContent>
 
-            <TabsContent value="tokens">
-              <TokensSection />
-            </TabsContent>
-          </div>
-        </div>
+          <TabsContent value="tokens">
+            <TokensSection />
+          </TabsContent>
+        </LocalNavLayout>
       </Tabs>
     </div>
   );

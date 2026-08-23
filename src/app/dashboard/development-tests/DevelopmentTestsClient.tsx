@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { showToast } from '@/lib/toast';
 import { FontSamples } from './font-samples';
@@ -174,47 +175,48 @@ export default function DevelopmentTestsClient() {
         orientation={railNav ? 'vertical' : 'horizontal'}
         className="gap-4"
       >
-        <div className="space-y-4 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
-          {railNav ? (
-            <TabRail tabs={SECTIONS} ariaLabel="Development test sections" />
-          ) : (
-            <TabBar
-              ariaLabel="Development test sections"
-              selectId="development-tests-tab-select"
-              value={tab}
-              onValueChange={setTab}
-              tabs={SECTIONS}
-              fill={false}
-            />
-          )}
+        <LocalNavLayout
+          className="space-y-4"
+          nav={
+            railNav ? (
+              <TabRail tabs={SECTIONS} ariaLabel="Development test sections" />
+            ) : (
+              <TabBar
+                ariaLabel="Development test sections"
+                selectId="development-tests-tab-select"
+                value={tab}
+                onValueChange={setTab}
+                tabs={SECTIONS}
+                fill={false}
+              />
+            )
+          }
+        >
+          <TabsContent value="toast" aria-labelledby="toast-tests-title">
+            <ToastSection />
+          </TabsContent>
 
-          <div className="min-w-0">
-            <TabsContent value="toast" aria-labelledby="toast-tests-title">
-              <ToastSection />
-            </TabsContent>
+          <TabsContent value="tokens" className="space-y-4">
+            <SectionHeading id="design-tokens-title" title="Design Tokens">
+              Live reference for the semantic colour tokens. Toggle the theme to compare light and
+              dark.
+            </SectionHeading>
+            <DesignTokens />
+          </TabsContent>
 
-            <TabsContent value="tokens" className="space-y-4">
-              <SectionHeading id="design-tokens-title" title="Design Tokens">
-                Live reference for the semantic colour tokens. Toggle the theme to compare light and
-                dark.
-              </SectionHeading>
-              <DesignTokens />
-            </TabsContent>
+          <TabsContent value="fonts" className="space-y-4">
+            <SectionHeading id="font-samples-title" title="Font Comparison" />
+            <FontSamples />
+          </TabsContent>
 
-            <TabsContent value="fonts" className="space-y-4">
-              <SectionHeading id="font-samples-title" title="Font Comparison" />
-              <FontSamples />
-            </TabsContent>
-
-            <TabsContent value="editor" className="space-y-4">
-              <SectionHeading id="rich-description-title" title="Rich Description Editor">
-                The shared description editor on its own, with the plain text derived for legacy
-                clients. No toolbar yet.
-              </SectionHeading>
-              <RichDescriptionDemo />
-            </TabsContent>
-          </div>
-        </div>
+          <TabsContent value="editor" className="space-y-4">
+            <SectionHeading id="rich-description-title" title="Rich Description Editor">
+              The shared description editor on its own, with the plain text derived for legacy
+              clients. No toolbar yet.
+            </SectionHeading>
+            <RichDescriptionDemo />
+          </TabsContent>
+        </LocalNavLayout>
       </Tabs>
     </div>
   );

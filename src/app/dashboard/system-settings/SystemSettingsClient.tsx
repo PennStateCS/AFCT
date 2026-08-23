@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -570,117 +571,118 @@ export default function SystemSettingsClient() {
         orientation={railNav ? 'vertical' : 'horizontal'}
         className="w-full gap-6"
       >
-        <div className="space-y-6 xl:grid xl:grid-cols-[12rem_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0">
-          {railNav ? (
-            <TabRail tabs={settingsTabs} ariaLabel="System settings sections" />
-          ) : (
-            <TabBar
-              ariaLabel="System settings sections"
-              selectId="system-settings-tab-select"
-              value={tab}
-              onValueChange={handleTabChange}
-              tabs={settingsTabs}
+        {/* max-w-3xl: the form was pinned to a narrow column inside a full-width card,
+            so it wrapped help text into slivers. Readable measure, not the whole monitor. */}
+        <LocalNavLayout
+          contentClassName="max-w-3xl"
+          nav={
+            railNav ? (
+              <TabRail tabs={settingsTabs} ariaLabel="System settings sections" />
+            ) : (
+              <TabBar
+                ariaLabel="System settings sections"
+                selectId="system-settings-tab-select"
+                value={tab}
+                onValueChange={handleTabChange}
+                tabs={settingsTabs}
+              />
+            )
+          }
+        >
+          <TabsContent value="general">
+            <GeneralTab
+              form={form}
+              setField={setField}
+              disabled={disabled}
+              loading={loading}
+              configuredUrl={settingsData?.configuredUrl}
+              timezoneOptions={timezoneOptions}
             />
-          )}
+          </TabsContent>
 
-          {/* max-w-3xl: the form was pinned to a narrow column inside a full-width card,
-              so it wrapped help text into slivers. Readable measure, not the whole monitor. */}
-          <div className="min-w-0 max-w-3xl">
+          <TabsContent value="queue">
+            <EvaluatorTab form={form} setField={setField} disabled={disabled} />
+          </TabsContent>
 
-            <TabsContent value="general">
-              <GeneralTab
-                form={form}
-                setField={setField}
-                disabled={disabled}
-                loading={loading}
-                configuredUrl={settingsData?.configuredUrl}
-                timezoneOptions={timezoneOptions}
-              />
-            </TabsContent>
+          <TabsContent value="backups">
+            <BackupsTab form={form} setField={setField} disabled={disabled} />
+          </TabsContent>
 
-            <TabsContent value="queue">
-              <EvaluatorTab form={form} setField={setField} disabled={disabled} />
-            </TabsContent>
+          <TabsContent value="email">
+            <EmailTab
+              enabled={smtpEnabled}
+              host={smtpHost}
+              port={typeof smtpPort === 'number' ? smtpPort : DEFAULT_SMTP_PORT}
+              security={smtpSecurity}
+              username={smtpUsername}
+              fromAddress={smtpFromAddress}
+              fromName={smtpFromName}
+              setField={setField}
+              disabled={disabled}
+              password={smtpPassword}
+              // A password typed just now is readable by definition; otherwise ask the server.
+              passwordReadable={smtpPassword !== '' || smtpPasswordReadable}
+              setPassword={setSmtpPassword}
+              passwordConfigured={smtpPasswordConfigured}
+              passwordClear={smtpPasswordClear}
+              setPasswordClear={setSmtpPasswordClear}
+              savedHost={settingsData?.smtpHost}
+              dirty={isDirty}
+            />
+          </TabsContent>
 
-            <TabsContent value="backups">
-              <BackupsTab form={form} setField={setField} disabled={disabled} />
-            </TabsContent>
+          <TabsContent value="sign-in">
+            <SignInTab
+              enabled={oidcEnabled}
+              issuer={oidcIssuer}
+              clientId={oidcClientId}
+              buttonLabel={oidcButtonLabel}
+              trustEmail={oidcTrustEmail}
+              allowLinkedAccountPasswords={allowLinkedAccountPasswords}
+              setField={setField}
+              disabled={disabled}
+              clientSecret={oidcClientSecret}
+              setClientSecret={setOidcClientSecret}
+              clientSecretConfigured={oidcClientSecretConfigured}
+              // A secret typed just now is readable by definition; otherwise ask the server.
+              clientSecretReadable={oidcClientSecret !== '' || oidcClientSecretReadable}
+              clientSecretClear={oidcClientSecretClear}
+              setClientSecretClear={setOidcClientSecretClear}
+              // Derived from the site URL the installer set, so an admin can hand it to IT
+              // without guessing at the path.
+              redirectUri={`${(settingsData?.configuredUrl ?? '').replace(/\/+$/, '')}/api/auth/callback/oidc`}
+            />
+          </TabsContent>
 
-            <TabsContent value="email">
-              <EmailTab
-                enabled={smtpEnabled}
-                host={smtpHost}
-                port={typeof smtpPort === 'number' ? smtpPort : DEFAULT_SMTP_PORT}
-                security={smtpSecurity}
-                username={smtpUsername}
-                fromAddress={smtpFromAddress}
-                fromName={smtpFromName}
-                setField={setField}
-                disabled={disabled}
-                password={smtpPassword}
-                // A password typed just now is readable by definition; otherwise ask the server.
-                passwordReadable={smtpPassword !== '' || smtpPasswordReadable}
-                setPassword={setSmtpPassword}
-                passwordConfigured={smtpPasswordConfigured}
-                passwordClear={smtpPasswordClear}
-                setPasswordClear={setSmtpPasswordClear}
-                savedHost={settingsData?.smtpHost}
-                dirty={isDirty}
-              />
-            </TabsContent>
+          <TabsContent value="lti">
+            {/* Same source as the OIDC redirect URL: the site URL the installer set. */}
+            <LtiTab siteUrl={settingsData?.configuredUrl ?? ''} />
+          </TabsContent>
 
-            <TabsContent value="sign-in">
-              <SignInTab
-                enabled={oidcEnabled}
-                issuer={oidcIssuer}
-                clientId={oidcClientId}
-                buttonLabel={oidcButtonLabel}
-                trustEmail={oidcTrustEmail}
-                allowLinkedAccountPasswords={allowLinkedAccountPasswords}
-                setField={setField}
-                disabled={disabled}
-                clientSecret={oidcClientSecret}
-                setClientSecret={setOidcClientSecret}
-                clientSecretConfigured={oidcClientSecretConfigured}
-                // A secret typed just now is readable by definition; otherwise ask the server.
-                clientSecretReadable={oidcClientSecret !== '' || oidcClientSecretReadable}
-                clientSecretClear={oidcClientSecretClear}
-                setClientSecretClear={setOidcClientSecretClear}
-                // Derived from the site URL the installer set, so an admin can hand it to IT
-                // without guessing at the path.
-                redirectUri={`${(settingsData?.configuredUrl ?? '').replace(/\/+$/, '')}/api/auth/callback/oidc`}
-              />
-            </TabsContent>
+          <TabsContent value="captcha">
+            <CaptchaTab
+              siteKey={hcaptchaSiteKey}
+              setField={setField}
+              disabled={disabled}
+              secretKey={hcaptchaSecretKey}
+              setSecretKey={setHcaptchaSecretKey}
+              secretConfigured={hcaptchaSecretConfigured}
+              secretClear={hcaptchaSecretClear}
+              setSecretClear={setHcaptchaSecretClear}
+              hcaptchaEnabled={hcaptchaEnabled}
+              savedSiteKey={settingsData?.hcaptchaSiteKey}
+            />
+          </TabsContent>
 
-            <TabsContent value="lti">
-              {/* Same source as the OIDC redirect URL: the site URL the installer set. */}
-              <LtiTab siteUrl={settingsData?.configuredUrl ?? ''} />
-            </TabsContent>
+          <TabsContent value="tls">
+            <TlsTab configuredUrl={settingsData?.configuredUrl} />
+          </TabsContent>
 
-            <TabsContent value="captcha">
-              <CaptchaTab
-                siteKey={hcaptchaSiteKey}
-                setField={setField}
-                disabled={disabled}
-                secretKey={hcaptchaSecretKey}
-                setSecretKey={setHcaptchaSecretKey}
-                secretConfigured={hcaptchaSecretConfigured}
-                secretClear={hcaptchaSecretClear}
-                setSecretClear={setHcaptchaSecretClear}
-                hcaptchaEnabled={hcaptchaEnabled}
-                savedSiteKey={settingsData?.hcaptchaSiteKey}
-              />
-            </TabsContent>
+          <TabsContent value="updates">
+            <UpdatesTab disabled={disabled} />
+          </TabsContent>
 
-            <TabsContent value="tls">
-              <TlsTab configuredUrl={settingsData?.configuredUrl} />
-            </TabsContent>
-
-            <TabsContent value="updates">
-              <UpdatesTab disabled={disabled} />
-            </TabsContent>
-
-            {/* Save action, under the section it saves. Hidden on tabs with no savable
+          {/* Save action, under the section it saves. Hidden on tabs with no savable
                 fields (TLS, Updates), which run their own actions instead. */}
           {showSave && (
             <div className="mt-6 flex items-center justify-start gap-3 border-t pt-4">
@@ -707,8 +709,7 @@ export default function SystemSettingsClient() {
               {isDirty && <span className="text-muted-foreground text-sm">Unsaved changes</span>}
             </div>
           )}
-          </div>
-        </div>
+        </LocalNavLayout>
       </Tabs>
 
       {/* The settings inputs live outside a <form> element, so this empty form

@@ -2,9 +2,23 @@
 
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Activity, BookOpen, FileText, GraduationCap, Settings, Table, Users } from 'lucide-react';
+import {
+  Activity,
+  BookOpen,
+  FileText,
+  GraduationCap,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+  Table,
+  Users,
+} from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useLocalNavCollapse } from '@/components/local-nav';
+import { cn } from '@/lib/utils';
 import type { TabType } from '@/types/course';
 
 type CourseTabDef = {
@@ -198,21 +212,40 @@ export function TabBar({
 }
 
 // The vertical rail (see {@link CourseTabBar}). Light and quiet on purpose: the global
-// sidebar is the dark one, and two charcoal columns would read as two applications.
+// sidebar is the dark one, and two charcoal columns would read as two applications. That
+// holds when it is collapsed too: it narrows to the sidebar's rhythm but keeps its own
+// muted surface, so the hierarchy between global and local navigation survives.
 const RAIL_TRIGGER_CLASS = [
   // `group` so the count badge can react to the item's own active state.
   // flex-none matters: the base TabsTrigger carries flex-1, and in a COLUMN flex container
   // that makes flex-basis govern the main axis, which is height. h-10 was being ignored and
   // every row sat at its content height instead.
-  'group flex h-10 w-full flex-none items-center gap-2 rounded-md px-2.5 text-sm',
-  'justify-start whitespace-nowrap',
+  'group flex h-10 w-full flex-none items-center gap-2 rounded-md text-sm',
+  'whitespace-nowrap',
   'text-muted-foreground hover:bg-accent hover:text-foreground',
   // Active: a soft tint of the primary, not a filled row. The dark pair is spelled out
   // because primary at 10% behind primary text is 2.8:1 on a dark card, under the floor.
+  // Unchanged when collapsed: a full cobalt fill would outrank the global sidebar.
   'data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:font-medium',
   'dark:data-[state=active]:bg-blue-950/40 dark:data-[state=active]:text-blue-300',
   'data-[state=active]:shadow-none',
   'border-0 bg-transparent transition-colors',
+].join(' ');
+
+// The same active treatment, keyed off aria-selected instead of data-state.
+//
+// Only used while collapsed, and it is not a style preference: a collapsed row is wrapped
+// in a Radix tooltip trigger, and that ALSO writes `data-state` (closed / delayed-open) on
+// the element it is given. It lands on top of the tab's own, so every data-[state=active]
+// rule above (and the ones the base TabsTrigger carries) silently stops matching and the
+// whole rail reads as inactive. aria-selected is set by Tabs and nothing else touches it.
+//
+// Kept separate rather than replacing the rules above: the expanded rail relies on sharing
+// a modifier with the base trigger so tailwind-merge drops the base's active background.
+// Change that and the base bg-background comes back and wins on source order.
+const RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS = [
+  'aria-selected:bg-primary/10 aria-selected:text-primary aria-selected:font-medium',
+  'dark:aria-selected:bg-blue-950/40 dark:aria-selected:text-blue-300',
 ].join(' ');
 
 /**
@@ -235,41 +268,111 @@ export function TabRail({
   /** Emit explicit `tab-*`/`panel-*` ids. Off for callers that let Radix pair them. */
   linkPanels?: boolean;
 }) {
+  // null outside a LocalNavLayout: the rail renders exactly as it always did, with no
+  // toggle, because collapsing it could not move a column that nothing owns.
+  const collapse = useLocalNavCollapse();
+  const collapsed = collapse?.collapsed ?? false;
+
   return (
     // A surface rather than a rule down the page: the divider split the workspace in two
     // instead of grouping the items. self-start so it stays the height of its own list
     // rather than stretching beside a long table.
     //
+    // The container is a plain div, not the TabsList: the collapse control is not a tab,
+    // and a non-tab child of role="tablist" is a real accessibility problem rather than a
+    // cosmetic one. The list is nested inside and keeps the role and the label.
+    //
     // Sticky only from lg, where the rail exists at all. `top-6` rather than a navbar-sized
     // offset because nothing is pinned up there: the header scrolls away with the page, so
     // this just needs a little air above it. No ancestor sets overflow, which is what would
     // otherwise turn position:sticky into a no-op.
-    <TabsList
-      aria-label={ariaLabel}
-      className="bg-muted/40 h-auto w-full flex-col items-stretch justify-start gap-1 self-start rounded-lg border-0 p-2.5 lg:sticky lg:top-6"
-    >
-      {tabs.map(({ value: tabValue, label, Icon, count }) => (
-        <TabsTrigger
-          key={tabValue}
-          value={tabValue}
-          className={RAIL_TRIGGER_CLASS}
-          {...(linkPanels ? { id: `tab-${tabValue}`, 'aria-controls': `panel-${tabValue}` } : {})}
-          // With a count, spell it into the accessible name; otherwise the visible label
-          // already names the tab.
-          aria-label={count === undefined ? undefined : `${label}, ${count}`}
+    //
+    // w-full throughout: the width is the grid column's, set by LocalNavLayout, so the rail
+    // and the workspace beside it can never disagree about how much room it is taking.
+    <div className="bg-muted/40 flex w-full flex-col gap-1 self-start overflow-hidden rounded-lg p-2.5 lg:sticky lg:top-6">
+      {collapse ? <RailCollapseToggle collapsed={collapsed} onToggle={collapse.toggle} /> : null}
+      <TabsList
+        aria-label={ariaLabel}
+        className="h-auto w-full flex-col items-stretch justify-start gap-1 border-0 bg-transparent p-0"
+      >
+        {tabs.map(({ value: tabValue, label, Icon, count }) => {
+          const trigger = (
+            <TabsTrigger
+              key={tabValue}
+              value={tabValue}
+              className={cn(
+                RAIL_TRIGGER_CLASS,
+                collapsed ? `justify-center px-0 ${RAIL_TRIGGER_COLLAPSED_ACTIVE_CLASS}` : 'px-2.5',
+              )}
+              {...(linkPanels
+                ? { id: `tab-${tabValue}`, 'aria-controls': `panel-${tabValue}` }
+                : {})}
+              // With a count, spell it into the accessible name; otherwise the label span
+              // below names the tab, which is why it stays in the DOM as sr-only when
+              // collapsed rather than being dropped.
+              aria-label={count === undefined ? undefined : `${label}, ${count}`}
+            >
+              {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
+              <span className={collapsed ? 'sr-only' : 'truncate'}>{label}</span>
+              {count !== undefined && !collapsed ? (
+                // Filled and borderless at rest: the outline made seven quiet counts read
+                // as seven controls. Only the active row's count picks up the tint. Dropped
+                // entirely when collapsed: a pill beside a centred icon at 36px is a
+                // smudge, and the count is already in the name and the tooltip.
+                <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary ml-auto min-w-5 rounded-full border-0 px-1.5 text-center text-xs leading-5 font-medium dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300">
+                  {count}
+                </span>
+              ) : null}
+            </TabsTrigger>
+          );
+
+          // Tooltips only while collapsed, where the label is the missing information.
+          // Radix opens them on focus as well as hover, so this is not a mouse-only path.
+          if (!collapsed) return trigger;
+          return (
+            <Tooltip key={tabValue}>
+              <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+              <TooltipContent side="right">
+                {count === undefined ? label : `${label} (${count})`}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </TabsList>
+    </div>
+  );
+}
+
+/**
+ * The rail's own collapse control. One button in both states, so focus stays exactly where
+ * it was when it is pressed: only the icon and the name change.
+ */
+function RailCollapseToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const label = collapsed ? 'Expand local navigation' : 'Collapse local navigation';
+  const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={label}
+          aria-expanded={!collapsed}
+          onClick={onToggle}
+          // Right-aligned when expanded so it sits out of the way of the labels below it,
+          // centred when collapsed because there is nowhere else for it to be.
+          className={cn(
+            'text-muted-foreground hover:text-foreground size-8 shrink-0',
+            collapsed ? 'self-center' : 'self-end',
+          )}
         >
-          {Icon ? <Icon className="size-4 shrink-0" aria-hidden="true" /> : null}
-          <span className="truncate">{label}</span>
-          {count !== undefined ? (
-            // Filled and borderless at rest: the outline made seven quiet counts read as
-            // seven controls. Only the active row's count picks up the tint.
-            <span className="bg-muted text-muted-foreground group-data-[state=active]:bg-primary/10 group-data-[state=active]:text-primary dark:group-data-[state=active]:bg-blue-950/40 dark:group-data-[state=active]:text-blue-300 ml-auto min-w-5 rounded-full border-0 px-1.5 text-center text-xs leading-5 font-medium">
-              {count}
-            </span>
-          ) : null}
-        </TabsTrigger>
-      ))}
-    </TabsList>
+          <Icon className="size-4" aria-hidden="true" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
   );
 }
 

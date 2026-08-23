@@ -4,6 +4,7 @@ import { Settings } from 'lucide-react';
 import { Tabs } from '@/components/ui/tabs';
 import { CourseHeaderContent } from '@/components/course/CourseHeader';
 import { CourseTabBar, CourseTabPanel } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { CourseStatusCard } from '@/components/course/CourseStatusCard';
 import { ActivityCard } from '@/components/ActivityCard';
@@ -187,96 +188,97 @@ export function AdminCourseView({
         </section>
 
         {/* Below lg this is a plain stack, so the strip sits above the panels exactly as it
-          did. At lg the rail takes a fixed column beside them. min-w-0 on the panel side:
-          without it a wide table refuses to shrink and stretches the page sideways. */}
-        <div className="space-y-6 lg:grid lg:grid-cols-[12rem_minmax(0,1fr)] lg:items-start lg:gap-6 lg:space-y-0">
-          <CourseTabBar
-            value={tab}
-            onValueChange={onTabChange}
-            rail={railNav}
-            counts={{
-              assignments: assignmentCount,
-              problems: problemCount,
-              roster: rosterCount,
-            }}
-          />
+          did. At lg the rail takes a column beside them (LocalNavLayout owns that width, so
+          collapsing the rail actually hands the room to the workspace). */}
+        <LocalNavLayout
+          breakpoint="lg"
+          nav={
+            <CourseTabBar
+              value={tab}
+              onValueChange={onTabChange}
+              rail={railNav}
+              counts={{
+                assignments: assignmentCount,
+                problems: problemCount,
+                roster: rosterCount,
+              }}
+            />
+          }
+        >
+          <CourseTabPanel value="assignments" active={tab === 'assignments'}>
+            <AssignmentsCard
+              courseId={course.id}
+              courseIsArchived={course.isArchived}
+              assignments={course.assignments}
+              assignmentColumns={assignmentColumns}
+              onCreateAssignment={onCreateAssignment}
+              onImportAssignment={() => setImportAssignmentOpen(true)}
+              isLoading={isAssignmentsLoading}
+            />
+          </CourseTabPanel>
 
-          <div className="min-w-0">
-            <CourseTabPanel value="assignments" active={tab === 'assignments'}>
-              <AssignmentsCard
-                courseId={course.id}
-                courseIsArchived={course.isArchived}
-                assignments={course.assignments}
-                assignmentColumns={assignmentColumns}
-                onCreateAssignment={onCreateAssignment}
-                onImportAssignment={() => setImportAssignmentOpen(true)}
-                isLoading={isAssignmentsLoading}
-              />
-            </CourseTabPanel>
+          <CourseTabPanel value="problems" active={tab === 'problems'}>
+            <ProblemsCard
+              courseId={course.id}
+              courseIsArchived={course.isArchived}
+              problems={course.problems}
+              problemColumns={problemColumns}
+              onCreateProblem={onCreateProblem}
+              onImportProblem={() => setImportProblemOpen(true)}
+              isLoading={isProblemsLoading}
+            />
+            {problemViewDialog}
+          </CourseTabPanel>
 
-            <CourseTabPanel value="problems" active={tab === 'problems'}>
-              <ProblemsCard
-                courseId={course.id}
-                courseIsArchived={course.isArchived}
-                problems={course.problems}
-                problemColumns={problemColumns}
-                onCreateProblem={onCreateProblem}
-                onImportProblem={() => setImportProblemOpen(true)}
-                isLoading={isProblemsLoading}
-              />
-              {problemViewDialog}
-            </CourseTabPanel>
+          <CourseTabPanel value="roster" active={tab === 'roster'}>
+            <RosterCard
+              courseId={course.id}
+              courseIsArchived={course.isArchived}
+              userColumns={rosterColumns}
+              onEnrollUser={onEnrollUser}
+              onBulkEnroll={onBulkEnroll}
+            />
+          </CourseTabPanel>
 
-            <CourseTabPanel value="roster" active={tab === 'roster'}>
-              <RosterCard
-                courseId={course.id}
-                courseIsArchived={course.isArchived}
-                userColumns={rosterColumns}
-                onEnrollUser={onEnrollUser}
-                onBulkEnroll={onBulkEnroll}
-              />
-            </CourseTabPanel>
+          <CourseTabPanel value="grades" active={tab === 'grades'}>
+            <PrivilegeGradesCard courseId={course.id} />
+          </CourseTabPanel>
 
-            <CourseTabPanel value="grades" active={tab === 'grades'}>
-              <PrivilegeGradesCard courseId={course.id} />
-            </CourseTabPanel>
+          <CourseTabPanel value="groups" active={tab === 'groups'}>
+            <GroupSetsCard courseId={course.id} courseIsArchived={course.isArchived} />
+          </CourseTabPanel>
 
-            <CourseTabPanel value="groups" active={tab === 'groups'}>
-              <GroupSetsCard courseId={course.id} courseIsArchived={course.isArchived} />
-            </CourseTabPanel>
+          <CourseTabPanel value="activity" active={tab === 'activity'}>
+            <ActivityCard courseId={course.id} />
+          </CourseTabPanel>
 
-            <CourseTabPanel value="activity" active={tab === 'activity'}>
-              <ActivityCard courseId={course.id} />
-            </CourseTabPanel>
-
-            <CourseTabPanel value="settings" active={tab === 'settings'}>
-              <div className="space-y-4">
-                <h2 className="flex items-center gap-2 text-xl font-semibold">
-                  <Settings className="h-5 w-5" />
-                  Course Settings
-                </h2>
-                <p className="text-muted-foreground text-sm">
-                  Edit the course name, code, dates, timezone, and self-registration settings.
+          <CourseTabPanel value="settings" active={tab === 'settings'}>
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <Settings className="h-5 w-5" />
+                Course Settings
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Edit the course name, code, dates, timezone, and self-registration settings.
+              </p>
+              {course.isArchived ? (
+                <p className="text-muted-foreground text-xs">
+                  This course is archived and read-only. Unarchive it to make changes.
                 </p>
-                {course.isArchived ? (
-                  <p className="text-muted-foreground text-xs">
-                    This course is archived and read-only. Unarchive it to make changes.
-                  </p>
-                ) : null}
-                {/* Form on the left; the immediate-effect status switches sit in their
+              ) : null}
+              {/* Form on the left; the immediate-effect status switches sit in their
                 own card to the right (stacked below on narrow screens). */}
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                  <CourseSettingsForm course={course} onSaved={onCourseSaved} className="w-full" />
-                  <CourseStatusCard
-                    course={course}
-                    onPublishToggle={onPublishToggle}
-                    className="w-full lg:w-80 lg:shrink-0"
-                  />
-                </div>
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                <CourseSettingsForm course={course} onSaved={onCourseSaved} className="w-full" />
+                <CourseStatusCard
+                  course={course}
+                  onPublishToggle={onPublishToggle}
+                  className="w-full lg:w-80 lg:shrink-0"
+                />
               </div>
-            </CourseTabPanel>
-          </div>
-        </div>
+            </div>
+          </CourseTabPanel>
+        </LocalNavLayout>
       </Tabs>
 
       {duplicateAssignmentMounted && (
