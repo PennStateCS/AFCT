@@ -417,6 +417,7 @@ function BadgePreview() {
 function FormControlSamples() {
   const [switchOn, setSwitchOn] = useState(true);
   const [settingOn, setSettingOn] = useState(false);
+  const [signupOn, setSignupOn] = useState(true);
   const [checked, setChecked] = useState(true);
   const [mode, setMode] = useState('limited');
   const [tags, setTags] = useState<string[]>(['fa']);
@@ -552,14 +553,39 @@ function FormControlSamples() {
         </div>
       </div>
 
-      <SwitchField
-        label="24-hour clock"
-        name="tokens-switch-field"
-        checked={settingOn}
-        onCheckedChange={setSettingOn}
-        descriptionPlacement="inline"
-        description="The setting row is the hit target, so the switch itself stays small."
-      />
+      {/* The setting rows on their own panel, with no border of their own: that is the
+          point of the pattern, so the specimen has to show a group of them the way a
+          settings section does rather than one row in isolation. */}
+      <div className="border-border bg-card space-y-1 rounded-md border p-4">
+        <p className="text-foreground text-sm font-medium">Setting rows</p>
+        <SwitchField
+          label="24-hour clock"
+          name="tokens-switch-on"
+          checked={settingOn}
+          onCheckedChange={setSettingOn}
+          descriptionPlacement="inline"
+          description="Display times on a 24-hour clock instead of 12-hour AM/PM, app-wide."
+        />
+        <SwitchField
+          label="Allow user signup"
+          name="tokens-switch-off"
+          checked={signupOn}
+          onCheckedChange={setSignupOn}
+        />
+        <SwitchField
+          label="Send email from this site"
+          name="tokens-switch-disabled"
+          checked={false}
+          onCheckedChange={() => {}}
+          disabled
+          descriptionPlacement="inline"
+          description="Disabled: the row dims and the label stops offering to toggle."
+        />
+        <p className="text-muted-foreground pt-1 text-xs leading-4.5">
+          No border and no surface of their own. A toggle has no value to contain, so the panel does
+          the grouping and the switch says this is a control. Clicking the label toggles it.
+        </p>
+      </div>
     </div>
   );
 }

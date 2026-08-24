@@ -11,6 +11,18 @@ export interface SwitchFieldProps {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   description?: string;
+  /**
+   * Where the description sits relative to the switch.
+   *
+   * `inline` puts it in the left-hand text block, directly under the label, and the switch
+   * centres against the pair. That is the setting-row look, and it is what almost every
+   * call site wants.
+   *
+   * `below` puts it on its own full-width line under the whole row. It is for a narrow
+   * column (the Evaluator Sandbox's grid cell, a card), where sharing the line with the
+   * switch would squeeze the text to a few words per line. It is the default because it is
+   * the safer of the two in a container of unknown width.
+   */
   descriptionPlacement?: 'below' | 'inline';
   error?: string;
   /**
@@ -24,10 +36,20 @@ export interface SwitchFieldProps {
   className?: string;
   labelClassName?: string;
   switchClassName?: string;
-  boxClassName?: string;
+  /** The label-and-switch row itself, for the rare caller that needs to adjust its spacing. */
+  rowClassName?: string;
   id?: string;
 }
 
+/**
+ * A settings row: the name of the setting on the left, the switch on the right.
+ *
+ * Deliberately *not* a field box. It used to render inside `border-input ... shadow-xs`,
+ * which is the boundary of something you type into, so a column of toggles read as a stack
+ * of empty text inputs that happened to have switches in them. A toggle has no value to
+ * contain and nothing to type, so it gets no container: the section panel around it is
+ * what groups these rows, and the switch is what says this is a control.
+ */
 export default function SwitchField({
   label,
   name,
@@ -42,7 +64,7 @@ export default function SwitchField({
   className,
   labelClassName,
   switchClassName,
-  boxClassName,
+  rowClassName,
   id,
 }: SwitchFieldProps) {
   const switchId = id ?? name;
@@ -64,22 +86,39 @@ export default function SwitchField({
   );
 
   return (
-    // gap-1 on the wrapper rather than a margin per message, matching InputGroup's rhythm.
     <div className={cn('flex flex-col gap-1', className)}>
-      {/* The row is the hit target, not the switch: the label is a real <label htmlFor>
-          pointing at the switch (Radix renders a labelable <button>), so clicking the
-          setting's name toggles it without the square itself having to grow. */}
-      <div
-        className={cn(
-          'border-input flex min-h-11 items-center justify-between gap-3 rounded-md border px-3 py-2 shadow-xs',
-          boxClassName,
-        )}
-      >
-        <div className="min-w-0">
+      {/*
+        items-center centres the switch against the whole text block, so a wrapped
+        two-line description keeps it in the middle rather than pinned to the first line.
+        min-h-11 is the touch target: without it a bare row is only as tall as its 20px
+        label, and the switch is 20px of that. It costs nothing on a described row.
+      */}
+      <div className={cn('flex min-h-11 items-center justify-between gap-4 py-1.5', rowClassName)}>
+        {/* min-w-0 so a long description wraps inside this block instead of widening it
+            and pushing the switch off the row. flex-1 so it takes the space the switch
+            does not need. */}
+        <div className={cn('min-w-0 flex-1', disabled && 'opacity-50')}>
+          {/*
+            A real <label htmlFor>, pointing at Radix's <button role="switch">, which is a
+            labelable element: that is what makes the setting's name the accessible name
+            AND makes clicking it toggle the switch, so the small control is not the only
+            hit target. `block` widens that target to the full text column.
+
+            The description is a sibling, not a child: inside the label it would be read
+            as part of the accessible name ("24-hour clock Display times on a 24-hour
+            clock instead of...") every time the control was announced.
+          */}
           <label
             id={labelId}
             htmlFor={switchId}
-            className={cn('text-sm font-medium', labelClassName)}
+            className={cn(
+              'block text-sm font-medium',
+              // A disabled control's label does not toggle it (the browser skips label
+              // activation for a disabled control), so this is only about not looking
+              // like it would.
+              disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+              labelClassName,
+            )}
           >
             {label}
           </label>
@@ -99,7 +138,7 @@ export default function SwitchField({
           disabled={disabled}
           aria-invalid={!!error || undefined}
           aria-describedby={describedByAttr}
-          className={switchClassName}
+          className={cn('shrink-0', switchClassName)}
         />
       </div>
 
