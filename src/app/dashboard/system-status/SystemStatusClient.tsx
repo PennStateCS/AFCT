@@ -198,12 +198,16 @@ export default function SystemStatusClient() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm">Auto-refresh</span>
-            <Switch
-              checked={autoRefresh}
-              onCheckedChange={setAutoRefresh}
-              aria-label="Enable automatic refresh every 15 seconds"
-            />
+            {/* The visible words are the label, so the accessible name starts with them.
+                It was an aria-label of "Enable automatic refresh every 15 seconds" beside
+                a visible "Auto-refresh", which WCAG 2.5.3 (Label in Name) fails: speech
+                input users say what they can see, and that name did not contain it. The
+                interval is still announced, from a hidden span inside the same label. */}
+            <label htmlFor="auto-refresh" className="cursor-pointer text-sm">
+              Auto-refresh
+              <span className="sr-only"> every 15 seconds</span>
+            </label>
+            <Switch id="auto-refresh" checked={autoRefresh} onCheckedChange={setAutoRefresh} />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm">Trend window</span>
