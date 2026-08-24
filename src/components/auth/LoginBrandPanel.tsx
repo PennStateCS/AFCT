@@ -1,11 +1,37 @@
-import { Code2 } from 'lucide-react';
+import { BookOpen, Code2, Scale } from 'lucide-react';
 
 import { AuthBrandMark } from './AuthBrandMark';
 import { RotatingAuthAutomaton } from './RotatingAuthAutomaton';
 import { cn } from '@/lib/utils';
 
 /** Quiet at rest, underlined on hover: four links should not read as four buttons. */
-const FOOTER_LINK = 'hover:text-sidebar-foreground underline-offset-2 hover:underline';
+const FOOTER_LINK =
+  'inline-flex items-center gap-2 hover:text-sidebar-foreground underline-offset-2 hover:underline';
+
+/** Every footer icon, so one change moves the set rather than three of four. */
+const FOOTER_ICON = 'size-4 shrink-0 text-blue-400';
+
+/**
+ * GitHub's own mark, drawn here because lucide dropped its brand icons.
+ *
+ * The three icons beside it are outlines and this one is a filled silhouette, which is a
+ * mismatch worth accepting: at 16px a generic branch or fork glyph does not say GitHub to
+ * anyone, and this is the row where knowing where the source lives is the point. Decorative,
+ * because the word next to it already says GitHub.
+ */
+function GithubMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={className}
+      aria-hidden="true"
+      focusable="false"
+      fill="currentColor"
+    >
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+    </svg>
+  );
+}
 
 /**
  * The dark half of the sign-in screen.
@@ -104,22 +130,49 @@ export function LoginBrandPanel({ className }: { className?: string }) {
         <RotatingAuthAutomaton className="pointer-events-none aspect-[444/234] max-h-full w-[30rem] max-w-[96%] -translate-y-5 text-blue-300 opacity-[0.22] xl:w-[35rem] 2xl:w-[40rem]" />
       </div>
 
-      {/* In flow and after the wave, so it paints over it rather than needing a scrim. */}
-      <div className="text-sidebar-muted-foreground relative flex flex-wrap items-center gap-x-3 gap-y-2 text-xs xl:gap-x-4 xl:text-sm">
-        <span className="flex items-center gap-2">
-          <Code2 className="size-4 text-blue-400" aria-hidden="true" />
+      {/* A glass pill rather than bare text on the wave. The wave's lines run straight through
+          this row, and the two ways out are to move the text above them or to give it a
+          surface of its own; lifting it cost the automaton 120px of height and left a dead
+          band under the footer. So: a translucent film with a blur behind it, which softens
+          the lines it covers instead of hiding them.
+
+          The film is deliberately barely there, under 4%, and the blur is 1px rather than the
+          4px `backdrop-blur-sm` would give. The wave is six 1.5px curves at 10% to 30%, and a
+          4px blur wipes them out: sampling a row through the pill, the wave went from a
+          21-level spread to 6, so the pill looked opaque even though almost nothing was
+          filling it. At 1px the spread is 12 and the lines still run through. What separates
+          the pill from the panel is the edge and that slight refraction, not the fill.
+
+          `w-fit` because a pill has to end where the content does. It wraps to two lines on a
+          narrow panel and stays a stadium, which is why the radius is `rounded-full` rather
+          than a fixed one that would look wrong at double height.
+
+          Medium weight, and a step brighter than the muted token this used to take. It was
+          already at 11:1, so this is not a contrast fix: light text on a dark ground blooms,
+          and a 400-weight 14px line sitting directly over the contour lines reads softer than
+          its ratio suggests. Weight does more for that than colour does.
+
+          Separators are drawn rules rather than a middle dot or a pipe character: a glyph sits
+          on the text baseline, so beside a row of 16px icons it rides low and picks up the
+          font's own weight. A 1px box centres with the row and stays 1px at any size. */}
+      <div className="text-sidebar-foreground/85 border-sidebar-foreground/[0.08] bg-sidebar-foreground/[0.035] relative flex w-fit flex-wrap items-center gap-x-3 gap-y-2 rounded-full border px-5 py-2.5 text-xs font-medium backdrop-blur-[1px] xl:gap-x-4 xl:text-sm">
+        <span className="inline-flex items-center gap-2">
+          <Code2 className={FOOTER_ICON} aria-hidden="true" />
           Open source
         </span>
-        <span aria-hidden="true">&middot;</span>
+        <span aria-hidden="true" className="h-3 w-px bg-current opacity-40 xl:h-3.5" />
         <a href="https://www.gnu.org/licenses/agpl-3.0.html" className={FOOTER_LINK}>
+          <Scale className={FOOTER_ICON} aria-hidden="true" />
           AGPLv3
         </a>
-        <span aria-hidden="true">&middot;</span>
+        <span aria-hidden="true" className="h-3 w-px bg-current opacity-40 xl:h-3.5" />
         <a href="https://pennstatecs.github.io/AFCT/" className={FOOTER_LINK}>
+          <BookOpen className={FOOTER_ICON} aria-hidden="true" />
           Documentation
         </a>
-        <span aria-hidden="true">&middot;</span>
+        <span aria-hidden="true" className="h-3 w-px bg-current opacity-40 xl:h-3.5" />
         <a href="https://github.com/PennStateCS/AFCT" className={FOOTER_LINK}>
+          <GithubMark className={FOOTER_ICON} />
           GitHub
         </a>
       </div>
