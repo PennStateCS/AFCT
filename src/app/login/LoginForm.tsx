@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { showToast } from '@/lib/toast';
 import { LazyMotion, m, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Building2 } from 'lucide-react';
@@ -460,15 +461,18 @@ export default function LoginForm({
       <LoginBrandPanel className="relative z-10 hidden lg:sticky lg:top-0 lg:grid" />
 
       {/* The extra right padding is the only thing pulling the card off the centre of its
-          column, and it moves the development strip with it so the two stay aligned. On a wide
-          display a dead-centred card leaves the middle of the screen emptier than either edge.
+          column. On a wide display a dead-centred card leaves the middle of the screen emptier
+          than either edge. Note that padding moves the card by half of what you add, since the
+          card is centred in what is left.
 
-          3xl (1700px, registered in globals.css) rather than 2xl, which is worth explaining. 2xl is also
-          where the split leans to 58/42, so applying the nudge there took the gap between the
-          brand column and the card DOWN from 101px at 1440 to 63px at 1536: the card moved
-          left and the column it was moving away from moved right to meet it. Above 1700 there
-          is enough width that both can happen and the gap still grows. */}
-      <div className="auth-form-surface 3xl:pr-24 relative z-10 flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
+          Two steps, and the 2xl one used to be a mistake. 2xl is also where the split leans to
+          58/42, so the card and the brand column move toward each other at the same breakpoint;
+          when the panel was a dark column with a visible seam, nudging at 2xl closed that gap
+          from 101px at 1440 to 63px at 1536. The seam is gone now, so what matters is the
+          distance from the drawing to the card, and that never drops below 200px anywhere
+          across 1440 to 2560. The 2xl step also makes the 1536 dip shallower rather than
+          deeper: 79px instead of 63. */}
+      <div className="auth-form-surface 3xl:pr-40 relative z-10 flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6 2xl:pr-16">
         <div className="mb-6 flex w-full max-w-[680px] flex-col items-center text-center lg:hidden">
           <AuthBrandMark
             className="size-12 text-blue-400"
@@ -489,7 +493,17 @@ export default function LoginForm({
 
         {/* Wider than the card inside it, so the development strip has room for four buttons
             on one line without the form growing to match. */}
-        <div className="flex w-full max-w-[680px] flex-1 flex-col justify-center">
+        {/* Equal padding top and bottom, and only in a development build. It changes nothing
+            while the content fits, because this block is already taller than the card. When
+            the signup form overflows the screen the page grows by both, and the bottom half is
+            what leaves room for the drawer hanging off the card's foot. Symmetric so the card
+            stays where it was: padding on one side only would move it. */}
+        <div
+          className={cn(
+            'flex w-full max-w-[680px] flex-1 flex-col justify-center',
+            isDev && 'py-20',
+          )}
+        >
           {/* Narrower than the column it sits in. A form is read down a single measure, so it
               stops at a comfortable one however wide the screen gets; the development strip
               below is a grid of controls and takes the full width of the column.
@@ -499,266 +513,281 @@ export default function LoginForm({
               Auth0 400); 520 less 64 of padding was 456, wider than any of them. This lands
               at 376, and it is now the same measure at every desktop size rather than being
               squeezed to 457 at the narrow end. */}
-          <section
-            aria-labelledby="auth-heading"
-            className="bg-card mx-auto w-full max-w-[440px] rounded-2xl border p-5 shadow-lg sm:p-6 lg:p-8"
-          >
-            {/* Outside the animated panels, so switching mode retitles the page rather than
+          <div className="relative mx-auto w-full max-w-[440px]">
+            <section
+              aria-labelledby="auth-heading"
+              className="bg-card relative z-10 w-full rounded-2xl border p-5 shadow-lg sm:p-6 lg:p-8"
+            >
+              {/* Outside the animated panels, so switching mode retitles the page rather than
                 replacing its h1: one h1 that changes its words, not two that take turns. */}
-            {/* The heading starts the card. There was a shield tile above it, and it was
+              {/* The heading starts the card. There was a shield tile above it, and it was
                 doing two unhelpful things: taking 76px before anyone reached the words, and
                 promising security this page cannot vouch for. A verified-shield over "Create
                 your account" made even less sense. If something belongs here later it should
                 be the product's own mark, which states an identity rather than a guarantee. */}
-            <div className="mb-6 flex flex-col items-center text-center">
-              <h1 id="auth-heading" className="text-2xl font-semibold tracking-tight">
-                {mode === 'login' ? 'Sign in to your account' : 'Create your account'}
-              </h1>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {mode === 'login'
-                  ? 'Access your AFCT Dashboard'
-                  : 'Set up your AFCT Dashboard account'}
-              </p>
-            </div>
+              <div className="mb-6 flex flex-col items-center text-center">
+                <h1 id="auth-heading" className="text-2xl font-semibold tracking-tight">
+                  {mode === 'login' ? 'Sign in to your account' : 'Create your account'}
+                </h1>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  {mode === 'login'
+                    ? 'Access your AFCT Dashboard'
+                    : 'Set up your AFCT Dashboard account'}
+                </p>
+              </div>
 
-            {/* Neither form sets autoComplete="off". The individual fields carry the
+              {/* Neither form sets autoComplete="off". The individual fields carry the
                 right tokens (username / current-password / new-password), and a
                 form-level "off" can stop a password manager filling or saving them in
                 some browsers. Letting the manager do that work is what keeps signing in
                 from being a memory test (WCAG 2.2 SC 3.3.8, Accessible Authentication).
                 The admin reset-password dialog is the deliberate exception: there an
                 administrator is setting someone else's password. */}
-            <LazyMotion features={loadMotionFeatures}>
-              <AnimatePresence mode="wait" initial={false}>
-                {mode === 'login' ? (
-                  <m.form
-                    key="login"
-                    id="login-panel"
-                    {...panelMotion}
-                    onSubmit={handleLogin}
-                    className="space-y-5"
-                  >
-                    {/* Not a live region: each field's error <p> now carries role="alert",
+              <LazyMotion features={loadMotionFeatures}>
+                <AnimatePresence mode="wait" initial={false}>
+                  {mode === 'login' ? (
+                    <m.form
+                      key="login"
+                      id="login-panel"
+                      {...panelMotion}
+                      onSubmit={handleLogin}
+                      className="space-y-5"
+                    >
+                      {/* Not a live region: each field's error <p> now carries role="alert",
                       so announcing here too would double-speak. Kept as static context. */}
-                    <p className="sr-only">
-                      {Object.values(loginErrors)[0]
-                        ? `Form error: ${Object.values(loginErrors)[0]}`
-                        : ''}
-                    </p>
-                    <InputGroup
-                      id="login-email"
-                      label="Email"
-                      name="login-email"
-                      required
-                      requiredMark
-                      autoComplete="username"
-                      placeholder="name@university.edu"
-                      value={loginEmail}
-                      setValue={setLoginEmail}
-                      type="email"
-                      error={loginErrors.email}
-                    />
-
-                    <div className="space-y-2">
+                      <p className="sr-only">
+                        {Object.values(loginErrors)[0]
+                          ? `Form error: ${Object.values(loginErrors)[0]}`
+                          : ''}
+                      </p>
                       <InputGroup
-                        label="Password"
-                        name="login-password"
+                        id="login-email"
+                        label="Email"
+                        name="login-email"
                         required
                         requiredMark
-                        autoComplete="current-password"
-                        placeholder="Enter your password"
-                        value={loginPassword}
-                        setValue={setLoginPassword}
-                        type="password"
-                        showEye
-                        isPasswordVisible={showLoginPassword}
-                        togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
-                        error={loginErrors.password}
+                        autoComplete="username"
+                        placeholder="name@university.edu"
+                        value={loginEmail}
+                        setValue={setLoginEmail}
+                        type="email"
+                        error={loginErrors.email}
                       />
 
-                      {/* Only offered where the site can actually send it. Without mail
+                      <div className="space-y-2">
+                        <InputGroup
+                          label="Password"
+                          name="login-password"
+                          required
+                          requiredMark
+                          autoComplete="current-password"
+                          placeholder="Enter your password"
+                          value={loginPassword}
+                          setValue={setLoginPassword}
+                          type="password"
+                          showEye
+                          isPasswordVisible={showLoginPassword}
+                          togglePasswordVisibility={() => setShowLoginPassword((v) => !v)}
+                          error={loginErrors.password}
+                        />
+
+                        {/* Only offered where the site can actually send it. Without mail
                         configured this link leads to a page that can only apologise, and the
                         row is not rendered at all rather than left empty. */}
-                      {mailConfigured ? (
-                        <div className="flex justify-end">
-                          <Link
-                            href="/forgot-password"
-                            className="text-link hover:text-link-hover text-sm hover:underline"
-                          >
-                            Forgot password?
-                          </Link>
-                        </div>
-                      ) : null}
-                    </div>
+                        {mailConfigured ? (
+                          <div className="flex justify-end">
+                            <Link
+                              href="/forgot-password"
+                              className="text-link hover:text-link-hover text-sm hover:underline"
+                            >
+                              Forgot password?
+                            </Link>
+                          </div>
+                        ) : null}
+                      </div>
 
-                    {renderCaptchaGate()}
+                      {renderCaptchaGate()}
 
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      aria-disabled={loading}
-                      className="h-11 w-full font-semibold"
-                    >
-                      {loading ? 'Logging in...' : 'Sign In'}
-                    </Button>
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        aria-disabled={loading}
+                        className="h-11 w-full font-semibold"
+                      >
+                        {loading ? 'Logging in...' : 'Sign In'}
+                      </Button>
 
-                    {/* Shown only when a provider is configured, so the button never leads
+                      {/* Shown only when a provider is configured, so the button never leads
                       somewhere that cannot work, and the divider does not appear on its own.
                       Local sign-in stays above it and keeps working whatever is set here. */}
-                    {oidcButtonLabel ? (
-                      <div className="space-y-3">
-                        <div className="text-muted-foreground flex items-center gap-3 text-xs">
-                          <span className="bg-border h-px flex-1" />
-                          or
-                          <span className="bg-border h-px flex-1" />
+                      {oidcButtonLabel ? (
+                        <div className="space-y-3">
+                          <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                            <span className="bg-border h-px flex-1" />
+                            or
+                            <span className="bg-border h-px flex-1" />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 w-full"
+                            // The same sanitised destination the password form uses. Somebody sent to
+                            // the login page from a course link should land on that link, whichever way
+                            // they sign in.
+                            onClick={() => void signIn('oidc', { callbackUrl })}
+                          >
+                            <Building2 className="size-4" aria-hidden="true" />
+                            {oidcButtonLabel}
+                          </Button>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-11 w-full"
-                          // The same sanitised destination the password form uses. Somebody sent to
-                          // the login page from a course link should land on that link, whichever way
-                          // they sign in.
-                          onClick={() => void signIn('oidc', { callbackUrl })}
-                        >
-                          <Building2 className="size-4" aria-hidden="true" />
-                          {oidcButtonLabel}
-                        </Button>
-                      </div>
-                    ) : null}
+                      ) : null}
 
-                    {allowSignup ? (
+                      {allowSignup ? (
+                        <p className="text-muted-foreground text-center text-sm">
+                          Don&apos;t have an account?{' '}
+                          <button
+                            type="button"
+                            className="text-link hover:text-link-hover font-semibold hover:underline"
+                            onClick={() => setMode('signup')}
+                          >
+                            Create account
+                          </button>
+                        </p>
+                      ) : null}
+                    </m.form>
+                  ) : (
+                    <m.form
+                      key="signup"
+                      id="signup-panel"
+                      {...panelMotion}
+                      onSubmit={handleSignup}
+                      className="space-y-5"
+                    >
+                      {/* Not a live region: each field's error <p> now carries role="alert",
+                      so announcing here too would double-speak. Kept as static context. */}
+                      <p className="sr-only">
+                        {Object.values(signupErrors)[0]
+                          ? `Form error: ${Object.values(signupErrors)[0]}`
+                          : ''}
+                      </p>
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <InputGroup
+                          id="signup-first"
+                          label="First Name"
+                          name="signup-first"
+                          required
+                          requiredMark
+                          autoComplete="given-name"
+                          value={signupFirst}
+                          setValue={setSignupFirst}
+                          error={signupErrors.first}
+                        />
+
+                        <InputGroup
+                          label="Last Name"
+                          name="signup-last"
+                          required
+                          requiredMark
+                          autoComplete="family-name"
+                          value={signupLast}
+                          setValue={setSignupLast}
+                          error={signupErrors.last}
+                        />
+                      </div>
+
+                      <InputGroup
+                        label="Email"
+                        name="signup-email"
+                        required
+                        requiredMark
+                        autoComplete="username"
+                        placeholder="name@university.edu"
+                        value={signupEmail}
+                        setValue={setSignupEmail}
+                        type="email"
+                        error={signupErrors.email}
+                      />
+
+                      <InputGroup
+                        label="Password"
+                        name="signup-password"
+                        required
+                        requiredMark
+                        autoComplete="new-password"
+                        value={signupPassword}
+                        setValue={setSignupPassword}
+                        type="password"
+                        showEye
+                        isPasswordVisible={showSignupPassword}
+                        togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
+                        additionalDescribedBy={passwordHelperId}
+                        error={signupErrors.password}
+                      />
+
+                      <InputGroup
+                        label="Confirm Password"
+                        name="signup-confirm"
+                        required
+                        requiredMark
+                        autoComplete="new-password"
+                        value={signupConfirm}
+                        setValue={setSignupConfirm}
+                        type="password"
+                        showEye
+                        isPasswordVisible={showSignupConfirm}
+                        togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
+                        error={signupErrors.confirm}
+                      />
+
+                      <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
+
+                      {renderCaptchaGate()}
+
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        aria-disabled={loading}
+                        className="h-11 w-full font-semibold"
+                      >
+                        {loading ? 'Signing up...' : 'Create Account'}
+                      </Button>
+
                       <p className="text-muted-foreground text-center text-sm">
-                        Don&apos;t have an account?{' '}
+                        Already have an account?{' '}
                         <button
                           type="button"
                           className="text-link hover:text-link-hover font-semibold hover:underline"
-                          onClick={() => setMode('signup')}
+                          onClick={() => setMode('login')}
                         >
-                          Create account
+                          Sign in
                         </button>
                       </p>
-                    ) : null}
-                  </m.form>
-                ) : (
-                  <m.form
-                    key="signup"
-                    id="signup-panel"
-                    {...panelMotion}
-                    onSubmit={handleSignup}
-                    className="space-y-5"
-                  >
-                    {/* Not a live region: each field's error <p> now carries role="alert",
-                      so announcing here too would double-speak. Kept as static context. */}
-                    <p className="sr-only">
-                      {Object.values(signupErrors)[0]
-                        ? `Form error: ${Object.values(signupErrors)[0]}`
-                        : ''}
-                    </p>
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <InputGroup
-                        id="signup-first"
-                        label="First Name"
-                        name="signup-first"
-                        required
-                        requiredMark
-                        autoComplete="given-name"
-                        value={signupFirst}
-                        setValue={setSignupFirst}
-                        error={signupErrors.first}
-                      />
+                    </m.form>
+                  )}
+                </AnimatePresence>
+              </LazyMotion>
+            </section>
 
-                      <InputGroup
-                        label="Last Name"
-                        name="signup-last"
-                        required
-                        requiredMark
-                        autoComplete="family-name"
-                        value={signupLast}
-                        setValue={setSignupLast}
-                        error={signupErrors.last}
-                      />
-                    </div>
+            {/* A drawer pulled out of the foot of the card, which is what it is: a set of
+                shortcuts into this form. Three things do the work. `top-full -mt-2` starts it
+                eight pixels above the card's bottom edge, and the card is `relative z-10`, so
+                that strip and the drawer's top corners disappear behind it. `px-4` insets it
+                from the card's sides, so it looks like it came out of the card rather than
+                being stuck to it: 32px each side, which is enough that the inset reads as
+                deliberate rather than as a rounding error. And its shadow falls on the page,
+                not on the card.
 
-                    <InputGroup
-                      label="Email"
-                      name="signup-email"
-                      required
-                      requiredMark
-                      autoComplete="username"
-                      placeholder="name@university.edu"
-                      value={signupEmail}
-                      setValue={setSignupEmail}
-                      type="email"
-                      error={signupErrors.email}
-                    />
-
-                    <InputGroup
-                      label="Password"
-                      name="signup-password"
-                      required
-                      requiredMark
-                      autoComplete="new-password"
-                      value={signupPassword}
-                      setValue={setSignupPassword}
-                      type="password"
-                      showEye
-                      isPasswordVisible={showSignupPassword}
-                      togglePasswordVisibility={() => setShowSignupPassword((v) => !v)}
-                      additionalDescribedBy={passwordHelperId}
-                      error={signupErrors.password}
-                    />
-
-                    <InputGroup
-                      label="Confirm Password"
-                      name="signup-confirm"
-                      required
-                      requiredMark
-                      autoComplete="new-password"
-                      value={signupConfirm}
-                      setValue={setSignupConfirm}
-                      type="password"
-                      showEye
-                      isPasswordVisible={showSignupConfirm}
-                      togglePasswordVisibility={() => setShowSignupConfirm((v) => !v)}
-                      error={signupErrors.confirm}
-                    />
-
-                    <PasswordRulesHelper id={passwordHelperId} rules={passwordRuleStatuses} />
-
-                    {renderCaptchaGate()}
-
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      aria-disabled={loading}
-                      className="h-11 w-full font-semibold"
-                    >
-                      {loading ? 'Signing up...' : 'Create Account'}
-                    </Button>
-
-                    <p className="text-muted-foreground text-center text-sm">
-                      Already have an account?{' '}
-                      <button
-                        type="button"
-                        className="text-link hover:text-link-hover font-semibold hover:underline"
-                        onClick={() => setMode('login')}
-                      >
-                        Sign in
-                      </button>
-                    </p>
-                  </m.form>
-                )}
-              </AnimatePresence>
-            </LazyMotion>
-          </section>
+                Absolute, and that is the whole point. In flow it took its height out of the
+                space the card centres in, so a development build put the card about 50px above
+                where a production build puts it, and the card should not move because a
+                debugging aid is present. */}
+            {isDev ? (
+              <div className="absolute inset-x-0 top-full -mt-2 px-8">
+                <DevLoginToolbar onSelectRole={applyTestLogin} />
+              </div>
+            ) : null}
+          </div>
         </div>
-
-        {/* Outside the card's block and after it, so the flex-1 above pushes it to the foot of
-            the pane: it is a tool that belongs to the page, not a footer on the form. In flow
-            rather than fixed, so a tall signup form or an expanded error simply moves it down
-            instead of having it sit on top of the thing being filled in. */}
-        {isDev ? <DevLoginToolbar onSelectRole={applyTestLogin} className="mt-8" /> : null}
       </div>
     </div>
   );

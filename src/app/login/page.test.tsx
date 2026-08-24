@@ -896,7 +896,7 @@ describe('the sign-in screen', () => {
   it('offers the seeded-account shortcuts in a development build', () => {
     render(<LoginPage />);
 
-    expect(screen.getByText('Development build')).toBeInTheDocument();
+    expect(screen.getByText('Dev build')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Admin' })).toBeInTheDocument();
   });
 
@@ -905,7 +905,7 @@ describe('the sign-in screen', () => {
     try {
       const { container } = render(<LoginPage />);
 
-      expect(screen.queryByText('Development build')).toBeNull();
+      expect(screen.queryByText('Dev build')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Admin' })).toBeNull();
       // Not merely hidden. The four seeded accounts share one password, and neither it nor
       // their addresses may reach a real deployment's HTML.
