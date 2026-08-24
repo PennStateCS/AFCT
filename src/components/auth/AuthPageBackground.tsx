@@ -40,8 +40,9 @@ export function AuthPageBackground() {
       />
       {/* Full width now that the ground is. It was the left column's footer decoration; across
           the whole page it reads as the bottom of the screen rather than the bottom of a pane,
-          which is the point of removing the seam. */}
-      <AuthDecorativeWave className="pointer-events-none fixed bottom-0 left-0 z-0 h-40 w-screen text-blue-300 xl:h-44" />
+          which is the point of removing the seam. The contour lines are one colour, set here
+          as `currentColor` so the whole set moves together. */}
+      <AuthDecorativeWave className="pointer-events-none fixed bottom-0 left-0 z-0 h-40 w-screen text-blue-400 xl:h-44" />
     </>
   );
 }
