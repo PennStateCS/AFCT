@@ -64,4 +64,50 @@ describe('LimitField', () => {
     await user.type(screen.getByLabelText('Max Submissions'), '5');
     expect(onValueChange).toHaveBeenCalledWith('5');
   });
+
+  // The invalid look comes from Input's own aria-invalid rules. LimitField used to add a
+  // border-destructive class of its own on top, which is a second copy that could
+  // disagree with the first; the attribute is the thing that has to be right.
+  it('marks the number input invalid and points it at the error', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <LimitField
+        label="Submissions"
+        name="submissions"
+        unlimited={false}
+        onUnlimitedChange={() => {}}
+        value={3}
+        onValueChange={() => {}}
+        error="Enter at least 1"
+      />,
+    );
+
+    const input = screen.getByLabelText('Submissions');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-describedby', 'submissions-value-error');
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Enter at least 1');
+    expect(alert).toHaveAttribute('id', 'submissions-value-error');
+
+    // Nothing to assert about the segmented control here beyond it still being usable.
+    await user.click(screen.getByRole('radio', { name: 'Unlimited' }));
+  });
+
+  it('does not announce an error while Unlimited hides the input', () => {
+    render(
+      <LimitField
+        label="Submissions"
+        name="submissions"
+        unlimited
+        onUnlimitedChange={() => {}}
+        value={null}
+        onValueChange={() => {}}
+        error="Enter at least 1"
+      />,
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });
