@@ -22,6 +22,7 @@ describe('DesignTokens', () => {
       'Tables',
       'Status / Feedback',
       'Solid Status Colors',
+      'Badges',
       'Sidebar',
       'Dashboard Header',
       'Data Visualization',

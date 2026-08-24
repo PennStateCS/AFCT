@@ -15,6 +15,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { RoleBadge } from '@/components/ui/RoleBadge';
+import { CategoryBadge } from '@/components/ui/category-badge';
 
 /**
  * A live reference for the app's semantic design tokens, rendered with the real Tailwind
@@ -313,6 +315,83 @@ function NavbarPreview() {
         </li>
         <li>
           Focus ring: <Cls>ring-navbar-ring</Cls>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * The badge families, rendered with the real components rather than lookalikes, so this page
+ * cannot drift from what ships.
+ */
+function BadgePreview() {
+  const status: [string, React.ComponentProps<typeof Badge>['variant']][] = [
+    ['Open', 'success'],
+    ['Late', 'warning'],
+    ['Failed', 'danger'],
+    ['Processing', 'info'],
+    ['Closed', 'neutral'],
+  ];
+  const categories = ['SYSTEM', 'USER', 'COURSE', 'ASSIGNMENT', 'PROBLEM', 'SUBMISSION', 'GRADE'];
+  return (
+    <div className="space-y-4">
+      <p className="text-muted-foreground max-w-2xl text-sm">
+        Semantic colours report a state. Categorical colours only tell one identity from another,
+        and mean nothing on their own: the green below is Problem, not success, and the rose is
+        Grade, not danger. Metadata stays quiet unless the value itself carries a state. In high
+        contrast every categorical hue collapses to one treatment, because the label already carries
+        the category and readability matters more than the hue.
+      </p>
+      <div className="space-y-3">
+        <div>
+          <h4 className="text-foreground mb-2 text-sm font-semibold">Semantic status</h4>
+          <div className="flex flex-wrap items-center gap-2">
+            {status.map(([label, variant]) => (
+              <Badge key={label} variant={variant}>
+                {label}
+              </Badge>
+            ))}
+          </div>
+        </div>
+        <div>
+          <h4 className="text-foreground mb-2 text-sm font-semibold">Roles</h4>
+          <div className="flex flex-wrap items-center gap-2">
+            {['ADMIN', 'FACULTY', 'TA', 'STUDENT'].map((r) => (
+              <RoleBadge key={r} userRole={r} />
+            ))}
+          </div>
+        </div>
+        <div>
+          <h4 className="text-foreground mb-2 text-sm font-semibold">Activity categories</h4>
+          <div className="flex flex-wrap items-center gap-2">
+            {categories.map((c) => (
+              <CategoryBadge key={c} category={c} />
+            ))}
+          </div>
+        </div>
+        <div>
+          <h4 className="text-foreground mb-2 text-sm font-semibold">Metadata and context</h4>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">Fall 2026</Badge>
+            <Badge variant="outline">3 credits</Badge>
+            <Badge variant="outline">Individual</Badge>
+            <Badge variant="info">In Canvas</Badge>
+          </div>
+        </div>
+      </div>
+      <ul className="text-muted-foreground min-w-56 space-y-1 text-sm">
+        <li>
+          Status: <Cls>success</Cls> <Cls>warning</Cls> <Cls>danger</Cls> <Cls>info</Cls>{' '}
+          <Cls>neutral</Cls>
+        </li>
+        <li>
+          Categorical: <Cls>category-slate</Cls> <Cls>category-blue</Cls> <Cls>category-indigo</Cls>{' '}
+          <Cls>category-violet</Cls> <Cls>category-green</Cls> <Cls>category-amber</Cls>{' '}
+          <Cls>category-orange</Cls> <Cls>category-rose</Cls>
+        </li>
+        <li>
+          Metadata: <Cls>secondary</Cls> <Cls>outline</Cls>
         </li>
       </ul>
     </div>
@@ -639,6 +718,14 @@ export function DesignTokens() {
             </div>
           ))}
         </div>
+      </TokenSection>
+
+      <TokenSection
+        id="tokens-badges"
+        title="Badges"
+        description="One primitive, three families of meaning. Semantic colour reports a state, categorical colour separates identities, and metadata stays quiet."
+      >
+        <BadgePreview />
       </TokenSection>
 
       <TokenSection
