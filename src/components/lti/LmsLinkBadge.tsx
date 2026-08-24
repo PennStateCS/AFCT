@@ -27,8 +27,8 @@ export function LmsLinkBadge({
 
   return (
     <Badge
-      variant="outline"
-      className={`bg-status-info-bg border-status-info-border text-status-info shrink-0 gap-1.5 text-xs font-normal ${className ?? ''}`}
+      variant="info"
+      className={`shrink-0 gap-1.5 font-normal ${className ?? ''}`}
       title={description}
     >
       <Link2 className="h-3.5 w-3.5" aria-hidden="true" />

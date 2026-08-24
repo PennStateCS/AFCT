@@ -3,6 +3,7 @@
 import React from 'react';
 import { Book, Check, Copy, Link as LinkIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { COURSE_LIFECYCLE_BADGE } from '@/lib/badge-presets';
 import { IdentityPanel, IdentityPanelIcon } from '@/components/IdentityPanel';
 import { Button } from '@/components/ui/button';
 import type { FullCourse } from '@/types/course';
@@ -104,24 +105,20 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
   const startDate = normalizeDate(course.startDate);
   const endDate = normalizeDate(course.endDate);
 
-  const badgeTheme = {
-    upcoming: { variant: 'info' as const },
-    open: { variant: 'success' as const },
-    closed: { variant: 'neutral' as const },
-  } as const;
-
+  // Which dates put the course in which state is this component's business; which colour
+  // that state gets is not. See lib/badge-presets, which the courses table reads too.
   const courseStatus = (() => {
     if (!startDate || !endDate) {
-      return { label: 'Upcoming', theme: badgeTheme.upcoming };
+      return { label: 'Upcoming', theme: { variant: COURSE_LIFECYCLE_BADGE.upcoming } };
     }
     const now = Date.now();
     if (now < startDate.getTime()) {
-      return { label: 'Upcoming', theme: badgeTheme.upcoming };
+      return { label: 'Upcoming', theme: { variant: COURSE_LIFECYCLE_BADGE.upcoming } };
     }
     if (now > endDate.getTime()) {
-      return { label: 'Closed', theme: badgeTheme.closed };
+      return { label: 'Closed', theme: { variant: COURSE_LIFECYCLE_BADGE.closed } };
     }
-    return { label: 'Open', theme: badgeTheme.open };
+    return { label: 'Open', theme: { variant: COURSE_LIFECYCLE_BADGE.open } };
   })();
 
   // Staff only, and complete: the header names every faculty member and TA, and the course

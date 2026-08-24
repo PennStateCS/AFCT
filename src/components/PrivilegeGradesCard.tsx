@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { DataTable } from '@/components/ui/data-table';
 import type { ColumnDef, OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
+import { Badge } from '@/components/ui/badge';
+import { ENROLLMENT_STATUS_BADGE } from '@/lib/badge-presets';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { Table, Download, RefreshCw, GraduationCap } from 'lucide-react';
@@ -271,9 +273,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           <div className="flex items-center gap-2">
             <span>{String(row.original.lastName ?? '')}</span>
             {row.original.enrollmentStatus === 'DROPPED' ? (
-              <span className="bg-status-warning-bg text-status-warning inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
-                Dropped
-              </span>
+              <Badge variant={ENROLLMENT_STATUS_BADGE.DROPPED}>Dropped</Badge>
             ) : null}
           </div>
         ),

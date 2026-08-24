@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { REGISTRATION_STATUS_BADGE } from '@/lib/badge-presets';
 import { showToast } from '@/lib/toast';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
@@ -76,12 +77,6 @@ type CourseActionsCellProps = {
   timeZone: string;
 };
 
-const registrationBadgeTheme = {
-  upcoming: { variant: 'info' as const },
-  open: { variant: 'success' as const },
-  closed: { variant: 'neutral' as const },
-} as const;
-
 const normalizeDate = (value?: string | Date | null) => {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -98,7 +93,7 @@ const getRegistrationStatus = (
   if (!openAt || !closeAt) {
     return {
       label: 'Closed',
-      theme: registrationBadgeTheme.closed,
+      theme: { variant: REGISTRATION_STATUS_BADGE.closed },
     };
   }
 
@@ -106,20 +101,20 @@ const getRegistrationStatus = (
   if (now >= openAt.getTime() && now <= closeAt.getTime()) {
     return {
       label: 'Open',
-      theme: registrationBadgeTheme.open,
+      theme: { variant: REGISTRATION_STATUS_BADGE.open },
     };
   }
 
   if (now < openAt.getTime()) {
     return {
       label: 'Upcoming',
-      theme: registrationBadgeTheme.upcoming,
+      theme: { variant: REGISTRATION_STATUS_BADGE.upcoming },
     };
   }
 
   return {
     label: 'Closed',
-    theme: registrationBadgeTheme.closed,
+    theme: { variant: REGISTRATION_STATUS_BADGE.closed },
   };
 };
 

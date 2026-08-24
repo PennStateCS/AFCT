@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 // Lazily fetches the assignment's max points when the row doesn't already have it.
 // Shares the assignment.shell cache entry with StudentAssignmentView/StudentNavigator,
@@ -97,15 +98,18 @@ export function DueDateCell({
       ) : (
         <Popover>
           <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="border-status-info-border bg-status-info-bg text-status-info hover:border-status-info focus-visible:ring-ring/70 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
-              aria-label={`Multiple due dates (${overrides.length} override${overrides.length === 1 ? '' : 's'}); show details`}
-            >
-              <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-              Multiple
-              <ChevronDown className="h-3 w-3" aria-hidden="true" />
-            </button>
+            {/* A real button, not a badge with a click handler: it opens the popover below,
+                so it keeps its element and borrows the badge's geometry through asChild. */}
+            <Badge asChild variant="info" className="hover:border-status-info cursor-pointer">
+              <button
+                type="button"
+                aria-label={`Multiple due dates (${overrides.length} override${overrides.length === 1 ? '' : 's'}); show details`}
+              >
+                <CalendarClock className="size-3.5" aria-hidden="true" />
+                Multiple
+                <ChevronDown className="size-3" aria-hidden="true" />
+              </button>
+            </Badge>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-72 p-3 text-xs">
             <p className="mb-2 font-medium">Due dates</p>
@@ -222,15 +226,14 @@ export function OverrideAwareCell({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="border-status-info-border bg-status-info-bg text-status-info hover:border-status-info focus-visible:ring-ring/70 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
-          aria-label={`Multiple ${label.toLowerCase()} values; show details`}
-        >
-          <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-          Multiple
-          <ChevronDown className="h-3 w-3" aria-hidden="true" />
-        </button>
+        {/* As above: a button that opens a popover, wearing the badge's geometry. */}
+        <Badge asChild variant="info" className="hover:border-status-info cursor-pointer">
+          <button type="button" aria-label={`Multiple ${label.toLowerCase()} values; show details`}>
+            <CalendarClock className="size-3.5" aria-hidden="true" />
+            Multiple
+            <ChevronDown className="size-3" aria-hidden="true" />
+          </button>
+        </Badge>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-3 text-xs">
         <p className="mb-2 font-medium">{label}</p>

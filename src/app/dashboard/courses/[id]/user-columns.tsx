@@ -44,7 +44,9 @@ function useMountedOnce(open: boolean): boolean {
   return mounted || open;
 }
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/RoleBadge';
+import { Badge } from '@/components/ui/badge';
+import { RoleBadge } from '@/components/ui/RoleBadge';
+import { ENROLLMENT_STATUS_BADGE } from '@/lib/badge-presets';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -409,9 +411,11 @@ export const userColumns = (
       // sortingFn: ordering is the server's, over the whole roster.
       meta: { priority: 2 },
       cell: ({ row }) => (
-        <Badge
+        // No fixed width. The old role pills were set to `w-20` so a column of solid blocks
+        // lined up; a shared badge sizes to its label, and forcing it wide again would leave
+        // "TA" floating in the middle of an empty box beside a Status badge that does not.
+        <RoleBadge
           userRole={(row.original as RosterUser).role as 'FACULTY' | 'TA' | 'STUDENT' | undefined}
-          className="w-20"
         />
       ),
     },
@@ -428,16 +432,14 @@ export const userColumns = (
         const r = row.original as RosterUser;
         // Status only applies to students; staff show a dash.
         if (r.role !== 'STUDENT') return <span className="text-muted-foreground">—</span>;
-        // Both standings are pills, and deliberately the same shape: one of them rendered as
-        // plain text read as an absence of status rather than as the opposite of Dropped.
+        // Both standings are badges, and deliberately the same shape: one of them rendered
+        // as plain text read as an absence of status rather than as the opposite of Dropped.
+        // Standing is a status and keeps its semantic colour; the role beside it is an
+        // identity and keeps a categorical one. A dropped student is still a student.
         return r.enrollmentStatus === 'DROPPED' ? (
-          <span className="bg-status-warning-bg text-status-warning inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
-            Dropped
-          </span>
+          <Badge variant={ENROLLMENT_STATUS_BADGE.DROPPED}>Dropped</Badge>
         ) : (
-          <span className="bg-status-success-bg text-status-success inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium">
-            Enrolled
-          </span>
+          <Badge variant={ENROLLMENT_STATUS_BADGE.ENROLLED}>Enrolled</Badge>
         );
       },
     },

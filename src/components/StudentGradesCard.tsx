@@ -12,6 +12,7 @@ import { formatDateInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { apiPaths } from '@/lib/api-paths';
+import { Badge } from '@/components/ui/badge';
 
 type StudentGradesResponse = {
   assignments: Array<{
@@ -193,7 +194,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                             <p className="text-foreground truncate text-sm font-medium">
                               Problem {index + 1}: {problem.title ?? 'Untitled'}
                             </p>
-                            <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
+                            <Badge variant="outline" className="text-muted-foreground">
                               {problem.status.toLowerCase() == 'processing'
                                 ? 'Evaluating'
                                 : problem.grade === null &&
@@ -203,27 +204,27 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                                   : problem.grade === null
                                     ? 'Not graded'
                                     : 'Graded'}
-                            </span>
-                            <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
+                            </Badge>
+                            <Badge variant="outline" className="text-muted-foreground">
                               {problem.submissionCount ? problem.submissionCount : 0}/
                               {problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions}{' '}
                               Submissions
-                            </span>
+                            </Badge>
                             {problem.autograderEnabled && problem.submissionCount ? (
-                              <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
+                              <Badge variant="outline" className="text-muted-foreground">
                                 {'Latest Status: ' + problem.status}
-                              </span>
+                              </Badge>
                             ) : (
                               <span></span>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="border-border text-foreground rounded-full border px-2 py-1 text-xs font-semibold">
+                            <Badge variant="outline" className="font-semibold">
                               {problem.grade === null
                                 ? `-/${problem.maxPoints}`
                                 : `${problem.grade}/${problem.maxPoints}`}{' '}
                               pts
-                            </span>
+                            </Badge>
                             <ChevronRight className="text-muted-foreground h-4 w-4" />
                           </div>
                         </button>

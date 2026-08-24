@@ -266,10 +266,7 @@ export default function ProblemWorkspace({
               {formatTimeInTimeZone(submittedAt, timezone, hour12)}
             </span>
             {isLate ? (
-              <Badge
-                variant="secondary"
-                className="bg-status-warning-bg text-status-warning mt-1 inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold shadow-sm"
-              >
+              <Badge variant="warning" className="mt-1">
                 Late
               </Badge>
             ) : null}
@@ -450,12 +447,14 @@ export default function ProblemWorkspace({
           className="min-w-0"
           action={
             isPrivilegedUser ? null : (
-              <div className="border-border text-foreground inline-flex items-center gap-2 rounded-full border bg-transparent px-3 py-2 text-xs whitespace-nowrap">
+              // A readout, not a state: it says what the grade is, so it stays quiet and
+              // takes the same geometry as the problem facts immediately below it.
+              <Badge variant="outline" className="gap-2 px-3 py-2">
                 <span className="font-semibold tracking-widest uppercase">Grade</span>
                 <span>
                   {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
                 </span>
-              </div>
+              </Badge>
             )
           }
           title={problem.title}

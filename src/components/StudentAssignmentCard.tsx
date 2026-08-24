@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { ChevronRight, Clock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
-import { cn } from '@/lib/utils';
 import type { FullCourse } from '@/types/course';
 
 interface StudentAssignmentCardProps {
@@ -94,18 +94,11 @@ export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
                     {/* A future deadline is information, not a success. Green was claiming
                         something had gone right about an assignment nobody had started.
                         Overdue keeps the danger tint AND says so in words. */}
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium',
-                        isOverdue
-                          ? 'border-status-danger-border bg-status-danger-bg text-status-danger'
-                          : 'border-status-info-border bg-status-info-bg text-status-info',
-                      )}
-                    >
+                    <Badge variant={isOverdue ? 'danger' : 'info'} className="gap-1.5 px-2 py-1">
                       <Clock className="size-3.5" aria-hidden="true" />
                       {isOverdue ? 'OVERDUE: ' : 'Due '}
                       {stamp(dueDate)}
-                    </span>
+                    </Badge>
                     <span className="text-muted-foreground text-xs">{meta.join(' · ')}</span>
                   </div>
                 </div>
