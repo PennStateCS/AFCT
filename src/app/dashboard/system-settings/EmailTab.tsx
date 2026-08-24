@@ -95,7 +95,7 @@ export function EmailTab({
       <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
         <SettingsStatusPanel>
           <Badge
-            variant={!enabled ? 'warning' : passwordReadable ? 'success' : 'destructive'}
+            variant={!enabled ? 'neutral' : passwordReadable ? 'success' : 'danger'}
             className="w-fit"
           >
             {!enabled ? 'Disabled' : passwordReadable ? 'Enabled' : 'Enabled, but unavailable'}

@@ -65,7 +65,7 @@ export function SignInTab({
       <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
         <SettingsStatusPanel>
           <Badge
-            variant={!enabled ? 'warning' : clientSecretReadable ? 'success' : 'destructive'}
+            variant={!enabled ? 'neutral' : clientSecretReadable ? 'success' : 'danger'}
             className="w-fit"
           >
             {!enabled ? 'Disabled' : clientSecretReadable ? 'Enabled' : 'Enabled, but unavailable'}

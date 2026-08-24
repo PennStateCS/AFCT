@@ -62,7 +62,7 @@ export function CaptchaTab({
       {/* Current status */}
       <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
         <SettingsStatusPanel>
-          <Badge variant={hcaptchaEnabled ? 'success' : 'warning'} className="w-fit">
+          <Badge variant={hcaptchaEnabled ? 'success' : 'neutral'} className="w-fit">
             {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
           </Badge>
           <p className="text-muted-foreground">
@@ -149,7 +149,7 @@ export function CaptchaTab({
                   )}
                   {captchaTestResult === 'fail' && (
                     <div className="space-y-1">
-                      <Badge variant="destructive" className="w-fit">
+                      <Badge variant="danger" className="w-fit">
                         Verification failed
                       </Badge>
                       <p className="text-muted-foreground text-xs">
