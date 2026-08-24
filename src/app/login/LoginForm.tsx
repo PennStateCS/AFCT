@@ -436,7 +436,19 @@ export default function LoginForm({
      * hardcoded white with grey labels bolted on to survive `.dark` on <html>. High contrast
      * still wins over it, which is deliberate.
      */
-    <div className="auth-light bg-background text-foreground min-h-dvh w-full lg:grid lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+    /**
+     * The split leans further towards the brand as the screen grows: even at a laptop width
+     * where the form still wants the room, 55/45 at a desktop, 58/42 on a wide display. The
+     * left half carries the mark, the copy, the automaton, the wave and the footer; the right
+     * half needs only enough width for a 520px card, so the extra space is worth more on the
+     * left. Stopping at 58 rather than 60 is deliberate: past that the form starts to read as
+     * a side panel rather than as the point of the page.
+     *
+     * minmax(0,Nfr) rather than a bare Nfr throughout. A bare fr track will not shrink below
+     * its content's min-content width, and the brand panel holds a fixed-width drawing, so the
+     * column would quietly grow past its share and push the page wider.
+     */
+    <div className="auth-light bg-background text-foreground min-h-dvh w-full lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] 2xl:grid-cols-[minmax(0,58fr)_minmax(0,42fr)]">
       {/* Below lg the picture goes entirely rather than shrinking: half a brand panel beside a
           narrow form is neither one thing nor the other. The compact header below stands in. */}
       <LoginBrandPanel className="hidden lg:sticky lg:top-0 lg:grid" />
