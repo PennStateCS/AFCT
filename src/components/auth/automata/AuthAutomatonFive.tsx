@@ -19,6 +19,9 @@ const Q0: State = { x: 100, y: 141, r: R_ACCEPT };
 const Q1: State = { x: 255, y: 141, r: R };
 const Q2: State = { x: 392, y: 141, r: R };
 
+/** The middle of this drawing's bounding box; see AutomatonFrame. */
+const CENTER = [220, 118] as const;
+
 const ARROW = 'afct-automaton-five-arrow';
 const loop0 = selfLoop(Q0);
 const loop2 = selfLoop(Q2);
@@ -28,7 +31,7 @@ const e12 = edgeBetween(Q1, Q2);
 
 export function AuthAutomatonFive({ className, style }: AutomatonProps) {
   return (
-    <AutomatonFrame arrowId={ARROW} className={className} style={style}>
+    <AutomatonFrame arrowId={ARROW} className={className} style={style} center={CENTER}>
       <line x1="20" y1={Q0.y} x2={Q0.x - Q0.r - 4} y2={Q0.y} markerEnd={`url(#${ARROW})`} />
 
       <path d={loop0.d} strokeLinecap="round" markerEnd={`url(#${ARROW})`} />

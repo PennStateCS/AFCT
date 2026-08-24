@@ -14,8 +14,14 @@ import { edgeBetween, selfLoop, type State } from './geometry';
  */
 const Q0: State = { x: 58, y: 138, r: R };
 const Q1: State = { x: 170, y: 118, r: R };
-const Q2: State = { x: 285, y: 162, r: R };
+// Dropped 14 below the line the other three sit near. At its old height the q3 -> q1 edge
+// ran straight through the labels on the two edges either side of q2, and the three
+// symbols piled up in the same few units of space.
+const Q2: State = { x: 285, y: 176, r: R };
 const Q3: State = { x: 392, y: 112, r: R_ACCEPT };
+
+/** The middle of this drawing's bounding box; see AutomatonFrame. */
+const CENTER = [222, 119] as const;
 
 const ARROW = 'afct-automaton-two-arrow';
 const loop = selfLoop(Q1);
@@ -27,7 +33,7 @@ const OFF = -17;
 
 export function AuthAutomatonTwo({ className, style }: AutomatonProps) {
   return (
-    <AutomatonFrame arrowId={ARROW} className={className} style={style}>
+    <AutomatonFrame arrowId={ARROW} className={className} style={style} center={CENTER}>
       <line x1="20" y1={Q0.y} x2={Q0.x - Q0.r - 4} y2={Q0.y} markerEnd={`url(#${ARROW})`} />
 
       <path d={loop.d} strokeLinecap="round" markerEnd={`url(#${ARROW})`} />

@@ -13,6 +13,24 @@ import type React from 'react';
  */
 export const AUTOMATON_VIEWBOX = '0 0 444 234';
 
+/** The middle of the viewBox, which is where each diagram's own content gets put. */
+const CX = 222;
+const CY = 117;
+
+/**
+ * How much of the frame a diagram is allowed to fill.
+ *
+ * Drawn at full size the widest of the five leaves 20 units of air at each side against 34 to
+ * 44 above and below, so it read as pressing on the left and right edges while floating in the
+ * middle. At 0.92 no diagram comes closer than 36 units to a side, which is in the same range
+ * as its vertical margins.
+ *
+ * One number for all five, and it has to stay that way: they crossfade into each other, so a
+ * per-diagram scale would change the state radius and the stroke weight mid-fade and read as
+ * the drawing flinching. Re-centring is the per-diagram part, and that moves nothing's size.
+ */
+const FIT = 0.92;
+
 /** Normal state, accepting state's outer ring, and the ring inside it. */
 export const R = 28;
 export const R_ACCEPT = 32;
@@ -25,8 +43,19 @@ export function AutomatonFrame({
   arrowId,
   className,
   style,
+  center,
   children,
-}: AutomatonProps & { arrowId: string; children: React.ReactNode }) {
+}: AutomatonProps & {
+  arrowId: string;
+  /**
+   * The middle of this diagram's own ink, in viewBox units, which is almost never the middle
+   * of the viewBox: a chain that hangs its last state low sits low in the frame. Measure it
+   * from the drawing's bounding box rather than averaging the state centres, since a self
+   * loop and its label reach well above the state they belong to.
+   */
+  center: readonly [number, number];
+  children: React.ReactNode;
+}) {
   return (
     <svg
       viewBox={AUTOMATON_VIEWBOX}
@@ -57,7 +86,12 @@ export function AutomatonFrame({
           <path d="M0 0 10 5 0 10Z" fill="currentColor" stroke="none" />
         </marker>
       </defs>
-      {children}
+      {/* Centre this diagram's ink in the frame, then shrink the whole thing so the frame has
+          a margin. Order matters: the scale happens about the viewBox centre, so the
+          re-centring translate has to be the innermost of the three. */}
+      <g transform={`translate(${CX} ${CY}) scale(${FIT}) translate(${-center[0]} ${-center[1]})`}>
+        {children}
+      </g>
     </svg>
   );
 }

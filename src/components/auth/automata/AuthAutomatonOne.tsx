@@ -17,6 +17,9 @@ const Q0: State = { x: 103, y: 112, r: R };
 const Q1: State = { x: 388, y: 67, r: R_ACCEPT };
 const Q2: State = { x: 343, y: 182, r: R };
 
+/** The middle of this drawing's bounding box; see AutomatonFrame. */
+const CENTER = [221.5, 119] as const;
+
 const ARROW = 'afct-automaton-one-arrow';
 const loop = selfLoop(Q0);
 const toQ1 = edgeBetween(Q0, Q1);
@@ -26,7 +29,7 @@ const OFF = -17;
 
 export function AuthAutomatonOne({ className, style }: AutomatonProps) {
   return (
-    <AutomatonFrame arrowId={ARROW} className={className} style={style}>
+    <AutomatonFrame arrowId={ARROW} className={className} style={style} center={CENTER}>
       <line x1="23" y1={Q0.y} x2={Q0.x - Q0.r - 4} y2={Q0.y} markerEnd={`url(#${ARROW})`} />
 
       <path d={loop.d} strokeLinecap="round" markerEnd={`url(#${ARROW})`} />

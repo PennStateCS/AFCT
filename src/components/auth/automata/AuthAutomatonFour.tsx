@@ -18,6 +18,9 @@ const Q2: State = { x: 165, y: 184, r: R };
 const Q3: State = { x: 288, y: 70, r: R };
 const Q4: State = { x: 386, y: 127, r: R_ACCEPT };
 
+/** The middle of this drawing's bounding box; see AutomatonFrame. */
+const CENTER = [218, 126] as const;
+
 const ARROW = 'afct-automaton-four-arrow';
 const loop = selfLoop(Q4);
 const e01 = edgeBetween(Q0, Q1);
@@ -28,7 +31,7 @@ const e24 = edgeBetween(Q2, Q4);
 
 export function AuthAutomatonFour({ className, style }: AutomatonProps) {
   return (
-    <AutomatonFrame arrowId={ARROW} className={className} style={style}>
+    <AutomatonFrame arrowId={ARROW} className={className} style={style} center={CENTER}>
       <line x1="18" y1={Q0.y} x2={Q0.x - Q0.r - 4} y2={Q0.y} markerEnd={`url(#${ARROW})`} />
 
       <line {...e01.line} strokeLinecap="round" markerEnd={`url(#${ARROW})`} />
