@@ -115,6 +115,34 @@
   --color-badge-neutral: var(--badge-neutral);
   --color-badge-neutral-bg: var(--badge-neutral-bg);
   --color-badge-neutral-border: var(--badge-neutral-border);
+  /* Categorical badge hues. These name a COLOUR, not a meaning: a violet badge is violet
+     because Admin and Assignment need to be told apart from their neighbours, never because
+     violet implies anything. Semantic state stays on the --badge-success/warning/danger/info
+     /neutral family above, and the two must not be mixed. */
+  --color-badge-category-slate: var(--badge-category-slate);
+  --color-badge-category-slate-bg: var(--badge-category-slate-bg);
+  --color-badge-category-slate-border: var(--badge-category-slate-border);
+  --color-badge-category-blue: var(--badge-category-blue);
+  --color-badge-category-blue-bg: var(--badge-category-blue-bg);
+  --color-badge-category-blue-border: var(--badge-category-blue-border);
+  --color-badge-category-indigo: var(--badge-category-indigo);
+  --color-badge-category-indigo-bg: var(--badge-category-indigo-bg);
+  --color-badge-category-indigo-border: var(--badge-category-indigo-border);
+  --color-badge-category-violet: var(--badge-category-violet);
+  --color-badge-category-violet-bg: var(--badge-category-violet-bg);
+  --color-badge-category-violet-border: var(--badge-category-violet-border);
+  --color-badge-category-green: var(--badge-category-green);
+  --color-badge-category-green-bg: var(--badge-category-green-bg);
+  --color-badge-category-green-border: var(--badge-category-green-border);
+  --color-badge-category-amber: var(--badge-category-amber);
+  --color-badge-category-amber-bg: var(--badge-category-amber-bg);
+  --color-badge-category-amber-border: var(--badge-category-amber-border);
+  --color-badge-category-orange: var(--badge-category-orange);
+  --color-badge-category-orange-bg: var(--badge-category-orange-bg);
+  --color-badge-category-orange-border: var(--badge-category-orange-border);
+  --color-badge-category-rose: var(--badge-category-rose);
+  --color-badge-category-rose-bg: var(--badge-category-rose-bg);
+  --color-badge-category-rose-border: var(--badge-category-rose-border);
   /* Semantic status/feedback family (foreground / soft -bg / -border) for inline status
      text, alert callouts, and toasts. Badges consume the same values via --badge-* above.
      Usage: text-status-warning, bg-status-warning-bg, border-status-warning-border. */
@@ -355,6 +383,32 @@
   --badge-neutral: oklch(0.3867 0 0); /* tint of --muted-foreground */
   --badge-neutral-bg: oklch(0.9551 0 0);
   --badge-neutral-border: oklch(0.8699 0 0);
+  /* Eight categorical hues, tinted the same way the status badges are: dark text on a pale
+     wash with a slightly stronger border. Every pair is 6.3:1 or better. */
+  --badge-category-slate: oklch(0.2795 0.0368 260.031);
+  --badge-category-slate-bg: oklch(0.9683 0.0069 247.896);
+  --badge-category-slate-border: oklch(0.9288 0.0126 255.508);
+  --badge-category-blue: oklch(0.4244 0.1809 265.638);
+  --badge-category-blue-bg: oklch(0.9319 0.0316 255.585);
+  --badge-category-blue-border: oklch(0.8823 0.0571 254.128);
+  --badge-category-indigo: oklch(0.3984 0.1773 277.366);
+  --badge-category-indigo-bg: oklch(0.9299 0.0334 272.788);
+  --badge-category-indigo-border: oklch(0.8699 0.0622 274.039);
+  --badge-category-violet: oklch(0.432 0.2106 292.759);
+  --badge-category-violet-bg: oklch(0.9433 0.0284 294.588);
+  --badge-category-violet-border: oklch(0.8943 0.0549 293.283);
+  --badge-category-green: oklch(0.4479 0.1083 151.328);
+  --badge-category-green-bg: oklch(0.9624 0.0434 156.743);
+  --badge-category-green-border: oklch(0.925 0.0806 155.995);
+  --badge-category-amber: oklch(0.4732 0.1247 46.201);
+  --badge-category-amber-bg: oklch(0.9619 0.058 95.617);
+  --badge-category-amber-border: oklch(0.9243 0.1151 95.746);
+  --badge-category-orange: oklch(0.4698 0.143 37.304);
+  --badge-category-orange-bg: oklch(0.9542 0.0372 75.164);
+  --badge-category-orange-border: oklch(0.9015 0.0729 70.697);
+  --badge-category-rose: oklch(0.4546 0.1713 13.697);
+  --badge-category-rose-bg: oklch(0.9414 0.0298 12.58);
+  --badge-category-rose-border: oklch(0.8924 0.0559 10.001);
 }
 
 /**
@@ -522,6 +576,32 @@
   --badge-neutral: oklch(0.6993 0 0);
   --badge-neutral-bg: oklch(0.329 0 0 / 35%);
   --badge-neutral-border: oklch(0.6993 0 0 / 30%);
+  /* The same eight hues, same order, inverted. A concept keeps its hue between themes; only
+     the lightness moves. Measured 8.0:1 or better against both the card and the page. */
+  --badge-category-slate: oklch(0.869 0.0198 252.894);
+  --badge-category-slate-bg: oklch(0.2077 0.0398 265.755 / 30%);
+  --badge-category-slate-border: oklch(0.869 0.0198 252.894 / 35%);
+  --badge-category-blue: oklch(0.8091 0.0956 251.813);
+  --badge-category-blue-bg: oklch(0.3791 0.1378 265.522 / 30%);
+  --badge-category-blue-border: oklch(0.8091 0.0956 251.813 / 35%);
+  --badge-category-indigo: oklch(0.7853 0.1041 274.713);
+  --badge-category-indigo-bg: oklch(0.3588 0.1354 278.697 / 30%);
+  --badge-category-indigo-border: oklch(0.7853 0.1041 274.713 / 35%);
+  --badge-category-violet: oklch(0.8112 0.1013 293.571);
+  --badge-category-violet-bg: oklch(0.3796 0.1783 293.745 / 30%);
+  --badge-category-violet-border: oklch(0.8112 0.1013 293.571 / 35%);
+  --badge-category-green: oklch(0.8712 0.1363 154.449);
+  --badge-category-green-bg: oklch(0.3925 0.0896 152.535 / 30%);
+  --badge-category-green-border: oklch(0.8712 0.1363 154.449 / 35%);
+  --badge-category-amber: oklch(0.879 0.1534 91.605);
+  --badge-category-amber-bg: oklch(0.4137 0.1054 45.904 / 30%);
+  --badge-category-amber-border: oklch(0.879 0.1534 91.605 / 35%);
+  --badge-category-orange: oklch(0.8366 0.1165 66.29);
+  --badge-category-orange-bg: oklch(0.4084 0.1165 38.172 / 30%);
+  --badge-category-orange-border: oklch(0.8366 0.1165 66.29 / 35%);
+  --badge-category-rose: oklch(0.8097 0.1061 11.638);
+  --badge-category-rose-bg: oklch(0.4103 0.1502 10.272 / 30%);
+  --badge-category-rose-border: oklch(0.8097 0.1061 11.638 / 35%);
 }
 
 /* A fourth theme, derived from LIGHT rather than being a third surface ladder.
@@ -637,6 +717,34 @@
   --badge-neutral: oklch(0.2393 0 89.8756); /* #1F1F1F */
   --badge-neutral-bg: oklch(0.9401 0 89.8756); /* #EBEBEB */
   --badge-neutral-border: oklch(0.2393 0 89.8756); /* #1F1F1F */
+  /* Every categorical hue collapses to the neutral treatment here, deliberately. Eight tinted
+     washes that are all legible would have to sit so close together that nobody could tell
+     them apart anyway, and the label already carries the category. Readability wins over hue
+     identity; this is the one theme where the two conflict. */
+  --badge-category-slate: var(--badge-neutral);
+  --badge-category-slate-bg: var(--badge-neutral-bg);
+  --badge-category-slate-border: var(--badge-neutral-border);
+  --badge-category-blue: var(--badge-neutral);
+  --badge-category-blue-bg: var(--badge-neutral-bg);
+  --badge-category-blue-border: var(--badge-neutral-border);
+  --badge-category-indigo: var(--badge-neutral);
+  --badge-category-indigo-bg: var(--badge-neutral-bg);
+  --badge-category-indigo-border: var(--badge-neutral-border);
+  --badge-category-violet: var(--badge-neutral);
+  --badge-category-violet-bg: var(--badge-neutral-bg);
+  --badge-category-violet-border: var(--badge-neutral-border);
+  --badge-category-green: var(--badge-neutral);
+  --badge-category-green-bg: var(--badge-neutral-bg);
+  --badge-category-green-border: var(--badge-neutral-border);
+  --badge-category-amber: var(--badge-neutral);
+  --badge-category-amber-bg: var(--badge-neutral-bg);
+  --badge-category-amber-border: var(--badge-neutral-border);
+  --badge-category-orange: var(--badge-neutral);
+  --badge-category-orange-bg: var(--badge-neutral-bg);
+  --badge-category-orange-border: var(--badge-neutral-border);
+  --badge-category-rose: var(--badge-neutral);
+  --badge-category-rose-bg: var(--badge-neutral-bg);
+  --badge-category-rose-border: var(--badge-neutral-border);
 
   /* Data. The same six hues in the same order, darkened so each clears 4.5:1 as a graphical
      object: series 5 is still gold, series 6 still green. The sequential ramp keeps its
