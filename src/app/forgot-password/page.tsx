@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
   // <main> is a flex item and shrinks to its content width without it, which leaves the
   // card pinned to the left however it is centred inside.
   return (
-    <main className="relative flex min-h-screen w-full items-center justify-center px-4 py-12">
+    <main className="auth-light relative flex min-h-dvh w-full items-center justify-center px-4 py-12">
       <AuthPageBackground />
       <Card className="relative z-10 w-full max-w-md">
         <CardHeader>
@@ -65,8 +65,8 @@ export default function ForgotPasswordPage() {
             <>
               {/* Deliberately says nothing about whether the address exists. */}
               <p role="status" className="text-sm">
-                If that address has an account, a reset link is on its way. The link works once
-                and expires in an hour.
+                If that address has an account, a reset link is on its way. The link works once and
+                expires in an hour.
               </p>
               <p className="text-muted-foreground text-sm">
                 Nothing arrived? Check the spam folder, or ask an administrator for help.
@@ -78,8 +78,8 @@ export default function ForgotPasswordPage() {
           ) : (
             <form onSubmit={submit} className="space-y-4" noValidate>
               <p className="text-muted-foreground text-sm">
-                Enter the email address for your account and we will send you a link to choose a
-                new password.
+                Enter the email address for your account and we will send you a link to choose a new
+                password.
               </p>
               <InputGroup
                 name="email"

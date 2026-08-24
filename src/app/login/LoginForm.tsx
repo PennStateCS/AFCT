@@ -9,6 +9,7 @@ import { showToast } from '@/lib/toast';
 import { LazyMotion, m, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Building2 } from 'lucide-react';
 import { AuthBrandMark } from '@/components/auth/AuthBrandMark';
+import { AuthPageBackground } from '@/components/auth/AuthPageBackground';
 import { LoginBrandPanel } from '@/components/auth/LoginBrandPanel';
 import { DevLoginToolbar } from '@/components/auth/DevLoginToolbar';
 import InputGroup from '@/components/ui/InputGroup';
@@ -448,22 +449,31 @@ export default function LoginForm({
      * its content's min-content width, and the brand panel holds a fixed-width drawing, so the
      * column would quietly grow past its share and push the page wider.
      */
-    <div className="auth-light bg-background text-foreground min-h-dvh w-full lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] 2xl:grid-cols-[minmax(0,58fr)_minmax(0,42fr)]">
+    <div className="auth-light relative min-h-dvh w-full lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,55fr)_minmax(0,45fr)] 2xl:grid-cols-[minmax(0,58fr)_minmax(0,42fr)]">
+      {/* The page ground, and the only one. The columns below carry no background of their
+          own, so the card and the development strip read as light objects floating on one
+          dark surface rather than as two panes meeting at a seam. */}
+      <AuthPageBackground />
+
       {/* Below lg the picture goes entirely rather than shrinking: half a brand panel beside a
           narrow form is neither one thing nor the other. The compact header below stands in. */}
-      <LoginBrandPanel className="hidden lg:sticky lg:top-0 lg:grid" />
+      <LoginBrandPanel className="relative z-10 hidden lg:sticky lg:top-0 lg:grid" />
 
-      <div className="auth-form-surface flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
+      <div className="auth-form-surface relative z-10 flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
         <div className="mb-6 flex w-full max-w-[680px] flex-col items-center text-center lg:hidden">
           <AuthBrandMark
-            className="text-primary size-12"
-            // Navy on the white card: the same two-tone the other way up.
-            accentClassName="text-foreground"
+            className="size-12 text-blue-400"
+            // Light on dark, the same pairing the desktop panel uses. This block sits on the
+            // page ground now, not on a light surface, so the card's navy accent would be
+            // invisible here.
+            accentClassName="text-sidebar-foreground"
           />
           {/* Not a heading: the form's own title is the page's one h1, and a second one here
               would put the product name above the thing the page is for. */}
-          <p className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">AFCT Dashboard</p>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <p className="text-sidebar-foreground mt-3 text-xl font-semibold tracking-tight sm:text-2xl">
+            AFCT Dashboard
+          </p>
+          <p className="text-sidebar-muted-foreground mt-1 text-sm">
             Automated Feedback for Computing Theory
           </p>
         </div>
@@ -476,7 +486,7 @@ export default function LoginForm({
               below is a grid of controls and takes the full 560. */}
           <section
             aria-labelledby="auth-heading"
-            className="bg-card mx-auto w-full max-w-[520px] rounded-2xl border p-5 shadow-md sm:p-6 lg:p-8"
+            className="bg-card mx-auto w-full max-w-[520px] rounded-2xl border p-5 shadow-lg sm:p-6 lg:p-8"
           >
             {/* Outside the animated panels, so switching mode retitles the page rather than
                 replacing its h1: one h1 that changes its words, not two that take turns. */}

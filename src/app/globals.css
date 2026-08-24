@@ -656,6 +656,20 @@
        system font. */
     @apply bg-background text-foreground font-sans;
   }
+  /**
+   * The signed-out pages are a full-bleed dark surface, and the canvas has to match them.
+   *
+   * `scrollbar-gutter: stable` above reserves a strip at the right edge whether or not there
+   * is a scrollbar, and nothing inside the page can paint it: it is outside the containing
+   * block of even a fixed element, and hit-testing returns nothing there. It is drawn from
+   * the canvas colour, which comes from the body. On the dashboard that strip is the same
+   * colour as the page and nobody sees it; against navy it was a pale stripe down the side of
+   * the screen. Keyed off the class those pages already carry rather than a body class, which
+   * only the root layout could set.
+   */
+  body:has(.auth-light) {
+    background-color: var(--sidebar);
+  }
   /* Anything clickable gets the hand.
 
      Tailwind's preflight leaves buttons on the default arrow, and the shared Button component

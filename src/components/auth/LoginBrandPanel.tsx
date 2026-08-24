@@ -2,7 +2,6 @@ import { Code2 } from 'lucide-react';
 
 import { AuthBrandMark } from './AuthBrandMark';
 import { RotatingAuthAutomaton } from './RotatingAuthAutomaton';
-import { AuthDecorativeWave } from './AuthDecorativeWave';
 import { cn } from '@/lib/utils';
 
 /** Quiet at rest, underlined on hover: four links should not read as four buttons. */
@@ -31,7 +30,9 @@ export function LoginBrandPanel({ className }: { className?: string }) {
     <section
       aria-label="About AFCT"
       className={cn(
-        'bg-sidebar text-sidebar-foreground relative overflow-hidden',
+        // No background of its own: `AuthPageBackground` owns the page ground, and a second
+        // one here is exactly the vertical seam this layout is meant not to have.
+        'text-sidebar-foreground relative',
         // Sticky rather than its own scroller. Signup is taller than the viewport, and two
         // independently scrolling panes is the layout that always ends up trapping a scroll.
         // minmax(0,1fr) on the column, not just the rows. Without it the single implicit
@@ -45,23 +46,6 @@ export function LoginBrandPanel({ className }: { className?: string }) {
         className,
       )}
     >
-      {/* Depth, in two restrained layers: cobalt gathering towards the bottom right, and a
-          soft light lifting the top left. Both derived from the theme rather than picked. */}
-      <div
-        aria-hidden="true"
-        className="to-primary/50 pointer-events-none absolute inset-0 bg-gradient-to-br from-transparent via-transparent"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(96,165,250,0.14),transparent_62%)]"
-      />
-
-      {/* The wave along the foot, behind everything that carries words. */}
-      <AuthDecorativeWave className="pointer-events-none absolute inset-x-0 bottom-0 h-40 w-full xl:h-44" />
-
-      {/* The brand and the copy under it are one block and move as one, so their shared
-          left edge survives. Offset here rather than on the panel's padding, which the
-          footer, the automaton's width and the wave all measure themselves against. */}
       <div className="relative mt-3 ml-4 max-w-xl">
         {/* Identity: the lockup and the words it stands for. The tagline sits under the whole
             row, not inside the text column beside the mark, so the block squares off on the
