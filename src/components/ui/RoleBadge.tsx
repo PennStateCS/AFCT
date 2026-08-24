@@ -1,61 +1,45 @@
-import { cn } from '@/lib/utils';
-import React from 'react';
+import * as React from 'react';
 
-export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: 'default' | 'destructive' | 'outline';
+import { Badge } from '@/components/ui/badge';
+import { ROLE_BADGE, ROLE_LABEL } from '@/lib/badge-presets';
+
+export type UserRole = keyof typeof ROLE_BADGE;
+
+export interface RoleBadgeProps extends React.ComponentProps<'span'> {
   /**
-   * Which course/system role this badge shows. Named `userRole`, not `role`, so it does
-   * not shadow the DOM `role` attribute inherited from HTMLAttributes (that collision
-   * both blocked setting a real ARIA role and read as an invalid one to auditors).
+   * Which course or system role this badge shows. Named `userRole`, not `role`, so it does
+   * not shadow the DOM `role` attribute inherited from the span props (that collision both
+   * blocked setting a real ARIA role and read as an invalid one to auditors).
    */
-  userRole?: 'ADMIN' | 'FACULTY' | 'TA' | 'STUDENT';
+  userRole?: string;
 }
 
-const roleStyles: Record<string, string> = {
-  ADMIN: 'bg-red-800 text-white',
-  FACULTY: 'bg-blue-800 text-white',
-  TA: 'bg-slate-800 text-white',
-  STUDENT: 'bg-green-800 text-white',
-};
-
-const badgeVariants: Record<string, string> = {
-  default: 'bg-primary text-white',
-  destructive: 'bg-red-600 text-white',
-  outline: 'border border-border text-foreground',
-};
-
-// Helper to normalize role input to match roleStyles keys
-function normalizeRole(role?: string): keyof typeof roleStyles | undefined {
+/** Accepts whatever casing the caller has to hand; roles arrive from several shapes. */
+function normalizeRole(role?: string): UserRole | undefined {
   if (!role) return undefined;
   const upper = role.toUpperCase();
-  return upper in roleStyles ? (upper as keyof typeof roleStyles) : undefined;
+  return upper in ROLE_BADGE ? (upper as UserRole) : undefined;
 }
 
-export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
-  ({ className, variant = 'default', userRole, children, ...props }, ref) => {
-    const normalizedRole = normalizeRole(userRole);
-    const variantClass = normalizedRole ? roleStyles[normalizedRole] : badgeVariants[variant];
-    const defaultLabel =
-      normalizedRole === 'TA'
-        ? 'TA'
-        : normalizedRole
-          ? normalizedRole.charAt(0) + normalizedRole.slice(1).toLowerCase()
-          : '';
+/**
+ * A role, in its categorical hue.
+ *
+ * A thin wrapper over the shared Badge rather than a second badge implementation. It used to
+ * draw its own `rounded-full px-4` pill in solid red, blue, slate and green, which was two
+ * problems at once: a shape nothing else in the app used, and semantic colours on something
+ * that is not a state. Red for Admin and green for Student made a roster read as a list of
+ * failures and successes.
+ *
+ * An unrecognised role falls back to the plain outline treatment rather than disappearing.
+ */
+export function RoleBadge({ className, userRole, children, ...props }: RoleBadgeProps) {
+  const role = normalizeRole(userRole);
 
-    return (
-      <span
-        ref={ref}
-        className={cn(
-          'inline-flex items-center justify-center rounded-full px-4 py-0.5 text-xs font-medium',
-          variantClass,
-          className,
-        )}
-        {...props}
-      >
-        {children ?? defaultLabel}
-      </span>
-    );
-  },
-);
+  return (
+    <Badge variant={role ? ROLE_BADGE[role] : 'outline'} className={className} {...props}>
+      {children ?? (role ? ROLE_LABEL[role] : (userRole ?? ''))}
+    </Badge>
+  );
+}
 
-Badge.displayName = 'Badge';
+export default RoleBadge;
