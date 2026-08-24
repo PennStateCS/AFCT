@@ -459,7 +459,16 @@ export default function LoginForm({
           narrow form is neither one thing nor the other. The compact header below stands in. */}
       <LoginBrandPanel className="relative z-10 hidden lg:sticky lg:top-0 lg:grid" />
 
-      <div className="auth-form-surface relative z-10 flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
+      {/* The extra right padding is the only thing pulling the card off the centre of its
+          column, and it moves the development strip with it so the two stay aligned. On a wide
+          display a dead-centred card leaves the middle of the screen emptier than either edge.
+
+          3xl (1700px, registered in globals.css) rather than 2xl, which is worth explaining. 2xl is also
+          where the split leans to 58/42, so applying the nudge there took the gap between the
+          brand column and the card DOWN from 101px at 1440 to 63px at 1536: the card moved
+          left and the column it was moving away from moved right to meet it. Above 1700 there
+          is enough width that both can happen and the gap still grows. */}
+      <div className="auth-form-surface 3xl:pr-24 relative z-10 flex min-h-dvh w-full flex-col items-center px-4 pt-8 pb-5 sm:px-6 lg:pt-10 lg:pb-6">
         <div className="mb-6 flex w-full max-w-[680px] flex-col items-center text-center lg:hidden">
           <AuthBrandMark
             className="size-12 text-blue-400"
@@ -482,11 +491,17 @@ export default function LoginForm({
             on one line without the form growing to match. */}
         <div className="flex w-full max-w-[680px] flex-1 flex-col justify-center">
           {/* Narrower than the column it sits in. A form is read down a single measure, so it
-              stops at a comfortable one however wide the screen gets; the development panel
-              below is a grid of controls and takes the full 560. */}
+              stops at a comfortable one however wide the screen gets; the development strip
+              below is a grid of controls and takes the full width of the column.
+
+              440 rather than the 520 it started at. Sign-in forms sit in a tight band in
+              practice, roughly 340 to 400 of actual field width (GitHub 340, Tailwind UI 384,
+              Auth0 400); 520 less 64 of padding was 456, wider than any of them. This lands
+              at 376, and it is now the same measure at every desktop size rather than being
+              squeezed to 457 at the narrow end. */}
           <section
             aria-labelledby="auth-heading"
-            className="bg-card mx-auto w-full max-w-[520px] rounded-2xl border p-5 shadow-lg sm:p-6 lg:p-8"
+            className="bg-card mx-auto w-full max-w-[440px] rounded-2xl border p-5 shadow-lg sm:p-6 lg:p-8"
           >
             {/* Outside the animated panels, so switching mode retitles the page rather than
                 replacing its h1: one h1 that changes its words, not two that take turns. */}
