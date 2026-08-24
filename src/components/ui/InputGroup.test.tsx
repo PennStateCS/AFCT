@@ -350,7 +350,7 @@ describe('input states', () => {
     expect(input).not.toBeDisabled();
     // Read-only is its own state: a muted surface and a text cursor, because the value is
     // there to be selected and copied. Disabled inputs get the opacity treatment instead.
-    expect(input.className).toContain('bg-muted/40');
+    expect(input.className).toMatch(/(^|\s)bg-muted(\s|$)/);
     expect(input.className).toContain('cursor-text');
     // The muted surface has to actually win over Input's own bg-card, not just be listed
     // after it, and nothing here dims the field unconditionally: the only opacity left is
@@ -364,7 +364,8 @@ describe('input states', () => {
 
     const input = screen.getByLabelText('Email');
     expect(input).toBeDisabled();
-    expect(input.className).not.toContain('bg-muted/40');
+    // Not the read-only surface: disabled keeps Input's own card background and dims it.
+    expect(input.className).not.toMatch(/(^|\s)bg-muted/);
   });
 
   it('keeps the native spinners on a number input', () => {

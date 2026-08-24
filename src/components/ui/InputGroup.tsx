@@ -190,17 +190,24 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
   const hasValue = String(currentValue ?? defaultValue ?? '').length > 0;
 
   return (
-    // The vertical rhythm is owned here rather than by the pieces: label row, 6px, field,
-    // 4px, message. It used to be an mb-1.5 on the Label and a second one on the required
-    // marker, which is two places to keep in step for one gap.
-    <div className={cn('flex flex-col', className)}>
+    // The vertical rhythm is one gap on the wrapper rather than a margin on each piece:
+    // 4px between the label row, the field and whatever message follows, plus 2px more
+    // under the label. It was an mb-1.5 here and an mt-1 on each of the two messages,
+    // which is three places to keep in step. The 6px under the label is what SelectField
+    // and SearchableSelect use, and a form mixes all three in one column.
+    <div className={cn('flex flex-col gap-1', className)}>
       {/* The marker sits beside the label, not inside it, so the label text stays the
-          bare field name for both the accessible name and label-based queries. */}
-      <div className="mb-1.5 flex items-center">
+          bare field name for both the accessible name and label-based queries.
+
+          text-sm and leading-none on the marker so it matches the label it belongs to. It
+          inherited the page's 16px and its default line height, which made it the taller of
+          the two: `items-center` grew the row, and every required field sat 5px lower than
+          its neighbours. The asterisk was also drawn a size larger than its own label. */}
+      <div className="mb-0.5 flex items-center">
         <Label id={labelId} htmlFor={inputId} className={labelClassName}>
           {label}
         </Label>
-        {requiredMark && <RequiredMark />}
+        {requiredMark && <RequiredMark className="text-sm leading-none" />}
       </div>
 
       <div className="relative">
@@ -230,10 +237,12 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
             // Read-only is a third state, not a shade of disabled. These fields hold LTI
             // URLs and one-time tokens people are meant to copy, so the value stays at full
             // contrast with a text cursor; the dimming and the not-allowed cursor mean "you
-            // cannot use this at all", which is a different thing. Applied from the prop
+            // cannot use this at all", which is a different thing. The surface is the full
+            // muted token, the same one the read-only rich-text editor and the Configured URL
+            // block use: at 40% it was all but invisible on a dark card. Applied from the prop
             // rather than Tailwind's `read-only:` variant, because a disabled input matches
             // CSS :read-only too and would pick this up as well.
-            readOnly && !disabled && 'bg-muted/40 cursor-text',
+            readOnly && !disabled && 'bg-muted cursor-text shadow-none',
             inputPaddingRight,
           )}
         />
@@ -283,13 +292,15 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
       </div>
 
       {showDescription && (
-        <p id={descId} className="text-muted-foreground mt-1 text-xs">
+        // text-xs sets a 16px line box, which is tight for the two and three line
+        // descriptions on the LTI and Sign-in tabs. 18px is 1.5, still compact.
+        <p id={descId} className="text-muted-foreground text-xs leading-4.5">
           {description}
         </p>
       )}
 
       {error && (
-        <p id={errorId} role="alert" className="text-destructive mt-1 text-xs">
+        <p id={errorId} role="alert" className="text-destructive text-xs leading-4.5">
           {error}
         </p>
       )}
