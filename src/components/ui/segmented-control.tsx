@@ -36,8 +36,10 @@ export function SegmentedControl({
       role="radiogroup"
       aria-label={ariaLabel}
       className={cn(
-        'bg-card inline-flex rounded-md border border-input p-0.5',
-        disabled && 'opacity-50',
+        'bg-card border-input inline-flex rounded-md border p-0.5 shadow-xs',
+        // The same 0.5 as every other disabled control, and cursor-not-allowed on the
+        // container because the segments themselves take pointer-events-none.
+        disabled && 'cursor-not-allowed opacity-50',
         className,
       )}
     >
@@ -48,7 +50,10 @@ export function SegmentedControl({
             key={opt.value}
             className={cn(
               'cursor-pointer rounded-[0.3rem] px-3 py-1 text-sm font-medium transition-colors',
-              'has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-offset-1',
+              // The same ring as every other control: ring-ring/70 at 3px. It was a 2px
+              // ring in the full-strength colour with a 1px offset, which read as a
+              // different, thinner focus style than the field above it.
+              'has-[:focus-visible]:ring-ring/70 has-[:focus-visible]:ring-[3px]',
               // --secondary is the documented "selected" step of the surface ladder in
               // globals.css, and it is what the neighbouring nav buttons already use.
               // --primary is a page-level action colour: a dark navy in light mode and a

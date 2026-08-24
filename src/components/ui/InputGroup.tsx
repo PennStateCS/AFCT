@@ -2,8 +2,12 @@
 
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RequiredMark } from '@/components/ui/required-mark';
+import {
+  FieldLabelRow,
+  FieldMessage,
+  composeDescribedBy,
+  shouldShowDescription,
+} from '@/components/ui/field';
 import Spinner from '@/components/ui/spinner';
 import { CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -161,27 +165,16 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
    * Where the description is what you need in order to correct the field, the caller asks
    * for both with showDescriptionWithError.
    */
-  const showDescription = !!description && (!error || !!showDescriptionWithError);
-
-  const extraDescribedBy = Array.isArray(additionalDescribedBy)
-    ? additionalDescribedBy
-    : [additionalDescribedBy];
+  const showDescription = shouldShowDescription(description, error, showDescriptionWithError);
 
   // Deduplicated, and only ever naming elements that are actually rendered: a repeated id
   // is read twice, and one pointing at a missing element is a dangling reference.
-  const describedByAttr = Array.from(
-    new Set(
-      [
-        error ? errorId : undefined,
-        showDescription ? descId : undefined,
-        hasStatus ? statusId : undefined,
-        ...extraDescribedBy,
-      ]
-        .filter((v): v is string => typeof v === 'string')
-        .flatMap((v) => v.trim().split(/\s+/))
-        .filter((v) => v.length > 0),
-    ),
-  ).join(' ');
+  const describedByAttr = composeDescribedBy(
+    error ? errorId : undefined,
+    showDescription ? descId : undefined,
+    hasStatus ? statusId : undefined,
+    additionalDescribedBy,
+  );
 
   // Room for the adornments, which sit 4px in from the border and are 32px wide each.
   const adornmentCount = (hasStatus ? 1 : 0) + (hasEye ? 1 : 0);
@@ -203,12 +196,14 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           inherited the page's 16px and its default line height, which made it the taller of
           the two: `items-center` grew the row, and every required field sat 5px lower than
           its neighbours. The asterisk was also drawn a size larger than its own label. */}
-      <div className="mb-0.5 flex items-center">
-        <Label id={labelId} htmlFor={inputId} className={labelClassName}>
-          {label}
-        </Label>
-        {requiredMark && <RequiredMark className="text-sm leading-none" />}
-      </div>
+      <FieldLabelRow
+        id={labelId}
+        htmlFor={inputId}
+        required={requiredMark}
+        labelClassName={labelClassName}
+      >
+        {label}
+      </FieldLabelRow>
 
       <div className="relative">
         <Input
@@ -226,7 +221,7 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
           aria-labelledby={labelId}
           aria-invalid={!!error || undefined}
           aria-required={requiredMark || undefined}
-          aria-describedby={describedByAttr || undefined}
+          aria-describedby={describedByAttr}
           // Only what this wrapper owns. Surface, border, focus, the aria-invalid border
           // and the transition all live on Input; repeating them here meant two places to
           // change and two chances to disagree. labelClassName is NOT in this list: it
@@ -291,19 +286,13 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
         )}
       </div>
 
-      {showDescription && (
-        // text-xs sets a 16px line box, which is tight for the two and three line
-        // descriptions on the LTI and Sign-in tabs. 18px is 1.5, still compact.
-        <p id={descId} className="text-muted-foreground text-xs leading-4.5">
-          {description}
-        </p>
-      )}
-
-      {error && (
-        <p id={errorId} role="alert" className="text-destructive text-xs leading-4.5">
-          {error}
-        </p>
-      )}
+      <FieldMessage
+        description={description}
+        descriptionId={descId}
+        error={error}
+        errorId={errorId}
+        showDescriptionWithError={showDescriptionWithError}
+      />
     </div>
   );
 });

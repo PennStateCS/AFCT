@@ -98,7 +98,6 @@ export function BackupsTab({
           disabled={disabled}
           descriptionPlacement="inline"
           description="When off, no scheduled dumps are taken."
-          boxClassName="border-input"
         />
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <InputGroup

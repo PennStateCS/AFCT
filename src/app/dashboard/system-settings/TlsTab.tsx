@@ -244,7 +244,6 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 disabled={tlsBusy}
                 descriptionPlacement="inline"
                 description="Issues an untrusted test certificate from the staging environment. Use this first to confirm setup without spending the weekly rate limit."
-                boxClassName="border-input"
               />
               <SwitchField
                 id="le-tos"
@@ -255,7 +254,6 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 disabled={tlsBusy}
                 descriptionPlacement="inline"
                 description="Required to request a certificate."
-                boxClassName="border-input"
               />
               {leProgress && (
                 <div role="status" className="bg-muted space-y-2 rounded-md border p-3 text-sm">

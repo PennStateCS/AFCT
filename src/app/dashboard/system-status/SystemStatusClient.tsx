@@ -209,7 +209,10 @@ export default function SystemStatusClient() {
             <span className="text-sm">Trend window</span>
             <select
               aria-label="Select trend window"
-              className="bg-card border-input rounded border px-2 py-1 text-sm"
+              // Same tokens as every other control: rounded-md, the field border, the
+              // subtle elevation and the shared focus ring. This one had drifted to a bare
+              // bordered box with no focus treatment at all.
+              className="bg-card border-input focus-visible:border-ring focus-visible:ring-ring/70 h-9 rounded-md border px-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
               value={windowHours}
               onChange={(e) => setHours(Number(e.target.value))}
             >

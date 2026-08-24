@@ -183,7 +183,6 @@ export function DateOverridesEditor({
               : 'Every assigned student already has an override.'
           }
           restoreFocusAfterSelect={false}
-          triggerClassName="bg-card border-input"
         />
       }
       contentClassName="p-0"

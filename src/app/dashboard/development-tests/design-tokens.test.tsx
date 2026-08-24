@@ -71,12 +71,26 @@ describe('DesignTokens', () => {
   it('renders the real form controls with labels', () => {
     render(<DesignTokens />);
     expect(screen.getByLabelText('Text input')).toBeInTheDocument();
-    expect(screen.getByLabelText('Description')).toBeInTheDocument();
-    expect(screen.getByLabelText('Normal')).toBeInTheDocument();
+    expect(screen.getByLabelText('Textarea')).toBeInTheDocument();
+    expect(screen.getByLabelText('Read-only')).toHaveAttribute('readonly');
     expect(screen.getByLabelText('Disabled')).toBeDisabled();
     expect(screen.getByLabelText('Invalid')).toHaveAttribute('aria-invalid', 'true');
     // The Select is Radix, so its trigger is a combobox rather than a labelled input.
     expect(screen.getByRole('combobox', { name: /Select/ })).toBeInTheDocument();
+  });
+
+  // The page is the reference for the form system, so every shared control has to be on
+  // it as the real component. A missing one means a control has no visual reference at
+  // all, which is how they drifted apart in the first place.
+  it('shows every shared form control, not a lookalike', () => {
+    render(<DesignTokens />);
+    // Both searchable pickers name their trigger from the field label, not the value.
+    expect(screen.getByRole('button', { name: 'Searchable select' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Multi-select' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Sample switch' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Sample checkbox' })).toBeChecked();
+    expect(screen.getByRole('radiogroup', { name: 'Submission limit' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: '24-hour clock' })).not.toBeChecked();
   });
 
   it('renders the token sample table', () => {

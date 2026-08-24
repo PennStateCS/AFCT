@@ -2,10 +2,18 @@
 
 import { BookOpen, Check, ChevronRight, FileCheck, LayoutDashboard, PanelLeft } from 'lucide-react';
 
+import { useState } from 'react';
+
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import InputGroup from '@/components/ui/InputGroup';
 import { Label } from '@/components/ui/label';
+import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import SelectField from '@/components/ui/SelectField';
+import { Switch } from '@/components/ui/switch';
+import SwitchField from '@/components/ui/SwitchField';
 import {
   Table,
   TableBody,
@@ -398,6 +406,164 @@ function BadgePreview() {
   );
 }
 
+/**
+ * The real shared controls, wired to real state.
+ *
+ * Interactive on purpose: a switch that cannot be flicked and a checkbox that cannot be
+ * ticked show one of their two states, and the checked treatment is exactly the thing that
+ * regresses unnoticed. Anything static here would be a lookalike, which is what this page
+ * exists to avoid.
+ */
+function FormControlSamples() {
+  const [switchOn, setSwitchOn] = useState(true);
+  const [settingOn, setSettingOn] = useState(false);
+  const [checked, setChecked] = useState(true);
+  const [mode, setMode] = useState('limited');
+  const [tags, setTags] = useState<string[]>(['fa']);
+
+  const problemTypes = [
+    { id: 'fa', label: 'Finite Automaton' },
+    { id: 're', label: 'Regular Expression' },
+    { id: 'cfg', label: 'Context-Free Grammar' },
+    { id: 'pda', label: 'Pushdown Automaton' },
+  ];
+
+  return (
+    <div className="bg-muted/30 border-border space-y-4 rounded-lg border p-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <InputGroup
+          label="Text input"
+          name="tokens-text-input"
+          placeholder="Assignment title"
+          description="bg-card, border-input, h-11."
+          autoComplete="off"
+          setValue={() => {}}
+          value=""
+        />
+        <SelectField
+          label="Select"
+          name="tokens-select"
+          id="tokens-select"
+          placeholder="Choose a problem type"
+          description='SelectTrigger at size="form": the same 44px field.'
+          options={[
+            { value: 'fa', label: 'Finite Automaton' },
+            { value: 're', label: 'Regular Expression' },
+            { value: 'cfg', label: 'Context-Free Grammar' },
+          ]}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <SearchableSelect
+          label="Searchable select"
+          items={problemTypes}
+          onSelect={() => {}}
+          placeholder="Add a problem"
+        />
+        <SearchableMultiSelect
+          label="Multi-select"
+          items={problemTypes}
+          value={tags}
+          onChange={setTags}
+          placeholder="Select problem types"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="tokens-textarea">Textarea</Label>
+        <Textarea
+          id="tokens-textarea"
+          placeholder="Describe what students should submit."
+          autoComplete="off"
+        />
+        <p className="text-muted-foreground text-xs leading-4.5">
+          The same tokens as the input, minus the fixed height: a textarea keeps its natural
+          multi-line size.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <InputGroup
+          label="Read-only"
+          name="tokens-input-readonly"
+          value="https://afct.example.edu/lti/launch"
+          readOnly
+          description="bg-muted, full contrast, text cursor."
+          setValue={() => {}}
+        />
+        <InputGroup
+          label="Disabled"
+          name="tokens-input-disabled"
+          value="Locked"
+          disabled
+          description="disabled:opacity-50."
+          setValue={() => {}}
+        />
+        <InputGroup
+          label="Invalid"
+          name="tokens-input-invalid"
+          value="not-an-email"
+          error="Enter a valid email address."
+          setValue={() => {}}
+        />
+      </div>
+
+      <div className="border-border bg-card grid gap-4 rounded-md border p-3 sm:grid-cols-3">
+        <div className="space-y-2">
+          <p className="text-foreground text-sm font-medium">Switch</p>
+          <div className="flex items-center gap-3">
+            <Switch checked={switchOn} onCheckedChange={setSwitchOn} aria-label="Sample switch" />
+            <span className="text-muted-foreground text-xs">
+              {switchOn ? 'on (bg-primary)' : 'off (bg-input)'}
+            </span>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-foreground text-sm font-medium">Checkbox</p>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={checked}
+              onCheckedChange={(next) => setChecked(next === true)}
+              aria-label="Sample checkbox"
+            />
+            <span>Notify students</span>
+          </label>
+          <p className="text-muted-foreground text-xs leading-4.5">
+            The label row is the hit target; the square stays 16px.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <p className="text-foreground text-sm font-medium">Segmented control</p>
+          <SegmentedControl
+            name="tokens-segmented"
+            ariaLabel="Submission limit"
+            value={mode}
+            onValueChange={setMode}
+            options={[
+              { value: 'unlimited', label: 'Unlimited' },
+              { value: 'limited', label: 'Limited' },
+            ]}
+          />
+          <p className="text-muted-foreground text-xs leading-4.5">
+            Selected is <Cls>bg-secondary</Cls>, not <Cls>bg-primary</Cls>: this is a choice, not a
+            page action.
+          </p>
+        </div>
+      </div>
+
+      <SwitchField
+        label="24-hour clock"
+        name="tokens-switch-field"
+        checked={settingOn}
+        onCheckedChange={setSettingOn}
+        descriptionPlacement="inline"
+        description="The setting row is the hit target, so the switch itself stays small."
+      />
+    </div>
+  );
+}
+
 export function DesignTokens() {
   return (
     <div className="space-y-8">
@@ -559,71 +725,9 @@ export function DesignTokens() {
       <TokenSection
         id="tokens-form-controls"
         title="Form Controls"
-        description="The real shared controls, deliberately sitting on a muted grouping panel. Controls are bg-card in both themes: if one of these goes transparent the panel shows through and the regression is obvious here first."
+        description="Every shared form control, real and interactive, on a muted grouping panel. Controls are bg-card in both themes: if one goes transparent the panel shows through and the regression is obvious here first. This is the reference for the form system, so nothing below is a lookalike."
       >
-        <div className="bg-muted/30 border-border space-y-4 rounded-lg border p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="tokens-text-input">Text input</Label>
-              <Input
-                id="tokens-text-input"
-                placeholder="Assignment title"
-                autoComplete="off"
-                readOnly
-              />
-            </div>
-            <SelectField
-              label="Select"
-              name="tokens-select"
-              id="tokens-select"
-              placeholder="Choose a problem type"
-              options={[
-                { value: 'fa', label: 'Finite Automaton' },
-                { value: 're', label: 'Regular Expression' },
-                { value: 'cfg', label: 'Context-Free Grammar' },
-              ]}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="tokens-textarea">Description</Label>
-            <Textarea
-              id="tokens-textarea"
-              placeholder="Describe what students should submit."
-              autoComplete="off"
-              readOnly
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="tokens-input-normal">Normal</Label>
-              <Input id="tokens-input-normal" defaultValue="Ready" autoComplete="off" readOnly />
-              <p className="text-muted-foreground text-xs">
-                <Cls>bg-card</Cls> <Cls>border-input</Cls>
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tokens-input-disabled">Disabled</Label>
-              <Input id="tokens-input-disabled" defaultValue="Locked" autoComplete="off" disabled />
-              <p className="text-muted-foreground text-xs">
-                <Cls>disabled:opacity-50</Cls>
-              </p>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tokens-input-invalid">Invalid</Label>
-              <Input
-                id="tokens-input-invalid"
-                defaultValue="not-an-email"
-                aria-invalid
-                aria-describedby="tokens-input-invalid-error"
-                autoComplete="off"
-                readOnly
-              />
-              <p id="tokens-input-invalid-error" className="text-status-danger text-xs">
-                Enter a valid email address.
-              </p>
-            </div>
-          </div>
-        </div>
+        <FormControlSamples />
       </TokenSection>
 
       <TokenSection

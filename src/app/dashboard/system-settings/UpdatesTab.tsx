@@ -529,7 +529,6 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                 value: v.tag,
                 label: v.label && v.label !== v.tag ? `${v.label} (${v.tag})` : v.tag,
               }))}
-              triggerClassName="border-input"
             />
             {selectedVersionInfo?.notes && (
               <p className="text-muted-foreground text-sm">{selectedVersionInfo.notes}</p>

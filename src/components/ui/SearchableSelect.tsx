@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useId, useMemo, useRef, useState } from 'react';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { FieldLabelRow, fieldControlClass } from '@/components/ui/field';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -110,12 +110,8 @@ export function SearchableSelect({
   };
 
   return (
-    <div className={cn('flex flex-col', className)}>
-      {label ? (
-        <Label htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
-          {label}
-        </Label>
-      ) : null}
+    <div className={cn('flex flex-col gap-1', className)}>
+      {label ? <FieldLabelRow htmlFor={triggerId}>{label}</FieldLabelRow> : null}
       <Popover
         open={open}
         onOpenChange={(next) => {
@@ -129,13 +125,16 @@ export function SearchableSelect({
             id={triggerId}
             disabled={disabled}
             className={cn(
-              'border-input bg-card text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/70 flex h-11 w-full items-center justify-between rounded-md border px-3 text-sm shadow-xs transition-all duration-150 focus-visible:ring-[3px] focus-visible:outline-none',
-              disabled && 'cursor-not-allowed opacity-60',
+              // Surface, border, focus and the disabled treatment come from the shared
+              // field class, the same one SelectTrigger uses, so this reads as the same
+              // control even though it is a plain button rather than a Radix select.
+              fieldControlClass,
+              'text-muted-foreground flex h-11 w-full items-center justify-between px-3 text-base md:text-sm',
               triggerClassName,
             )}
           >
             <span className="min-w-0 flex-1 truncate text-left">{placeholder}</span>
-            <ChevronDown className="text-muted-foreground ml-2 h-4 w-4 shrink-0" />
+            <ChevronDown className="text-muted-foreground ml-2 size-4 shrink-0" />
           </button>
         </PopoverTrigger>
         <PopoverContent

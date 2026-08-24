@@ -116,7 +116,7 @@ export function GroupSetsCard({
               id={selectorId}
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
-              className="border-input bg-card focus-visible:ring-ring/70 h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+              className="border-input bg-card focus-visible:border-ring focus-visible:ring-ring/70 h-9 rounded-md border px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
             >
               {sets.map((s) => (
                 <option key={s.id} value={s.id}>

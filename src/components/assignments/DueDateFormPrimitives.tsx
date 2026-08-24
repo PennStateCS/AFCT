@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useId } from 'react';
-import { Label } from '@/components/ui/label';
+import { FieldLabelRow } from '@/components/ui/field';
 import {
   Select,
   SelectContent,
@@ -77,22 +77,16 @@ export function OverrideLatePolicyField({
 
   return (
     <div className="flex flex-col">
-      <Label htmlFor={fieldId} className="mb-1.5 text-sm font-medium">
-        Late submissions
-      </Label>
+      <FieldLabelRow htmlFor={fieldId}>Late submissions</FieldLabelRow>
       <Select
         value={selectValue}
         onValueChange={(next) =>
           onChange(next === 'allow' ? true : next === 'block' ? false : undefined)
         }
       >
-        <SelectTrigger
-          id={fieldId}
-          aria-describedby={descriptionId}
-          // bg-card + border-input so it reads like the InputGroup date fields beside it
-          // (the default border-input gray made the whole control look gray).
-          className="bg-card border-input h-11 w-full"
-        >
+        {/* size="form" is the 44px full-width field size, so this sits at the same
+            height as the InputGroup date fields beside it. */}
+        <SelectTrigger id={fieldId} size="form" aria-describedby={descriptionId}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

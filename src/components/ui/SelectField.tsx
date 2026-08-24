@@ -1,8 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { Label } from '@/components/ui/label';
-import { RequiredMark } from '@/components/ui/required-mark';
+import {
+  FieldLabelRow,
+  FieldMessage,
+  composeDescribedBy,
+  shouldShowDescription,
+} from '@/components/ui/field';
 import {
   Select,
   SelectTrigger,
@@ -24,6 +28,11 @@ export interface SelectFieldProps extends Omit<React.ComponentProps<typeof Selec
   placeholder?: string;
   description?: string;
   error?: string;
+  /**
+   * Keep the description visible while an error is showing. Off by default, matching
+   * InputGroup: one message under a field reads better than a stack of them.
+   */
+  showDescriptionWithError?: boolean;
   // Marks the field required: renders the visible "*" next to the label and sets
   // aria-required on the trigger, so the requirement is conveyed both ways.
   requiredMark?: boolean;
@@ -47,9 +56,10 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
       placeholder,
       description,
       error,
+      showDescriptionWithError,
       // Destructured so it isn't forwarded onto the Select/DOM; it drives the label's
       // marker and the trigger's aria-required below.
-      requiredMark: _requiredMark,
+      requiredMark,
       additionalDescribedBy,
       options,
       className,
@@ -65,51 +75,40 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
   ) {
     const triggerId = id ?? name;
     const labelId = `${triggerId}-label`;
+    const descId = `${triggerId}-desc`;
+    const errorId = `${triggerId}-error`;
 
-    const describedByIds: Array<string | null> = [
-      error ? `${triggerId}-error` : null,
-      description ? `${triggerId}-desc` : null,
-    ];
-
-    if (additionalDescribedBy) {
-      if (Array.isArray(additionalDescribedBy)) {
-        describedByIds.push(...additionalDescribedBy);
-      } else {
-        describedByIds.push(additionalDescribedBy);
-      }
-    }
-
-    const describedByAttr = describedByIds
-      .filter((val): val is string => !!val && val.trim().length > 0)
-      .join(' ')
-      .trim();
+    const describedByAttr = composeDescribedBy(
+      error ? errorId : undefined,
+      shouldShowDescription(description, error, showDescriptionWithError) ? descId : undefined,
+      additionalDescribedBy,
+    );
 
     return (
-      <div className={cn('flex flex-col', className)}>
-        {/* The marker sits beside the label, not inside it, so the label text stays the
-            bare field name for both the accessible name and label-based queries. */}
-        <div className="flex items-center">
-          <Label id={labelId} htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
-            {label}
-          </Label>
-          {_requiredMark && <RequiredMark className="mb-1.5" />}
-        </div>
+      // The same rhythm as InputGroup, owned by one gap on the wrapper rather than a
+      // margin on each piece: 4px between the label row, the control and the message,
+      // plus 2px more under the label. A form mixes both wrappers in one column.
+      <div className={cn('flex flex-col gap-1', className)}>
+        <FieldLabelRow id={labelId} htmlFor={triggerId} required={requiredMark}>
+          {label}
+        </FieldLabelRow>
 
         <Select name={name} disabled={disabled} {...selectProps}>
           <SelectTrigger
             ref={ref}
             id={triggerId}
-            aria-label={label}
+            size="form"
+            // aria-labelledby only. It carried aria-label as well, which the spec makes
+            // redundant (labelledby wins) and which quietly allows the two names to drift.
             aria-labelledby={labelId}
-            aria-required={_requiredMark || undefined}
+            aria-required={requiredMark || undefined}
             aria-invalid={!!error || undefined}
-            aria-describedby={describedByAttr || undefined}
+            aria-describedby={describedByAttr}
             disabled={disabled}
-            className={cn(
-              'border-input focus-visible:border-ring focus-visible:ring-ring/70 placeholder:text-muted-foreground data-[placeholder]:text-muted-foreground bg-card flex !h-11 w-full min-w-0 items-center justify-between rounded-md border px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
-              error && 'border-destructive focus-visible:border-destructive',
-              triggerClassName,
-            )}
+            // Only what this wrapper owns. Surface, border, typography, radius, focus, the
+            // aria-invalid border and the disabled state all live on SelectTrigger; the
+            // long copy of them that used to be here is what let the two drift apart.
+            className={triggerClassName}
           >
             <SelectValue placeholder={placeholder} />
           </SelectTrigger>
@@ -133,17 +132,13 @@ const SelectField = React.forwardRef<React.ElementRef<typeof SelectTrigger>, Sel
           )}
         </Select>
 
-        {description && (
-          <p id={`${triggerId}-desc`} className="text-muted-foreground mt-1 text-xs">
-            {description}
-          </p>
-        )}
-
-        {error && (
-          <p id={`${triggerId}-error`} role="alert" className="text-destructive mt-1 text-xs">
-            {error}
-          </p>
-        )}
+        <FieldMessage
+          description={description}
+          descriptionId={descId}
+          error={error}
+          errorId={errorId}
+          showDescriptionWithError={showDescriptionWithError}
+        />
       </div>
     );
   },

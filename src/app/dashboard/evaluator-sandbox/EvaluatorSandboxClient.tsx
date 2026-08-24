@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { fieldControlClass } from '@/components/ui/field';
 import { LimitField } from '@/components/ui/LimitField';
 import SwitchField from '@/components/ui/SwitchField';
 import Spinner from '@/components/ui/spinner';
@@ -24,6 +25,7 @@ import { fetchJson } from '@/lib/query-fetch';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { isTrialFinished, type EvaluatorTrialView } from '@/lib/evaluator-trial-view';
+import { cn } from '@/lib/utils';
 
 // The same four the problem dialog offers, so staff see one set of choices across the app.
 const PROBLEM_TYPES = [
@@ -65,8 +67,10 @@ const ACCEPTED_FILES = '.txt,.fa,.pda,.cfg,.re,.jff';
 // A native select, the same control the problem dialog uses, wearing SelectField's trigger
 // classes so the fields in this card share a height, a border and a focus ring. SelectField
 // itself is a Radix listbox, and there is no shared component for the native element.
-const SELECT_CLASS =
-  'border-input focus-visible:border-ring focus-visible:ring-ring/70 bg-card h-11 w-full min-w-0 rounded-md border px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm';
+// A native <select> deliberately (the options are a short fixed list and the platform
+// control is the right one here), but wearing the shared field surface so it matches the
+// inputs beside it. Only the size and padding are its own.
+const SELECT_CLASS = cn(fieldControlClass, 'h-11 w-full min-w-0 px-3 py-1 text-base md:text-sm');
 
 /** Poll while the run is live; a second is fast enough to feel immediate. */
 const POLL_MS = 1_000;

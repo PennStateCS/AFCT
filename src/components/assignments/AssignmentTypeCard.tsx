@@ -145,7 +145,6 @@ export function AssignmentTypeCard({
               value={selectedSetId ?? undefined}
               onValueChange={(v) => setSelectedSetId(v)}
               disabled={courseIsArchived}
-              triggerClassName="bg-card border-input"
               options={groupSets.map((gs) => ({
                 value: gs.id,
                 label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,

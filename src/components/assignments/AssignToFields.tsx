@@ -182,7 +182,6 @@ export function AssignToFields({
           <SwitchField
             label="Allow late submissions"
             name="allowLateSubmissions"
-            boxClassName="border-input"
             checked={!!field.value}
             onCheckedChange={(checked) => field.onChange(!!checked)}
             description="Accept work after the due date."
