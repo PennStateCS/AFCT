@@ -59,3 +59,4 @@ AFCT works with a Java evaluator that uses [JFLAP](https://www.jflap.org/) to pr
 | Adam Manowski       | PSU         | [Adam-Manowski](https://github.com/Adam-Manowski)   |
 | Andrew Sutton       | PSU         | [asutton24](https://github.com/asutton24)     |
 | Bruno Rodriguez     | PSU         | [MrBrunoRod](https://github.com/MrBrunoRod)   |
+| Jace Chernesky       | PSU         | [chernjac321](https://github.com/chernjac321) |
