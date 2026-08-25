@@ -1,6 +1,6 @@
 # AFCT Dashboard
 
-A modern Next.js 16 dashboard for the Automated Feedback for CS Theory (AFCT) system.  
+A modern Next.js 16 dashboard for the Automated Feedback for CS Theory (AFCT) system.
 Built with:
 
 ![Node.js](https://img.shields.io/badge/Node.js-22%2B-brightgreen?logo=node.js)
@@ -58,3 +58,4 @@ AFCT works with a Java evaluator that uses [JFLAP](https://www.jflap.org/) to pr
 | Edwin Kimsal        | PSU         | [EdwinKimsal](https://github.com/EdwinKimsal) |
 | Adam Manowski       | PSU         | [Adam-Manowski](https://github.com/Adam-Manowski)   |
 | Andrew Sutton       | PSU         | [asutton24](https://github.com/asutton24)     |
+| Bruno Rodriguez     | PSU         | [MrBrunoRod](https://github.com/MrBrunoRod)   |
