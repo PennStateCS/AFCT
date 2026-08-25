@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
-import { SETTINGS_STANDARD, SETTINGS_ASIDE_GRID, SETTINGS_WORKSPACE } from './settings-layout';
+import { SETTINGS_ASIDE_GRID, SETTINGS_WORKSPACE } from './settings-layout';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -539,17 +539,6 @@ export default function SystemSettingsClient() {
   // Backups included (its schedule is part of the form), needs it.
   const showSave = tab !== 'tls' && tab !== 'updates';
 
-  /*
-   * Which tabs put a rail beside the form.
-   *
-   * Four carry their current state there; General carries the server's public address,
-   * which is reference rather than status. Evaluator, Backups, LTI and Updates have
-   * neither, and inventing something to fill a rail would be a worse page. The mixed
-   * layout is the point.
-   */
-  const hasAsideColumn =
-    tab === 'general' || tab === 'email' || tab === 'sign-in' || tab === 'captcha' || tab === 'tls';
-
   // xl rather than lg: a rail plus a settings form needs more room than a table does.
   const railNav = useIsDesktopNav(1280);
 
@@ -704,16 +693,14 @@ export default function SystemSettingsClient() {
                * the form's right edge rather than out on the left margin where it read as a
                * page-level control that happened to be nearby.
                *
-               * On a status tab that width is the grid's first column, which no max-width
-               * can name: it depends on the rail and the gap. So the footer borrows the SAME
-               * grid template and takes column one, and the two agree by construction rather
-               * than by two numbers kept in step by hand.
+               * That width is the grid's first column, which no max-width can name: it
+               * depends on the rail and the gap. So the footer borrows the SAME grid template
+               * every tab's form now uses and takes column one, and the two agree by
+               * construction rather than by two numbers kept in step by hand. On Backups that
+               * also keeps Save under the schedule it saves, rather than out at the right
+               * edge of the backup table, which is a wider section it does not touch.
                */
-              className={
-                hasAsideColumn
-                  ? `${SETTINGS_WORKSPACE} ${SETTINGS_ASIDE_GRID} mt-6`
-                  : `${SETTINGS_STANDARD} mt-6`
-              }
+              className={`${SETTINGS_WORKSPACE} ${SETTINGS_ASIDE_GRID} mt-6`}
             >
               <div
                 // Status first, then the escape hatch, then the primary action last: the order

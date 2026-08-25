@@ -7,6 +7,8 @@ import { render, screen } from '@testing-library/react';
 import { Badge } from '@/components/ui/badge';
 
 import {
+  SETTINGS_ASIDE_GRID,
+  SettingsFormLayout,
   SettingsSection,
   SettingsStatusCard,
   SettingsAsideLayout,
@@ -39,6 +41,51 @@ describe('SettingsSection', () => {
     expect(screen.getByRole('region', { name: 'Current status' })).toContainElement(
       screen.getByText('panel'),
     );
+  });
+});
+
+/*
+ * A tab without a rail still has to line up with the tabs that have one.
+ *
+ * The form column is `workspace - rail - gap`, which is 840px below 2xl and 808px above it,
+ * so no fixed max-w-* tracks it. Sharing the grid template is what makes them equal; a
+ * refactor back to a max-width would look right at one viewport and drift at the other.
+ */
+describe('SettingsFormLayout', () => {
+  it('uses the same grid template as the aside layout', () => {
+    const { container: form } = render(
+      <SettingsFormLayout>
+        <SettingsSection title="Evaluation limits">
+          <p>fields</p>
+        </SettingsSection>
+      </SettingsFormLayout>,
+    );
+    const { container: aside } = render(
+      <SettingsAsideLayout aside={<p>rail</p>}>
+        <SettingsSection title="Email configuration">
+          <p>fields</p>
+        </SettingsSection>
+      </SettingsAsideLayout>,
+    );
+
+    for (const root of [form.firstElementChild, aside.firstElementChild]) {
+      expect(root?.className).toContain(SETTINGS_ASIDE_GRID);
+    }
+  });
+
+  it('puts its content in the first column, leaving the rail column empty', () => {
+    const { container } = render(
+      <SettingsFormLayout>
+        <SettingsSection title="Evaluation limits">
+          <p>fields</p>
+        </SettingsSection>
+      </SettingsFormLayout>,
+    );
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.children).toHaveLength(1);
+    expect(root.firstElementChild?.className).toContain('col-start-1');
+    expect(screen.getByRole('region', { name: 'Evaluation limits' })).toBeInTheDocument();
   });
 });
 

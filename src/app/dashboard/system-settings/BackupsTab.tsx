@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
-import { SETTINGS_STANDARD, SETTINGS_WIDE, SettingsSection } from './settings-layout';
+import { SettingsFormLayout, SETTINGS_WIDE, SettingsSection } from './settings-layout';
 import SwitchField from '@/components/ui/SwitchField';
 import { DataTable } from '@/components/ui/data-table';
 import { apiPaths } from '@/lib/api-paths';
@@ -86,53 +86,56 @@ export function BackupsTab({
 
   return (
     <>
-      {/* Two content types, two measures. The schedule is three short controls; the table
-          below is the thing that actually wants the monitor. */}
-      <SettingsSection title="Backup schedule" className={`${SETTINGS_STANDARD} mb-6`}>
-        <SwitchField
-          id="backup-enabled"
-          name="backup-enabled"
-          label="Enable automatic backups"
-          checked={form.backupEnabled}
-          onCheckedChange={(v) => setField('backupEnabled', v)}
-          disabled={disabled}
-          descriptionPlacement="inline"
-          description="When off, no scheduled dumps are taken."
-        />
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-          <InputGroup
-            label="Daily backup time (hour)"
-            name="backupHour"
-            type="number"
-            required
-            requiredMark
-            min={MIN_BACKUP_HOUR}
-            max={MAX_BACKUP_HOUR}
-            value={form.backupHour === '' ? '' : String(form.backupHour)}
-            setValue={(val) => setField('backupHour', val === '' ? '' : Number(val))}
-            disabled={disabled || !form.backupEnabled}
-            description={`24-hour clock, server time (UTC). ${MIN_BACKUP_HOUR}-${MAX_BACKUP_HOUR}. e.g. 2 = 2:00 AM.`}
+      {/* Two content types, two measures. The schedule is a normal settings form, so it
+          takes the same column as every other one; the table below is the thing that
+          actually wants the monitor, and keeps the full workspace. */}
+      <SettingsFormLayout className="mb-6">
+        <SettingsSection title="Backup schedule">
+          <SwitchField
+            id="backup-enabled"
+            name="backup-enabled"
+            label="Enable automatic backups"
+            checked={form.backupEnabled}
+            onCheckedChange={(v) => setField('backupEnabled', v)}
+            disabled={disabled}
+            descriptionPlacement="inline"
+            description="When off, no scheduled dumps are taken."
           />
-          <InputGroup
-            label="Retention (days)"
-            name="backupRetentionDays"
-            type="number"
-            required
-            requiredMark
-            min={MIN_BACKUP_RETENTION_DAYS}
-            max={MAX_BACKUP_RETENTION_DAYS}
-            value={form.backupRetentionDays === '' ? '' : String(form.backupRetentionDays)}
-            setValue={(val) => setField('backupRetentionDays', val === '' ? '' : Number(val))}
-            disabled={disabled || !form.backupEnabled}
-            description={`Older dumps are deleted. ${MIN_BACKUP_RETENTION_DAYS}-${MAX_BACKUP_RETENTION_DAYS} days.`}
-          />
-        </div>
-        {/* Kept inside the schedule card, next to the setting it qualifies. */}
-        <p className="text-muted-foreground text-xs">
-          Backups are stored on the server. Copy them off-host regularly, on-host backups don’t
-          survive host loss.
-        </p>
-      </SettingsSection>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <InputGroup
+              label="Daily backup time (hour)"
+              name="backupHour"
+              type="number"
+              required
+              requiredMark
+              min={MIN_BACKUP_HOUR}
+              max={MAX_BACKUP_HOUR}
+              value={form.backupHour === '' ? '' : String(form.backupHour)}
+              setValue={(val) => setField('backupHour', val === '' ? '' : Number(val))}
+              disabled={disabled || !form.backupEnabled}
+              description={`24-hour clock, server time (UTC). ${MIN_BACKUP_HOUR}-${MAX_BACKUP_HOUR}. e.g. 2 = 2:00 AM.`}
+            />
+            <InputGroup
+              label="Retention (days)"
+              name="backupRetentionDays"
+              type="number"
+              required
+              requiredMark
+              min={MIN_BACKUP_RETENTION_DAYS}
+              max={MAX_BACKUP_RETENTION_DAYS}
+              value={form.backupRetentionDays === '' ? '' : String(form.backupRetentionDays)}
+              setValue={(val) => setField('backupRetentionDays', val === '' ? '' : Number(val))}
+              disabled={disabled || !form.backupEnabled}
+              description={`Older dumps are deleted. ${MIN_BACKUP_RETENTION_DAYS}-${MAX_BACKUP_RETENTION_DAYS} days.`}
+            />
+          </div>
+          {/* Kept inside the schedule card, next to the setting it qualifies. */}
+          <p className="text-muted-foreground text-xs">
+            Backups are stored on the server. Copy them off-host regularly, on-host backups don’t
+            survive host loss.
+          </p>
+        </SettingsSection>
+      </SettingsFormLayout>
 
       <section
         aria-labelledby="settings-available-backups"

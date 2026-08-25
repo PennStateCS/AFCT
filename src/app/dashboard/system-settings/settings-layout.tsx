@@ -200,6 +200,34 @@ export function SettingsAsideLayout({
 }
 
 /**
+ * A tab with no rail, whose form should still line up with the tabs that have one.
+ *
+ * The same grid, with column two left empty. That is deliberately not "a max-width that
+ * happens to match": the aside tabs' form column is `workspace - rail - gap`, which is
+ * 840px below 2xl and 808px above it, and no fixed `max-w-*` tracks both. Sharing the
+ * template makes them equal by construction instead of by two numbers kept in step by hand.
+ *
+ * Evaluator and the Backups schedule sat at SETTINGS_STANDARD (1024px) before this, which
+ * was 216px wider than General's form at 1920 while the page as a whole stopped further
+ * left, so clicking between tabs moved the right edge twice in opposite directions.
+ */
+export function SettingsFormLayout({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn(SETTINGS_WORKSPACE, SETTINGS_ASIDE_GRID, 'items-start', className)}>
+      <div className="min-w-0 space-y-6 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The shell every card in the rail shares: a titled, quiet, self-labelling box.
  *
  * `bg-card`, the same surface as the form panels, so the rail reads as another panel in the

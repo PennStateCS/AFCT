@@ -23,7 +23,7 @@ import {
 } from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
-import { SETTINGS_READABLE, SETTINGS_STANDARD, SETTINGS_WIDE } from './settings-layout';
+import { SETTINGS_READABLE, SETTINGS_WIDE, SettingsFormLayout } from './settings-layout';
 
 // Colour the self-update banner by outcome via the semantic status tokens: success on a
 // completed update, danger on a real failure, warning while working / timed out / when the
@@ -202,30 +202,31 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
 
   return (
     <>
-      <div className="text-muted-foreground mb-4 max-w-2xl space-y-2 text-sm xl:max-w-4xl">
-        <p>
-          Upgrade AFCT to a newer published release, all from here, with no server login needed.
-          When you start an upgrade, AFCT backs up the database, downloads the new version, and
-          restarts. If the new version fails its health check it is rolled back to the current one
-          automatically, so a bad release won&apos;t leave the site down.
-        </p>
-        <p>
-          Some releases also improve the update system itself. Because the updater can&apos;t
-          replace its own container while it&apos;s running, those show a second step afterward, an{' '}
-          <span className="font-medium">Update the update service</span> button, so the next upgrade
-          uses the newest logic. Both steps run here.
-        </p>
-        <p>
-          Prefer the command line? You can still update from the server instead. In the directory
-          that holds <code className="font-mono">docker-compose.yml</code>, run{' '}
-          <code className="font-mono">sh install.sh update</code>. It does the same backup, swap,
-          and health check as the in-app upgrade above.
-        </p>
-      </div>
+      {/* The same column every settings form uses, so clicking between tabs does not move
+          the right edge. The panels inside keep their own narrower measures; the live log
+          is the one that wants the room this gives it. */}
+      <SettingsFormLayout className="[&>div]:space-y-5">
+        <div className="text-muted-foreground mb-4 max-w-2xl space-y-2 text-sm xl:max-w-4xl">
+          <p>
+            Upgrade AFCT to a newer published release, all from here, with no server login needed.
+            When you start an upgrade, AFCT backs up the database, downloads the new version, and
+            restarts. If the new version fails its health check it is rolled back to the current one
+            automatically, so a bad release won&apos;t leave the site down.
+          </p>
+          <p>
+            Some releases also improve the update system itself. Because the updater can&apos;t
+            replace its own container while it&apos;s running, those show a second step afterward,
+            an <span className="font-medium">Update the update service</span> button, so the next
+            upgrade uses the newest logic. Both steps run here.
+          </p>
+          <p>
+            Prefer the command line? You can still update from the server instead. In the directory
+            that holds <code className="font-mono">docker-compose.yml</code>, run{' '}
+            <code className="font-mono">sh install.sh update</code>. It does the same backup, swap,
+            and health check as the in-app upgrade above.
+          </p>
+        </div>
 
-      {/* The live log inside this carries long build output, so the panel opens up a step
-          beyond the prose above it. */}
-      <div className={`space-y-5 ${SETTINGS_STANDARD}`}>
         <div className="space-y-2">
           <h2 className="text-base font-semibold">Current version</h2>
           {/* Same card as Update status below, so the two read as one pair rather than a
@@ -551,7 +552,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
             </Button>
           </div>
         )}
-      </div>
+      </SettingsFormLayout>
 
       <ConfirmDialog
         open={confirmUpgradeOpen}

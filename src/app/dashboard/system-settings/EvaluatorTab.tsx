@@ -1,6 +1,6 @@
 'use client';
 
-import { SETTINGS_STANDARD, SettingsSection } from './settings-layout';
+import { SettingsFormLayout, SettingsSection } from './settings-layout';
 import InputGroup from '@/components/ui/InputGroup';
 import {
   MIN_SUBMISSION_EVAL_TIMEOUT_MS,
@@ -29,12 +29,12 @@ export function EvaluatorTab({
   disabled: boolean;
 }) {
   return (
-    <>
+    <SettingsFormLayout>
       {/* Six short numeric settings. As one narrow column they were a tall stack with a
           screen of empty space beside it; paired, the whole group is visible at once.
           lg rather than md: below that the rail and the sidebar leave too little room and
           two columns would just cramp the labels. */}
-      <SettingsSection title="Evaluation limits" className={SETTINGS_STANDARD}>
+      <SettingsSection title="Evaluation limits">
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <InputGroup
             label="Evaluation timeout (seconds)"
@@ -116,6 +116,6 @@ export function EvaluatorTab({
           />
         </div>
       </SettingsSection>
-    </>
+    </SettingsFormLayout>
   );
 }
