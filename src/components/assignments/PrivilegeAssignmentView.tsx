@@ -555,12 +555,12 @@ export default function AssignmentDashboardPage({
           <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
             {/*
               Same basis split as the course banner, and load-bearing for the same reason. The
-              control cluster beside this is shrink-0 and about 550px wide once the publish
-              toggle, the badge and the 224px assignment picker are counted. At a plain `flex-1`
-              the title's own basis is zero, so on a 768px screen it was left with about 55px and
-              came down one letter per line: the banner measured 674px tall. A full basis below
-              sm gives the title its own row, and the 24rem floor above sm makes flex-wrap drop
-              the controls to their own line until there is genuinely room for both.
+              control column beside this is shrink-0 at the picker's 224px. At a plain `flex-1`
+              the title's own basis is zero, so back when that column was a 550px row of four
+              things, a 768px screen left the title about 55px and it came down one letter per
+              line: the banner measured 674px tall. A full basis below sm gives the title its
+              own row, and the 24rem floor above sm makes flex-wrap drop the column to its own
+              line until there is genuinely room for both.
 
               break-words, not overflow-wrap:anywhere. `anywhere` also shrinks an element's
               min-content width, which is what let that collapse happen; this only breaks a word
@@ -575,9 +575,15 @@ export default function AssignmentDashboardPage({
               <IdentityPanelIcon icon={BookOpen} />
               <span className="min-w-0 break-words">{assignment.title}</span>
             </h1>
-            <div className="flex shrink-0 flex-wrap items-center gap-3">
-              {/* Publish toggle sits next to the title; server enforces the guards
-                  (e.g. no unpublish after submissions). */}
+            {/* Two controls stacked rather than a row of four things beside the title. The
+                badges moved down to the metadata line, which leaves this column as just the
+                things you operate: the publish state and the jump to another assignment.
+                Right-aligned to the picker's edge, the only fixed width here, once the column
+                is actually beside the title. Below sm it has wrapped underneath instead, and
+                right-aligning inside a 224px block sitting at the left of the banner just
+                indents the toggle for no reason, so it squares up on the left there. */}
+            <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+              {/* Server enforces the guards (e.g. no unpublish after submissions). */}
               <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
                 {/* The switch ships with page-token colours: an --input track that goes pure
                     black in high contrast (invisible on a black banner) and a thumb that flips
@@ -600,36 +606,6 @@ export default function AssignmentDashboardPage({
                 />
                 Published
               </label>
-              {/* Whether this is group work belongs to the assignment, so it is stated once
-                  here rather than repeated beside every student on the Submissions tab. The
-                  dates are NOT here on purpose: those resolve per student through date
-                  overrides, so a single header value would hide an extension. */}
-              {/* Tinted so it registers at a glance. The two tones differ to tell them apart,
-                  not to say one is better: an icon carries the same distinction for anyone who
-                  cannot separate the hues.
-
-                  Fixed palette values, not the --status-* tokens this used to take. Those flip
-                  with the theme while the banner does not, so in dark mode both chips became a
-                  dark translucent fill on a dark navy ground and neither could be found. These
-                  are light chips in every theme, and they keep the amber/blue split. */}
-              <Badge
-                variant="outline"
-                className={`shrink-0 gap-1.5 text-xs font-normal ${
-                  assignment.groupSetId
-                    ? 'border-amber-300/70 bg-amber-100 text-amber-900'
-                    : 'border-sky-300/70 bg-sky-100 text-sky-900'
-                }`}
-              >
-                {assignment.groupSetId ? (
-                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                ) : (
-                  <User className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
-              </Badge>
-              {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
-                  Settings holds the detail and the way to remove one. */}
-              <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
               {/* Quick jump to another assignment in this course. */}
               <div className="w-56 shrink-0">
                 <SearchableSelect
@@ -670,6 +646,38 @@ export default function AssignmentDashboardPage({
               column, matching the course banner: the sm icon slot is 56px and the gap beside it
               16. */}
           <div className="flex flex-wrap items-center gap-2 text-sm sm:pl-[4.5rem]">
+            {/* Whether this is group work belongs to the assignment, so it is stated once here
+                rather than repeated beside every student on the Submissions tab. It sits under
+                the title rather than beside it: it describes the assignment, and the column on
+                the right is for the two things you actually operate. The dates are NOT here on
+                purpose: those resolve per student through date overrides, so a single header
+                value would hide an extension.
+
+                Tinted so it registers at a glance. The two tones differ to tell them apart, not
+                to say one is better: an icon carries the same distinction for anyone who cannot
+                separate the hues. Fixed palette values, not the --status-* tokens this used to
+                take. Those flip with the theme while the banner does not, so in dark mode both
+                chips became a dark translucent fill on a dark navy ground and neither could be
+                found. These are light chips in every theme, and they keep the amber/blue
+                split. */}
+            <Badge
+              variant="outline"
+              className={`shrink-0 gap-1.5 text-xs font-normal ${
+                assignment.groupSetId
+                  ? 'border-amber-300/70 bg-amber-100 text-amber-900'
+                  : 'border-sky-300/70 bg-sky-100 text-sky-900'
+              }`}
+            >
+              {assignment.groupSetId ? (
+                <Users className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <User className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
+            </Badge>
+            {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
+                Settings holds the detail and the way to remove one. */}
+            <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
             {/* Show course name/code as a link to the course page (fallback to courseId) */}
             <Link
               href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
