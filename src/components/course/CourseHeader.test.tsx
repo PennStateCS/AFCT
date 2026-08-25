@@ -130,10 +130,11 @@ describe('CourseHeaderContent', () => {
 
   it('keeps the decorative banner out of the accessibility tree', () => {
     const { container } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
-    // The network and the text-safe wash carry no meaning, so they must not be reachable or
-    // clickable.
+    // The network carries no meaning, so it must not be reachable or clickable. One decoration
+    // now, not two: the navy wash that used to sit over it is gone, because it and the SVG's
+    // own fade were two mechanisms multiplying to hide the left of the mesh entirely.
     const decorations = container.querySelectorAll('[aria-hidden="true"].pointer-events-none');
-    expect(decorations.length).toBeGreaterThanOrEqual(2);
+    expect(decorations.length).toBeGreaterThanOrEqual(1);
     // The banner is a named region, so the heading names it rather than the ground doing so.
     const banner = container.querySelector('section[aria-labelledby="course-page-title"]');
     expect(banner).not.toBeNull();
@@ -146,8 +147,15 @@ describe('CourseHeaderContent', () => {
     // Decoration only: no name, no focus, no pointer events, and clipped to the banner.
     expect(svg).toHaveAttribute('focusable', 'false');
     expect(svg?.getAttribute('class')).toContain('pointer-events-none');
-    expect(svg?.querySelectorAll('circle').length).toBeGreaterThan(15);
-    expect(svg?.querySelectorAll('line').length).toBeGreaterThan(15);
+    expect(svg?.querySelectorAll('circle').length).toBeGreaterThan(40);
+    expect(svg?.querySelectorAll('line').length).toBeGreaterThan(60);
+    // A few edges are drawn as directed transitions, which is the one nod to what the app is
+    // for. A marker that stopped resolving would drop them silently back to plain lines.
+    const marker = svg?.querySelector('marker');
+    expect(marker).not.toBeNull();
+    const arrowGroup = svg?.querySelector('g[marker-end]');
+    expect(arrowGroup?.getAttribute('marker-end')).toBe(`url(#${marker?.id})`);
+    expect(arrowGroup?.querySelectorAll('line').length).toBeGreaterThan(3);
     const banner = container.querySelector('section[aria-labelledby="course-page-title"]');
     expect(banner?.className).toContain('overflow-hidden');
   });

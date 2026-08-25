@@ -135,11 +135,12 @@ function RegistrationCode({ code }: { code: string }) {
  * `text-muted-foreground` in this file is invisible in light mode and there is no way to see
  * that from the markup, which is the whole reason the family exists.
  *
- * Three layers, in order: the ground gradient on the section itself, the network over it, and
- * a text-safe wash over that. The wash is not a panel behind the text. It is the same navy as
- * the left stop, opaque at the very left and gone by about three quarters across, so the
- * network fades in under the empty space beside the badges and never competes with the course
- * name. There is no visible edge to it anywhere.
+ * Two layers: the ground gradient on the section itself, and the network over it. There used
+ * to be a third, a navy wash between them that kept the left quiet, and it is gone because the
+ * network now carries its own horizontal fade as an SVG mask. Two mechanisms doing one job
+ * multiplied: with both in place the mesh on the left third came out at a fraction of a percent
+ * of opacity and simply was not there. The mask is the better of the two, because it dims only
+ * the decoration and leaves the ground gradient at full strength.
  */
 export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
   const normalizeDate = (value?: string | Date | null) => {
@@ -195,18 +196,6 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
       }
     >
       <CourseHeaderNetwork />
-
-      {/* The text-safe wash. Opaque navy at the left edge, half strength by the middle, gone
-          by 78%, so the network is only ever fully visible in the empty right of the banner.
-          A gradient rather than a rectangle: a panel behind the text would draw an edge, and
-          the point is that the ground looks continuous. */}
-      <div
-        aria-hidden="true"
-        className={
-          'from-course-banner via-course-banner/55 pointer-events-none absolute inset-0 ' +
-          'bg-gradient-to-r from-8% via-46% to-transparent to-78%'
-        }
-      />
 
       {/* Everything real sits above the decoration. The padding lives here rather than on the
           section so the network runs edge to edge behind it. */}
