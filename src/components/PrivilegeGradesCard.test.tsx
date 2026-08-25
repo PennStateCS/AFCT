@@ -166,19 +166,36 @@ describe('PrivilegeGradesCard', () => {
 
     // Student names and the graded cell come from the derived matrix. Cells show only
     // the earned grade, formatted to two decimals (the points live in the header).
-    expect(screen.getByText('Ada')).toBeInTheDocument();
-    expect(screen.getByText('Turing')).toBeInTheDocument();
+    // One name column, last name first, which is the order the table is sorted in.
+    expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument();
+    expect(screen.getByText('Turing, Alan')).toBeInTheDocument();
     expect(screen.getByText('8.00')).toBeInTheDocument();
     expect(screen.queryByText('/10')).toBeNull();
 
-    // The matrix leads with the names. No avatar column: a photo says nothing about a
-    // grade, and it cost a column in a table that is already mostly columns.
-    const leadCols = Array.from(document.querySelectorAll('[data-col]'))
-      .map((el) => el.getAttribute('data-col'))
-      .filter((c) => c === 'lastName' || c === 'firstName')
-      .slice(0, 2);
-    expect(leadCols).toEqual(['lastName', 'firstName']);
+    // The matrix leads with the name. No separate first-name column: it cost width that
+    // every assignment column needs, in a table that is already mostly columns. And no
+    // avatar column, because a photo says nothing about a grade.
+    const cols = Array.from(document.querySelectorAll('[data-col]')).map((el) =>
+      el.getAttribute('data-col'),
+    );
+    expect(cols[0]).toBe('lastName');
+    expect(cols).not.toContain('firstName');
     expect(document.querySelector('[data-col="avatar"]')).toBeNull();
+  });
+
+  /*
+   * The column id is still `lastName`, and that is load-bearing rather than leftover:
+   * sorting is the server's, and its `lastName` order is last name, then first name, then
+   * user id, which is exactly what this column shows. A prettier id would have to be added
+   * to the API's allowlist first, and until it was, sorting would silently fall back.
+   */
+  it('sorts the combined column on the server, by last name then first', async () => {
+    const fetchMock = installFetch();
+    renderWithClient(<PrivilegeGradesCard courseId="c1" />);
+    await waitFor(() => expect(screen.getByTestId('table-rows').textContent).toBe('2'));
+
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => u.includes('sortBy=lastName'))).toBe(true);
   });
 
   it('keeps the current page on screen while the next one loads', async () => {

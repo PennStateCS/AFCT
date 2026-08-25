@@ -54,6 +54,25 @@ type StudentRow = {
   [key: string]: unknown;
 };
 
+/**
+ * A student's name for the gradebook's one name column: "Lovelace, Ada".
+ *
+ * Either part can be missing (an account created from an LMS launch that sent only a
+ * display name, or an invite that has not been completed), so this never produces a
+ * dangling comma. With neither, the email is the only thing left that identifies the row,
+ * and a blank cell in a grade table is worse than a long one.
+ */
+function studentName({
+  firstName,
+  lastName,
+  email,
+}: Pick<StudentRow, 'firstName' | 'lastName' | 'email'>): string {
+  const last = (lastName ?? '').trim();
+  const first = (firstName ?? '').trim();
+  if (last && first) return `${last}, ${first}`;
+  return last || first || email;
+}
+
 type Assignment = {
   id: string;
   title: string;
@@ -267,11 +286,24 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
 
     const cols: ColumnDef<StudentRow, unknown>[] = [
       {
+        /*
+         * One name column, "Lovelace, Ada", rather than two.
+         *
+         * A gradebook is mostly assignment columns and the two name columns cost width that
+         * every one of them needs; split across two cells they also read as two facts rather
+         * than as one person. Last name first because that is the order the table is sorted
+         * in, so the column now reads down the way it is ordered.
+         *
+         * The id stays `lastName`. It is what the server sorts on, and `lastName` there
+         * already means last name, then first name, then user id, which is exactly this
+         * column's order. Renaming it would have needed a matching change on the API for no
+         * gain, and would have quietly dropped anybody's stored column-visibility choice.
+         */
         accessorKey: 'lastName',
-        header: 'Last Name',
+        header: 'Student',
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
-            <span>{String(row.original.lastName ?? '')}</span>
+            <span>{studentName(row.original)}</span>
             {row.original.enrollmentStatus === 'DROPPED' ? (
               <Badge variant={ENROLLMENT_STATUS_BADGE.DROPPED}>Dropped</Badge>
             ) : null}
@@ -280,12 +312,6 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         // Row header for the matrix: screen readers announce this name with each grade
         // cell in the row, so a grade is never read as a bare number.
         meta: { priority: 1, rowHeader: true },
-      },
-      {
-        accessorKey: 'firstName',
-        header: 'First Name',
-        cell: ({ row }) => <div>{String(row.original.firstName ?? '')}</div>,
-        meta: { priority: 1 },
       },
     ];
 
