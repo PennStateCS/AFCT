@@ -4,7 +4,15 @@ import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { NetworkStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, StatGrid, Section, useStatusQuery } from '../status-ui';
+import {
+  Loading,
+  STATUS_STANDARD,
+  Stat,
+  StatGrid,
+  StatusSection,
+  StatusSubsection,
+  useStatusQuery,
+} from '../status-ui';
 import { formatMs, formatRate } from '../status-format';
 
 export default function NetworkTab({
@@ -34,18 +42,19 @@ export default function NetworkTab({
     e?.resolved?.length ? e.resolved.join(', ') : '—';
 
   return (
-    <Section title="Network">
+    <div className="space-y-5">
       {/* Two endpoints, side by side rather than interleaved down one column.
           The nine readings here are really the same four questions asked twice, and the
           answers only mean anything against each other: a slow database and a slow sign-in
           endpoint is the network, one of them alone is that service. Stacked they were nine
           unrelated rows and you had to hold one to compare it with the next. */}
-      <div className="max-w-5xl space-y-6">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <div className="text-muted-foreground mb-2 text-sm font-semibold">
-              Database endpoint
-            </div>
+      <StatusSection
+        title="Endpoints"
+        description="What AFCT can reach, and how quickly. Compare the two: both slow is the network, one slow is that service."
+        className={STATUS_STANDARD}
+      >
+        <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+          <StatusSubsection title="Database endpoint">
             <div className="space-y-2">
               <Stat label="Latency" value={formatMs(net.db?.latencyMs)} />
               <Stat
@@ -55,28 +64,24 @@ export default function NetworkTab({
               <Stat label="Host" value={host(net.db)} />
               <Stat label="DNS" value={dns(net.db)} />
             </div>
-          </div>
+          </StatusSubsection>
 
-          <div>
-            <div className="text-muted-foreground mb-2 text-sm font-semibold">
-              Authentication endpoint
-            </div>
+          <StatusSubsection title="Authentication endpoint">
             <div className="space-y-2">
               <Stat label="Latency" value={formatMs(net.auth?.latencyMs)} />
               <Stat label="Host" value={host(net.auth)} />
               <Stat label="DNS" value={dns(net.auth)} />
             </div>
-          </div>
+          </StatusSubsection>
         </div>
+      </StatusSection>
 
-        <div>
-          <div className="text-muted-foreground mb-2 text-sm font-semibold">Error rates</div>
-          <StatGrid className="max-w-4xl">
-            <Stat label="Last 5 minutes" value={errRate(net.errors?.last5m)} />
-            <Stat label="Last 15 minutes" value={errRate(net.errors?.last15m)} />
-          </StatGrid>
-        </div>
-      </div>
-    </Section>
+      <StatusSection title="Error rates" className={STATUS_STANDARD}>
+        <StatGrid>
+          <Stat label="Last 5 minutes" value={errRate(net.errors?.last5m)} />
+          <Stat label="Last 15 minutes" value={errRate(net.errors?.last15m)} />
+        </StatGrid>
+      </StatusSection>
+    </div>
   );
 }

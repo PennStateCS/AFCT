@@ -16,7 +16,7 @@ import type { AbandonedFile, FilesStatusResponse } from '@/lib/status/types';
 import { formatBytes } from '../status-format';
 import { abandonedFileColumns } from '../abandoned-file-columns';
 import { UploadUsagePanel } from '../upload-usage-panel';
-import { Loading, Section, useStatusQuery } from '../status-ui';
+import { Loading, STATUS_STANDARD, STATUS_WIDE, StatusSection, useStatusQuery } from '../status-ui';
 
 /** What a delete is waiting on: one named file, or a whole category. */
 type Pending =
@@ -136,10 +136,10 @@ export default function FilesTab({
   // as "nothing to clean up", so a database that could not be reached looked like good news.
   if (files.error) {
     return (
-      <Section title="Abandoned files">
+      <StatusSection title="Abandoned files" className={STATUS_STANDARD}>
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 max-w-3xl space-y-2 rounded border p-4"
+          className="border-status-danger-border bg-status-danger-bg space-y-2 rounded-md border p-3"
         >
           <div className="flex items-center gap-2 font-medium">
             <TriangleAlert className="size-4" aria-hidden />
@@ -153,7 +153,7 @@ export default function FilesTab({
             in use.
           </p>
         </div>
-      </Section>
+      </StatusSection>
     );
   }
 
@@ -163,8 +163,10 @@ export default function FilesTab({
   const truncated = files.total > files.files.length;
 
   return (
-    <>
-      <Section
+    <div className="space-y-5">
+      <StatusSection
+        className={STATUS_STANDARD}
+        titleText="Uploaded files"
         title={
           <>
             <HardDrive className="size-4" aria-hidden />
@@ -175,43 +177,45 @@ export default function FilesTab({
             </Badge>
           </>
         }
+        description="Everything students and staff have uploaded: submitted work, reference solutions, profile photos and evaluator trials."
       >
-        <div className="space-y-4">
-          <p className="text-muted-foreground max-w-3xl text-sm">
-            Everything students and staff have uploaded: submitted work, reference solutions,
-            profile photos and evaluator trials. What is in use is what AFCT still needs. The other
-            two figures are the ones to act on, and they are opposites: abandoned files can be
-            deleted to free space, while a missing file is one AFCT expects and cannot find.
-          </p>
+        <p className="text-muted-foreground text-sm">
+          What is in use is what AFCT still needs. The other two figures are the ones to act on, and
+          they are opposites: abandoned files can be deleted to free space, while a missing file is
+          one AFCT expects and cannot find.
+        </p>
 
-          {(storage?.missingCount ?? 0) > 0 && (
-            // Worth an alert of its own. Everything else on this page is housekeeping; this is
-            // work AFCT believes it has and cannot produce, which for a submission means a
-            // student's file cannot be downloaded, re-graded or appealed.
-            <div
-              role="alert"
-              className="border-destructive/40 bg-destructive/5 max-w-3xl space-y-1 rounded border p-3"
-            >
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <FileWarning className="size-4" aria-hidden />
-                {storage?.missingCount} file{storage?.missingCount === 1 ? ' is' : 's are'} recorded
-                but not on the server
-              </div>
-              <p className="text-muted-foreground text-sm">
-                Something in AFCT points at {storage?.missingCount === 1 ? 'a file' : 'files'} that
-                cannot be found on disk, so {storage?.missingCount === 1 ? 'it' : 'they'} cannot be
-                downloaded or re-graded. This is not something deleting anything will fix: it
-                usually means files were restored from a backup without the uploads, or removed from
-                the server by hand. The affected kinds are marked below.
-              </p>
+        {(storage?.missingCount ?? 0) > 0 && (
+          // Worth an alert of its own. Everything else on this page is housekeeping; this is
+          // work AFCT believes it has and cannot produce, which for a submission means a
+          // student's file cannot be downloaded, re-graded or appealed.
+          <div
+            role="alert"
+            className="border-status-danger-border bg-status-danger-bg space-y-1 rounded-md border p-3"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <FileWarning className="size-4" aria-hidden />
+              {storage?.missingCount} file{storage?.missingCount === 1 ? ' is' : 's are'} recorded
+              but not on the server
             </div>
-          )}
+            <p className="text-muted-foreground text-sm">
+              Something in AFCT points at {storage?.missingCount === 1 ? 'a file' : 'files'} that
+              cannot be found on disk, so {storage?.missingCount === 1 ? 'it' : 'they'} cannot be
+              downloaded or re-graded. This is not something deleting anything will fix: it usually
+              means files were restored from a backup without the uploads, or removed from the
+              server by hand. The affected kinds are marked below.
+            </p>
+          </div>
+        )}
 
-          {storage && <UploadUsagePanel storage={storage} />}
-        </div>
-      </Section>
+        {storage && <UploadUsagePanel storage={storage} />}
+      </StatusSection>
 
-      <Section
+      {/* Unboxed: the table below brings its own shell. */}
+      <StatusSection
+        boxed={false}
+        className={STATUS_WIDE}
+        titleText="Abandoned files"
         title={
           <>
             Abandoned files
@@ -222,7 +226,7 @@ export default function FilesTab({
         }
       >
         <div className="space-y-4">
-          <p className="text-muted-foreground max-w-3xl text-sm">
+          <p className="text-muted-foreground max-w-4xl text-sm">
             Files still on the server that nothing in AFCT points at any more, usually left behind
             when the record that used them was deleted. They are safe to remove: nothing in the app
             can reach them, and a file is only listed here after AFCT has checked that no course,
@@ -237,11 +241,11 @@ export default function FilesTab({
           </div>
 
           {shown.length > 0 && (
-            <ul className="max-w-3xl space-y-2">
+            <ul className="max-w-4xl space-y-2">
               {shown.map((c) => (
                 <li
                   key={c.category}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded border px-3 py-2"
+                  className="bg-muted/40 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2"
                 >
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{c.label}</div>
@@ -301,7 +305,7 @@ export default function FilesTab({
             defaultSorting={[{ id: 'sizeBytes', desc: true }]}
           />
         </div>
-      </Section>
+      </StatusSection>
 
       <ConfirmDialog
         open={!!pending}
@@ -334,6 +338,6 @@ export default function FilesTab({
         }}
         onCancel={() => setPending(null)}
       />
-    </>
+    </div>
   );
 }

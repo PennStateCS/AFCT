@@ -9,7 +9,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { RateLimitedAddress, RateLimitsStatusResponse } from '@/lib/status/types';
-import { Section, useStatusQuery } from '../status-ui';
+import { STATUS_WIDE, StatusSection, useStatusQuery } from '../status-ui';
 import { getRateLimitColumns } from '../rate-limit-columns';
 
 export default function RateLimitsTab({
@@ -66,37 +66,40 @@ export default function RateLimitsTab({
   );
 
   return (
-    <Section title={`Rate Limits${entries.length ? ` (${entries.length})` : ''}`}>
-      <div className="space-y-4">
-        <p className="text-muted-foreground max-w-3xl text-sm">
-          Addresses AFCT is currently turning away for making too many sign-in, sign-up, or
-          email-availability requests. Each restriction lifts on its own at the time shown;
-          clear one only when you know the traffic is legitimate, such as a classroom or
-          office where everyone shares an address. Restrictions are held in memory, so this
-          list also resets whenever the app restarts.
-        </p>
+    <StatusSection
+      title={`Rate Limits${entries.length ? ` (${entries.length})` : ''}`}
+      description="Addresses AFCT is currently turning away for making too many sign-in, sign-up, or email-availability requests."
+      boxed={false}
+      className={STATUS_WIDE}
+    >
+      {/* The operational detail an admin needs before clearing one, kept out of the
+          description so the section still opens with what the list is. */}
+      <p className="text-muted-foreground max-w-4xl text-sm">
+        Each restriction lifts on its own at the time shown; clear one only when you know the
+        traffic is legitimate, such as a classroom or office where everyone shares an address.
+        Restrictions are held in memory, so this list also resets whenever the app restarts.
+      </p>
 
-        <div aria-live="polite" className="sr-only">
-          {status}
-        </div>
-
-        <DataTable
-          columns={columns}
-          data={entries}
-          loading={isLoading}
-          storageKey="system-status-rate-limits"
-          tableLabel="Rate-limited IP addresses"
-          emptyIcon={ShieldCheck}
-          emptyTitle="No IP addresses are currently rate limited"
-          emptyDescription="Addresses appear here when they make too many sign-in, sign-up, or email-availability requests."
-          defaultSorting={[{ id: 'startedAt', desc: true }]}
-          // No toolbar: this is a short operational list, not something to search or export.
-          // The two filter-only columns went with it, since the Filters popover was the only
-          // thing that could reach them and their detail is already in the IP and Seen before
-          // cells.
-          showToolbar={false}
-        />
+      <div aria-live="polite" className="sr-only">
+        {status}
       </div>
-    </Section>
+
+      <DataTable
+        columns={columns}
+        data={entries}
+        loading={isLoading}
+        storageKey="system-status-rate-limits"
+        tableLabel="Rate-limited IP addresses"
+        emptyIcon={ShieldCheck}
+        emptyTitle="No IP addresses are currently rate limited"
+        emptyDescription="Addresses appear here when they make too many sign-in, sign-up, or email-availability requests."
+        defaultSorting={[{ id: 'startedAt', desc: true }]}
+        // No toolbar: this is a short operational list, not something to search or export.
+        // The two filter-only columns went with it, since the Filters popover was the only
+        // thing that could reach them and their detail is already in the IP and Seen before
+        // cells.
+        showToolbar={false}
+      />
+    </StatusSection>
   );
 }

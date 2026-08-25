@@ -4,7 +4,16 @@ import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { DockerStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, StatGrid, Section, useStatusQuery, copy } from '../status-ui';
+import {
+  Loading,
+  STATUS_COMPACT,
+  STATUS_STANDARD,
+  Stat,
+  StatGrid,
+  StatusSection,
+  useStatusQuery,
+  copy,
+} from '../status-ui';
 import { formatBytes } from '../status-format';
 
 // The resource-limit fields are tri-state: a number is the cap, `null` means the
@@ -41,19 +50,19 @@ export default function DockerTab({
 
   if (!docker) {
     return (
-      <Section title="Docker">
-        <div className="text-sm">Not running inside a container.</div>
-      </Section>
+      <StatusSection title="Container" className={STATUS_COMPACT}>
+        <div className="text-muted-foreground text-sm">Not running inside a container.</div>
+      </StatusSection>
     );
   }
 
   return (
-    <Section title="Docker">
-      <div className="space-y-4">
-        {/* Deliberately not widened to match the other tabs. Seven short attributes do not
-            become easier to read with 1400px behind them, and this is the one tab where the
-            content genuinely wants less room than the workspace has. */}
-        <StatGrid className="max-w-3xl">
+    <div className="space-y-5">
+      {/* Deliberately not widened to match the other tabs. Seven short attributes do not
+          become easier to read with 1400px behind them, and this is the one tab where the
+          content genuinely wants less room than the workspace has. */}
+      <StatusSection title="Container" className={STATUS_COMPACT}>
+        <StatGrid>
           <Stat
             label="Container ID"
             value={docker.containerIdShort ?? docker.containerId ?? '—'}
@@ -69,28 +78,29 @@ export default function DockerTab({
             value={docker.indicators?.length ? docker.indicators.join(', ') : '—'}
           />
         </StatGrid>
-        {/* The exception on this tab: cgroup paths are long, break mid-word, and are read
-            character by character when something is wrong, so they get the width. */}
-        <div>
-          <div className="text-muted-foreground mb-1 text-sm">Cgroup</div>
-          {docker.cgroupPaths?.length ? (
-            <ul className="divide-y rounded border">
-              {docker.cgroupPaths.slice(0, 6).map((line, i) => (
-                <li key={i} className="px-2 py-1 text-xs break-all">
-                  {line}
-                </li>
-              ))}
-              {docker.cgroupPaths.length > 6 ? (
-                <li className="text-muted-foreground px-2 py-1 text-xs">
-                  +{docker.cgroupPaths.length - 6} more
-                </li>
-              ) : null}
-            </ul>
-          ) : (
-            <div className="text-sm">—</div>
-          )}
-        </div>
-      </div>
-    </Section>
+      </StatusSection>
+
+      {/* Its own section, and a wider one: cgroup paths are long, break mid-word, and are
+          read character by character when something is wrong, so they get the room the
+          summary above deliberately refuses. */}
+      <StatusSection title="Cgroup" className={STATUS_STANDARD}>
+        {docker.cgroupPaths?.length ? (
+          <ul className="bg-muted divide-y rounded-md border">
+            {docker.cgroupPaths.slice(0, 6).map((line, i) => (
+              <li key={i} className="px-3 py-1.5 font-mono text-xs break-all">
+                {line}
+              </li>
+            ))}
+            {docker.cgroupPaths.length > 6 ? (
+              <li className="text-muted-foreground px-3 py-1.5 text-xs">
+                +{docker.cgroupPaths.length - 6} more
+              </li>
+            ) : null}
+          </ul>
+        ) : (
+          <div className="text-muted-foreground text-sm">—</div>
+        )}
+      </StatusSection>
+    </div>
   );
 }

@@ -136,24 +136,140 @@ export const StatGrid = ({
   <div className={cn('grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2', className)}>{children}</div>
 );
 
-/** A titled section for the in-card tab content (replaces per-panel Cards). */
-export const Section = ({
+/**
+ * The width vocabulary for a System Status tab.
+ *
+ * Eight subsystems report eight different shapes of information, so one width for all of
+ * them would be wrong in both directions: seven short Docker readings stretched across a
+ * monitor, and a diagnostic table squeezed into a form column. These name the four choices
+ * so a tab picks one on purpose instead of reaching for whatever `max-w-*` looked right
+ * that day, which is how the tabs ended up with 3xl, 4xl, 5xl and xl between them.
+ */
+/** Short key/value groups: Docker's container summary, a handful of readings. */
+export const STATUS_COMPACT = 'w-full max-w-3xl';
+/** Prose and notices, held to a readable line length. */
+export const STATUS_READABLE = 'w-full max-w-4xl';
+/** The default: ordinary status panels and metric groups. */
+export const STATUS_STANDARD = 'w-full max-w-5xl';
+/** Tables, charts and diagnostic detail, which read better with the room. */
+export const STATUS_WIDE = 'w-full max-w-6xl';
+
+/** A stable id from the visible title, so the heading and its section stay associated. */
+export function statusSectionId(title: string) {
+  return `status-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+/**
+ * One titled group of status information.
+ *
+ * The panel treatment, padding and internal rhythm are deliberately the same numbers
+ * System Settings uses (see `SETTINGS_BOX_CLASS`): a professor moving between the two
+ * admin pages should not have to learn a second visual language. Written out here rather
+ * than imported across page directories, because these are two pages that agree today,
+ * not one shared component.
+ *
+ * `boxed={false}` for content that brings its own surface. A DataTable already draws a
+ * bordered shell and a card around a card is noise, worst of all in the high-contrast
+ * theme where both borders are solid black.
+ */
+export const StatusSection = ({
   title,
+  titleText,
+  description,
   action,
+  className,
+  boxed = true,
   children,
 }: {
   title: React.ReactNode;
+  /**
+   * The section's name, when `title` is markup rather than a string.
+   *
+   * Files builds its headings out of an icon, a label and a count badge, and without this
+   * such a section would quietly become an unnamed landmark: a region a screen reader
+   * announces with no idea what it contains.
+   */
+  titleText?: string;
+  description?: React.ReactNode;
   action?: React.ReactNode;
+  /** The width this section's content wants. Defaults to {@link STATUS_STANDARD}. */
+  className?: string;
+  boxed?: boolean;
+  children: React.ReactNode;
+}) => {
+  const name = titleText ?? (typeof title === 'string' ? title : undefined);
+  const id = name ? statusSectionId(name) : undefined;
+
+  const header = (
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="space-y-1">
+        <h2 id={id} className="flex items-center gap-2 text-base font-semibold">
+          {title}
+        </h2>
+        {description ? (
+          <p className="text-muted-foreground max-w-3xl text-sm">{description}</p>
+        ) : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+
+  if (!boxed) {
+    return (
+      <section aria-labelledby={id} className={cn('space-y-3', className ?? STATUS_STANDARD)}>
+        {header}
+        {children}
+      </section>
+    );
+  }
+
+  return (
+    <section aria-labelledby={id} className={className ?? STATUS_STANDARD}>
+      <div className="bg-card space-y-4 rounded-lg border px-5 py-4 shadow-xs">
+        {header}
+        {children}
+      </div>
+    </section>
+  );
+};
+
+/**
+ * A labelled group inside a section: "Details", "Last migration", "Error rates".
+ *
+ * Seven of these were hand-built as `text-muted-foreground mb-2 text-sm font-semibold`,
+ * which put a subgroup heading in the SAME colour as the `Stat` labels under it and left
+ * weight as the only thing telling them apart. Foreground, so a subgroup sits clearly
+ * between the section title above it and the readings below.
+ */
+export const StatusSubsection = ({
+  title,
+  className,
+  children,
+}: {
+  title: string;
+  className?: string;
   children: React.ReactNode;
 }) => (
-  <section className="space-y-3">
-    <div className="flex items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 text-base font-semibold">{title}</h2>
-      {action}
-    </div>
+  <div className={cn('space-y-2', className)}>
+    <h3 className="text-foreground text-sm font-semibold">{title}</h3>
     {children}
-  </section>
+  </div>
 );
+
+/**
+ * A small inset inside a panel: a sparkline's plot area, a path list.
+ *
+ * `bg-muted` and no shadow, so it reads as a recess in the card rather than a second card
+ * on top of it. A bare border-inside-a-border is what this replaces, and it is worst in
+ * high contrast where both are solid black.
+ */
+export const StatusInset = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) => <div className={cn('bg-muted rounded-md border p-3', className)}>{children}</div>;
 
 /**
  * Which direction is the good one for a given reading.
@@ -232,7 +348,7 @@ export const Sparkline = ({
         height={height}
         role="img"
         aria-label={`${label ? `${label}: ` : ''}trend ${trendDir}`}
-        className="stroke-current text-primary"
+        className="text-primary stroke-current"
         strokeWidth={1.5}
         fill="none"
       >

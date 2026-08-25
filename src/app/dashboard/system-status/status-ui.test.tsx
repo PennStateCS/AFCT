@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { Loading, TrendBadge } from './status-ui';
+import { Loading, StatusSection, StatusSubsection, TrendBadge } from './status-ui';
 
 /**
  * The status tabs used to show flat text while they fetched, so a tab that had to load looked
@@ -79,5 +79,80 @@ describe('TrendBadge', () => {
 
     expect(variantOf(container)).toContain('badge-neutral');
     expect(screen.getByText('(no change)', { exact: false })).toBeInTheDocument();
+  });
+});
+
+/*
+ * The page grammar the eight tabs compose.
+ *
+ * Every tab used to hand-build its own width, surface and subgroup headings, so equivalent
+ * information looked different depending on which subsystem you were looking at. These pin
+ * the two things that keep them in step: a section is a labelled region, and a section that
+ * brings its own surface (a table, a grid of tiles) can opt out of the panel rather than
+ * being wrapped in a second one.
+ */
+describe('StatusSection', () => {
+  it('is a region named by its heading', () => {
+    render(
+      <StatusSection title="Evaluator" description="How much work is waiting.">
+        <p>body</p>
+      </StatusSection>,
+    );
+
+    const region = screen.getByRole('region', { name: 'Evaluator' });
+    expect(region).toContainElement(screen.getByText('body'));
+    expect(screen.getByRole('heading', { level: 2, name: 'Evaluator' })).toBeVisible();
+    expect(screen.getByText('How much work is waiting.')).toBeVisible();
+  });
+
+  it('draws a panel by default', () => {
+    const { container } = render(
+      <StatusSection title="Performance">
+        <p>body</p>
+      </StatusSection>,
+    );
+    expect(container.querySelector('section > div.bg-card')).not.toBeNull();
+  });
+
+  it('draws no panel when the content brings its own surface', () => {
+    const { container } = render(
+      <StatusSection title="Being graded now" boxed={false}>
+        <table />
+      </StatusSection>,
+    );
+    // No card around a card: the table's own shell is the surface, and two nested borders
+    // are worst in the high-contrast theme where both are solid black. Asserted on the
+    // panel element itself, not the <section>: the surface lives on an inner div, so
+    // checking the section's own class passes even when the panel is still drawn.
+    expect(container.querySelector('section > div.bg-card')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Being graded now' })).toBeInTheDocument();
+  });
+
+  it('keeps an action reachable beside the heading', () => {
+    render(
+      <StatusSection title="Files" action={<button type="button">Clean up</button>}>
+        <p>body</p>
+      </StatusSection>,
+    );
+    expect(screen.getByRole('button', { name: 'Clean up' })).toBeVisible();
+  });
+});
+
+describe('StatusSubsection', () => {
+  /*
+   * Seven of these were hand-built as muted + semibold, which is the SAME colour as the
+   * Stat labels underneath, leaving weight as the only thing separating a group heading
+   * from the readings in it.
+   */
+  it('sets its heading in the foreground, above the readings it groups', () => {
+    render(
+      <StatusSubsection title="Last migration">
+        <p>rows</p>
+      </StatusSubsection>,
+    );
+
+    const heading = screen.getByRole('heading', { level: 3, name: 'Last migration' });
+    expect(heading.className).toContain('text-foreground');
+    expect(heading.className).not.toContain('text-muted-foreground');
   });
 });

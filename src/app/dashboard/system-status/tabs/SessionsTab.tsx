@@ -8,7 +8,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { DataTable } from '@/components/ui/data-table';
 import type { SessionsStatusResponse } from '@/lib/status/types';
-import { Loading, Section, useStatusQuery, copy } from '../status-ui';
+import { Loading, STATUS_WIDE, StatusSection, useStatusQuery, copy } from '../status-ui';
 
 type SessionRow = SessionsStatusResponse['activeSessions'][number];
 
@@ -106,20 +106,34 @@ export default function SessionsTab({
   ];
 
   return (
-    <Section title="Sessions">
-      <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Unboxed on both counts: the tiles are their own surface and the table brings its
+          own shell, so boxing either would put a card inside a card. */}
+      <StatusSection
+        title="Sessions"
+        description="Sign-ins seen over five spans, so the recent rate can be compared against the day."
+        boxed={false}
+        className={STATUS_WIDE}
+      >
         {/* Five figures across, in the same tiles as the summary at the top of the page,
             rather than five label/value rows down a narrow column. They are one reading
             taken over five spans, so they are meant to be compared at a glance. */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {figures.map((f) => (
-            <div key={f.label} className="bg-card rounded-lg border p-3">
+            <div key={f.label} className="bg-card rounded-lg border p-3 shadow-xs">
               <div className="text-muted-foreground text-xs">{f.label}</div>
               <div className="mt-1 text-lg font-semibold">{f.value}</div>
             </div>
           ))}
         </div>
+      </StatusSection>
 
+      <StatusSection
+        title="Active sessions"
+        description="Everyone with a live session in the last 24 hours."
+        boxed={false}
+        className={STATUS_WIDE}
+      >
         <DataTable
           columns={columns}
           data={data.activeSessions}
@@ -133,7 +147,7 @@ export default function SessionsTab({
           emptyTitle="No active sessions"
           emptyDescription="No sessions have been seen in the last 24 hours."
         />
-      </div>
-    </Section>
+      </StatusSection>
+    </div>
   );
 }
