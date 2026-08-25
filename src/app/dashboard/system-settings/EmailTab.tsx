@@ -7,13 +7,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
 import { SMTP_SECURITY, SMTP_SECURITY_LABELS, type SmtpSecurity } from '@/schemas/smtp';
-import { SETTINGS_BOX_CLASS } from './system-settings-shared';
-import {
-  SETTINGS_COMPACT,
-  SETTINGS_STANDARD,
-  SettingsSection,
-  SettingsStatusPanel,
-} from './settings-layout';
+import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 type TestState =
@@ -91,8 +85,9 @@ export function EmailTab({
   };
 
   return (
-    <>
-      <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
+    <SettingsStatusLayout
+      statusTitle="Current status"
+      status={
         <SettingsStatusPanel>
           <Badge
             variant={!enabled ? 'neutral' : passwordReadable ? 'success' : 'danger'}
@@ -100,17 +95,28 @@ export function EmailTab({
           >
             {!enabled ? 'Disabled' : passwordReadable ? 'Enabled' : 'Enabled, but unavailable'}
           </Badge>
-          <p className="text-muted-foreground">
+          {/* A one-line summary first, then the consequence. It was a single paragraph of
+              three or four sentences, which is a wall in an 18rem rail and the first thing
+              skipped on a phone, where this sits above the form. Nothing was dropped: the
+              key-has-changed guidance is the part an admin cannot act without. */}
+          <p className="text-foreground">
             {!enabled
-              ? 'AFCT sends no email. Passwords can only be reset by an administrator.'
+              ? 'AFCT sends no email.'
               : passwordReadable
-                ? 'AFCT is set up to send email. Send a test message below to check that it arrives; a reset request that cannot be delivered fails quietly, because the sign-in page must not say whether an account exists.'
-                : 'The saved mail password cannot be read, so nothing can be sent and reset requests will fail quietly. This usually means the encryption key this AFCT was set up with has changed. Enter the password again, or restore the key.'}
+                ? 'AFCT is set up to send email.'
+                : 'Mail is on, but nothing can be sent.'}
+          </p>
+          <p className="text-muted-foreground text-xs leading-4.5">
+            {!enabled
+              ? 'Passwords can only be reset by an administrator.'
+              : passwordReadable
+                ? 'Send a test message to check that it arrives. A reset request that cannot be delivered fails quietly, because the sign-in page must not say whether an account exists.'
+                : 'The saved mail password cannot be read, so reset requests fail quietly. This usually means the encryption key this AFCT was set up with has changed. Enter the password again, or restore the key.'}
           </p>
         </SettingsStatusPanel>
-      </SettingsSection>
-
-      <div className={`${SETTINGS_STANDARD} ${SETTINGS_BOX_CLASS} bg-card`}>
+      }
+    >
+      <SettingsSection title="Email configuration">
         <SwitchField
           id="smtp-enabled"
           name="smtp-enabled"
@@ -211,14 +217,15 @@ export function EmailTab({
             description="Shown beside the address in the recipient's inbox."
           />
         </div>
-      </div>
+      </SettingsSection>
 
-      {/* Prove it works now, rather than when someone is locked out. */}
-      <div className={`mt-6 space-y-3 border-t pt-5 ${SETTINGS_COMPACT}`}>
-        <h2 className="text-base font-semibold">Send a test message</h2>
+      {/* Prove it works now, rather than when someone is locked out. The test belongs with
+          the things you do, not with the summary of what is set: it acts on the SAVED
+          settings, which is a workflow, not a report. */}
+      <SettingsSection title="Send a test message">
         {savedHost ? (
           <>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground max-w-3xl text-xs leading-4.5">
               Sends a message using the saved settings, so you can confirm email works before anyone
               needs it.
               {dirty
@@ -256,12 +263,12 @@ export function EmailTab({
             </div>
           </>
         ) : (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-xs leading-4.5">
             Add a mail server and save to send a test message.
           </p>
         )}
-      </div>
-    </>
+      </SettingsSection>
+    </SettingsStatusLayout>
   );
 }
 

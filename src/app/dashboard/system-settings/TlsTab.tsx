@@ -18,7 +18,22 @@ import FileUploadInput from '@/components/FileUploadInput';
 import { useTlsCertificate } from './useTlsCertificate';
 import { StepList } from './StepList';
 import { deriveAcmeSteps } from './system-settings-shared';
-import { SETTINGS_STANDARD } from './settings-layout';
+import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
+
+/**
+ * One fact about the installed certificate, label above value.
+ *
+ * The rail is 18rem, so an inline "Issued to: host.example.edu" wraps the value onto its own
+ * line anyway; stacking it deliberately gets the same height with a scannable label column.
+ */
+function CertMeta({ label, value, wrap }: { label: string; value: string; wrap?: boolean }) {
+  return (
+    <div className="space-y-0.5">
+      <div className="text-muted-foreground text-xs">{label}</div>
+      <div className={`text-foreground text-sm${wrap ? 'break-all' : ''}`}>{value}</div>
+    </div>
+  );
+}
 
 /** TLS Certificate tab: current status plus the upload / CSR / self-signed / Let's Encrypt flows. */
 export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined }) {
@@ -67,40 +82,36 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
   return (
     <>
-      <div className="space-y-5">
-        {/* Current status */}
-        <div className="space-y-2">
-          <h2 className="text-base font-semibold">Current certificate</h2>
-          <div className={`bg-muted ${SETTINGS_STANDARD} space-y-2 rounded-md border p-4 text-sm`}>
+      <SettingsStatusLayout
+        statusTitle="Current certificate"
+        status={
+          <SettingsStatusPanel>
             {tls?.installed ? (
               <>
-                <div className="flex flex-wrap items-center gap-2">
-                  {tls.expired ? (
-                    <Badge variant="warning">Expired</Badge>
-                  ) : tls.selfSigned ? (
-                    <Badge variant="warning">Self-signed certificate</Badge>
-                  ) : (
-                    <Badge variant="success">Trusted certificate</Badge>
-                  )}
-                </div>
-                {tls.subject && (
-                  <div className="text-foreground break-all">
-                    <span className="text-muted-foreground">Issued to: </span>
-                    {tls.subject}
-                  </div>
+                {tls.expired ? (
+                  <Badge variant="warning" className="w-fit">
+                    Expired
+                  </Badge>
+                ) : tls.selfSigned ? (
+                  <Badge variant="warning" className="w-fit">
+                    Self-signed certificate
+                  </Badge>
+                ) : (
+                  <Badge variant="success" className="w-fit">
+                    Trusted certificate
+                  </Badge>
                 )}
-                {tls.validTo && (
-                  <div className="text-foreground">
-                    <span className="text-muted-foreground">Valid until: </span>
-                    {tls.validTo}
-                  </div>
-                )}
-                <p className="text-muted-foreground">
+                {/* Stacked label over value, not "Issued to: foo" inline. A domain and a
+                    date are the two things you come here to read, and in an 18rem rail an
+                    inline label pushes the value onto its own wrapped line anyway. */}
+                {tls.subject && <CertMeta label="Issued to" value={tls.subject} wrap />}
+                {tls.validTo && <CertMeta label="Valid until" value={tls.validTo} />}
+                <p className="text-muted-foreground text-xs leading-4.5">
                   {tls.expired
-                    ? 'This certificate has expired, so browsers will show a security warning until you install a valid one.'
+                    ? 'Browsers will show a security warning until you install a valid one.'
                     : tls.selfSigned
-                      ? 'This certificate isn’t issued by a trusted authority, so browsers will show a security warning.'
-                      : 'This certificate is trusted by browsers, so visitors won’t see a security warning.'}
+                      ? 'Not issued by a trusted authority, so browsers will show a security warning.'
+                      : 'Trusted by browsers, so visitors won’t see a security warning.'}
                 </p>
               </>
             ) : (
@@ -108,24 +119,22 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 <Badge variant="warning" className="w-fit">
                   Self-signed (built-in)
                 </Badge>
-                <p className="text-foreground">
-                  The server is using its built-in self-signed certificate.
-                </p>
-                <p className="text-muted-foreground">
+                <p className="text-foreground">The server is using its built-in certificate.</p>
+                <p className="text-muted-foreground text-xs leading-4.5">
                   The connection is still encrypted, but browsers will show a security warning until
-                  you install a trusted certificate below.
+                  you install a trusted certificate.
                 </p>
               </>
             )}
             {tls?.acme?.managed && (
-              <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+              <div className="space-y-2 border-t pt-3">
                 <Badge variant="success" className="w-fit">
                   Auto-renewing
                 </Badge>
-                <span className="text-muted-foreground">
+                <p className="text-muted-foreground text-xs leading-4.5">
                   Let’s Encrypt for {tls.acme.domain}
                   {tls.acme.staging ? ' (staging)' : ''}. Renews automatically before expiry.
-                </span>
+                </p>
                 <Button
                   type="button"
                   size="sm"
@@ -137,9 +146,9 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 </Button>
               </div>
             )}
-          </div>
-        </div>
-
+          </SettingsStatusPanel>
+        }
+      >
         {/* A CSR was generated but its signed cert isn't installed yet. */}
         {tls?.pendingCsr && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -153,9 +162,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
           </div>
         )}
 
-        {/* Method chooser */}
-        <div className="space-y-2">
-          <h2 className="text-base font-semibold">Set up a certificate</h2>
+        <SettingsSection title="Set up a certificate">
           <div className="flex flex-wrap gap-2" role="group" aria-label="Certificate setup method">
             <Button
               type="button"
@@ -184,7 +191,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
               Upload an existing certificate
             </Button>
           </div>
-        </div>
+        </SettingsSection>
 
         {/* Let's Encrypt (ACME HTTP-01) form (modal) */}
         <Dialog
@@ -481,7 +488,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             </Button>
           )}
         </div>
-      </div>
+      </SettingsStatusLayout>
 
       <ConfirmDialog
         open={tlsConfirm === 'reset'}

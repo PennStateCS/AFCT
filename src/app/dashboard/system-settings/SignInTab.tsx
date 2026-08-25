@@ -4,13 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
-import { SETTINGS_BOX_CLASS } from './system-settings-shared';
-import {
-  SETTINGS_COMPACT,
-  SETTINGS_STANDARD,
-  SettingsSection,
-  SettingsStatusPanel,
-} from './settings-layout';
+
+import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 /**
@@ -60,8 +55,9 @@ export function SignInTab({
   redirectUri: string;
 }) {
   return (
-    <>
-      <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
+    <SettingsStatusLayout
+      statusTitle="Current status"
+      status={
         <SettingsStatusPanel>
           <Badge
             variant={!enabled ? 'neutral' : clientSecretReadable ? 'success' : 'danger'}
@@ -69,17 +65,27 @@ export function SignInTab({
           >
             {!enabled ? 'Disabled' : clientSecretReadable ? 'Enabled' : 'Enabled, but unavailable'}
           </Badge>
-          <p className="text-muted-foreground">
+          {/* Summary, then consequence: the rail is 18rem and this sits above the form on a
+              phone, so the first line has to be readable at a glance. */}
+          <p className="text-foreground">
             {!enabled
               ? 'Everyone signs in with an AFCT password.'
               : clientSecretReadable
-                ? 'People can sign in with their institution. AFCT passwords still work as well.'
-                : 'The saved client secret cannot be read, so the institution button is not shown and nobody can sign in that way. This usually means the encryption key this AFCT was set up with has changed. Save the secret again, or restore the key.'}
+                ? 'People can sign in with their institution.'
+                : 'Institutional sign-in is on, but nobody can use it.'}
+          </p>
+          <p className="text-muted-foreground text-xs leading-4.5">
+            {!enabled
+              ? 'Turn on institutional sign-in below to add your provider.'
+              : 'AFCT passwords still work as well.'}
+            {enabled && !clientSecretReadable
+              ? ' The saved client secret cannot be read, so the institution button is not shown. This usually means the encryption key this AFCT was set up with has changed. Save the secret again, or restore the key.'
+              : ''}
           </p>
         </SettingsStatusPanel>
-      </SettingsSection>
-
-      <div className={`${SETTINGS_STANDARD} ${SETTINGS_BOX_CLASS} bg-card`}>
+      }
+    >
+      <SettingsSection title="Institutional sign-in">
         <SwitchField
           id="oidc-enabled"
           name="oidc-enabled"
@@ -142,12 +148,11 @@ export function SignInTab({
           placeholder={DEFAULT_OIDC_BUTTON_LABEL}
           description="What the sign-in button says. Use whatever your institution calls its login."
         />
-      </div>
+      </SettingsSection>
 
       <SettingsSection
         title="Give this to your IT department"
         description="The redirect URL AFCT will use. Registration usually fails without it, with an error about a mismatched redirect."
-        className={`${SETTINGS_STANDARD} mt-6`}
       >
         <InputGroup
           label="Redirect URL"
@@ -161,7 +166,6 @@ export function SignInTab({
       <SettingsSection
         title="Matching people to accounts"
         description="When somebody signs in for the first time, AFCT attaches their institutional identity to an existing account with the same email address, but only if the provider states that the address is verified."
-        className={`${SETTINGS_STANDARD} mt-6`}
       >
         <SwitchField
           id="oidc-trust-email"
@@ -173,26 +177,31 @@ export function SignInTab({
           descriptionPlacement="inline"
           description="Only turn this on if your provider controls the addresses it reports."
         />
-        {/* Not hidden behind a tooltip: this is the one setting on the page that can hand
-            somebody another person's account, and the reason it exists at all is that the
-            common case (Microsoft) omits the claim. */}
-        <p className="text-muted-foreground max-w-3xl text-xs leading-4.5">
-          Some providers, including Microsoft Entra, never mark addresses as verified. Without this,
-          nobody at those institutions is matched automatically. With it on at a provider where
-          people can choose their own address, someone could reach an account that is not theirs.
-          Administrator accounts are never matched automatically either way.
-        </p>
-        {/* The distinction people got wrong: this setting answers an unverified address, not a
-            missing one, and Entra can send no address at all unless the claim is released. */}
-        <p className="text-muted-foreground max-w-3xl text-xs leading-4.5">
-          This does not help if your provider sends no address at all. On Entra the email claim has
-          to be released on the app registration, or through the OpenID scope on v2.0 endpoints;
-          without it, people are refused with &ldquo;your institution did not share an email
-          address&rdquo; whatever this setting says.
-        </p>
+        {/*
+          One note, not two loose paragraphs after a switch. Neutral bg-muted and not a
+          warning colour: this is a detail about how providers behave, and the page has no
+          warning state to report. Deliberately NOT a tooltip either: this is the one
+          setting here that can hand somebody another person's account, and the reason it
+          exists at all is that the common case (Microsoft) omits the claim.
+        */}
+        <div className="bg-muted/40 max-w-3xl space-y-2 rounded-md border p-3">
+          <p className="text-foreground text-xs font-medium">If your provider is Microsoft Entra</p>
+          <p className="text-muted-foreground text-xs leading-4.5">
+            Entra never marks addresses as verified, so without this setting nobody at those
+            institutions is matched automatically. With it on at a provider where people can choose
+            their own address, someone could reach an account that is not theirs. Administrator
+            accounts are never matched automatically either way.
+          </p>
+          <p className="text-muted-foreground text-xs leading-4.5">
+            It does not help if your provider sends no address at all. On Entra the email claim has
+            to be released on the app registration, or through the OpenID scope on v2.0 endpoints;
+            without it, people are refused with &ldquo;your institution did not share an email
+            address&rdquo; whatever this setting says.
+          </p>
+        </div>
       </SettingsSection>
 
-      <SettingsSection title="AFCT passwords" className={`${SETTINGS_STANDARD} mt-6`}>
+      <SettingsSection title="AFCT passwords">
         <SwitchField
           id="allow-linked-account-passwords"
           name="allow-linked-account-passwords"
@@ -211,7 +220,7 @@ export function SignInTab({
           cannot confirm an LMS launch, which asks for an AFCT password.
         </p>
       </SettingsSection>
-    </>
+    </SettingsStatusLayout>
   );
 }
 

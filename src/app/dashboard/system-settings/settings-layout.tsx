@@ -97,6 +97,77 @@ export function SettingsSection({
 }
 
 /**
+ * The two-column grid a status tab uses: the form, and a narrow rail beside it.
+ *
+ * Exported because the Save row has to line up with the form column and lives outside the
+ * tab that draws the grid. Giving the footer the same template and putting it in column 1
+ * makes them agree by construction, rather than by two max-widths that have to be kept in
+ * step by hand.
+ *
+ * The breakpoint is measured, not picked off the scale.
+ *
+ * Two rails are already in front of this content: the dashboard sidebar (~255px) and the
+ * Settings Menu (240px + a 24px gutter), so the workspace starts about 567px narrower than
+ * the viewport. Splitting it again needs the form to keep ~520px, which is where the Email
+ * tab's From address stops truncating, plus the 288px rail and its 24px gap. That lands at
+ * about 1400px. At Tailwind's `xl` (1280) the form came out at 386px with every helper on
+ * three lines and the address cut off, which is the cramped two-column case to avoid; at
+ * `2xl` (1536) a 1440px laptop would lose the rail for no reason.
+ *
+ * 18rem is enough for a badge and a short paragraph and not enough to compete with the
+ * form; 20rem once there is room to spare.
+ */
+export const SETTINGS_STATUS_GRID =
+  'grid grid-cols-1 gap-6 min-[1400px]:grid-cols-[minmax(0,1fr)_18rem] 2xl:grid-cols-[minmax(0,1fr)_20rem]';
+
+/**
+ * A tab that answers two questions at once: what is set up now, and what do I want to change.
+ *
+ * The form is the main column; the current state sits beside it on a wide screen and above
+ * it on a narrow one. Status goes FIRST in the DOM deliberately. Stacked, that is the order
+ * you want (know the state, then edit it), and it means the visual and reading orders differ
+ * only in the one place they must: on a wide screen the rail is placed into column two.
+ * Keep the status copy short for the same reason, or a phone gets a paragraph before the form.
+ *
+ * Layout only. Nothing here knows what a certificate or an SMTP host is.
+ */
+export function SettingsStatusLayout({
+  statusTitle,
+  status,
+  className,
+  children,
+}: {
+  /** The rail's heading, e.g. "Current status" or "Current certificate". */
+  statusTitle: string;
+  status: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const id = settingsSectionId(statusTitle);
+  return (
+    <div className={cn(SETTINGS_WORKSPACE, SETTINGS_STATUS_GRID, 'items-start', className)}>
+      {/* Sticky at the same offset as the Settings Menu rail, and for the same reason: on
+          the long tabs (Sign-in, TLS) the state you are changing is worth keeping in view
+          while you scroll the flow that changes it. No ancestor sets overflow, which is
+          what would otherwise make position:sticky a no-op. */}
+      <aside
+        aria-labelledby={id}
+        className="space-y-3 min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1"
+      >
+        <h2 id={id} className="text-base font-semibold">
+          {statusTitle}
+        </h2>
+        {status}
+      </aside>
+
+      <div className="min-w-0 space-y-6 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The neutral "here is what is currently configured" panel that Email, Sign-in, Captcha and
  * TLS each open with. Deliberately `bg-muted` and not a status colour: it reports a state,
  * it is not itself a success or a warning. The Badge inside carries that.
@@ -109,7 +180,10 @@ export function SettingsStatusPanel({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn('bg-muted space-y-2 rounded-md border p-4 text-sm', className)}>
+    // rounded-lg to match the settings panels beside it, and bg-muted deliberately: the
+    // panel reports a state, it is not itself a success or a warning. The Badge inside
+    // carries that, which is why this never turns green or red.
+    <div className={cn('bg-muted space-y-2 rounded-lg border p-4 text-sm', className)}>
       {children}
     </div>
   );

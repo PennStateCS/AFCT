@@ -6,8 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
-import { SETTINGS_BOX_CLASS } from './system-settings-shared';
-import { SETTINGS_COMPACT, SettingsSection, SettingsStatusPanel } from './settings-layout';
+import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 /** Captcha tab: hCaptcha keys + a live "test my keys" flow. */
@@ -58,22 +57,25 @@ export function CaptchaTab({
   };
 
   return (
-    <>
-      {/* Current status */}
-      <SettingsSection title="Current status" className={`${SETTINGS_COMPACT} mb-6`} boxed={false}>
+    <SettingsStatusLayout
+      statusTitle="Current status"
+      status={
         <SettingsStatusPanel>
           <Badge variant={hcaptchaEnabled ? 'success' : 'neutral'} className="w-fit">
             {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
           </Badge>
-          <p className="text-muted-foreground">
+          <p className="text-foreground">
+            {hcaptchaEnabled ? 'Bot protection is on.' : 'Bot protection is off.'}
+          </p>
+          <p className="text-muted-foreground text-xs leading-4.5">
             {hcaptchaEnabled
-              ? 'Bot protection is on. After repeated failed logins, users are shown an hCaptcha challenge.'
-              : 'Bot protection is off. Add your hCaptcha keys below to turn it on.'}
+              ? 'After repeated failed logins, people are shown an hCaptcha challenge.'
+              : 'Add your hCaptcha keys to turn it on.'}
           </p>
         </SettingsStatusPanel>
-      </SettingsSection>
-
-      <div className={`${SETTINGS_COMPACT} ${SETTINGS_BOX_CLASS} bg-card`}>
+      }
+    >
+      <SettingsSection title="hCaptcha keys">
         <InputGroup
           label="hCaptcha site key"
           name="hcaptchaSiteKey"
@@ -107,13 +109,29 @@ export function CaptchaTab({
             description="Deletes the stored secret when you save."
           />
         )}
-      </div>
-      {/* Verify the saved keys actually work before relying on them. */}
-      <div className={`mt-6 space-y-3 border-t pt-5 ${SETTINGS_COMPACT}`}>
-        <h2 className="text-base font-semibold">Verify your keys</h2>
+        {/* A quiet footnote inside the key form rather than a paragraph after it: it is
+            where you get the values for the two fields above, so it belongs with them and
+            must not read as a third section. */}
+        <p className="text-muted-foreground border-t pt-4 text-xs leading-4.5">
+          To get keys, sign up at{' '}
+          <a
+            href="https://www.hcaptcha.com/signup"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+          >
+            hcaptcha.com
+          </a>{' '}
+          and copy your site key and secret key. Leave both keys blank to keep hCaptcha off.
+        </p>
+      </SettingsSection>
+
+      {/* Verify the saved keys actually work before relying on them. The live challenge
+          stays here in the main column: it is something you do, not a summary of state. */}
+      <SettingsSection title="Verify your keys">
         {savedSiteKey && secretConfigured ? (
           <>
-            <p className="text-muted-foreground text-xs">
+            <p className="text-muted-foreground max-w-3xl text-xs leading-4.5">
               Loads a real hCaptcha challenge with your saved site key and checks the result against
               your saved secret, so you can confirm bot protection works.
             </p>
@@ -163,24 +181,11 @@ export function CaptchaTab({
             )}
           </>
         ) : (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-xs leading-4.5">
             Save a site key and secret key above, then come back here to test them.
           </p>
         )}
-      </div>
-
-      <p className="text-muted-foreground mt-3 text-xs">
-        To get keys, sign up at{' '}
-        <a
-          href="https://www.hcaptcha.com/signup"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline"
-        >
-          hcaptcha.com
-        </a>{' '}
-        and copy your site key and secret key. Leave both keys blank to keep hCaptcha off.
-      </p>
-    </>
+      </SettingsSection>
+    </SettingsStatusLayout>
   );
 }

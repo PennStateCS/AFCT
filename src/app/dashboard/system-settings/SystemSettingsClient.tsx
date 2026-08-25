@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
-import { SETTINGS_COMPACT, SETTINGS_STANDARD, SETTINGS_WORKSPACE } from './settings-layout';
+import { SETTINGS_STANDARD, SETTINGS_STATUS_GRID, SETTINGS_WORKSPACE } from './settings-layout';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -540,14 +540,15 @@ export default function SystemSettingsClient() {
   const showSave = tab !== 'tls' && tab !== 'updates';
 
   /*
-   * How wide the Save row is, per tab.
+   * Which tabs put their current state in a rail beside the form.
    *
-   * It has to match the content it saves. Every tab's form sits at SETTINGS_STANDARD except
-   * Captcha, whose two keys are a short form at SETTINGS_COMPACT: a footer 256px wider than
-   * the panel above it puts Save out past the form's right edge, reading as a page control
-   * that happens to be nearby rather than this form's action.
+   * Only the four that answer two different questions at once ("what is set up now" and
+   * "what do I want to change"). General, Evaluator, Backups, LTI and Updates have no such
+   * summary, and inventing one to make the tabs match would be a worse page. The mixed
+   * layout is the point.
    */
-  const saveWidth = tab === 'captcha' ? SETTINGS_COMPACT : SETTINGS_STANDARD;
+  const hasStatusColumn =
+    tab === 'email' || tab === 'sign-in' || tab === 'captcha' || tab === 'tls';
 
   // xl rather than lg: a rail plus a settings form needs more room than a table does.
   const railNav = useIsDesktopNav(1280);
@@ -703,36 +704,51 @@ export default function SystemSettingsClient() {
                 fields (TLS, Updates), which run their own actions instead. */}
           {showSave && (
             <div
-              // Right-aligned, and the same width as the panels above it, so Save sits under
-              // the right edge of the form rather than out on the left margin where it read
-              // as a page-level control that happened to be nearby. Status first, then the
-              // escape hatch, then the primary action last: the order a footer is read in.
-              // flex-wrap so the three do not fight for room at 390px.
-              className={`mt-6 flex flex-wrap items-center justify-end gap-3 border-t pt-4 ${saveWidth}`}
+              /*
+               * Right-aligned, and exactly as wide as the form it saves, so Save sits under
+               * the form's right edge rather than out on the left margin where it read as a
+               * page-level control that happened to be nearby.
+               *
+               * On a status tab that width is the grid's first column, which no max-width
+               * can name: it depends on the rail and the gap. So the footer borrows the SAME
+               * grid template and takes column one, and the two agree by construction rather
+               * than by two numbers kept in step by hand.
+               */
+              className={
+                hasStatusColumn
+                  ? `${SETTINGS_WORKSPACE} ${SETTINGS_STATUS_GRID} mt-6`
+                  : `${SETTINGS_STANDARD} mt-6`
+              }
             >
-              {isDirty && (
-                <span className="text-muted-foreground mr-auto text-sm">Unsaved changes</span>
-              )}
-              {isDirty && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={resetForm}
-                  disabled={saving}
-                >
-                  Reset
-                </Button>
-              )}
-              <Button
-                type="submit"
-                form="system-settings-form"
-                size="sm"
-                aria-label="Save system settings"
-                disabled={disabled}
+              <div
+                // Status first, then the escape hatch, then the primary action last: the order
+                // a footer is read in. flex-wrap so the three do not fight for room at 390px.
+                className="flex flex-wrap items-center justify-end gap-3 border-t pt-4 min-[1400px]:col-start-1"
               >
-                {saving ? 'Saving…' : 'Save changes'}
-              </Button>
+                {isDirty && (
+                  <span className="text-muted-foreground mr-auto text-sm">Unsaved changes</span>
+                )}
+                {isDirty && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={resetForm}
+                    disabled={saving}
+                  >
+                    Reset
+                  </Button>
+                )}
+                <Button
+                  type="submit"
+                  form="system-settings-form"
+                  size="sm"
+                  aria-label="Save system settings"
+                  disabled={disabled}
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </Button>
+              </div>
             </div>
           )}
         </LocalNavLayout>

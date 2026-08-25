@@ -40,7 +40,11 @@ export function GeneralTab({
           now, and "where do I change the lockout" is a category question. Nothing moved
           between tabs; only the arrangement within this one changed. */}
       <div className="space-y-6">
-        <SettingsSection title="Server Configuration" className={SETTINGS_STANDARD}>
+        <SettingsSection
+          title="Server Configuration"
+          description="Where AFCT lives and how it reports time."
+          className={SETTINGS_STANDARD}
+        >
           {/* A grid rather than a stack of hand-picked max-widths. The URL is a value you
               inspect, so it takes the full measure; a timezone name is short, so it takes
               one column and the empty half beside it is deliberate rather than a select
@@ -105,9 +109,11 @@ export function GeneralTab({
           </div>
         </SettingsSection>
 
-        <SettingsSection title="Uploads &amp; Retention" className={SETTINGS_STANDARD}>
-          {/* Both are ceilings on what the server stores: how big one upload may be, and
-              how long the audit trail is kept. */}
+        <SettingsSection
+          title="Uploads &amp; Retention"
+          description="Ceilings on what the server stores: how big one upload may be, and how long the audit trail is kept."
+          className={SETTINGS_STANDARD}
+        >
           <div className="grid gap-5 md:grid-cols-2">
             <InputGroup
               label="Max upload size (MB)"
@@ -142,56 +148,62 @@ export function GeneralTab({
           </div>
         </SettingsSection>
 
-        <SettingsSection title="Sign-in &amp; Security" className={SETTINGS_STANDARD}>
-          {/* Short numeric fields pair up; the domain list stays full-width because it is
-              a comma-separated string that wraps. */}
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            <InputGroup
-              label="Session timeout (minutes)"
-              name="sessionTimeoutMinutes"
-              type="number"
-              required
-              requiredMark
-              min={MIN_SESSION_TIMEOUT_MINUTES}
-              max={MAX_SESSION_TIMEOUT_MINUTES}
-              value={form.sessionTimeoutMinutes === '' ? '' : String(form.sessionTimeoutMinutes)}
-              setValue={(val) => setField('sessionTimeoutMinutes', val === '' ? '' : Number(val))}
-              disabled={disabled}
-              description={`Signs out after inactivity. ${MIN_SESSION_TIMEOUT_MINUTES}–${MAX_SESSION_TIMEOUT_MINUTES} min.`}
-            />
-            <InputGroup
-              label="Failed logins before lockout"
-              name="loginMaxAttempts"
-              type="number"
-              required
-              requiredMark
-              min={MIN_LOGIN_MAX_ATTEMPTS}
-              max={MAX_LOGIN_MAX_ATTEMPTS}
-              value={form.loginMaxAttempts === '' ? '' : String(form.loginMaxAttempts)}
-              setValue={(val) => setField('loginMaxAttempts', val === '' ? '' : Number(val))}
-              disabled={disabled}
-              description={`Failed attempts on one account before it's temporarily locked. ${MIN_LOGIN_MAX_ATTEMPTS}–${MAX_LOGIN_MAX_ATTEMPTS}.`}
-            />
-            <InputGroup
-              label="Account lockout duration (minutes)"
-              name="loginLockoutMinutes"
-              type="number"
-              required
-              requiredMark
-              min={MIN_LOGIN_LOCKOUT_MINUTES}
-              max={MAX_LOGIN_LOCKOUT_MINUTES}
-              value={form.loginLockoutMinutes === '' ? '' : String(form.loginLockoutMinutes)}
-              setValue={(val) => setField('loginLockoutMinutes', val === '' ? '' : Number(val))}
-              disabled={disabled}
-              description={`How long a locked account must wait. ${MIN_LOGIN_LOCKOUT_MINUTES}–${MAX_LOGIN_LOCKOUT_MINUTES} min.`}
-            />
+        <SettingsSection
+          title="Sign-in &amp; Security"
+          description="How sessions end, how lockout works, and who may create an account."
+          className={SETTINGS_STANDARD}
+        >
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold">Sessions and lockout</h3>
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              <InputGroup
+                label="Session timeout (minutes)"
+                name="sessionTimeoutMinutes"
+                type="number"
+                required
+                requiredMark
+                min={MIN_SESSION_TIMEOUT_MINUTES}
+                max={MAX_SESSION_TIMEOUT_MINUTES}
+                value={form.sessionTimeoutMinutes === '' ? '' : String(form.sessionTimeoutMinutes)}
+                setValue={(val) => setField('sessionTimeoutMinutes', val === '' ? '' : Number(val))}
+                disabled={disabled}
+                description={`Signs out after inactivity. ${MIN_SESSION_TIMEOUT_MINUTES}–${MAX_SESSION_TIMEOUT_MINUTES} min.`}
+              />
+              <InputGroup
+                label="Failed logins before lockout"
+                name="loginMaxAttempts"
+                type="number"
+                required
+                requiredMark
+                min={MIN_LOGIN_MAX_ATTEMPTS}
+                max={MAX_LOGIN_MAX_ATTEMPTS}
+                value={form.loginMaxAttempts === '' ? '' : String(form.loginMaxAttempts)}
+                setValue={(val) => setField('loginMaxAttempts', val === '' ? '' : Number(val))}
+                disabled={disabled}
+                description={`Failed attempts on one account before it's temporarily locked. ${MIN_LOGIN_MAX_ATTEMPTS}–${MAX_LOGIN_MAX_ATTEMPTS}.`}
+              />
+              <InputGroup
+                label="Account lockout duration (minutes)"
+                name="loginLockoutMinutes"
+                type="number"
+                required
+                requiredMark
+                min={MIN_LOGIN_LOCKOUT_MINUTES}
+                max={MAX_LOGIN_LOCKOUT_MINUTES}
+                value={form.loginLockoutMinutes === '' ? '' : String(form.loginLockoutMinutes)}
+                setValue={(val) => setField('loginLockoutMinutes', val === '' ? '' : Number(val))}
+                disabled={disabled}
+                description={`How long a locked account must wait. ${MIN_LOGIN_LOCKOUT_MINUTES}–${MAX_LOGIN_LOCKOUT_MINUTES} min.`}
+              />
+            </div>
           </div>
           {/* Two groups in one panel, split by a rule rather than a second card: the three
               fields above are about an existing account's session, and these two are about
               whether new accounts can be made at all. The domain list only means anything
               while signup is on, which is why it sits with the switch and greys out with
               it. */}
-          <div className="space-y-5 border-t pt-4">
+          <div className="space-y-3 border-t pt-4">
+            <h3 className="text-sm font-semibold">Account creation</h3>
             <SwitchField
               id="allow-signup"
               name="allow-signup"
