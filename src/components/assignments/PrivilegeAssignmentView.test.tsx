@@ -817,12 +817,18 @@ describe('PrivilegeAssignmentView - the LMS badge', () => {
     expect(
       container.querySelector('section[aria-labelledby="assignment-page-title"]'),
     ).not.toBeNull();
-    // The wash and the arcs carry no meaning, so they stay out of the accessibility tree
-    // and cannot swallow a click.
+    // The network carries no meaning, so it stays out of the accessibility tree and cannot
+    // swallow a click. One decoration now, not three: the pale wash and its two circles are
+    // gone with the tinted panel, and the banner's node figure is a single SVG.
     const decoration = container.querySelectorAll(
       'section[aria-labelledby="assignment-page-title"] [aria-hidden="true"].pointer-events-none',
     );
-    expect(decoration.length).toBeGreaterThanOrEqual(3);
+    expect(decoration.length).toBeGreaterThanOrEqual(1);
+    // The same shared banner the course page leads with, network and all.
+    const svg = container.querySelector(
+      'section[aria-labelledby="assignment-page-title"] svg[aria-hidden="true"][focusable="false"]',
+    );
+    expect(svg?.querySelectorAll('circle').length ?? 0).toBeGreaterThan(40);
   });
 
   it('keeps every header control inside the panel', () => {

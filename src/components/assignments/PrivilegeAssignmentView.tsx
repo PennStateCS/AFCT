@@ -22,7 +22,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { IdentityPanel, IdentityPanelIcon } from '@/components/IdentityPanel';
+import {
+  IdentityPanel,
+  IdentityPanelIcon,
+  IDENTITY_BADGE,
+  IDENTITY_LINK,
+} from '@/components/IdentityPanel';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import {
   Dialog,
@@ -58,7 +63,6 @@ import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
 import { AssignmentLmsLinksCard } from '@/components/lti/AssignmentLmsLinksCard';
 import { fetchAssignmentLmsLinks, type AssignmentLmsLink } from '@/lib/lti/fetch-assignment-links';
-import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
 
 /**
@@ -540,33 +544,59 @@ export default function AssignmentDashboardPage({
         // the navbar left only the layout's own 16px above it. One mechanism, one value.
         className="gap-4"
       >
-        {/* The same identity panel the course page leads with, so an assignment reads as
-            the same kind of object one level down. The shell, the wash and the arcs all
-            come from the shared component; only what goes inside differs. */}
+        {/* The same banner the course page leads with, so an assignment reads as the same kind
+            of object one level down. The navy, the network, the padding and the height floor
+            all come from the shared component; only what goes inside differs.
+
+            That surface is dark in every theme, which is why the controls below carry explicit
+            colours instead of the ones their primitives ship with. See the note on IdentityPanel
+            for the rule and IDENTITY_BADGE / IDENTITY_LINK for the two common cases. */}
         <IdentityPanel labelledBy="assignment-page-title">
           <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
-            {/* min-w-0 flex-1 so a long title wraps rather than pushing the controls off
-                the panel. Never truncated: this is the one place the whole title belongs. */}
+            {/*
+              Same basis split as the course banner, and load-bearing for the same reason. The
+              control cluster beside this is shrink-0 and about 550px wide once the publish
+              toggle, the badge and the 224px assignment picker are counted. At a plain `flex-1`
+              the title's own basis is zero, so on a 768px screen it was left with about 55px and
+              came down one letter per line: the banner measured 674px tall. A full basis below
+              sm gives the title its own row, and the 24rem floor above sm makes flex-wrap drop
+              the controls to their own line until there is genuinely room for both.
+
+              break-words, not overflow-wrap:anywhere. `anywhere` also shrinks an element's
+              min-content width, which is what let that collapse happen; this only breaks a word
+              that cannot fit. Never truncated: this is the one place the whole title belongs.
+            */}
             <h1
               id="assignment-page-title"
-              className="flex min-w-0 flex-1 items-start gap-3 text-2xl leading-tight font-semibold tracking-tight"
+              className="flex min-w-0 basis-full items-start gap-3 text-2xl leading-tight font-semibold tracking-tight sm:min-w-96 sm:grow sm:basis-0 sm:gap-4"
             >
               {/* BookOpen, the icon the local rail and the course page already use for
-                  assignments, in the identity panel's emerald tile. */}
+                  assignments. */}
               <IdentityPanelIcon icon={BookOpen} />
-              <span className="min-w-0 [overflow-wrap:anywhere] break-words">
-                {assignment.title}
-              </span>
+              <span className="min-w-0 break-words">{assignment.title}</span>
             </h1>
             <div className="flex shrink-0 flex-wrap items-center gap-3">
               {/* Publish toggle sits next to the title; server enforces the guards
                   (e.g. no unpublish after submissions). */}
               <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+                {/* The switch ships with page-token colours: an --input track that goes pure
+                    black in high contrast (invisible on a black banner) and a thumb that flips
+                    to near-white in dark mode. Pinned here instead. The thumb stays white in
+                    both states and the track carries the state, which is how a switch is
+                    normally read, and the white border keeps the track findable whatever is
+                    behind it. The important modifier is not decoration: the thumb's own
+                    `dark:` rules are a specificity step above a plain descendant selector. */}
                 <Switch
                   aria-label="Published"
                   checked={!!assignment.isPublished}
                   onCheckedChange={(checked) => setPublishTarget(!!checked)}
                   disabled={courseIsArchived}
+                  className={
+                    'border-white/40 data-[state=checked]:bg-blue-400 ' +
+                    'data-[state=unchecked]:bg-white/20 dark:data-[state=unchecked]:bg-white/20 ' +
+                    'focus-visible:border-white focus-visible:ring-white/80 ' +
+                    '[&_[data-slot=switch-thumb]]:bg-white!'
+                  }
                 />
                 Published
               </label>
@@ -576,13 +606,18 @@ export default function AssignmentDashboardPage({
                   overrides, so a single header value would hide an extension. */}
               {/* Tinted so it registers at a glance. The two tones differ to tell them apart,
                   not to say one is better: an icon carries the same distinction for anyone who
-                  cannot separate the hues. */}
+                  cannot separate the hues.
+
+                  Fixed palette values, not the --status-* tokens this used to take. Those flip
+                  with the theme while the banner does not, so in dark mode both chips became a
+                  dark translucent fill on a dark navy ground and neither could be found. These
+                  are light chips in every theme, and they keep the amber/blue split. */}
               <Badge
                 variant="outline"
                 className={`shrink-0 gap-1.5 text-xs font-normal ${
                   assignment.groupSetId
-                    ? 'bg-status-warning-bg border-status-warning-border text-status-warning'
-                    : 'bg-status-info-bg border-status-info-border text-status-info'
+                    ? 'border-amber-300/70 bg-amber-100 text-amber-900'
+                    : 'border-sky-300/70 bg-sky-100 text-sky-900'
                 }`}
               >
                 {assignment.groupSetId ? (
@@ -594,7 +629,7 @@ export default function AssignmentDashboardPage({
               </Badge>
               {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
                   Settings holds the detail and the way to remove one. */}
-              <LmsLinkBadge links={confirmedLmsLinks} />
+              <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
               {/* Quick jump to another assignment in this course. */}
               <div className="w-56 shrink-0">
                 <SearchableSelect
@@ -620,17 +655,25 @@ export default function AssignmentDashboardPage({
                   searchPlaceholder="Search assignments..."
                   emptyStateText="No assignments found."
                   disabled={assignmentsLoading}
+                  // The trigger's shared field class is built for a light page: a --card fill
+                  // and a --muted-foreground label, both of which vanish on navy. The chevron
+                  // is coloured inside the component, so it takes a descendant rule.
+                  triggerClassName={
+                    'border-white/25 bg-white/10 text-white hover:bg-white/15 ' +
+                    'focus-visible:border-white focus-visible:ring-white/80 [&_svg]:text-white/70'
+                  }
                 />
               </div>
             </div>
           </div>
-          {/* Indented to the title's text on wide screens, so the identity block reads as
-              one column, matching the course panel. */}
-          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm sm:pl-[3.75rem]">
+          {/* Indented to the title's text on wide screens, so the identity block reads as one
+              column, matching the course banner: the sm icon slot is 56px and the gap beside it
+              16. */}
+          <div className="flex flex-wrap items-center gap-2 text-sm sm:pl-[4.5rem]">
             {/* Show course name/code as a link to the course page (fallback to courseId) */}
             <Link
               href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-              className={cn(TEXT_LINK_CLASS, 'max-w-full break-all')}
+              className={cn(IDENTITY_LINK, 'max-w-full break-all')}
             >
               {assignment.course?.name || assignment.courseName || assignment.courseId}
               {assignment.course?.code

@@ -254,7 +254,7 @@ function resolve(pairs: Array<[number, number]>, opts: { opacity?: number; trim?
     const from = NODES[a];
     const to = NODES[b];
     if (!from || !to) {
-      throw new Error(`CourseHeaderNetwork: edge ${a}-${b} names a node that does not exist`);
+      throw new Error(`IdentityNetwork: edge ${a}-${b} names a node that does not exist`);
     }
     // An arrowed line stops short of its target so the head sits just off the node instead of
     // buried under it. Done here in the geometry rather than with the marker's refX, which is
@@ -285,7 +285,8 @@ const ARROW_LINES = resolve(ARROWS, { trim: true, opacity: ARROW_OPACITY });
 const HALOS = NODES.filter((n) => n.kind === 'bright');
 
 /**
- * The connected-node figure behind the course banner.
+ * The connected-node figure behind an identity banner, on the course page and the assignment
+ * page alike.
  *
  * Presentation only, and decorative in the strict sense: it is `aria-hidden`, it cannot take
  * focus, it takes no pointer events and it carries no information the banner needs. Remove it
@@ -321,7 +322,7 @@ const HALOS = NODES.filter((n) => n.kind === 'bright');
  * is least room for it, with no breakpoint deciding it. `xMax` would do the opposite and slide
  * the densest cluster behind stacked text on the smallest screen.
  */
-export function CourseHeaderNetwork({ className }: { className?: string }) {
+export function IdentityNetwork({ className }: { className?: string }) {
   // One banner per page, but an id collision would point the arrowheads at another component's
   // marker, and the colons React puts in these are fine inside a url() reference.
   const arrowId = `course-network-head-${useId()}`;
@@ -406,4 +407,4 @@ export function CourseHeaderNetwork({ className }: { className?: string }) {
   );
 }
 
-export default CourseHeaderNetwork;
+export default IdentityNetwork;

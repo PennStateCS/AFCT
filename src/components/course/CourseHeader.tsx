@@ -10,41 +10,17 @@ import { getInstructors, type EnrolledUser } from '@/lib/course-roster';
 import { showToast } from '@/lib/toast';
 import { formatRegistrationCode } from '@/lib/format-registration-code';
 import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
-import { CourseHeaderNetwork } from '@/components/course/CourseHeaderNetwork';
+import {
+  IdentityPanel,
+  IdentityPanelIcon,
+  IDENTITY_BADGE,
+  IDENTITY_ICON_BUTTON,
+} from '@/components/IdentityPanel';
 
 interface CourseHeaderProps {
   course: FullCourse;
   isStudent: boolean;
 }
-
-/**
- * Every badge in the banner, in one class.
- *
- * A light neutral chip, and deliberately the same one for all four. Two things rule out the
- * ordinary badge variants here. Their fills are page tokens, so in dark mode they turn into a
- * dark translucent surface, which on a navy banner is a chip you can barely find; and their
- * text colours flip with the theme while the banner does not, so a variant that reads in light
- * mode disappears in dark. This is fixed in every theme: 16.2:1 for the label, and the chip
- * itself is unmistakable against the navy.
- *
- * The lifecycle badge losing its hue costs nothing. `COURSE_LIFECYCLE_BADGE` is still what
- * decides the badge's meaning and is untouched, the courses table still renders it in colour,
- * and here the word Open, Upcoming or Closed carries it on its own. Colour was never allowed
- * to be the only signal anyway.
- */
-const BANNER_BADGE = 'border-white/30 bg-white/90 text-slate-900';
-
-/**
- * The two icon buttons beside the registration code.
- *
- * Spelled out rather than left to the ghost variant, which is built from page tokens: its
- * `text-foreground` is near-black in light mode, its `hover:bg-accent` is a pale grey box, and
- * its cobalt focus ring does not clear 3:1 on navy. Nothing inside the banner may reach for a
- * page token; see the note on --course-banner in globals.css.
- */
-const BANNER_ICON_BUTTON =
-  'size-6 text-white/70 hover:bg-white/15 hover:text-white dark:hover:bg-white/15 ' +
-  'focus-visible:border-white focus-visible:ring-white/80';
 
 /**
  * The course registration code plus one-click copy of the code and of a shareable
@@ -79,7 +55,7 @@ function RegistrationCode({ code }: { code: string }) {
         type="button"
         variant="ghost"
         size="icon"
-        className={BANNER_ICON_BUTTON}
+        className={IDENTITY_ICON_BUTTON}
         onClick={copyCode}
         aria-label={
           copied === 'code' ? 'Registration code copied' : `Copy registration code ${formatted}`
@@ -99,7 +75,7 @@ function RegistrationCode({ code }: { code: string }) {
         type="button"
         variant="ghost"
         size="icon"
-        className={BANNER_ICON_BUTTON}
+        className={IDENTITY_ICON_BUTTON}
         onClick={copyLink}
         aria-label={copied === 'link' ? 'Invite link copied' : 'Copy invite link'}
         title="Copy invite link"
@@ -122,25 +98,10 @@ function RegistrationCode({ code }: { code: string }) {
  * this in their own `<section className="grid grid-cols-1 gap-3">`, which meant the shell
  * was described twice and could drift; it belongs to the header, so it lives here.
  *
- * This replaced a pale mint-and-sky `IdentityPanel`, which is still what the assignment page
- * uses. The panel was a tint on the page: it followed the theme, sat a fraction above the
- * canvas, and read as a slightly nicer card. A course page is the one place in the app that
- * should say AFCT before it says anything else, so this is a branded surface instead. It is
- * dark in every theme for the same reason the sidebar and the sign-in panel are, and it does
- * not inherit `bg-card` on purpose: the page around it stays light in light mode.
- *
- * Because of that, nothing in here may use a page token or a `dark:` utility. Every colour
- * comes from the `--course-banner-*` family in globals.css, which is where the light, dark and
- * high-contrast values are decided and where their contrast is recorded. A stray
- * `text-muted-foreground` in this file is invisible in light mode and there is no way to see
- * that from the markup, which is the whole reason the family exists.
- *
- * Two layers: the ground gradient on the section itself, and the network over it. There used
- * to be a third, a navy wash between them that kept the left quiet, and it is gone because the
- * network now carries its own horizontal fade as an SVG mask. Two mechanisms doing one job
- * multiplied: with both in place the mesh on the left third came out at a fraction of a percent
- * of opacity and simply was not there. The mask is the better of the two, because it dims only
- * the decoration and leaves the ground gradient at full strength.
+ * The surface, the network, the padding and the height floor all come from `IdentityPanel`,
+ * which the assignment page uses too; only what goes inside differs. Read the note there before
+ * changing anything here, in particular the rule that nothing inside a banner may use a page
+ * token or a `dark:` utility.
  */
 export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
   const normalizeDate = (value?: string | Date | null) => {
@@ -153,7 +114,7 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
 
   // Which dates put the course in which state is this component's business; which colour
   // that state gets is not. See lib/badge-presets, which the courses table reads too. The
-  // banner then renders it in its own fixed chip; see BANNER_BADGE for why.
+  // banner then renders it in its own fixed chip; see IDENTITY_BADGE for why.
   const courseStatus = (() => {
     if (!startDate || !endDate) {
       return { label: 'Upcoming', theme: { variant: COURSE_LIFECYCLE_BADGE.upcoming } };
@@ -184,35 +145,9 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
 
   // -- render ---------------------------------------------------------------
   return (
-    <section
-      aria-labelledby="course-page-title"
-      // overflow-hidden clips the network to the rounded corners; relative anchors it.
-      // shadow-xs rather than a real shadow: the separation comes from the surface being a
-      // different kind of thing from the page, not from floating above it.
-      className={
-        'border-course-banner-border text-course-banner-foreground relative overflow-hidden ' +
-        'rounded-xl border bg-gradient-to-r shadow-xs ' +
-        'from-course-banner via-course-banner-mid to-course-banner-accent'
-      }
-    >
-      <CourseHeaderNetwork />
-
-      {/* Everything real sits above the decoration. The padding lives here rather than on the
-          section so the network runs edge to edge behind it. */}
-      {/* The floor is what makes a course page open the same height whoever is looking. A
-          student gets no faculty/TA/registration line, so without it their banner came out at
-          116px against a staff member's 138 and the assignment table started in a different
-          place for the two of them. 8.5rem is the staff height, and the spare goes above and
-          below rather than under the title. Not applied below sm, where the rows stack and
-          there is no spare height to distribute.
-
-          The padding and the row gap are each a step down from where this started, which took
-          the banner from 156px to 138 without touching the type, the icon slot or the two-row
-          structure. The icon slot is the floor under the rest: at 56px plus padding there is
-          not much further to go without shrinking something that carries meaning. */}
-      <div className="relative flex flex-col justify-center gap-3 p-4 sm:min-h-[8.5rem] sm:p-5 lg:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          {/*
+    <IdentityPanel labelledBy="course-page-title">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        {/*
             basis-full below sm, a growing basis-0 above it, and that split is load-bearing.
 
             The badges are shrink-0 and about 290px wide. At `flex-1` (which is basis-0) the
@@ -235,29 +170,21 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
             roughly 700px of banner the badges drop to the next line and the title gets the
             width, above it they sit alongside as they should.
           */}
-          <h1
-            id="course-page-title"
-            className="flex min-w-0 basis-full items-start gap-3 text-2xl leading-tight font-semibold tracking-tight sm:min-w-96 sm:grow sm:basis-0 sm:gap-4"
-          >
-            {/* The Book that marks a course everywhere else in the app, as a bare glyph. It
-                had a translucent white tile around it, which on a surface this dark read as a
-                second object rather than as part of the title. The span stays as a fixed slot
-                even without the box: the metadata line below indents to its width, so the
-                geometry is doing real work whether or not anything is painted on it. The glyph
-                is bigger than it was inside the tile, which is what an unboxed icon needs to
-                hold its own beside a text-2xl title. */}
-            <span className="mt-0.5 flex size-12 shrink-0 items-center justify-center sm:size-14">
-              <Book className="size-7 sm:size-9" aria-hidden="true" />
-            </span>
-            {/* One title, one colour. The code used to be muted and the name foreground,
+        <h1
+          id="course-page-title"
+          className="flex min-w-0 basis-full items-start gap-3 text-2xl leading-tight font-semibold tracking-tight sm:min-w-96 sm:grow sm:basis-0 sm:gap-4"
+        >
+          {/* The Book that marks a course everywhere else in the app. */}
+          <IdentityPanelIcon icon={Book} />
+          {/* One title, one colour. The code used to be muted and the name foreground,
                 which broke "CMPSC 131: Programming and Computation I" into two ranks for no
                 reason; its position already tells you which part is the code. */}
-            <span className="min-w-0 break-words">
-              {course.code}: {course.name}
-            </span>
-          </h1>
+          <span className="min-w-0 break-words">
+            {course.code}: {course.name}
+          </span>
+        </h1>
 
-          {/* Indented to the title's text on the same terms the metadata below is, which only
+        {/* Indented to the title's text on the same terms the metadata below is, which only
               shows when the row has wrapped underneath: pushed right by justify-between on a
               wide banner, the padding costs nothing. Without it a wrapped badge row sat
               against the banner edge while the faculty line under it started 72px in.
@@ -267,44 +194,43 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
               badges take their own line and the title gets the full width rather than being
               squeezed to its 24rem floor. Removing it puts a long course name into four lines
               beside three chips, which is taller than the wrap it avoids. */}
-          <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pl-[4.5rem]">
-            <Badge variant="secondary" className={BANNER_BADGE}>
-              {course.semester}
-            </Badge>
-            <Badge variant="outline" className={BANNER_BADGE}>
-              {course.credits} credit{course.credits === 1 ? '' : 's'}
-            </Badge>
-            <Badge variant={courseStatus.theme.variant} className={BANNER_BADGE}>
-              {courseStatus.label}
-            </Badge>
-            {/* Only staff receive `lmsLinks`, so this is empty for a student and renders
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pl-[4.5rem]">
+          <Badge variant="secondary" className={IDENTITY_BADGE}>
+            {course.semester}
+          </Badge>
+          <Badge variant="outline" className={IDENTITY_BADGE}>
+            {course.credits} credit{course.credits === 1 ? '' : 's'}
+          </Badge>
+          <Badge variant={courseStatus.theme.variant} className={IDENTITY_BADGE}>
+            {courseStatus.label}
+          </Badge>
+          {/* Only staff receive `lmsLinks`, so this is empty for a student and renders
                 nothing. It sits last because it is the one badge that is often absent, and
                 a row that changes length at the end is easier to read than one that shifts
                 in the middle. */}
-            {!isStudent && <LmsLinkBadge links={course.lmsLinks ?? []} className={BANNER_BADGE} />}
-          </div>
+          {!isStudent && <LmsLinkBadge links={course.lmsLinks ?? []} className={IDENTITY_BADGE} />}
         </div>
+      </div>
 
-        {/* Faculty, TAs (only when there are any), then the registration code + copy.
+      {/* Faculty, TAs (only when there are any), then the registration code + copy.
             Indented to the title's text rather than the banner edge on wide screens, so the
             identity block reads as one column: the sm icon is 56px and the gap beside it 16.
             No indent below sm, where the rows are stacked full width anyway. */}
-        {!isStudent && (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm sm:pl-[4.5rem]">
+      {!isStudent && (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm sm:pl-[4.5rem]">
+          <span>
+            <span className="text-course-banner-muted-foreground">Faculty: </span>
+            <span className="font-medium">{facultyNames}</span>
+          </span>
+          {tas.length > 0 && (
             <span>
-              <span className="text-course-banner-muted-foreground">Faculty: </span>
-              <span className="font-medium">{facultyNames}</span>
+              <span className="text-course-banner-muted-foreground">TAs: </span>
+              <span className="font-medium">{formatAllNames(tas)}</span>
             </span>
-            {tas.length > 0 && (
-              <span>
-                <span className="text-course-banner-muted-foreground">TAs: </span>
-                <span className="font-medium">{formatAllNames(tas)}</span>
-              </span>
-            )}
-            {registrationCode ? <RegistrationCode code={registrationCode} /> : null}
-          </div>
-        )}
-      </div>
-    </section>
+          )}
+          {registrationCode ? <RegistrationCode code={registrationCode} /> : null}
+        </div>
+      )}
+    </IdentityPanel>
   );
 }
