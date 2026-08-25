@@ -200,6 +200,16 @@ export function AssignmentBasicsForm({
           }}
           disabled={courseIsArchived}
           placeholder="Enter assignment description"
+          /*
+           * Taller than the editor's default, because this is a page and not a dialog. The
+           * default 160px box (115px of writing area, about five lines) is sized for the
+           * problem dialogs, where the editor competes with a file picker and a set of
+           * limits for a fixed amount of room. Here the description IS the tab, and that box
+           * left an assignment brief being written through a slot with 400px of empty page
+           * under it. 288px is about eleven lines; the drag grip still takes it further, up
+           * to 80vh.
+           */
+          minHeightClassName="min-h-72"
         />
 
         {error && (
