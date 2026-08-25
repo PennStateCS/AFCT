@@ -544,15 +544,15 @@ export default function SystemSettingsClient() {
 
   return (
     // Spacing stated per element rather than through `space-y`, because the first child is
-    // the sr-only status line: it is out of flow, so a wrapper gap put nothing above the
-    // title and the page's own padding was all it had. The title now sits in equal air,
-    // 24px above and 24px below (the 16px comes from <main>'s py-4).
+    // the sr-only status line: it is out of flow, so a wrapper gap would put nothing above
+    // the title. The 24px above comes from <main>'s py-6; this supplies the matching 24
+    // below, so the title sits in equal air.
     <div>
       <p className="sr-only" aria-live="polite">
         {loading ? 'Loading system settings' : saving ? 'Saving system settings' : ''}
       </p>
 
-      <h1 className="mt-2 flex items-center gap-3 text-2xl font-semibold tracking-tight">
+      <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
         {/* Decorative: the heading beside it already says what this is. The icon the
             sidebar already uses for this page, on the neutral muted surface the other
             admin pages use. */}

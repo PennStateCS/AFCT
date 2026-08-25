@@ -84,7 +84,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
                     id="main-content"
                     tabIndex={-1}
                     lang="en"
-                    className="flex min-w-0 flex-1 flex-col px-4 py-4 lg:px-6"
+                    // py-6, not py-4: 24px is the air a page title wants above it, and
+                    // every page's title sits directly against this padding. Paired with
+                    // the 24px under the title, the heading reads as centred in its own
+                    // band rather than pinned to the navbar. WorkspaceSurface bleeds back
+                    // through these values, so it matches them.
+                    className="flex min-w-0 flex-1 flex-col px-4 py-6 lg:px-6"
                   >
                     {children}
                   </main>

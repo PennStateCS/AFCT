@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
  * `bg-card`, so they keep reading as objects on the canvas rather than dissolving into it.
  *
  * The negative margin is the awkward part and the reason this lives in one place.
- * `dashboard/layout.tsx` puts `px-4 py-4 lg:px-6` on `<main>`, so a plain background
+ * `dashboard/layout.tsx` puts `px-4 py-6 lg:px-6` on `<main>`, so a plain background
  * inside it would stop short on every side and read as a rectangle floating on slate.
  * The negative margins bleed back through that padding and the matching padding restores
  * it inside, which puts the surface flush against the navbar's divider and the workspace
@@ -28,7 +28,7 @@ export function WorkspaceSurface({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn('bg-background -m-4 flex-1 p-4 lg:-mx-6 lg:px-6', className)}>
+    <div className={cn('bg-background -mx-4 -my-6 flex-1 px-4 py-6 lg:-mx-6 lg:px-6', className)}>
       {children}
     </div>
   );
