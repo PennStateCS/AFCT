@@ -99,7 +99,7 @@ export function SettingsSection({
 }
 
 /**
- * The two-column grid a status tab uses: the form, and a narrow rail beside it.
+ * The two-column grid an aside tab uses: the form, and a narrow rail beside it.
  *
  * Exported because the Save row has to line up with the form column and lives outside the
  * tab that draws the grid. Giving the footer the same template and putting it in column 1
@@ -119,32 +119,34 @@ export function SettingsSection({
  * 18rem is enough for a badge and a short paragraph and not enough to compete with the
  * form; 20rem once there is room to spare.
  */
-export const SETTINGS_STATUS_GRID =
+export const SETTINGS_ASIDE_GRID =
   'grid grid-cols-1 gap-6 min-[1400px]:grid-cols-[minmax(0,1fr)_18rem] 2xl:grid-cols-[minmax(0,1fr)_20rem]';
 
 /**
- * A tab that answers two questions at once: what is set up now, and what do I want to change.
+ * A tab that answers two questions at once: what do I want to change, and what should I know
+ * while I change it. Four tabs put their current state in the rail; General puts the server's
+ * public address there, which is reference rather than status, hence the neutral name.
  *
- * The form is the main column; the current state sits beside it on a wide screen and above
- * it on a narrow one. Status goes FIRST in the DOM deliberately. Stacked, that is the order
+ * The form is the main column; the rail sits beside it on a wide screen and above it on a
+ * narrow one. The rail goes FIRST in the DOM deliberately. Stacked, that is the order
  * you want (know the state, then edit it), and it means the visual and reading orders differ
  * only in the one place they must: on a wide screen the rail is placed into column two.
- * Keep the status copy short for the same reason, or a phone gets a paragraph before the form.
+ * Keep the rail's copy short for the same reason, or a phone gets a paragraph before the form.
  *
  * Layout only. Nothing here knows what a certificate or an SMTP host is.
  */
-export function SettingsStatusLayout({
-  status,
+export function SettingsAsideLayout({
+  aside,
   className,
   children,
 }: {
-  /** The rail's content, normally one {@link SettingsStatusCard}. */
-  status: React.ReactNode;
+  /** The rail's content: a {@link SettingsStatusCard}, or any {@link SettingsAsideCard}. */
+  aside: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn(SETTINGS_WORKSPACE, SETTINGS_STATUS_GRID, 'items-start', className)}>
+    <div className={cn(SETTINGS_WORKSPACE, SETTINGS_ASIDE_GRID, 'items-start', className)}>
       {/* Positioning only. The landmark and the heading belong to the card inside, so the
           rail is one named region rather than an anonymous <aside> wrapping a titled box.
 
@@ -153,13 +155,47 @@ export function SettingsStatusLayout({
           while you scroll the flow that changes it. No ancestor sets overflow, which is
           what would otherwise make position:sticky a no-op. */}
       <div className="min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1">
-        {status}
+        {aside}
       </div>
 
       <div className="min-w-0 space-y-6 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * The shell every card in the rail shares: a titled, quiet, self-labelling box.
+ *
+ * `bg-muted` and never `bg-card`. The white panels are the editable form; the rail is what
+ * you consult while filling it in, and matching the form's surface would make a reference
+ * card look like another thing to fill in. It also keeps all five tabs' rails identical,
+ * which is the point of having a rail at all.
+ *
+ * The heading lives inside the box, and the box names itself with it, so the rail is one
+ * named landmark rather than an anonymous aside wrapping a titled div.
+ */
+export function SettingsAsideCard({
+  title,
+  className,
+  children,
+}: {
+  title: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const id = settingsSectionId(title);
+  return (
+    <aside
+      aria-labelledby={id}
+      className={cn('bg-muted rounded-lg border p-5 shadow-xs', className)}
+    >
+      <h2 id={id} className="text-base font-semibold">
+        {title}
+      </h2>
+      <div className="mt-4">{children}</div>
+    </aside>
   );
 }
 
@@ -214,21 +250,13 @@ export function SettingsStatusCard({
   /** Detail and, where there is one, the next step. Keep it to a few short lines. */
   children?: React.ReactNode;
 }) {
-  const id = settingsSectionId(title);
   const { Icon, className: toneClass } = STATUS_TONES[tone];
 
   return (
     // No role="status": this is a summary of the current state, not a live region, and
     // announcing the whole card on every render would talk over the form beside it.
-    <aside
-      aria-labelledby={id}
-      className={cn('bg-muted rounded-lg border p-5 shadow-xs', className)}
-    >
-      <h2 id={id} className="text-base font-semibold">
-        {title}
-      </h2>
-
-      <div className="mt-4 space-y-3">
+    <SettingsAsideCard title={title} className={className}>
+      <div className="space-y-3">
         <div className="flex items-center gap-2">
           <Icon className={cn('size-4 shrink-0', toneClass)} aria-hidden="true" />
           {badge}
@@ -238,7 +266,7 @@ export function SettingsStatusCard({
 
         {children ? <div className="space-y-2">{children}</div> : null}
       </div>
-    </aside>
+    </SettingsAsideCard>
   );
 }
 

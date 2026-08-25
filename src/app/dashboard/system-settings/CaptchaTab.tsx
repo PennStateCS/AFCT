@@ -9,7 +9,7 @@ import SwitchField from '@/components/ui/SwitchField';
 import {
   SettingsSection,
   SettingsStatusCard,
-  SettingsStatusLayout,
+  SettingsAsideLayout,
   SettingsStatusNextStep,
   SettingsStatusText,
 } from './settings-layout';
@@ -63,8 +63,8 @@ export function CaptchaTab({
   };
 
   return (
-    <SettingsStatusLayout
-      status={
+    <SettingsAsideLayout
+      aside={
         <SettingsStatusCard
           title="Current status"
           tone={hcaptchaEnabled ? 'ok' : 'off'}
@@ -199,6 +199,6 @@ export function CaptchaTab({
           </p>
         )}
       </SettingsSection>
-    </SettingsStatusLayout>
+    </SettingsAsideLayout>
   );
 }

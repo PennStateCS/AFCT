@@ -10,7 +10,7 @@ import { SMTP_SECURITY, SMTP_SECURITY_LABELS, type SmtpSecurity } from '@/schema
 import {
   SettingsSection,
   SettingsStatusCard,
-  SettingsStatusLayout,
+  SettingsAsideLayout,
   SettingsStatusNextStep,
   SettingsStatusText,
 } from './settings-layout';
@@ -91,8 +91,8 @@ export function EmailTab({
   };
 
   return (
-    <SettingsStatusLayout
-      status={
+    <SettingsAsideLayout
+      aside={
         <SettingsStatusCard
           title="Current status"
           tone={!enabled ? 'off' : passwordReadable ? 'ok' : 'bad'}
@@ -296,7 +296,7 @@ export function EmailTab({
           </p>
         )}
       </SettingsSection>
-    </SettingsStatusLayout>
+    </SettingsAsideLayout>
   );
 }
 

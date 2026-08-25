@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   SettingsSection,
   SettingsStatusCard,
-  SettingsStatusLayout,
+  SettingsAsideLayout,
   SettingsStatusNextStep,
   SettingsStatusText,
 } from './settings-layout';
@@ -101,11 +101,11 @@ describe('SettingsStatusCard', () => {
   });
 });
 
-describe('SettingsStatusLayout', () => {
+describe('SettingsAsideLayout', () => {
   function renderLayout() {
     return render(
-      <SettingsStatusLayout
-        status={
+      <SettingsAsideLayout
+        aside={
           <SettingsStatusCard
             title="Current status"
             tone="ok"
@@ -120,7 +120,7 @@ describe('SettingsStatusLayout', () => {
           <label htmlFor="host">Mail server</label>
           <input id="host" />
         </SettingsSection>
-      </SettingsStatusLayout>,
+      </SettingsAsideLayout>,
     );
   }
 

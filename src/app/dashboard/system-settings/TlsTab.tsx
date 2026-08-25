@@ -21,7 +21,7 @@ import { deriveAcmeSteps } from './system-settings-shared';
 import {
   SettingsSection,
   SettingsStatusCard,
-  SettingsStatusLayout,
+  SettingsAsideLayout,
   SettingsStatusText,
 } from './settings-layout';
 
@@ -87,8 +87,8 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
   return (
     <>
-      <SettingsStatusLayout
-        status={
+      <SettingsAsideLayout
+        aside={
           <SettingsStatusCard
             title="Current certificate"
             /* The tab decides what the certificate IS; the card only decides how a state
@@ -502,7 +502,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             </Button>
           )}
         </div>
-      </SettingsStatusLayout>
+      </SettingsAsideLayout>
 
       <ConfirmDialog
         open={tlsConfirm === 'reset'}

@@ -8,7 +8,7 @@ import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
 import {
   SettingsSection,
   SettingsStatusCard,
-  SettingsStatusLayout,
+  SettingsAsideLayout,
   SettingsStatusNextStep,
   SettingsStatusText,
 } from './settings-layout';
@@ -61,8 +61,8 @@ export function SignInTab({
   redirectUri: string;
 }) {
   return (
-    <SettingsStatusLayout
-      status={
+    <SettingsAsideLayout
+      aside={
         <SettingsStatusCard
           title="Current status"
           tone={!enabled ? 'off' : clientSecretReadable ? 'ok' : 'bad'}
@@ -247,7 +247,7 @@ export function SignInTab({
           cannot confirm an LMS launch, which asks for an AFCT password.
         </p>
       </SettingsSection>
-    </SettingsStatusLayout>
+    </SettingsAsideLayout>
   );
 }
 

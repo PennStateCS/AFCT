@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
-import { SETTINGS_STANDARD, SETTINGS_STATUS_GRID, SETTINGS_WORKSPACE } from './settings-layout';
+import { SETTINGS_STANDARD, SETTINGS_ASIDE_GRID, SETTINGS_WORKSPACE } from './settings-layout';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -540,15 +540,15 @@ export default function SystemSettingsClient() {
   const showSave = tab !== 'tls' && tab !== 'updates';
 
   /*
-   * Which tabs put their current state in a rail beside the form.
+   * Which tabs put a rail beside the form.
    *
-   * Only the four that answer two different questions at once ("what is set up now" and
-   * "what do I want to change"). General, Evaluator, Backups, LTI and Updates have no such
-   * summary, and inventing one to make the tabs match would be a worse page. The mixed
+   * Four carry their current state there; General carries the server's public address,
+   * which is reference rather than status. Evaluator, Backups, LTI and Updates have
+   * neither, and inventing something to fill a rail would be a worse page. The mixed
    * layout is the point.
    */
-  const hasStatusColumn =
-    tab === 'email' || tab === 'sign-in' || tab === 'captcha' || tab === 'tls';
+  const hasAsideColumn =
+    tab === 'general' || tab === 'email' || tab === 'sign-in' || tab === 'captcha' || tab === 'tls';
 
   // xl rather than lg: a rail plus a settings form needs more room than a table does.
   const railNav = useIsDesktopNav(1280);
@@ -710,8 +710,8 @@ export default function SystemSettingsClient() {
                * than by two numbers kept in step by hand.
                */
               className={
-                hasStatusColumn
-                  ? `${SETTINGS_WORKSPACE} ${SETTINGS_STATUS_GRID} mt-6`
+                hasAsideColumn
+                  ? `${SETTINGS_WORKSPACE} ${SETTINGS_ASIDE_GRID} mt-6`
                   : `${SETTINGS_STANDARD} mt-6`
               }
             >
