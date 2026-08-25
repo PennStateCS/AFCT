@@ -54,12 +54,15 @@ export function settingsSectionId(title: string) {
 export function SettingsSection({
   title,
   description,
+  action,
   className,
   boxed = true,
   children,
 }: {
   title: string;
   description?: React.ReactNode;
+  /** A control that belongs to this section, e.g. "Add an LMS", shown beside the heading. */
+  action?: React.ReactNode;
   className?: string;
   boxed?: boolean;
   children: React.ReactNode;
@@ -68,7 +71,7 @@ export function SettingsSection({
 
   // h2, under the page's "System Settings" h1. A major group must not look like a field
   // label, which is what text-sm font-medium made it, nor compete with the page title.
-  const header = (
+  const heading = (
     <div className="space-y-1">
       <h2 id={id} className="text-base font-semibold">
         {title}
@@ -77,6 +80,18 @@ export function SettingsSection({
         <p className="text-muted-foreground max-w-3xl text-sm">{description}</p>
       ) : null}
     </div>
+  );
+
+  // The action sits on the heading's row, not out at the panel's far edge: a button that
+  // far from its list reads as belonging to the page. flex-wrap so it drops under the
+  // heading at 390px rather than squeezing it.
+  const header = action ? (
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      {heading}
+      <div className="shrink-0">{action}</div>
+    </div>
+  ) : (
+    heading
   );
 
   if (!boxed) {
@@ -137,14 +152,33 @@ export const SETTINGS_ASIDE_GRID =
  */
 export function SettingsAsideLayout({
   aside,
+  asidePlacement = 'before',
   className,
   children,
 }: {
   /** The rail's content: a {@link SettingsStatusCard}, or any {@link SettingsAsideCard}. */
   aside: React.ReactNode;
+  /**
+   * Where the rail goes once the columns stack, which is also its DOM order.
+   *
+   * `before` for a status summary: know the state, then edit it. `after` for reference
+   * material like LTI's manual endpoints, which is the fallback path and should not sit
+   * between a phone user and the workflow they came for.
+   *
+   * It changes nothing on a wide screen. Both columns are placed explicitly by row and
+   * column, so the grid puts them side by side whichever order they are written in, and
+   * no CSS has to reorder anything for the reading order to match what is on screen.
+   */
+  asidePlacement?: 'before' | 'after';
   className?: string;
   children: React.ReactNode;
 }) {
+  const railColumn = (
+    <div className="min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1">
+      {aside}
+    </div>
+  );
+
   return (
     <div className={cn(SETTINGS_WORKSPACE, SETTINGS_ASIDE_GRID, 'items-start', className)}>
       {/* Positioning only. The landmark and the heading belong to the card inside, so the
@@ -154,13 +188,13 @@ export function SettingsAsideLayout({
           the long tabs (Sign-in, TLS) the state you are changing is worth keeping in view
           while you scroll the flow that changes it. No ancestor sets overflow, which is
           what would otherwise make position:sticky a no-op. */}
-      <div className="min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1">
-        {aside}
-      </div>
+      {asidePlacement === 'before' ? railColumn : null}
 
       <div className="min-w-0 space-y-6 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
         {children}
       </div>
+
+      {asidePlacement === 'after' ? railColumn : null}
     </div>
   );
 }

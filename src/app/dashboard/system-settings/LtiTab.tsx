@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Copy, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { LtiPlatformSchema } from '@/schemas/lti';
-import { SETTINGS_READABLE, SETTINGS_STANDARD } from './settings-layout';
+import { SettingsAsideCard, SettingsAsideLayout, SettingsSection } from './settings-layout';
+import { CopyableValue } from './CopyableValue';
 
 type Platform = {
   id: string;
@@ -38,6 +39,42 @@ const EMPTY = {
  * Registration is mutual, so the tab has two halves. The values AFCT needs go in the form; the
  * values the LMS needs are listed above it, ready to copy.
  */
+/**
+ * The four endpoint values an LMS wants when it is configured by hand.
+ *
+ * Reference, in the rail, not four read-only InputGroups in the middle of the page. This is
+ * the fallback path: dynamic registration fills all of it in for you, so it should be
+ * findable without competing with the button that does the job for you.
+ *
+ * The two caveats that used to sit in a paragraph under all four fields now sit with the
+ * endpoint each one is actually about.
+ */
+function ManualConfigurationCard({ base }: { base: string }) {
+  return (
+    <SettingsAsideCard title="Manual configuration">
+      <div className="space-y-4">
+        <p className="text-muted-foreground text-xs leading-4.5">
+          Use these only if your LMS cannot do dynamic registration, or you would rather register
+          AFCT by hand.
+        </p>
+
+        <CopyableValue label="Target link URI" value={`${base}/api/lti/launch`} />
+        <CopyableValue label="Login initiation URL" value={`${base}/api/lti/login`} />
+        <CopyableValue
+          label="Redirection URI"
+          value={`${base}/api/lti/launch`}
+          description="Your LMS compares this exactly. A trailing slash or a different host is the usual cause of a failed launch."
+        />
+        <CopyableValue
+          label="Public keyset URL"
+          value={`${base}/api/lti/jwks`}
+          description="Your LMS reads this from its own servers, not from a browser, so AFCT has to be reachable from your LMS. Grades will not reach it otherwise."
+        />
+      </div>
+    </SettingsAsideCard>
+  );
+}
+
 export function LtiTab({ siteUrl }: { siteUrl: string }) {
   const base = siteUrl.replace(/\/+$/, '');
   const [platforms, setPlatforms] = useState<Platform[] | null>(null);
@@ -47,7 +84,6 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
   const [removing, setRemoving] = useState<Platform | null>(null);
   const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
   const [creatingLink, setCreatingLink] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -114,7 +150,6 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
 
   const createLink = async () => {
     setCreatingLink(true);
-    setCopied(false);
     try {
       const res = await fetch('/api/admin/lti/registration-token', { method: 'POST' });
       const data = (await res.json().catch(() => ({}))) as {
@@ -134,232 +169,187 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
     }
   };
 
-  const copyLink = async () => {
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link.url);
-      setCopied(true);
-    } catch {
-      // Copying can be refused. The link is on screen and selectable, so say that rather than
-      // pretending it worked.
-      showToast.error('Could not copy. Select the link and copy it manually.');
-    }
-  };
 
   const set = (key: keyof typeof EMPTY) => (value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   return (
     <>
-      <div className="mb-6 space-y-2">
-        <h2 className="text-base font-semibold">Register automatically</h2>
-        <div className={`${SETTINGS_STANDARD} space-y-3 rounded-md border p-3`}>
-          <p className="text-muted-foreground text-sm">
-            Create a link, then paste it into your LMS where it asks for a registration or tool URL.
-            Canvas, Moodle and Brightspace all call this something slightly different; look for
-            dynamic registration. The link works once and expires after an hour.
+      {/*
+        The manual endpoints go in the rail, and asidePlacement="after" puts them last when
+        the columns stack. They are the fallback path: an admin whose LMS cannot do dynamic
+        registration. On a phone they should not sit between someone and the button they
+        came for, which is why this is the one tab whose rail is not read first.
+      */}
+      <SettingsAsideLayout asidePlacement="after" aside={<ManualConfigurationCard base={base} />}>
+        <SettingsSection
+          title="Register automatically"
+          description="Connect an LMS with a temporary registration link. This is the easiest way."
+        >
+          <p className="text-muted-foreground max-w-3xl text-sm">
+            Create a link and paste it into your LMS where it asks for a registration or tool URL.
+            Canvas, Moodle and Brightspace each call this something slightly different; look for
+            dynamic registration.
           </p>
           {link ? (
-            <>
-              <InputGroup
+            <div className="max-w-2xl space-y-3">
+              <CopyableValue
                 label="Registration link"
-                name="ltiRegistrationLink"
                 value={link.url}
-                setValue={() => {}}
-                readOnly
+                copyName="registration link"
                 description={`Works once, and expires at ${new Date(link.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Anyone holding it can register an LMS, so treat it like a password.`}
               />
-              <div className="flex items-center gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={() => void copyLink()}>
-                  <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Copy link
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setLink(null)}>
-                  Done
-                </Button>
-              </div>
-              {/* One live region for this area, so the copy result is announced once. */}
-              <p role="status" aria-live="polite" className="text-sm">
-                {copied ? 'Registration link copied to the clipboard.' : ''}
-              </p>
-            </>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setLink(null)}>
+                Done
+              </Button>
+            </div>
           ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void createLink()}
-              disabled={creatingLink}
-            >
-              {creatingLink ? 'Creating...' : 'Create a registration link'}
-            </Button>
+            <div className="space-y-2">
+              <Button onClick={() => void createLink()} disabled={creatingLink}>
+                {creatingLink ? 'Creating...' : 'Create a registration link'}
+              </Button>
+              {/* Not buried in the paragraph above: an admin who creates one and comes back
+                  tomorrow needs to know it will already be dead. */}
+              <p className="text-muted-foreground text-xs leading-4.5">
+                The link works once and expires after an hour.
+              </p>
+            </div>
           )}
-        </div>
-      </div>
+        </SettingsSection>
 
-      <div className="mb-6 space-y-2">
-        <h2 className="text-base font-semibold">Or give these to your LMS by hand</h2>
-        <div className={`${SETTINGS_STANDARD} space-y-3 rounded-md border p-3`}>
-          <InputGroup
-            label="Target link URI"
-            name="ltiTargetLinkUri"
-            value={`${base}/api/lti/launch`}
-            setValue={() => {}}
-            readOnly
-          />
-          <InputGroup
-            label="Login initiation URL"
-            name="ltiLoginUrl"
-            value={`${base}/api/lti/login`}
-            setValue={() => {}}
-            readOnly
-          />
-          <InputGroup
-            label="Redirection URI"
-            name="ltiRedirectUri"
-            value={`${base}/api/lti/launch`}
-            setValue={() => {}}
-            readOnly
-            description="Your LMS compares this exactly. A trailing slash or a different host is the usual cause of a failed launch."
-          />
-          <InputGroup
-            label="Public keyset URL"
-            name="ltiKeysetUrl"
-            value={`${base}/api/lti/jwks`}
-            setValue={() => {}}
-            readOnly
-          />
-          <p className="text-muted-foreground text-xs">
-            Your LMS reads the keyset URL from its own servers, not from a browser, so AFCT has to
-            be reachable from your LMS. Grades will not reach it otherwise.
-          </p>
-        </div>
-      </div>
+        <SettingsSection
+          title="Registered LMSs"
+          description="LMS platforms currently allowed to launch AFCT."
+          action={
+            !adding && (
+              <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                Add an LMS
+              </Button>
+            )
+          }
+        >
+          {platforms === null ? (
+            <p className="text-muted-foreground text-sm">Loading...</p>
+          ) : platforms.length === 0 ? (
+            // Understated, not an illustration: the useful part is what it means, which is
+            // that the LTI half of the install does nothing yet.
+            <div className="bg-muted/40 space-y-1 rounded-md border p-4">
+              <p className="text-foreground text-sm font-medium">No LMSs registered</p>
+              <p className="text-muted-foreground text-xs leading-4.5">
+                Nobody can open AFCT from an LMS yet. Register one automatically above, or add it by
+                hand.
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-y rounded-md border">
+              {platforms.map((platform) => (
+                <li key={platform.id} className="flex items-start justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{platform.name}</p>
+                    <p className="text-muted-foreground truncate text-xs">{platform.issuer}</p>
+                    <p className="text-muted-foreground truncate text-xs">
+                      Client {platform.clientId}, deployment {platform.deploymentId}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRemoving(platform)}
+                    aria-label={`Remove ${platform.name}`}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SettingsSection>
 
-      {/* Button beside the heading rather than pushed to the far edge, where it reads as
-          belonging to the page rather than to this list. */}
-      <div className="mb-3 flex items-center gap-3">
-        <h2 className="text-base font-semibold">Registered LMSs</h2>
-        {!adding && (
-          <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
-            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-            Add an LMS
-          </Button>
-        )}
-      </div>
+        {adding && (
+          <div className="bg-card space-y-4 rounded-lg border p-4 shadow-xs">
+            <h3 className="text-sm font-semibold">Add an LMS</h3>
+            <p className="text-muted-foreground text-xs">
+              Your LMS gives you these when you create a developer key for AFCT.
+            </p>
 
-      {platforms === null ? (
-        <p className="text-muted-foreground text-sm">Loading...</p>
-      ) : platforms.length === 0 ? (
-        <p className={`text-muted-foreground mb-4 text-sm ${SETTINGS_READABLE}`}>
-          No LMS is registered, so nobody can open AFCT from one yet.
-        </p>
-      ) : (
-        <ul className={`mb-4 ${SETTINGS_STANDARD} divide-y rounded-md border`}>
-          {platforms.map((platform) => (
-            <li key={platform.id} className="flex items-start justify-between gap-3 p-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{platform.name}</p>
-                <p className="text-muted-foreground truncate text-xs">{platform.issuer}</p>
-                <p className="text-muted-foreground truncate text-xs">
-                  Client {platform.clientId}, deployment {platform.deploymentId}
-                </p>
-              </div>
+            {/* Short identifiers pair up; the URLs below stay full rows, because half a
+                URL is harder to check than a taller form. */}
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <InputGroup
+                label="Name"
+                name="lti-name"
+                value={draft.name}
+                setValue={set('name')}
+                placeholder="Penn State Canvas"
+              />
+              <InputGroup
+                label="Client ID"
+                name="lti-client-id"
+                value={draft.clientId}
+                setValue={set('clientId')}
+              />
+              <InputGroup
+                label="Deployment ID"
+                name="lti-deployment-id"
+                value={draft.deploymentId}
+                setValue={set('deploymentId')}
+              />
+            </div>
+            <InputGroup
+              label="Platform issuer"
+              name="lti-issuer"
+              value={draft.issuer}
+              setValue={set('issuer')}
+              placeholder="https://canvas.instructure.com"
+            />
+            <InputGroup
+              label="Authorization URL"
+              name="lti-auth-url"
+              value={draft.authLoginUrl}
+              setValue={set('authLoginUrl')}
+            />
+            <InputGroup
+              label="Token URL"
+              name="lti-token-url"
+              value={draft.tokenUrl}
+              setValue={set('tokenUrl')}
+            />
+            <InputGroup
+              label="Public keyset URL"
+              name="lti-keyset-url"
+              value={draft.keysetUrl}
+              setValue={set('keysetUrl')}
+            />
+            {/* Last, and described rather than labelled tersely, because almost nobody needs it and
+                the one place it is needed is not guessable from the name. */}
+            <InputGroup
+              label="Token audience (optional)"
+              name="lti-token-audience"
+              value={draft.tokenAudience}
+              setValue={set('tokenAudience')}
+              description="Only D2L Brightspace needs this: use the Brightspace OAuth2 Audience from its registration. Leave it empty for Canvas, Moodle and Blackboard, which expect the token URL."
+            />
+
+            <div className="flex gap-2">
+              <Button onClick={save} disabled={saving}>
+                {saving ? 'Registering...' : 'Register'}
+              </Button>
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => setRemoving(platform)}
-                aria-label={`Remove ${platform.name}`}
+                onClick={() => {
+                  setAdding(false);
+                  setDraft(EMPTY);
+                }}
+                disabled={saving}
               >
-                <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                Remove
+                Cancel
               </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {adding && (
-        <div className={`${SETTINGS_STANDARD} space-y-4 rounded-md border p-4`}>
-          <h3 className="text-sm font-semibold">Add an LMS</h3>
-          <p className="text-muted-foreground text-xs">
-            Your LMS gives you these when you create a developer key for AFCT.
-          </p>
-
-          {/* Short identifiers pair up; the URLs below stay full rows, because half a
-              URL is harder to check than a taller form. */}
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            <InputGroup
-              label="Name"
-              name="lti-name"
-              value={draft.name}
-              setValue={set('name')}
-              placeholder="Penn State Canvas"
-            />
-            <InputGroup
-              label="Client ID"
-              name="lti-client-id"
-              value={draft.clientId}
-              setValue={set('clientId')}
-            />
-            <InputGroup
-              label="Deployment ID"
-              name="lti-deployment-id"
-              value={draft.deploymentId}
-              setValue={set('deploymentId')}
-            />
+            </div>
           </div>
-          <InputGroup
-            label="Platform issuer"
-            name="lti-issuer"
-            value={draft.issuer}
-            setValue={set('issuer')}
-            placeholder="https://canvas.instructure.com"
-          />
-          <InputGroup
-            label="Authorization URL"
-            name="lti-auth-url"
-            value={draft.authLoginUrl}
-            setValue={set('authLoginUrl')}
-          />
-          <InputGroup
-            label="Token URL"
-            name="lti-token-url"
-            value={draft.tokenUrl}
-            setValue={set('tokenUrl')}
-          />
-          <InputGroup
-            label="Public keyset URL"
-            name="lti-keyset-url"
-            value={draft.keysetUrl}
-            setValue={set('keysetUrl')}
-          />
-          {/* Last, and described rather than labelled tersely, because almost nobody needs it and
-              the one place it is needed is not guessable from the name. */}
-          <InputGroup
-            label="Token audience (optional)"
-            name="lti-token-audience"
-            value={draft.tokenAudience}
-            setValue={set('tokenAudience')}
-            description="Only D2L Brightspace needs this: use the Brightspace OAuth2 Audience from its registration. Leave it empty for Canvas, Moodle and Blackboard, which expect the token URL."
-          />
-
-          <div className="flex gap-2">
-            <Button onClick={save} disabled={saving}>
-              {saving ? 'Registering...' : 'Register'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setAdding(false);
-                setDraft(EMPTY);
-              }}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
+        )}
+      </SettingsAsideLayout>
 
       <ConfirmDialog
         open={removing !== null}
