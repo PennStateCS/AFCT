@@ -62,7 +62,11 @@ export default function DashboardSidebarHeader() {
               className={
                 'focus-visible:ring-sidebar-ring flex items-center rounded-md outline-hidden ' +
                 'transition-opacity hover:opacity-80 focus-visible:ring-2 ' +
-                (collapsed ? 'justify-center px-2 py-4' : 'gap-3 px-4 py-4')
+                // 18px expanded, 16 in the rail. The air belongs around the lockup and not
+                // inside it: at 17 outside against 6 between the two brand lines, the ratio
+                // was 2.8:1 and the block read as three loosely stacked things rather than as
+                // one object with a margin. It is 6:1 now, and the header is 80px.
+                (collapsed ? 'justify-center px-2 py-4' : 'gap-3 px-4 py-[18px]')
               }
             >
               {/*
@@ -91,10 +95,18 @@ export default function DashboardSidebarHeader() {
                   <span className="text-sidebar-foreground text-2xl leading-none font-semibold tracking-tight">
                     AFCT
                   </span>
-                  {/* The sign-in page's tracked line, a size down: at 0.28em the letters are
-                      spaced far enough to read as a mark rather than as a word, which is what
-                      keeps it from competing with AFCT above or with the nav labels below. */}
-                  <span className="mt-1.5 text-[10px] font-medium tracking-[0.28em] text-blue-300 uppercase">
+                  {/*
+                    3px under AFCT, not 6: these two lines are one wordmark, and the gap that
+                    separates them should be smaller than any gap around them.
+
+                    0.34em rather than 0.28. The sign-in page tracks this line at 0.32em on
+                    12px text, which is 3.84px between letters; matching the em here would give
+                    only 2.8px at 10px and read as ordinary small text set slightly loose. 3.4px
+                    is the nearest this size gets to the same rhythm, and tracking is what makes
+                    the line a brand element rather than a caption. It measures 95px inside a
+                    167px column, so there is room to spare.
+                  */}
+                  <span className="mt-[3px] text-[10px] font-medium tracking-[0.34em] text-blue-300 uppercase">
                     Dashboard
                   </span>
                 </span>
