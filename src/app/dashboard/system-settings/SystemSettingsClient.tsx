@@ -543,12 +543,16 @@ export default function SystemSettingsClient() {
   const railNav = useIsDesktopNav(1280);
 
   return (
-    <div className="space-y-4">
+    // Spacing stated per element rather than through `space-y`, because the first child is
+    // the sr-only status line: it is out of flow, so a wrapper gap put nothing above the
+    // title and the page's own padding was all it had. The title now sits in equal air,
+    // 24px above and 24px below (the 16px comes from <main>'s py-4).
+    <div>
       <p className="sr-only" aria-live="polite">
         {loading ? 'Loading system settings' : saving ? 'Saving system settings' : ''}
       </p>
 
-      <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+      <h1 className="mt-2 flex items-center gap-3 text-2xl font-semibold tracking-tight">
         {/* Decorative: the heading beside it already says what this is. The icon the
             sidebar already uses for this page, on the neutral muted surface the other
             admin pages use. */}
@@ -558,14 +562,17 @@ export default function SystemSettingsClient() {
         <span>System Settings</span>
       </h1>
 
-      {/* Nine sections is too many for a strip, so above xl they become a rail beside the
+      {/* With the intro sentence gone, the title sat almost on top of the Settings Menu.
+          This is the other half of the pair above: 24px, matching the gap over the title.
+
+          Nine sections is too many for a strip, so above xl they become a rail beside the
           form. Below that the strip and its select stay exactly as they were. One control
           at a time: rendering both would put two tablists under one Tabs root. */}
       <Tabs
         value={tab}
         onValueChange={handleTabChange}
         orientation={railNav ? 'vertical' : 'horizontal'}
-        className="w-full gap-6"
+        className="mt-6 w-full gap-6"
       >
         {/* The WORKSPACE is wide; the content inside it is not. Pinning the whole page to
             max-w-3xl left a 1920px monitor two thirds empty and still wrapped help text
