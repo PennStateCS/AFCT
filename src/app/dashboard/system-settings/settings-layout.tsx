@@ -1,5 +1,7 @@
 import type React from 'react';
 
+import { CircleAlert, CircleCheck, CircleOff } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 
@@ -132,33 +134,27 @@ export const SETTINGS_STATUS_GRID =
  * Layout only. Nothing here knows what a certificate or an SMTP host is.
  */
 export function SettingsStatusLayout({
-  statusTitle,
   status,
   className,
   children,
 }: {
-  /** The rail's heading, e.g. "Current status" or "Current certificate". */
-  statusTitle: string;
+  /** The rail's content, normally one {@link SettingsStatusCard}. */
   status: React.ReactNode;
   className?: string;
   children: React.ReactNode;
 }) {
-  const id = settingsSectionId(statusTitle);
   return (
     <div className={cn(SETTINGS_WORKSPACE, SETTINGS_STATUS_GRID, 'items-start', className)}>
-      {/* Sticky at the same offset as the Settings Menu rail, and for the same reason: on
+      {/* Positioning only. The landmark and the heading belong to the card inside, so the
+          rail is one named region rather than an anonymous <aside> wrapping a titled box.
+
+          Sticky at the same offset as the Settings Menu rail, and for the same reason: on
           the long tabs (Sign-in, TLS) the state you are changing is worth keeping in view
           while you scroll the flow that changes it. No ancestor sets overflow, which is
           what would otherwise make position:sticky a no-op. */}
-      <aside
-        aria-labelledby={id}
-        className="space-y-3 min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1"
-      >
-        <h2 id={id} className="text-base font-semibold">
-          {statusTitle}
-        </h2>
+      <div className="min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1">
         {status}
-      </aside>
+      </div>
 
       <div className="min-w-0 space-y-6 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
         {children}
@@ -168,23 +164,94 @@ export function SettingsStatusLayout({
 }
 
 /**
- * The neutral "here is what is currently configured" panel that Email, Sign-in, Captcha and
- * TLS each open with. Deliberately `bg-muted` and not a status colour: it reports a state,
- * it is not itself a success or a warning. The Badge inside carries that.
+ * How a status reads, not what it means.
+ *
+ * The tab decides which one applies; this only says which glyph and which semantic colour
+ * go with it. One family (Lucide's circles) on purpose: a shield here and a triangle there
+ * would make four tabs look like four systems.
  */
-export function SettingsStatusPanel({
+const STATUS_TONES = {
+  ok: { Icon: CircleCheck, className: 'text-status-success' },
+  off: { Icon: CircleOff, className: 'text-muted-foreground' },
+  warn: { Icon: CircleAlert, className: 'text-status-warning' },
+  bad: { Icon: CircleAlert, className: 'text-destructive' },
+} as const;
+
+export type SettingsStatusTone = keyof typeof STATUS_TONES;
+
+/**
+ * The "what is set up right now" summary that sits in a status tab's rail.
+ *
+ * Four fixed rungs, so the same glance works on every tab: the card's own title, then an
+ * icon-and-badge row saying which state this is, then a one-line headline, then whatever
+ * detail and next step the tab wants to add as children.
+ *
+ * `bg-muted` and never a status colour. The card reports a state; it is not itself a
+ * success or a failure, and a card that turned green would make "enabled" shout louder
+ * than the form it is describing. The badge, the icon and the words carry the meaning,
+ * which is also why the icon is aria-hidden: it repeats what the badge already says.
+ *
+ * Presentation only. Which tone applies is the tab's decision (see each tab), because
+ * "is this certificate trusted" is not something a layout file should know.
+ */
+export function SettingsStatusCard({
+  title,
+  tone,
+  badge,
+  headline,
   className,
   children,
 }: {
+  /** The card's own heading, e.g. "Current status" or "Current certificate". */
+  title: string;
+  tone: SettingsStatusTone;
+  /** The state's name, as a Badge. Passed in because the label is often longer than the
+   *  variant, e.g. "Enabled, but unavailable" or "Self-signed (built-in)". */
+  badge: React.ReactNode;
+  /** One short line: what is true right now. */
+  headline: string;
   className?: string;
-  children: React.ReactNode;
+  /** Detail and, where there is one, the next step. Keep it to a few short lines. */
+  children?: React.ReactNode;
 }) {
+  const id = settingsSectionId(title);
+  const { Icon, className: toneClass } = STATUS_TONES[tone];
+
   return (
-    // rounded-lg to match the settings panels beside it, and bg-muted deliberately: the
-    // panel reports a state, it is not itself a success or a warning. The Badge inside
-    // carries that, which is why this never turns green or red.
-    <div className={cn('bg-muted space-y-2 rounded-lg border p-4 text-sm', className)}>
-      {children}
-    </div>
+    // No role="status": this is a summary of the current state, not a live region, and
+    // announcing the whole card on every render would talk over the form beside it.
+    <aside
+      aria-labelledby={id}
+      className={cn('bg-muted rounded-lg border p-5 shadow-xs', className)}
+    >
+      <h2 id={id} className="text-base font-semibold">
+        {title}
+      </h2>
+
+      <div className="mt-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Icon className={cn('size-4 shrink-0', toneClass)} aria-hidden="true" />
+          {badge}
+        </div>
+
+        <p className="text-foreground text-sm font-medium">{headline}</p>
+
+        {children ? <div className="space-y-2">{children}</div> : null}
+      </div>
+    </aside>
   );
+}
+
+/** A line of detail under a status headline. Quiet, and short enough for an 18rem rail. */
+export function SettingsStatusText({ children }: { children: React.ReactNode }) {
+  return <p className="text-muted-foreground text-xs leading-4.5">{children}</p>;
+}
+
+/**
+ * The one thing to do about the state above, set slightly stronger than the detail around
+ * it so it is findable without becoming a second headline. Not a button: these point at a
+ * form that is already on screen.
+ */
+export function SettingsStatusNextStep({ children }: { children: React.ReactNode }) {
+  return <p className="text-foreground text-xs leading-4.5 font-medium">{children}</p>;
 }

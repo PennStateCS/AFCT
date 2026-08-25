@@ -18,7 +18,12 @@ import FileUploadInput from '@/components/FileUploadInput';
 import { useTlsCertificate } from './useTlsCertificate';
 import { StepList } from './StepList';
 import { deriveAcmeSteps } from './system-settings-shared';
-import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
+import {
+  SettingsSection,
+  SettingsStatusCard,
+  SettingsStatusLayout,
+  SettingsStatusText,
+} from './settings-layout';
 
 /**
  * One fact about the installed certificate, label above value.
@@ -83,58 +88,67 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
   return (
     <>
       <SettingsStatusLayout
-        statusTitle="Current certificate"
         status={
-          <SettingsStatusPanel>
-            {tls?.installed ? (
-              <>
-                {tls.expired ? (
-                  <Badge variant="warning" className="w-fit">
-                    Expired
-                  </Badge>
-                ) : tls.selfSigned ? (
-                  <Badge variant="warning" className="w-fit">
-                    Self-signed certificate
-                  </Badge>
-                ) : (
-                  <Badge variant="success" className="w-fit">
-                    Trusted certificate
-                  </Badge>
-                )}
-                {/* Stacked label over value, not "Issued to: foo" inline. A domain and a
-                    date are the two things you come here to read, and in an 18rem rail an
-                    inline label pushes the value onto its own wrapped line anyway. */}
+          <SettingsStatusCard
+            title="Current certificate"
+            /* The tab decides what the certificate IS; the card only decides how a state
+               looks. Expired and self-signed are both "browsers will warn", which is a
+               warning rather than a failure: the site is still reachable and encrypted. */
+            tone={!tls?.installed || tls.expired || tls.selfSigned ? 'warn' : 'ok'}
+            badge={
+              !tls?.installed ? (
+                <Badge variant="warning">Self-signed (built-in)</Badge>
+              ) : tls.expired ? (
+                <Badge variant="warning">Expired</Badge>
+              ) : tls.selfSigned ? (
+                <Badge variant="warning">Self-signed certificate</Badge>
+              ) : (
+                <Badge variant="success">Trusted certificate</Badge>
+              )
+            }
+            headline={
+              !tls?.installed
+                ? 'Using the built-in certificate'
+                : tls.expired
+                  ? 'This certificate has expired'
+                  : tls.selfSigned
+                    ? 'Browsers will warn visitors'
+                    : 'Certificate is trusted'
+            }
+          >
+            <SettingsStatusText>
+              {!tls?.installed
+                ? 'The connection is still encrypted, but browsers will show a security warning until you install a trusted certificate.'
+                : tls.expired
+                  ? 'Browsers will show a security warning until you install a valid one.'
+                  : tls.selfSigned
+                    ? 'It is not issued by a trusted authority, so browsers will show a security warning.'
+                    : 'Visitors will not see a security warning.'}
+            </SettingsStatusText>
+
+            {/* Stacked label over value, not "Issued to: foo" inline: in an 18rem rail the
+                inline form wraps the value onto its own line anyway, so this costs the same
+                height and gains a label column you can scan. */}
+            {tls?.installed && (tls.subject || tls.validTo) ? (
+              <div className="space-y-3 pt-1">
                 {tls.subject && <CertMeta label="Issued to" value={tls.subject} wrap />}
                 {tls.validTo && <CertMeta label="Valid until" value={tls.validTo} />}
-                <p className="text-muted-foreground text-xs leading-4.5">
-                  {tls.expired
-                    ? 'Browsers will show a security warning until you install a valid one.'
-                    : tls.selfSigned
-                      ? 'Not issued by a trusted authority, so browsers will show a security warning.'
-                      : 'Trusted by browsers, so visitors won’t see a security warning.'}
-                </p>
-              </>
-            ) : (
-              <>
-                <Badge variant="warning" className="w-fit">
-                  Self-signed (built-in)
-                </Badge>
-                <p className="text-foreground">The server is using its built-in certificate.</p>
-                <p className="text-muted-foreground text-xs leading-4.5">
-                  The connection is still encrypted, but browsers will show a security warning until
-                  you install a trusted certificate.
-                </p>
-              </>
-            )}
+              </div>
+            ) : null}
+
             {tls?.acme?.managed && (
-              <div className="space-y-2 border-t pt-3">
+              // A second status inside the same card, separated by a rule rather than by a
+              // nested card: renewal is a fact about the certificate above, not a new topic.
+              <div className="space-y-3 border-t pt-3">
                 <Badge variant="success" className="w-fit">
                   Auto-renewing
                 </Badge>
-                <p className="text-muted-foreground text-xs leading-4.5">
-                  Let’s Encrypt for {tls.acme.domain}
-                  {tls.acme.staging ? ' (staging)' : ''}. Renews automatically before expiry.
-                </p>
+                <CertMeta
+                  label={`Let’s Encrypt${tls.acme.staging ? ' (staging)' : ''}`}
+                  value={tls.acme.domain}
+                  wrap
+                />
+                <SettingsStatusText>Renews automatically before expiry.</SettingsStatusText>
                 <Button
                   type="button"
                   size="sm"
@@ -146,7 +160,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 </Button>
               </div>
             )}
-          </SettingsStatusPanel>
+          </SettingsStatusCard>
         }
       >
         {/* A CSR was generated but its signed cert isn't installed yet. */}

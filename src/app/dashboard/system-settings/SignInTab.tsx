@@ -5,7 +5,13 @@ import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
 import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
 
-import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
+import {
+  SettingsSection,
+  SettingsStatusCard,
+  SettingsStatusLayout,
+  SettingsStatusNextStep,
+  SettingsStatusText,
+} from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 /**
@@ -56,33 +62,54 @@ export function SignInTab({
 }) {
   return (
     <SettingsStatusLayout
-      statusTitle="Current status"
       status={
-        <SettingsStatusPanel>
-          <Badge
-            variant={!enabled ? 'neutral' : clientSecretReadable ? 'success' : 'danger'}
-            className="w-fit"
-          >
-            {!enabled ? 'Disabled' : clientSecretReadable ? 'Enabled' : 'Enabled, but unavailable'}
-          </Badge>
-          {/* Summary, then consequence: the rail is 18rem and this sits above the form on a
-              phone, so the first line has to be readable at a glance. */}
-          <p className="text-foreground">
-            {!enabled
-              ? 'Everyone signs in with an AFCT password.'
+        <SettingsStatusCard
+          title="Current status"
+          tone={!enabled ? 'off' : clientSecretReadable ? 'ok' : 'bad'}
+          badge={
+            <Badge variant={!enabled ? 'neutral' : clientSecretReadable ? 'success' : 'danger'}>
+              {!enabled
+                ? 'Disabled'
+                : clientSecretReadable
+                  ? 'Enabled'
+                  : 'Enabled, but unavailable'}
+            </Badge>
+          }
+          headline={
+            !enabled
+              ? 'Institutional sign-in is off'
               : clientSecretReadable
-                ? 'People can sign in with their institution.'
-                : 'Institutional sign-in is on, but nobody can use it.'}
-          </p>
-          <p className="text-muted-foreground text-xs leading-4.5">
-            {!enabled
-              ? 'Turn on institutional sign-in below to add your provider.'
-              : 'AFCT passwords still work as well.'}
-            {enabled && !clientSecretReadable
-              ? ' The saved client secret cannot be read, so the institution button is not shown. This usually means the encryption key this AFCT was set up with has changed. Save the secret again, or restore the key.'
-              : ''}
-          </p>
-        </SettingsStatusPanel>
+                ? 'Institutional sign-in is available'
+                : 'Institutional sign-in is unavailable'
+          }
+        >
+          {/* "AFCT passwords still work" belongs here, in both working states: it is the
+              thing an admin is worried about when they touch this page. The provider and
+              email-matching rules do NOT: those are decisions you make in the form. */}
+          {!enabled && (
+            <>
+              <SettingsStatusText>Everyone signs in with an AFCT password.</SettingsStatusText>
+              <SettingsStatusNextStep>Turn it on to add your provider.</SettingsStatusNextStep>
+            </>
+          )}
+          {enabled && clientSecretReadable && (
+            <SettingsStatusText>
+              People can sign in with their institution. AFCT passwords still work as well.
+            </SettingsStatusText>
+          )}
+          {enabled && !clientSecretReadable && (
+            <>
+              <SettingsStatusText>
+                The saved client secret cannot be read, so the institution button is not shown. This
+                usually means the encryption key this AFCT was set up with has changed. AFCT
+                passwords still work.
+              </SettingsStatusText>
+              <SettingsStatusNextStep>
+                Save the secret again, or restore the key.
+              </SettingsStatusNextStep>
+            </>
+          )}
+        </SettingsStatusCard>
       }
     >
       <SettingsSection title="Institutional sign-in">

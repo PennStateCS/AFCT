@@ -4,7 +4,15 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
+import { Badge } from '@/components/ui/badge';
+
+import {
+  SettingsSection,
+  SettingsStatusCard,
+  SettingsStatusLayout,
+  SettingsStatusNextStep,
+  SettingsStatusText,
+} from './settings-layout';
 
 describe('SettingsSection', () => {
   it('names its section from the heading, so the panel is a labelled region', () => {
@@ -34,15 +42,78 @@ describe('SettingsSection', () => {
   });
 });
 
+describe('SettingsStatusCard', () => {
+  function renderCard(tone: 'ok' | 'off' | 'warn' | 'bad' = 'off') {
+    return render(
+      <SettingsStatusCard
+        title="Current status"
+        tone={tone}
+        badge={<Badge variant="neutral">Disabled</Badge>}
+        headline="Bot protection is off"
+      >
+        <SettingsStatusText>hCaptcha challenges are not shown.</SettingsStatusText>
+        <SettingsStatusNextStep>Add both keys to turn protection on.</SettingsStatusNextStep>
+      </SettingsStatusCard>,
+    );
+  }
+
+  it('names itself with a real h2, inside the card', () => {
+    renderCard();
+
+    const card = screen.getByRole('complementary', { name: 'Current status' });
+    const heading = screen.getByRole('heading', { level: 2, name: 'Current status' });
+    // The title has to be IN the card, not floating above it: that is the whole point of
+    // this pass, and a heading rendered as a sibling would still pass a name check.
+    expect(card).toContainElement(heading);
+  });
+
+  it('states the status in words, not only in an icon', () => {
+    renderCard();
+
+    expect(screen.getByText('Disabled')).toBeVisible();
+    expect(screen.getByText('Bot protection is off')).toBeVisible();
+    expect(screen.getByText('hCaptcha challenges are not shown.')).toBeVisible();
+    expect(screen.getByText('Add both keys to turn protection on.')).toBeVisible();
+  });
+
+  /*
+   * The icon repeats what the badge beside it already says, so it must not reach the
+   * accessibility tree: otherwise every state is announced twice, once as a shape.
+   */
+  it('hides the tone icon from assistive tech', () => {
+    const { container } = renderCard('bad');
+
+    const svgs = Array.from(container.querySelectorAll('svg'));
+    expect(svgs.length).toBeGreaterThan(0);
+    for (const svg of svgs) {
+      expect(svg.getAttribute('aria-hidden')).toBe('true');
+    }
+  });
+
+  it('draws a different tone glyph for a healthy state than a failed one', () => {
+    const { container: off } = renderCard('off');
+    const offIcon = off.querySelector('svg')?.getAttribute('class') ?? '';
+    const { container: bad } = renderCard('bad');
+    const badIcon = bad.querySelector('svg')?.getAttribute('class') ?? '';
+
+    expect(offIcon).toContain('text-muted-foreground');
+    expect(badIcon).toContain('text-destructive');
+  });
+});
+
 describe('SettingsStatusLayout', () => {
   function renderLayout() {
     return render(
       <SettingsStatusLayout
-        statusTitle="Current status"
         status={
-          <SettingsStatusPanel>
-            <p>Mail is on.</p>
-          </SettingsStatusPanel>
+          <SettingsStatusCard
+            title="Current status"
+            tone="ok"
+            badge={<Badge variant="success">Enabled</Badge>}
+            headline="Email delivery is configured"
+          >
+            <SettingsStatusText>Mail is on.</SettingsStatusText>
+          </SettingsStatusCard>
         }
       >
         <SettingsSection title="Email configuration">
@@ -77,12 +148,11 @@ describe('SettingsStatusLayout', () => {
    * with nothing visible changing on the desktop layout that gets looked at.
    */
   it('puts the status before the form in reading order', () => {
-    const { container } = renderLayout();
+    renderLayout();
 
     const status = screen.getByRole('complementary', { name: 'Current status' });
     const form = screen.getByRole('region', { name: 'Email configuration' });
 
     expect(status.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(container.querySelector('aside')).toBe(status);
   });
 });

@@ -6,7 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
-import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
+import {
+  SettingsSection,
+  SettingsStatusCard,
+  SettingsStatusLayout,
+  SettingsStatusNextStep,
+  SettingsStatusText,
+} from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 /** Captcha tab: hCaptcha keys + a live "test my keys" flow. */
@@ -58,21 +64,28 @@ export function CaptchaTab({
 
   return (
     <SettingsStatusLayout
-      statusTitle="Current status"
       status={
-        <SettingsStatusPanel>
-          <Badge variant={hcaptchaEnabled ? 'success' : 'neutral'} className="w-fit">
-            {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
-          </Badge>
-          <p className="text-foreground">
-            {hcaptchaEnabled ? 'Bot protection is on.' : 'Bot protection is off.'}
-          </p>
-          <p className="text-muted-foreground text-xs leading-4.5">
+        <SettingsStatusCard
+          title="Current status"
+          tone={hcaptchaEnabled ? 'ok' : 'off'}
+          badge={
+            <Badge variant={hcaptchaEnabled ? 'success' : 'neutral'}>
+              {hcaptchaEnabled ? 'Enabled' : 'Disabled'}
+            </Badge>
+          }
+          headline={hcaptchaEnabled ? 'Bot protection is active' : 'Bot protection is off'}
+        >
+          <SettingsStatusText>
             {hcaptchaEnabled
-              ? 'After repeated failed logins, people are shown an hCaptcha challenge.'
-              : 'Add your hCaptcha keys to turn it on.'}
-          </p>
-        </SettingsStatusPanel>
+              ? 'People may be shown an hCaptcha challenge after repeated failed sign-ins.'
+              : 'hCaptcha challenges are not shown after repeated failed sign-ins.'}
+          </SettingsStatusText>
+          <SettingsStatusNextStep>
+            {hcaptchaEnabled
+              ? 'Use Verify your keys to confirm the saved pair works.'
+              : 'Add both keys to turn protection on.'}
+          </SettingsStatusNextStep>
+        </SettingsStatusCard>
       }
     >
       <SettingsSection title="hCaptcha keys">

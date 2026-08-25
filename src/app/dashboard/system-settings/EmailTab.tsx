@@ -7,7 +7,13 @@ import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';
 import SwitchField from '@/components/ui/SwitchField';
 import { SMTP_SECURITY, SMTP_SECURITY_LABELS, type SmtpSecurity } from '@/schemas/smtp';
-import { SettingsSection, SettingsStatusLayout, SettingsStatusPanel } from './settings-layout';
+import {
+  SettingsSection,
+  SettingsStatusCard,
+  SettingsStatusLayout,
+  SettingsStatusNextStep,
+  SettingsStatusText,
+} from './settings-layout';
 import type { SetField } from './system-settings-shared';
 
 type TestState =
@@ -86,34 +92,56 @@ export function EmailTab({
 
   return (
     <SettingsStatusLayout
-      statusTitle="Current status"
       status={
-        <SettingsStatusPanel>
-          <Badge
-            variant={!enabled ? 'neutral' : passwordReadable ? 'success' : 'danger'}
-            className="w-fit"
-          >
-            {!enabled ? 'Disabled' : passwordReadable ? 'Enabled' : 'Enabled, but unavailable'}
-          </Badge>
-          {/* A one-line summary first, then the consequence. It was a single paragraph of
-              three or four sentences, which is a wall in an 18rem rail and the first thing
-              skipped on a phone, where this sits above the form. Nothing was dropped: the
-              key-has-changed guidance is the part an admin cannot act without. */}
-          <p className="text-foreground">
-            {!enabled
-              ? 'AFCT sends no email.'
+        <SettingsStatusCard
+          title="Current status"
+          tone={!enabled ? 'off' : passwordReadable ? 'ok' : 'bad'}
+          badge={
+            <Badge variant={!enabled ? 'neutral' : passwordReadable ? 'success' : 'danger'}>
+              {!enabled ? 'Disabled' : passwordReadable ? 'Enabled' : 'Enabled, but unavailable'}
+            </Badge>
+          }
+          headline={
+            !enabled
+              ? 'Email delivery is off'
               : passwordReadable
-                ? 'AFCT is set up to send email.'
-                : 'Mail is on, but nothing can be sent.'}
-          </p>
-          <p className="text-muted-foreground text-xs leading-4.5">
-            {!enabled
-              ? 'Passwords can only be reset by an administrator.'
-              : passwordReadable
-                ? 'Send a test message to check that it arrives. A reset request that cannot be delivered fails quietly, because the sign-in page must not say whether an account exists.'
-                : 'The saved mail password cannot be read, so reset requests fail quietly. This usually means the encryption key this AFCT was set up with has changed. Enter the password again, or restore the key.'}
-          </p>
-        </SettingsStatusPanel>
+                ? 'Email delivery is configured'
+                : 'Email cannot currently be sent'
+          }
+        >
+          {/* Three rungs on every state: what is true, why it matters, what to do. The
+              encryption-key guidance is the whole reason the failed state is worth a card
+              at all, so it stays as visible text rather than being trimmed for width. */}
+          {!enabled && (
+            <>
+              <SettingsStatusText>
+                AFCT sends no email, so passwords can only be reset by an administrator.
+              </SettingsStatusText>
+              <SettingsStatusNextStep>
+                Add a mail server to turn delivery on.
+              </SettingsStatusNextStep>
+            </>
+          )}
+          {enabled && passwordReadable && (
+            <>
+              <SettingsStatusText>AFCT sends email using the saved mail server.</SettingsStatusText>
+              <SettingsStatusNextStep>
+                Send a test message: an undeliverable reset fails quietly.
+              </SettingsStatusNextStep>
+            </>
+          )}
+          {enabled && !passwordReadable && (
+            <>
+              <SettingsStatusText>
+                The saved mail password cannot be read, so reset requests fail quietly. This usually
+                means the encryption key this AFCT was set up with has changed.
+              </SettingsStatusText>
+              <SettingsStatusNextStep>
+                Enter the password again, or restore the key.
+              </SettingsStatusNextStep>
+            </>
+          )}
+        </SettingsStatusCard>
       }
     >
       <SettingsSection title="Email configuration">
