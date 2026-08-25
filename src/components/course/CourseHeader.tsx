@@ -201,11 +201,16 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
           section so the network runs edge to edge behind it. */}
       {/* The floor is what makes a course page open the same height whoever is looking. A
           student gets no faculty/TA/registration line, so without it their banner came out at
-          116px against a staff member's 156 and the assignment table started in a different
-          place for the two of them. 9.5rem is the staff height, and the spare goes above and
+          116px against a staff member's 138 and the assignment table started in a different
+          place for the two of them. 8.5rem is the staff height, and the spare goes above and
           below rather than under the title. Not applied below sm, where the rows stack and
-          there is no spare height to distribute. */}
-      <div className="relative flex flex-col justify-center gap-4 p-5 sm:min-h-[9.5rem] sm:p-6 lg:p-7">
+          there is no spare height to distribute.
+
+          The padding and the row gap are each a step down from where this started, which took
+          the banner from 156px to 138 without touching the type, the icon slot or the two-row
+          structure. The icon slot is the floor under the rest: at 56px plus padding there is
+          not much further to go without shrinking something that carries meaning. */}
+      <div className="relative flex flex-col justify-center gap-3 p-4 sm:min-h-[8.5rem] sm:p-5 lg:p-6">
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           {/*
             basis-full below sm, a growing basis-0 above it, and that split is load-bearing.
