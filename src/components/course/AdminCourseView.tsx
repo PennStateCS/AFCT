@@ -7,6 +7,8 @@ import { CourseTabBar, CourseTabPanel } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { CourseStatusCard } from '@/components/course/CourseStatusCard';
+import { CourseLmsSection } from '@/components/course/CourseLmsSection';
+import { SettingsAsideLayout } from '@/components/settings/settings-layout';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
@@ -274,16 +276,18 @@ export function AdminCourseView({
                   </p>
                 ) : null}
               </div>
-              {/* Form on the left; the immediate-effect status switches sit in their
-                own card to the right (stacked below on narrow screens). */}
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <CourseSettingsForm course={course} onSaved={onCourseSaved} className="w-full" />
-                <CourseStatusCard
-                  course={course}
-                  onPublishToggle={onPublishToggle}
-                  className="w-full lg:w-80 lg:shrink-0"
-                />
-              </div>
+              {/* The System Settings layout, not a bespoke one: grouped panels in the main
+                  column and the immediate-effect publish switch in the rail beside them.
+                  Before this the form was a single max-w-xl column of eleven fields with the
+                  status card floating 440px away from its right edge, on a tab a professor
+                  reaches straight from System Settings. */}
+              <SettingsAsideLayout
+                aside={<CourseStatusCard course={course} onPublishToggle={onPublishToggle} />}
+              >
+                <CourseSettingsForm course={course} onSaved={onCourseSaved} />
+                {/* Renders nothing unless an LMS opens this course. */}
+                <CourseLmsSection courseId={course.id} />
+              </SettingsAsideLayout>
             </div>
           </CourseTabPanel>
         </LocalNavLayout>
