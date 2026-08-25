@@ -559,20 +559,15 @@ export default function SystemSettingsClient() {
         {loading ? 'Loading system settings' : saving ? 'Saving system settings' : ''}
       </p>
 
-      <div className="space-y-1">
-        <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
-          {/* Decorative: the heading beside it already says what this is. The icon the
-              sidebar already uses for this page, on the neutral muted surface the other
-              admin pages use. */}
-          <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-            <Settings className="size-5" aria-hidden="true" />
-          </span>
-          <span>System Settings</span>
-        </h1>
-        <p className="text-muted-foreground text-sm">
-          Manage server-wide configuration, security, uploads, evaluator behavior, and TLS.
-        </p>
-      </div>
+      <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+        {/* Decorative: the heading beside it already says what this is. The icon the
+            sidebar already uses for this page, on the neutral muted surface the other
+            admin pages use. */}
+        <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+          <Settings className="size-5" aria-hidden="true" />
+        </span>
+        <span>System Settings</span>
+      </h1>
 
       {/* Nine sections is too many for a strip, so above xl they become a rail beside the
           form. Below that the strip and its select stay exactly as they were. One control

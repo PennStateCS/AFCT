@@ -1,12 +1,13 @@
 import { cn } from '@/lib/utils';
 
 /**
- * The white working surface behind a work page (Courses, a course).
+ * The working surface behind a work page (Courses, a course).
  *
- * AFCT draws two kinds of page. An overview page (the dashboard) sits on the slate
- * canvas so its modules read as separate objects. A work page is one continuous surface
- * you do things on, so it takes the card colour and drops the border, radius and shadow
- * a Card would bring: this is the page, not an object on it.
+ * Every dashboard page now sits on the same slate canvas the dashboard overview uses, so
+ * the background does not change as you move between them. This used to paint `bg-card`,
+ * which made a work page one continuous white sheet and the overview slate: two pages in
+ * the same app with two different grounds. The cards, tables and panels on top are still
+ * `bg-card`, so they keep reading as objects on the canvas rather than dissolving into it.
  *
  * The negative margin is the awkward part and the reason this lives in one place.
  * `dashboard/layout.tsx` puts `px-4 py-4 lg:px-6` on `<main>`, so a plain background
@@ -27,7 +28,7 @@ export function WorkspaceSurface({
   children: React.ReactNode;
 }) {
   return (
-    <div className={cn('bg-card -m-4 flex-1 p-4 lg:-mx-6 lg:px-6', className)}>
+    <div className={cn('bg-background -m-4 flex-1 p-4 lg:-mx-6 lg:px-6', className)}>
       {children}
     </div>
   );
