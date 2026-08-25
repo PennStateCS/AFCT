@@ -3,9 +3,12 @@
 import { Badge } from '@/components/ui/badge';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
+
+import { CopyableValue } from './CopyableValue';
 import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
 
 import {
+  SettingsAsideCard,
   SettingsSection,
   SettingsStatusCard,
   SettingsAsideLayout,
@@ -63,53 +66,67 @@ export function SignInTab({
   return (
     <SettingsAsideLayout
       aside={
-        <SettingsStatusCard
-          title="Current status"
-          tone={!enabled ? 'off' : clientSecretReadable ? 'ok' : 'bad'}
-          badge={
-            <Badge variant={!enabled ? 'neutral' : clientSecretReadable ? 'success' : 'danger'}>
-              {!enabled
-                ? 'Disabled'
+        <>
+          <SettingsStatusCard
+            title="Current status"
+            tone={!enabled ? 'off' : clientSecretReadable ? 'ok' : 'bad'}
+            badge={
+              <Badge variant={!enabled ? 'neutral' : clientSecretReadable ? 'success' : 'danger'}>
+                {!enabled
+                  ? 'Disabled'
+                  : clientSecretReadable
+                    ? 'Enabled'
+                    : 'Enabled, but unavailable'}
+              </Badge>
+            }
+            headline={
+              !enabled
+                ? 'Institutional sign-in is off'
                 : clientSecretReadable
-                  ? 'Enabled'
-                  : 'Enabled, but unavailable'}
-            </Badge>
-          }
-          headline={
-            !enabled
-              ? 'Institutional sign-in is off'
-              : clientSecretReadable
-                ? 'Institutional sign-in is available'
-                : 'Institutional sign-in is unavailable'
-          }
-        >
-          {/* "AFCT passwords still work" belongs here, in both working states: it is the
-              thing an admin is worried about when they touch this page. The provider and
-              email-matching rules do NOT: those are decisions you make in the form. */}
-          {!enabled && (
-            <>
-              <SettingsStatusText>Everyone signs in with an AFCT password.</SettingsStatusText>
-              <SettingsStatusNextStep>Turn it on to add your provider.</SettingsStatusNextStep>
-            </>
-          )}
-          {enabled && clientSecretReadable && (
-            <SettingsStatusText>
-              People can sign in with their institution. AFCT passwords still work as well.
-            </SettingsStatusText>
-          )}
-          {enabled && !clientSecretReadable && (
-            <>
+                  ? 'Institutional sign-in is available'
+                  : 'Institutional sign-in is unavailable'
+            }
+          >
+            {/* "AFCT passwords still work" belongs here, in both working states: it is the
+                thing an admin is worried about when they touch this page. The provider and
+                email-matching rules do NOT: those are decisions you make in the form. */}
+            {!enabled && (
+              <>
+                <SettingsStatusText>Everyone signs in with an AFCT password.</SettingsStatusText>
+                <SettingsStatusNextStep>Turn it on to add your provider.</SettingsStatusNextStep>
+              </>
+            )}
+            {enabled && clientSecretReadable && (
               <SettingsStatusText>
-                The saved client secret cannot be read, so the institution button is not shown. This
-                usually means the encryption key this AFCT was set up with has changed. AFCT
-                passwords still work.
+                People can sign in with their institution. AFCT passwords still work as well.
               </SettingsStatusText>
-              <SettingsStatusNextStep>
-                Save the secret again, or restore the key.
-              </SettingsStatusNextStep>
-            </>
-          )}
-        </SettingsStatusCard>
+            )}
+            {enabled && !clientSecretReadable && (
+              <>
+                <SettingsStatusText>
+                  The saved client secret cannot be read, so the institution button is not shown.
+                  This usually means the encryption key this AFCT was set up with has changed. AFCT
+                  passwords still work.
+                </SettingsStatusText>
+                <SettingsStatusNextStep>
+                  Save the secret again, or restore the key.
+                </SettingsStatusNextStep>
+              </>
+            )}
+          </SettingsStatusCard>
+
+          {/* Reference, not configuration: a value you hand to somebody else, so it sits in
+              the rail with a copy button rather than as a read-only field in the middle of
+              the form. Same treatment as LTI's manual endpoints and the public address. */}
+          <SettingsAsideCard title="For your IT department">
+            <CopyableValue
+              label="Redirect URL"
+              value={redirectUri}
+              copyName="redirect URL"
+              description="Registration usually fails without it, with an error about a mismatched redirect."
+            />
+          </SettingsAsideCard>
+        </>
       }
     >
       <SettingsSection title="Institutional sign-in">
@@ -174,19 +191,6 @@ export function SignInTab({
           disabled={disabled}
           placeholder={DEFAULT_OIDC_BUTTON_LABEL}
           description="What the sign-in button says. Use whatever your institution calls its login."
-        />
-      </SettingsSection>
-
-      <SettingsSection
-        title="Give this to your IT department"
-        description="The redirect URL AFCT will use. Registration usually fails without it, with an error about a mismatched redirect."
-      >
-        <InputGroup
-          label="Redirect URL"
-          name="oidcRedirectUri"
-          value={redirectUri}
-          setValue={() => {}}
-          readOnly
         />
       </SettingsSection>
 

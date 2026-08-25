@@ -174,7 +174,9 @@ export function SettingsAsideLayout({
   children: React.ReactNode;
 }) {
   const railColumn = (
-    <div className="min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1">
+    // space-y-6, the same gap the main column uses between its sections: a tab may put more
+    // than one card here (Sign-in has its status and the URL its IT department needs).
+    <div className="space-y-6 min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1">
       {aside}
     </div>
   );
