@@ -4,16 +4,7 @@ import React from 'react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { DockerStatusResponse } from '@/lib/status/types';
-import {
-  Loading,
-  STATUS_COMPACT,
-  STATUS_STANDARD,
-  Stat,
-  StatGrid,
-  StatusSection,
-  useStatusQuery,
-  copy,
-} from '../status-ui';
+import { Loading, Stat, StatGrid, StatusSection, useStatusQuery, copy } from '../status-ui';
 import { formatBytes } from '../status-format';
 
 // The resource-limit fields are tri-state: a number is the cap, `null` means the
@@ -50,7 +41,7 @@ export default function DockerTab({
 
   if (!docker) {
     return (
-      <StatusSection title="Container" className={STATUS_COMPACT}>
+      <StatusSection title="Container">
         <div className="text-muted-foreground text-sm">Not running inside a container.</div>
       </StatusSection>
     );
@@ -58,10 +49,11 @@ export default function DockerTab({
 
   return (
     <div className="space-y-5">
-      {/* Deliberately not widened to match the other tabs. Seven short attributes do not
-          become easier to read with 1400px behind them, and this is the one tab where the
-          content genuinely wants less room than the workspace has. */}
-      <StatusSection title="Container" className={STATUS_COMPACT}>
+      {/* Seven short attributes, paired up so they do not run down the page. The card takes
+          the same width as every other section on every other tab: `StatGrid` already keeps
+          each reading beside its label, so the panel does not need to be narrow as well, and
+          two stacked cards at two different widths read as an accident. */}
+      <StatusSection title="Container">
         <StatGrid>
           <Stat
             label="Container ID"
@@ -83,7 +75,7 @@ export default function DockerTab({
       {/* Its own section, and a wider one: cgroup paths are long, break mid-word, and are
           read character by character when something is wrong, so they get the room the
           summary above deliberately refuses. */}
-      <StatusSection title="Cgroup" className={STATUS_STANDARD}>
+      <StatusSection title="Cgroup">
         {docker.cgroupPaths?.length ? (
           <ul className="bg-muted divide-y rounded-md border">
             {docker.cgroupPaths.slice(0, 6).map((line, i) => (

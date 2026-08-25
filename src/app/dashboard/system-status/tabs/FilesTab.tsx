@@ -16,7 +16,7 @@ import type { AbandonedFile, FilesStatusResponse } from '@/lib/status/types';
 import { formatBytes } from '../status-format';
 import { abandonedFileColumns } from '../abandoned-file-columns';
 import { UploadUsagePanel } from '../upload-usage-panel';
-import { Loading, STATUS_STANDARD, STATUS_WIDE, StatusSection, useStatusQuery } from '../status-ui';
+import { Loading, StatusSection, useStatusQuery } from '../status-ui';
 
 /** What a delete is waiting on: one named file, or a whole category. */
 type Pending =
@@ -136,7 +136,7 @@ export default function FilesTab({
   // as "nothing to clean up", so a database that could not be reached looked like good news.
   if (files.error) {
     return (
-      <StatusSection title="Abandoned files" className={STATUS_STANDARD}>
+      <StatusSection title="Abandoned files">
         <div
           role="alert"
           className="border-status-danger-border bg-status-danger-bg space-y-2 rounded-md border p-3"
@@ -165,7 +165,6 @@ export default function FilesTab({
   return (
     <div className="space-y-5">
       <StatusSection
-        className={STATUS_STANDARD}
         titleText="Uploaded files"
         title={
           <>
@@ -211,10 +210,7 @@ export default function FilesTab({
         {storage && <UploadUsagePanel storage={storage} />}
       </StatusSection>
 
-      {/* Unboxed: the table below brings its own shell. */}
       <StatusSection
-        boxed={false}
-        className={STATUS_WIDE}
         titleText="Abandoned files"
         title={
           <>

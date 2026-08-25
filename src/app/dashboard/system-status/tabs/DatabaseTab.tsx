@@ -8,7 +8,6 @@ import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import type { DatabaseStatusResponse } from '@/lib/status/types';
 import {
   Loading,
-  STATUS_STANDARD,
   Stat,
   StatGrid,
   StatusSection,
@@ -55,7 +54,7 @@ export default function DatabaseTab({
     <div className="space-y-5">
       {/* Three groups, not one section with four hand-built subheadings: what the database
           is, what it holds, and how it is performing are three different questions. */}
-      <StatusSection title="Database" className={STATUS_STANDARD}>
+      <StatusSection title="Database">
         <Stat label="Provider" value={(data.provider ?? 'unknown').toUpperCase()} />
         {details?.version && <Stat label="Version" value={formatDbVersion(details.version)} />}
         <Stat label="Tables" value={tables == null ? '—' : tables} />
@@ -67,7 +66,7 @@ export default function DatabaseTab({
 
       {/* What the database is, beside when it was last changed. The two are read together
           after an upgrade: the version you are on and the migration that put you there. */}
-      <StatusSection title="Details" className={STATUS_STANDARD}>
+      <StatusSection title="Details">
         <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
           <StatusSubsection title="Connection">
             <div className="space-y-2">
@@ -121,7 +120,7 @@ export default function DatabaseTab({
       {/* One section framing, provider-specific contents: Postgres and SQLite genuinely
           report different things and forcing them to match would invent readings. */}
       {pg && (
-        <StatusSection title="Performance" description="Postgres" className={STATUS_STANDARD}>
+        <StatusSection title="Performance" description="Postgres">
           {/* Counters, not prose: paired up they fit on one screen instead of running down
               the page below everything else worth reading. */}
           <StatGrid>
@@ -160,7 +159,7 @@ export default function DatabaseTab({
       )}
 
       {sqlite && (
-        <StatusSection title="Performance" description="SQLite" className={STATUS_STANDARD}>
+        <StatusSection title="Performance" description="SQLite">
           <Stat label="Journal Mode" value={sqlite.journal_mode ?? '—'} />
         </StatusSection>
       )}

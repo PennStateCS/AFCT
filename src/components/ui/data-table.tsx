@@ -406,7 +406,9 @@ export function DataTable<TData, TValue>({
             loadingMessage={loadingMessage}
             emptyAction={emptyAction}
           />
-          <div className="rounded-md border p-3">
+          {/* Same reason as the table shell below: the card view's pagination strip was
+              transparent, so it took the page's colour instead of the table's. */}
+          <div className="rounded-md border bg-[var(--table-background)] p-3">
             <PaginationControls
               table={table}
               rowCount={rowCount}
@@ -418,8 +420,16 @@ export function DataTable<TData, TValue>({
         /* Single scroll container: the Table primitive already wraps the table in an
            overflow-x-auto div, so this wrapper only frames it (a second overflow-x-auto
            here produced a doubled/flaky horizontal scrollbar). overflow-hidden keeps the
-           rounded corners clipping the scrolling content. */
-        <div className="overflow-hidden rounded-md border">
+           rounded corners clipping the scrolling content.
+
+           The surface belongs to the shell, not only to the rows. It used to be painted
+           per row, which looks right until a table has no rows: an empty state, the
+           loading state and the pagination strip were all transparent, so on any page whose
+           background is not the card colour the table showed the page through itself. That
+           went unnoticed while every table sat inside a white card. `--table-background`
+           is the card colour in all three themes, so this is invisible where that is still
+           true and is the fix everywhere else. */
+        <div className="overflow-hidden rounded-md border bg-[var(--table-background)]">
           <Table
             // `bordered` adds gridlines: a right border on every cell except the last
             // column (vertical lines) plus a bottom border on body rows (horizontal

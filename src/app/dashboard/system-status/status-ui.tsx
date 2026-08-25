@@ -137,22 +137,20 @@ export const StatGrid = ({
 );
 
 /**
- * The width vocabulary for a System Status tab.
+ * One content measure for every status section, on every tab.
  *
- * Eight subsystems report eight different shapes of information, so one width for all of
- * them would be wrong in both directions: seven short Docker readings stretched across a
- * monitor, and a diagnostic table squeezed into a form column. These name the four choices
- * so a tab picks one on purpose instead of reaching for whatever `max-w-*` looked right
- * that day, which is how the tabs ended up with 3xl, 4xl, 5xl and xl between them.
+ * This started as four named widths (compact / readable / standard / wide) on the theory
+ * that seven short Docker readings and a diagnostic table want different room. In the
+ * browser that produced two cards of different widths stacked on the Docker tab, and a
+ * right edge that jumped between 768, 1024 and 1152 as you moved through the eight tabs,
+ * which reads as an accident rather than as a decision.
+ *
+ * So: one measure. `StatGrid` already keeps a reading beside its label, and the tables
+ * here are short operational lists, so nothing on these pages actually needed the extra
+ * room it was being given. Add a second width only with a case that survives looking at
+ * it next to its neighbours.
  */
-/** Short key/value groups: Docker's container summary, a handful of readings. */
-export const STATUS_COMPACT = 'w-full max-w-3xl';
-/** Prose and notices, held to a readable line length. */
-export const STATUS_READABLE = 'w-full max-w-4xl';
-/** The default: ordinary status panels and metric groups. */
 export const STATUS_STANDARD = 'w-full max-w-5xl';
-/** Tables, charts and diagnostic detail, which read better with the room. */
-export const STATUS_WIDE = 'w-full max-w-6xl';
 
 /** A stable id from the visible title, so the heading and its section stay associated. */
 export function statusSectionId(title: string) {

@@ -7,14 +7,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import type { WorkItem, WorkersStatusResponse } from '@/lib/status/workers';
-import {
-  Loading,
-  STATUS_STANDARD,
-  Stat,
-  StatGrid,
-  StatusSection,
-  useStatusQuery,
-} from '../status-ui';
+import { Loading, Stat, StatGrid, StatusSection, useStatusQuery } from '../status-ui';
 
 /** How long something has been running, in the shortest form that is still honest. */
 function elapsed(ms: number): string {
@@ -175,12 +168,12 @@ export default function WorkersTab({
         ) : null}
       </StatusSection>
 
-      {/* Unboxed: the table draws its own shell, and a card around a card is noise. */}
+      {/* A card, like Evaluator above it. The table's own shell paints the card colour, so
+          inside a panel its border reads as a rule around the rows rather than as a second
+          card, which is how the Backups table sits in System Settings. */}
       <StatusSection
         title="Being graded now"
         description="Slots are concurrent grading loops inside one evaluator container, not separate machines. How many there are comes from the submission concurrency limit in System Settings."
-        boxed={false}
-        className={STATUS_STANDARD}
       >
         <DataTable
           columns={columns}

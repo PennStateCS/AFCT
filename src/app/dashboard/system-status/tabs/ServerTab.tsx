@@ -9,7 +9,6 @@ import type { ServerStatusResponse, IpAddr } from '@/lib/status/types';
 import {
   Loading,
   Meter,
-  STATUS_STANDARD,
   Sparkline,
   Stat,
   StatGrid,
@@ -67,7 +66,6 @@ export default function ServerTab({
       <StatusSection
         title="Performance"
         description="How hard this server is working right now, and over the chosen window."
-        className={STATUS_STANDARD}
       >
         {/* Readings and their meters on one side, the trend over the chosen window on the
             other. Stacked below lg, where two of either would be too narrow to read. */}
@@ -144,7 +142,6 @@ export default function ServerTab({
       <StatusSection
         title="This server"
         description="What the host operating system reports about itself."
-        className={STATUS_STANDARD}
       >
         {host.available ? (
           <ul className="space-y-2">
@@ -186,7 +183,7 @@ export default function ServerTab({
         )}
       </StatusSection>
 
-      <StatusSection title="Software" className={STATUS_STANDARD}>
+      <StatusSection title="Software">
         {/* Eight versions is a list to scan, not to read in order, so it pairs up rather than
             running down the page. */}
         <StatGrid>
@@ -204,7 +201,7 @@ export default function ServerTab({
         </StatGrid>
       </StatusSection>
 
-      <StatusSection title="Network interfaces" className={STATUS_STANDARD}>
+      <StatusSection title="Network interfaces">
         <Stat label="Hostname" value={system.hostname ?? '—'} />
         {(system.ipAddresses?.length ?? 0) > 0 ? (
           <ul className="bg-muted divide-y rounded-md border">

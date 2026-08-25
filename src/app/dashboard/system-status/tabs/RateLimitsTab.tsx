@@ -9,7 +9,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { RateLimitedAddress, RateLimitsStatusResponse } from '@/lib/status/types';
-import { STATUS_WIDE, StatusSection, useStatusQuery } from '../status-ui';
+import { StatusSection, useStatusQuery } from '../status-ui';
 import { getRateLimitColumns } from '../rate-limit-columns';
 
 export default function RateLimitsTab({
@@ -69,8 +69,6 @@ export default function RateLimitsTab({
     <StatusSection
       title={`Rate Limits${entries.length ? ` (${entries.length})` : ''}`}
       description="Addresses AFCT is currently turning away for making too many sign-in, sign-up, or email-availability requests."
-      boxed={false}
-      className={STATUS_WIDE}
     >
       {/* The operational detail an admin needs before clearing one, kept out of the
           description so the section still opens with what the list is. */}

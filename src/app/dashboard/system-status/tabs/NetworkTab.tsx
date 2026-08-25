@@ -6,7 +6,6 @@ import { queryKeys } from '@/lib/query-keys';
 import type { NetworkStatusResponse } from '@/lib/status/types';
 import {
   Loading,
-  STATUS_STANDARD,
   Stat,
   StatGrid,
   StatusSection,
@@ -51,7 +50,6 @@ export default function NetworkTab({
       <StatusSection
         title="Endpoints"
         description="What AFCT can reach, and how quickly. Compare the two: both slow is the network, one slow is that service."
-        className={STATUS_STANDARD}
       >
         <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
           <StatusSubsection title="Database endpoint">
@@ -76,7 +74,7 @@ export default function NetworkTab({
         </div>
       </StatusSection>
 
-      <StatusSection title="Error rates" className={STATUS_STANDARD}>
+      <StatusSection title="Error rates">
         <StatGrid>
           <Stat label="Last 5 minutes" value={errRate(net.errors?.last5m)} />
           <Stat label="Last 15 minutes" value={errRate(net.errors?.last15m)} />
