@@ -4,6 +4,10 @@ AFCT can be opened from Canvas, D2L Brightspace, Blackboard, or any other LMS th
 
 AFCT sits alongside your LMS; it does not replace it. Your LMS stays the system of record for a final grade.
 
+AFCT is certified by 1EdTech for **LTI Advantage Complete**, which covers LTI 1.3 along with Deep Linking 2.0, Names and Role Provisioning Services 2.0, and Assignment and Grade Services 2.0. If your institution asks for evidence of conformance before approving a new tool, the certification is listed publicly in the 1EdTech Product Directory.
+
+<a href="https://site.imsglobal.org/certifications/pennsylvania-state-university/afct"><img src="https://site.imsglobal.org/sites/default/files/media/images/logo_ims/1edtech_trusted-apps-certified.svg" alt="1EdTech Certified" width="140" border="0"></a>
+
 Registering an LMS is an administrator task and only has to be done once per LMS. After that, faculty connect their own courses themselves by opening AFCT from the LMS. See [Grades and rosters from your LMS](../faculty/lms.md) for their side of it.
 
 ## Before you start
