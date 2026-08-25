@@ -373,28 +373,66 @@ export function DataTable<TData, TValue>({
 
   const stacked = useStackedView();
 
+  /*
+   * The controls that drive the table, drawn ON the table rather than above it.
+   *
+   * They used to float on the page background: outside the shell, outside its border, with
+   * nothing tying Search and Filters to the rows they filter. That was invisible while every
+   * table sat inside a white card, and became obvious once the shell started painting its own
+   * surface, because the toolbar was then the one part of the table showing the page through
+   * itself. Every table that sits inside a settings or status panel already passes
+   * `showToolbar={false}`, so nothing gains a second header band from this.
+   *
+   * The band is the table's own surface with a rule under it, NOT `bg-muted`: --table-header
+   * and --muted are the same value in all three themes, so a muted toolbar directly above the
+   * muted header row read as one grey block split by a hairline.
+   */
+  const toolbar = showToolbar ? (
+    <div className="border-b p-3">
+      <DataTableToolbar
+        table={table}
+        globalFilter={globalFilter}
+        setGlobalFilter={setGlobalFilter}
+        searchScope={searchScope}
+        setSearchScope={setSearchScope}
+        scopeOptions={scopeOptions}
+        filterableColumns={filterableColumns}
+        activeFilterCount={activeFilterCount}
+        actionButtons={actionButtons}
+        showExportButton={showExportButton}
+        onExport={exportToCSV}
+        onResetColumns={resetColumns}
+        getColumnLabel={columnLabel}
+      />
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-4">
-      {showToolbar && (
-        <DataTableToolbar
-          table={table}
-          globalFilter={globalFilter}
-          setGlobalFilter={setGlobalFilter}
-          searchScope={searchScope}
-          setSearchScope={setSearchScope}
-          scopeOptions={scopeOptions}
-          filterableColumns={filterableColumns}
-          activeFilterCount={activeFilterCount}
-          actionButtons={actionButtons}
-          showExportButton={showExportButton}
-          onExport={exportToCSV}
-          onResetColumns={resetColumns}
-          getColumnLabel={columnLabel}
-        />
-      )}
-
       {stacked ? (
         <div className="space-y-3">
+          {/* Stacked, there is no single shell to sit on: the cards are separate objects. The
+              toolbar takes the same box the pagination strip below them takes, so the two
+              controls that bracket the list match each other. */}
+          {showToolbar ? (
+            <div className="overflow-hidden rounded-md border bg-[var(--table-background)] p-3">
+              <DataTableToolbar
+                table={table}
+                globalFilter={globalFilter}
+                setGlobalFilter={setGlobalFilter}
+                searchScope={searchScope}
+                setSearchScope={setSearchScope}
+                scopeOptions={scopeOptions}
+                filterableColumns={filterableColumns}
+                activeFilterCount={activeFilterCount}
+                actionButtons={actionButtons}
+                showExportButton={showExportButton}
+                onExport={exportToCSV}
+                onResetColumns={resetColumns}
+                getColumnLabel={columnLabel}
+              />
+            </div>
+          ) : null}
           <DataTableCards
             table={table}
             loading={loading}
@@ -430,6 +468,7 @@ export function DataTable<TData, TValue>({
            is the card colour in all three themes, so this is invisible where that is still
            true and is the fix everywhere else. */
         <div className="overflow-hidden rounded-md border bg-[var(--table-background)]">
+          {toolbar}
           <Table
             // `bordered` adds gridlines: a right border on every cell except the last
             // column (vertical lines) plus a bottom border on body rows (horizontal

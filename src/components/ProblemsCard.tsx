@@ -54,25 +54,23 @@ export function ProblemsCard({
           </Button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <DataTable
-          columns={problemColumns}
-          data={problems}
-          loading={isLoading}
-          tableLabel="Problems table"
-          // The creation date is rarely needed; hide it by default. It stays available
-          // through the Columns menu.
-          defaultColumnVisibility={{ createdAt: false }}
-          emptyTitle="No problems yet"
-          emptyDescription={
-            courseIsArchived
-              ? 'This course was archived without any problems.'
-              : 'Create a problem to add to an assignment.'
-          }
-          emptyIcon={FileText}
-          loadingMessage="Loading problems, please wait..."
-        />
-      </div>
+      <DataTable
+        columns={problemColumns}
+        data={problems}
+        loading={isLoading}
+        tableLabel="Problems table"
+        // The creation date is rarely needed; hide it by default. It stays available
+        // through the Columns menu.
+        defaultColumnVisibility={{ createdAt: false }}
+        emptyTitle="No problems yet"
+        emptyDescription={
+          courseIsArchived
+            ? 'This course was archived without any problems.'
+            : 'Create a problem to add to an assignment.'
+        }
+        emptyIcon={FileText}
+        loadingMessage="Loading problems, please wait..."
+      />
     </div>
   );
 }

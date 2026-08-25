@@ -25,10 +25,9 @@ export function AssignmentsCard({
   isLoading = false,
 }: AssignmentsCardProps) {
   return (
-    // 24px below the heading/action row, against the 16px DataTable keeps between its own
-    // toolbar and the table. The two numbers differ on purpose: the heading and its buttons
-    // belong to the SECTION, the toolbar belongs to the table, so the larger gap is where
-    // the grouping actually changes. Flat 16/16 made the buttons look glued to the filters.
+    // 24px between the heading/action row and the table, which is now one object: the
+    // toolbar moved inside the table's own shell, so the only gap left on this tab is the
+    // one where the grouping actually changes, from the section's controls to its content.
     <div className="space-y-6">
       {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
           fit on a phone, and a single row pushed them off the edge. Same shape as the
@@ -49,23 +48,21 @@ export function AssignmentsCard({
           </Button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <DataTable
-          columns={assignmentColumns}
-          data={assignments}
-          loading={isLoading}
-          tableLabel="Assignments table"
-          defaultSorting={[{ id: 'dueDate', desc: false }]}
-          emptyTitle="No assignments yet"
-          emptyDescription={
-            courseIsArchived
-              ? 'This course was archived without any assignments.'
-              : 'Create an assignment to give students something to submit.'
-          }
-          emptyIcon={BookOpen}
-          loadingMessage="Loading assignments, please wait..."
-        />
-      </div>
+      <DataTable
+        columns={assignmentColumns}
+        data={assignments}
+        loading={isLoading}
+        tableLabel="Assignments table"
+        defaultSorting={[{ id: 'dueDate', desc: false }]}
+        emptyTitle="No assignments yet"
+        emptyDescription={
+          courseIsArchived
+            ? 'This course was archived without any assignments.'
+            : 'Create an assignment to give students something to submit.'
+        }
+        emptyIcon={BookOpen}
+        loadingMessage="Loading assignments, please wait..."
+      />
     </div>
   );
 }
