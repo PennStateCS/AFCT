@@ -673,7 +673,9 @@ export function GroupSetView({
           {/* Group cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
             {detail.groups.length === 0 && (
-              <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm sm:col-span-2">
+              // Same as the empty group-set panel: dashed to say it is empty, filled so it
+              // is still an object sitting beside the Unassigned card rather than a hole.
+              <div className="bg-card text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm sm:col-span-2">
                 This set has no groups yet. Use &quot;Add group&quot; to create one.
               </div>
             )}

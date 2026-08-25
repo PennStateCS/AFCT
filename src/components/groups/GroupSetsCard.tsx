@@ -96,7 +96,9 @@ export function GroupSetsCard({
       {listQuery.isPending ? (
         <LoadingSpinner label="Loading group sets" fullScreen={false} className="min-h-40" />
       ) : sets.length === 0 ? (
-        <div className="text-muted-foreground rounded-md border border-dashed p-8 text-center">
+        // bg-card and dashed. The dash is what says "nothing here yet"; leaving it unfilled
+        // as well made the one thing on the tab a hollow outline on the page.
+        <div className="bg-card text-muted-foreground rounded-md border border-dashed p-8 text-center">
           <Layers className="text-muted-foreground mx-auto mb-2 h-8 w-8" aria-hidden="true" />
           <p className="font-medium">No group sets yet</p>
           <p className="text-sm">
