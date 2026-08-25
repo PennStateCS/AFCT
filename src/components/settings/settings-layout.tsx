@@ -82,6 +82,7 @@ export function SettingsSection({
   action,
   className,
   boxed = true,
+  headingRef,
   headingLevel = 2,
   children,
 }: {
@@ -91,6 +92,16 @@ export function SettingsSection({
   action?: React.ReactNode;
   className?: string;
   boxed?: boolean;
+  /**
+   * Somewhere for focus to land after the thing that had it was removed.
+   *
+   * A list whose rows carry a Remove button has this problem: the dialog restores focus to
+   * whatever opened it, and that button no longer exists, so focus falls to the body and a
+   * keyboard user is thrown to the top of the page. The section's own heading is the nearest
+   * stable landmark, so it takes `tabIndex={-1}` whenever a caller asks for the ref. Without
+   * one it stays an ordinary heading, out of the tab order.
+   */
+  headingRef?: React.Ref<HTMLHeadingElement>;
   /**
    * Which heading tag the title gets. 2 where the page title is the only thing above it,
    * which is System Settings. 3 on a course or assignment tab, where the tab already
@@ -110,7 +121,12 @@ export function SettingsSection({
   // it, nor compete with the page title.
   const heading = (
     <div className="space-y-1">
-      <Heading id={id} className="text-base font-semibold">
+      <Heading
+        id={id}
+        ref={headingRef}
+        tabIndex={headingRef ? -1 : undefined}
+        className="text-base font-semibold"
+      >
         {title}
       </Heading>
       {description ? (

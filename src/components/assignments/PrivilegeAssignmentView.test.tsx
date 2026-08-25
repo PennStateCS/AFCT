@@ -459,6 +459,50 @@ describe('PrivilegeAssignmentView — tabs', () => {
   });
 });
 
+/*
+ * The four form tabs, as pages rather than as four sets of loose fields.
+ *
+ * Each had grown its own shape: Details was a bare stack, Type and Assign To each rendered
+ * their own icon heading, and Settings had no heading at all, so the tab a professor landed
+ * on decided what the page looked like. They now share the settings vocabulary: the tab's
+ * name as an h2, then titled panels under it as h3s.
+ *
+ * Pinned here rather than in each component's own file because the failure is a mismatch
+ * BETWEEN them, which no single component can see. The heading level is the load-bearing
+ * part: as h2s the panels claimed to be the tab heading's siblings, which is the flat
+ * structure this replaces.
+ */
+describe('PrivilegeAssignmentView - one shape across the form tabs', () => {
+  // Every form tab, including Settings, which had no heading of any kind before this.
+  it.each(['Details', 'Type', 'Assign To', 'Settings'])(
+    'names the %s tab with an h2 above its panels',
+    async (tab) => {
+      const user = userEvent.setup();
+      renderView();
+      await user.click(screen.getByRole('tab', { name: new RegExp(tab) }));
+
+      expect(await screen.findByRole('heading', { level: 2, name: tab })).toBeVisible();
+    },
+  );
+
+  /*
+   * The panels themselves are h3, under that h2. Only the two tabs whose components this file
+   * renders for real can be checked here: AssignmentSettingsCard is stubbed above, and its own
+   * test pins its panels instead.
+   */
+  it.each([
+    ['Details', 'Title and description'],
+    ['Type', 'How students work'],
+  ])("puts %s's panel under that heading rather than beside it", async (tab, title) => {
+    const user = userEvent.setup();
+    renderView();
+    await user.click(screen.getByRole('tab', { name: new RegExp(tab) }));
+
+    const panel = await screen.findByRole('region', { name: title });
+    expect(within(panel).getByRole('heading', { level: 3, name: title })).toBeVisible();
+  });
+});
+
 describe('PrivilegeAssignmentView — queries', () => {
   beforeEach(() => {
     searchState.value = 'tab=problems';

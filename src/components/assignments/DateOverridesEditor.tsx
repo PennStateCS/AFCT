@@ -1,13 +1,7 @@
 'use client';
 
 import React, { useEffect, useId, useState } from 'react';
-import {
-  Controller,
-  useController,
-  useFieldArray,
-  useWatch,
-  type Control,
-} from 'react-hook-form';
+import { Controller, useController, useFieldArray, useWatch, type Control } from 'react-hook-form';
 import { useQuery } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -46,10 +40,13 @@ export function DateOverridesEditor({
   control,
   courseId,
   active,
+  className,
 }: {
   control: Control<FormValues>;
   courseId: string;
   active: boolean;
+  /** Passed to the panel, so a caller can match the shape of the panels around it. */
+  className?: string;
 }) {
   const { fields, append, remove } = useFieldArray({ control, name: 'dateOverrides' });
   const sectionId = useId();
@@ -165,6 +162,7 @@ export function DateOverridesEditor({
 
   return (
     <DueDateSection
+      className={className}
       id={sectionId}
       icon={<CalendarRange className="h-4 w-4" />}
       title={`Date overrides (${fields.length})`}
@@ -203,7 +201,9 @@ export function DateOverridesEditor({
             const o = rows[index];
             const rowIsGroup = !!f.groupId;
             const key = f.groupId ? `g:${f.groupId}` : f.userId ? `s:${f.userId}` : f.id;
-            const displayName = rowIsGroup ? (f.groupName ?? 'Group') : (f.studentName ?? 'Student');
+            const displayName = rowIsGroup
+              ? (f.groupName ?? 'Group')
+              : (f.studentName ?? 'Student');
             const targetLabel = rowIsGroup ? `group ${displayName}` : displayName;
             const isOpen = expandedKeys.has(key);
             const overrideAllowLate = o?.allowLateSubmissions;
@@ -212,7 +212,9 @@ export function DateOverridesEditor({
             if (overrideAllowLate === undefined || overrideAllowLate === null) {
               lateText = baseAllowLate ? 'Default: allowed' : 'Default: closes at due';
             } else if (overrideAllowLate) {
-              lateText = o?.lateCutoff ? `Until ${formatDateTimeLocal(o.lateCutoff)}` : 'Allowed, no cutoff';
+              lateText = o?.lateCutoff
+                ? `Until ${formatDateTimeLocal(o.lateCutoff)}`
+                : 'Allowed, no cutoff';
             } else {
               lateText = 'Closes at due';
             }
@@ -242,11 +244,19 @@ export function DateOverridesEditor({
                       </span>
                       <span className="text-muted-foreground pl-6 text-xs md:pl-0">
                         <span className="font-medium md:sr-only">Available: </span>
-                        {o?.unlockAt ? formatDateTimeLocal(o.unlockAt) : <Badge variant="neutral">Default</Badge>}
+                        {o?.unlockAt ? (
+                          formatDateTimeLocal(o.unlockAt)
+                        ) : (
+                          <Badge variant="neutral">Default</Badge>
+                        )}
                       </span>
                       <span className="text-muted-foreground pl-6 text-xs md:pl-0">
                         <span className="font-medium md:sr-only">Due: </span>
-                        {o?.dueDate ? formatDateTimeLocal(o.dueDate) : <Badge variant="neutral">Default</Badge>}
+                        {o?.dueDate ? (
+                          formatDateTimeLocal(o.dueDate)
+                        ) : (
+                          <Badge variant="neutral">Default</Badge>
+                        )}
                       </span>
                       <span className="text-muted-foreground pl-6 text-xs md:pl-0">
                         <span className="font-medium md:sr-only">Late work: </span>

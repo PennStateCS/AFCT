@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronUp, RefreshCw, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import SwitchField from '@/components/ui/SwitchField';
+import { SettingsSection } from '@/components/settings/settings-layout';
 import { showToast } from '@/lib/toast';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -107,11 +108,13 @@ export function GradeSyncCard({
     // The Settings tab is a real destination, so it explains itself rather than being blank.
     // The Submissions tab is not: nothing to say there when no LMS is involved.
     return variant === 'settings' ? (
-      <p className="text-muted-foreground max-w-2xl text-sm">
-        This course is not connected to an LMS, so there are no grade settings to change. Once
-        somebody opens AFCT from your LMS and connects the course, this is where you choose whether
-        grades are sent automatically.
-      </p>
+      <SettingsSection title="Grades in your LMS" headingLevel={3}>
+        <p className="text-muted-foreground text-sm">
+          This course is not connected to an LMS, so there are no grade settings to change. Once
+          somebody opens AFCT from your LMS and connects the course, this is where you choose
+          whether grades are sent automatically.
+        </p>
+      </SettingsSection>
     ) : null;
   }
 
@@ -250,8 +253,9 @@ export function GradeSyncCard({
 
   if (variant === 'settings') {
     return (
-      <div className="max-w-2xl space-y-4 rounded-md border p-4">
-        <h2 className="text-sm font-medium">Grades in your LMS</h2>
+      // The settings panel the rest of this tab uses. It was a bare rounded-md box with a
+      // text-sm heading, which put a major section at the weight of a field label.
+      <SettingsSection title="Grades in your LMS" headingLevel={3}>
         <SwitchField
           name="ltiAutoSync"
           label="Send grades automatically"
@@ -260,7 +264,7 @@ export function GradeSyncCard({
           onCheckedChange={(value) => void setAuto(value)}
           descriptionPlacement="inline"
         />
-      </div>
+      </SettingsSection>
     );
   }
 

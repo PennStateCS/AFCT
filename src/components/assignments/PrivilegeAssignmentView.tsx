@@ -686,13 +686,19 @@ export default function AssignmentDashboardPage({
             </div>
           </TabsContent>
           <TabsContent value="type">
-            <AssignmentTypeCard
-              courseId={id}
-              assignmentId={assignment.id}
-              groupSetId={assignment.groupSetId ?? null}
-              courseIsArchived={courseIsArchived}
-              onChanged={() => void invalidateAssignment()}
-            />
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <Shapes className="h-6 w-6" />
+                Type
+              </h2>
+              <AssignmentTypeCard
+                courseId={id}
+                assignmentId={assignment.id}
+                groupSetId={assignment.groupSetId ?? null}
+                courseIsArchived={courseIsArchived}
+                onChanged={() => void invalidateAssignment()}
+              />
+            </div>
           </TabsContent>
           <TabsContent
             value="problems"
@@ -766,7 +772,13 @@ export default function AssignmentDashboardPage({
             <AssignmentSimilarityPanel />
           </TabsContent>
           <TabsContent value="settings">
+            {/* This tab had no heading at all: two panels appeared under the tab rail with
+                nothing naming what they were. */}
             <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <SlidersHorizontal className="h-6 w-6" />
+                Settings
+              </h2>
               <GradeSyncCard assignmentId={aid} variant="settings" />
               <AssignmentLmsLinksCard
                 courseId={id}
@@ -788,18 +800,24 @@ export default function AssignmentDashboardPage({
           </TabsContent>
 
           <TabsContent value="assign-to">
-            {settingsAssignment ? (
-              <AssignmentSettingsCard
-                courseId={id}
-                courseIsArchived={courseIsArchived}
-                // Edit the dates in the COURSE's zone (what the server stores them in).
-                timeZone={assignment.course?.timezone ?? timezone}
-                assignment={settingsAssignment}
-                onSaved={() => {
-                  void invalidateAssignment();
-                }}
-              />
-            ) : null}
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <Users className="h-6 w-6" />
+                Assign To
+              </h2>
+              {settingsAssignment ? (
+                <AssignmentSettingsCard
+                  courseId={id}
+                  courseIsArchived={courseIsArchived}
+                  // Edit the dates in the COURSE's zone (what the server stores them in).
+                  timeZone={assignment.course?.timezone ?? timezone}
+                  assignment={settingsAssignment}
+                  onSaved={() => {
+                    void invalidateAssignment();
+                  }}
+                />
+              ) : null}
+            </div>
           </TabsContent>
         </LocalNavLayout>
       </Tabs>

@@ -1,9 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SettingsSection } from '@/components/settings/settings-layout';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -48,8 +47,12 @@ export function AssignmentLmsLinksCard({
    * Radix restores focus to whatever opened the dialog, and that was the Remove button inside
    * the row the removal has just deleted. Restoring to a node that no longer exists drops focus
    * to the document body, so a keyboard user was returned to the top of the page.
+   *
+   * The panel's own heading is the anchor; `headingRef` is what makes it focusable. It used to
+   * be a CardTitle, which is a div, so this is also the first time the card names itself with a
+   * real heading.
    */
-  const headingRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   const remove = async (link: AssignmentLmsLink) => {
     try {
@@ -67,14 +70,8 @@ export function AssignmentLmsLinksCard({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle ref={headingRef} tabIndex={-1} className="flex items-center gap-2 text-base">
-          <Link2 className="h-4 w-4" aria-hidden="true" />
-          In your LMS
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 text-sm">
+    <SettingsSection title="In your LMS" headingLevel={3} headingRef={headingRef}>
+      <div className="space-y-4 text-sm">
         {/* One region for the whole card, kept across every branch below, so the wait and
             its outcome are both announced. "Loading…" used to be plain text. */}
         <span role="status" aria-live="polite" className="sr-only">
@@ -153,7 +150,7 @@ export function AssignmentLmsLinksCard({
             </p>
           </>
         )}
-      </CardContent>
+      </div>
 
       <ConfirmDialog
         open={!!toRemove}
@@ -174,6 +171,6 @@ export function AssignmentLmsLinksCard({
           headingRef.current?.focus();
         }}
       />
-    </Card>
+    </SettingsSection>
   );
 }
