@@ -58,13 +58,21 @@ export function IdentityPanel({
         Everything real sits above the decoration. The padding lives here rather than on the
         section so the network runs edge to edge behind it.
 
+        Vertical padding is a step under the horizontal, which is the whole compaction lever
+        along with the icon slot below: 20px top and bottom against 24 either side on a desktop.
+        The banner should stay generous across and only as tall as it needs to be, and the
+        alternative levers all cost information. Shrinking the title or the metadata would trade
+        hierarchy for pixels, and the 12px gap between the two rows is already at the point where
+        any less reads as glued together.
+
         The min-height is what makes a page open at the same height whoever is looking. A student
         gets no faculty/TA/registration line, so without it their course banner came out at 116px
         against a staff member's 144 and the assignment table started in a different place for
-        the two of them. The spare goes above and below rather than under the title. Not applied
-        below sm, where the rows stack and there is no spare height to distribute.
+        the two of them. The spare goes above and below rather than under the title. It is a
+        MINIMUM and only above sm: a long title, a second line of faculty or a wrapped badge row
+        all push past it, and on a phone the rows stack and there is no spare height to hand out.
       */}
-      <div className="relative flex flex-col justify-center gap-3 p-4 sm:min-h-[8.5rem] sm:p-5 lg:p-6">
+      <div className="relative flex flex-col justify-center gap-3 px-4 py-4 sm:min-h-[7.25rem] sm:px-5 lg:px-6 lg:py-5">
         {children}
       </div>
     </section>
@@ -79,6 +87,13 @@ export function IdentityPanel({
  * because the metadata line below indents to its width; the geometry is doing real work whether
  * or not anything is painted on it. Decorative, since the heading beside it already names the
  * thing.
+ *
+ * The slot is wider than it is tall, and that asymmetry is the second compaction lever. It used
+ * to be square at 56, sized for a tile that no longer exists, so 20 of those 56 pixels were
+ * blank space above and below a 36px glyph AND they set the height of the whole title row. The
+ * width has to stay 56 because the metadata line indents to it; the height does not, so it comes
+ * down to the glyph. The icon itself is unchanged at 36px, which is the point: this buys back
+ * 18px of banner without making the course mark any smaller.
  */
 export function IdentityPanelIcon({
   icon: Icon,
@@ -87,7 +102,7 @@ export function IdentityPanelIcon({
 }) {
   return (
     // Top-aligned by the caller, so it stays beside the first line when a title wraps.
-    <span className="mt-0.5 flex size-12 shrink-0 items-center justify-center sm:size-14">
+    <span className="flex h-7 w-12 shrink-0 items-center justify-center sm:h-9 sm:w-14">
       <Icon className="size-7 sm:size-9" aria-hidden="true" />
     </span>
   );
