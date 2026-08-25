@@ -2,6 +2,14 @@
 
 import { useState } from 'react';
 import {
+  ChevronRight,
+  FileKey,
+  FileUp,
+  KeyRound,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -10,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import InputGroup from '@/components/ui/InputGroup';
@@ -24,6 +33,72 @@ import {
   SettingsAsideLayout,
   SettingsStatusText,
 } from './settings-layout';
+
+/**
+ * One way of getting a certificate, as a card you click.
+ *
+ * These were four filled primary buttons in a row, which read as one dense cluster of
+ * equally urgent actions when they are actually four alternative routes to the same end.
+ * A card gives each one room for the sentence that tells them apart.
+ *
+ * The whole card is the <button>, so keyboard activation, focus and the accessible name
+ * are the platform's rather than something re-implemented here; that is also why there is
+ * no button nested inside. Neutral by default: choosing one opens a dialog, so none of
+ * them is the page's primary action, and none of them stays "selected" afterwards.
+ */
+function CertificateMethodCard({
+  icon: Icon,
+  title,
+  description,
+  recommended,
+  onClick,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  recommended?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        // bg-background, not bg-card: these sit inside a bg-card panel, and a card on a card
+        // is invisible. This is the surface step the page already uses for an inset.
+        'bg-background group flex w-full items-start gap-3 rounded-lg border p-4 text-left shadow-xs',
+        'transition-[color,background-color,border-color,box-shadow]',
+        'hover:bg-muted/40 hover:border-ring/50',
+        'focus-visible:border-ring focus-visible:ring-ring/70 outline-none focus-visible:ring-[3px]',
+      )}
+    >
+      <Icon
+        className={cn(
+          'mt-0.5 size-5 shrink-0',
+          recommended ? 'text-primary' : 'text-muted-foreground',
+        )}
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1 space-y-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-foreground text-sm font-semibold">{title}</span>
+          {/* info, not success: this is a recommendation, and success is reserved for
+              something that IS in a good state. Nothing here reports a state. */}
+          {recommended && (
+            <Badge variant="info" className="shrink-0">
+              Recommended
+            </Badge>
+          )}
+        </span>
+        <span className="text-muted-foreground block text-xs leading-4.5">{description}</span>
+      </span>
+      <ChevronRight
+        className="text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+        aria-hidden="true"
+      />
+    </button>
+  );
+}
 
 /**
  * One fact about the installed certificate, label above value.
@@ -176,11 +251,20 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
           </div>
         )}
 
-        <SettingsSection title="Set up a certificate">
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Certificate setup method">
-            <Button
-              type="button"
-              size="sm"
+        <SettingsSection
+          title="Set up a certificate"
+          description="Choose how AFCT should obtain or install its TLS certificate."
+        >
+          <div
+            className="grid grid-cols-1 gap-3 md:grid-cols-2"
+            role="group"
+            aria-label="Certificate setup method"
+          >
+            <CertificateMethodCard
+              icon={ShieldCheck}
+              title="Let’s Encrypt"
+              description="Get a free browser-trusted certificate with automatic renewal."
+              recommended
               onClick={() => {
                 // Prefill the domain from the configured public URL's host.
                 if (!leDomain && configuredUrl) {
@@ -192,19 +276,33 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 }
                 setTlsMethod('lets-encrypt');
               }}
-            >
-              Get a free certificate (Let’s Encrypt)
-            </Button>
-            <Button type="button" size="sm" onClick={() => setTlsMethod('csr')}>
-              Request a CA-signed certificate
-            </Button>
-            <Button type="button" size="sm" onClick={() => setTlsMethod('self-signed')}>
-              Create a self-signed certificate
-            </Button>
-            <Button type="button" size="sm" onClick={() => setTlsMethod('upload')}>
-              Upload an existing certificate
-            </Button>
+            />
+            <CertificateMethodCard
+              icon={FileKey}
+              title="CA-signed certificate"
+              description="Generate a CSR and install the certificate your certificate authority returns."
+              onClick={() => setTlsMethod('csr')}
+            />
+            <CertificateMethodCard
+              icon={KeyRound}
+              title="Self-signed certificate"
+              description="Create one locally. Browsers will still show a trust warning."
+              onClick={() => setTlsMethod('self-signed')}
+            />
+            <CertificateMethodCard
+              icon={FileUp}
+              title="Upload existing certificate"
+              description="Install a certificate and private key you already have."
+              onClick={() => setTlsMethod('upload')}
+            />
           </div>
+
+          {/* The reassurance belongs with the choices, not floating under the card: it is
+              what makes picking any of them safe to try. */}
+          <p className="text-muted-foreground border-t pt-3 text-xs leading-4.5">
+            A new certificate takes effect within about 15 seconds. If it is invalid it is rejected
+            and the current one is kept in place, so the site stays reachable.
+          </p>
         </SettingsSection>
 
         {/* Let's Encrypt (ACME HTTP-01) form (modal) */}
@@ -483,13 +581,10 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
           </DialogContent>
         </Dialog>
 
-        {/* Footer note + reset */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-muted-foreground max-w-xl text-xs">
-            The new certificate takes effect within about 15 seconds. If the new certificate is
-            invalid, it’s rejected and the current one is kept in place, so the site stays
-            reachable.
-          </p>
+        {/* The timing note moved into the setup card, beside the choices it reassures you
+            about. What is left here is the escape hatch, which is not part of setting one
+            up: it undoes one. */}
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {tls?.installed && (
             <Button
               type="button"

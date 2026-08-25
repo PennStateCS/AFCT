@@ -137,12 +137,12 @@ export function BackupsTab({
           </p>
         </SettingsSection>
 
-        <section aria-labelledby="settings-available-backups" className="space-y-3">
-          {/* Heading and action on one row, so the button sits with the list it adds to. */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id="settings-available-backups" className="text-base font-semibold">
-              Available backups
-            </h2>
+        {/* A panel, like the schedule above it: a bare heading over a table read as loose
+            page furniture next to a card, and the two are peers. Back up now goes on the
+            heading row, where SettingsSection puts a section's own action. */}
+        <SettingsSection
+          title="Available backups"
+          action={
             <Button
               type="button"
               size="sm"
@@ -151,8 +151,8 @@ export function BackupsTab({
             >
               {backupNowBusy ? 'Requesting…' : 'Back up now'}
             </Button>
-          </div>
-
+          }
+        >
           <DataTable
             columns={columns}
             data={backups}
@@ -172,7 +172,7 @@ export function BackupsTab({
             complete, restorable copy. Keep one off-host — and if backups are encrypted, store the
             passphrase somewhere other than this server, or they cannot be restored.
           </p>
-        </section>
+        </SettingsSection>
       </SettingsFormLayout>
     </>
   );

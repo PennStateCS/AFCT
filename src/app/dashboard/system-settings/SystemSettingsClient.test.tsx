@@ -480,7 +480,7 @@ describe('SystemSettingsClient — TLS certificate', () => {
     renderWithClient(<SystemSettingsClient />);
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Create a self-signed certificate' }),
+      await screen.findByRole('button', { name: /^Self-signed certificate/ }),
     );
     fireEvent.change(await screen.findByLabelText(/Hostname \(Common Name\)/), {
       target: { value: 'afct.test.edu' },
@@ -506,7 +506,7 @@ describe('SystemSettingsClient — TLS certificate', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderWithClient(<SystemSettingsClient />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Request a CA-signed certificate' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^CA-signed certificate/ }));
     fireEvent.change(await screen.findByLabelText(/Hostname \(Common Name\)/), {
       target: { value: 'afct.test.edu' },
     });
