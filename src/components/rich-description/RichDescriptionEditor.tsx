@@ -347,7 +347,12 @@ export function RichDescriptionEditor({
       data-expanded={expanded ? 'true' : undefined}
       className={cn(
         // Mirrors the Textarea's chrome so the editor sits in a form as a peer control.
-        'border-input dark:bg-input/30 relative w-full rounded-md border bg-transparent text-base shadow-xs transition-[color,box-shadow] md:text-sm',
+        // bg-card, which is what Input and Textarea moved to: transparent left the editor
+        // showing the page through itself, so beside a white title field it read as a
+        // greyed-out box. It has to be a real fill, not `dark:bg-input/30` over nothing,
+        // because a settings panel and the page it sits on are two different surfaces and
+        // a transparent control cannot match both.
+        'border-input bg-card relative w-full rounded-md border text-base shadow-xs transition-[color,box-shadow] md:text-sm',
         'focus-within:border-ring focus-within:ring-ring/70 focus-within:ring-[3px]',
         invalid && 'border-destructive ring-destructive/20 dark:ring-destructive/40',
         // Disabled and read-only are told apart by more than opacity. Opacity alone disappears
@@ -370,7 +375,10 @@ export function RichDescriptionEditor({
         !expanded && !disabled && 'max-h-[80vh] resize-y',
         // Expanded: fill the overlay, no rounded card chrome, and let the document scroll
         // rather than the whole overlay, which keeps the toolbar in view.
-        expanded && 'flex min-h-0 flex-1 flex-col rounded-none border-0 shadow-none ring-0',
+        // Expanded, the dialog is the surface: a card fill inside a full-screen overlay would
+        // draw a second, subtly different sheet over the first.
+        expanded &&
+          'flex min-h-0 flex-1 flex-col rounded-none border-0 bg-transparent shadow-none ring-0',
         className,
       )}
     >
@@ -384,8 +392,10 @@ export function RichDescriptionEditor({
           // there is exactly one "Exit expanded view" button on screen.
           onExpand={canExpand && !expanded ? () => setExpanded(true) : undefined}
           expandButtonRef={expandButtonRef}
-          // Sticky while expanded so it stays reachable through a long document.
-          className={expanded ? 'bg-background sticky top-0 z-10' : undefined}
+          // Sticky while expanded so it stays reachable through a long document. It keeps its
+          // own muted fill: bg-background here made the band darker than the sheet under it
+          // in dark mode, so expanding flipped the toolbar from lighter to darker.
+          className={expanded ? 'sticky top-0 z-10' : undefined}
         />
       )}
       <LinkDialog editor={editor} open={linkDialogOpen} onOpenChange={setLinkDialogOpen} />

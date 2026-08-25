@@ -31,7 +31,7 @@ const RichDescriptionEditor = dynamic(
     loading: () => (
       <div
         aria-hidden="true"
-        className="border-input dark:bg-input/30 size-full rounded-md border bg-transparent shadow-xs"
+        className="border-input bg-card size-full rounded-md border shadow-xs"
       />
     ),
   },
