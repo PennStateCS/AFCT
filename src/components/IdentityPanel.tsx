@@ -1,17 +1,20 @@
 import { cn } from '@/lib/utils';
 
 /**
- * The bounded, softly tinted shell that says "this page is about this one thing": a course,
- * an assignment. It holds the icon, the title, the metadata and the badges, and nothing else
- * on the page looks like it.
+ * The bounded, softly tinted shell that says "this page is about this one thing". It holds the
+ * icon, the title, the metadata and the badges, and nothing else on the page looks like it.
  *
- * Deliberately not a Card. A Card is what ordinary content sits in on these pages, so a
- * course or an assignment wrapped in one reads as another table. This is the one surface
- * that identifies the object, and it is meant to be distinguishable at a glance.
+ * Deliberately not a Card. A Card is what ordinary content sits in on these pages, so an
+ * assignment wrapped in one reads as another table. This is the one surface that identifies
+ * the object, and it is meant to be distinguishable at a glance.
  *
- * Shared because there is exactly one of these treatments, not one per page. It started
- * inline in the course header; the assignment page needed the same thing, and two copies of
- * a gradient is how two pages quietly stop matching.
+ * The assignment page is the only caller now. It started inline in the course header and both
+ * pages shared it for a while; the course page has since moved to `CourseHeaderNetwork`'s
+ * branded navy banner, which is a different decision rather than a restyling of this one. A
+ * course is the thing a person navigates TO, so its header is allowed to be the product's
+ * identity; an assignment sits inside a course that has already said so, and a tint on the
+ * page is the right weight for it. Kept general rather than renamed to the assignment page:
+ * if a third object ever needs this treatment it should get this one and not a copy.
  *
  * The tint carries NONE of the meaning. Everything is still readable from the border, the
  * heading and the badge text alone, which is what keeps this honest when the wash all but
@@ -64,9 +67,9 @@ export function IdentityPanel({
 }
 
 /**
- * The icon tile an identity panel leads with. Emerald in both themes, matching the Book
- * that marks a course everywhere else in the app, so the panels read as one family.
- * Decorative: the heading beside it already names the thing.
+ * The icon tile an identity panel leads with. Emerald in both themes, matching the course Book
+ * in the sidebar and the courses table. Decorative: the heading beside it already names the
+ * thing. Not what the course banner uses; that surface is dark and builds its own tile.
  */
 export function IdentityPanelIcon({
   icon: Icon,

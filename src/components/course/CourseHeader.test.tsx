@@ -128,14 +128,50 @@ describe('CourseHeaderContent', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
-  it('keeps the decorative panel out of the accessibility tree', () => {
+  it('keeps the decorative banner out of the accessibility tree', () => {
     const { container } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
-    // The tint and the arcs carry no meaning, so they must not be reachable or clickable.
+    // The network and the text-safe wash carry no meaning, so they must not be reachable or
+    // clickable.
     const decorations = container.querySelectorAll('[aria-hidden="true"].pointer-events-none');
-    expect(decorations.length).toBeGreaterThanOrEqual(3);
-    // The panel is a named region, so the heading names it rather than the tint doing so.
-    const panel = container.querySelector('section[aria-labelledby="course-page-title"]');
-    expect(panel).not.toBeNull();
+    expect(decorations.length).toBeGreaterThanOrEqual(2);
+    // The banner is a named region, so the heading names it rather than the ground doing so.
+    const banner = container.querySelector('section[aria-labelledby="course-page-title"]');
+    expect(banner).not.toBeNull();
+  });
+
+  it('draws the network inside the banner, hidden and unfocusable', () => {
+    const { container } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
+    const svg = container.querySelector('svg[aria-hidden="true"]');
+    expect(svg).not.toBeNull();
+    // Decoration only: no name, no focus, no pointer events, and clipped to the banner.
+    expect(svg).toHaveAttribute('focusable', 'false');
+    expect(svg?.getAttribute('class')).toContain('pointer-events-none');
+    expect(svg?.querySelectorAll('circle').length).toBeGreaterThan(15);
+    expect(svg?.querySelectorAll('line').length).toBeGreaterThan(15);
+    const banner = container.querySelector('section[aria-labelledby="course-page-title"]');
+    expect(banner?.className).toContain('overflow-hidden');
+  });
+
+  it('puts no page-theme colour inside the banner', () => {
+    // The banner is dark in every theme, so a page token or a `dark:` utility in here is a
+    // value that follows the page instead: near-black text on navy in light mode, and no way
+    // to see it from the markup. Every colour comes from the --course-banner-* family.
+    const { container } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
+    const banner = container.querySelector('section[aria-labelledby="course-page-title"]');
+    const classes = Array.from(banner?.querySelectorAll<HTMLElement>('[class]') ?? [])
+      .map((el) => el.getAttribute('class') ?? '')
+      .join(' ')
+      .split(/\s+/)
+      // The badge and button primitives carry `[a&]:hover:...` rules for the anchor form of
+      // themselves. Nothing in the banner is an anchor, so those never apply and are not
+      // worth overriding one by one.
+      .filter((c) => !c.includes('[a&]:'));
+    const themed = classes.filter((c) =>
+      /(^|:)(text|bg|border)-(foreground|background|card|muted|accent|secondary|primary|popover)(\b|-|\/)/.test(
+        c,
+      ),
+    );
+    expect(themed).toEqual([]);
   });
 
   it('never truncates the course title', () => {

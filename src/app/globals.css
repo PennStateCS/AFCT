@@ -50,6 +50,19 @@
   --color-navbar-accent: var(--navbar-accent);
   --color-navbar-accent-foreground: var(--navbar-accent-foreground);
   --color-navbar-ring: var(--navbar-ring);
+  /* The course banner. Like --sidebar, this family is DARK in every theme: the banner is a
+     branded identity surface, not a card that follows the page. Its three ground stops go
+     left-to-right across the banner; --course-banner-node and --course-banner-glow paint the
+     decorative network, and high contrast turns both transparent so it disappears there.
+     See the notes on --course-banner in the :root block. */
+  --color-course-banner: var(--course-banner);
+  --color-course-banner-mid: var(--course-banner-mid);
+  --color-course-banner-accent: var(--course-banner-accent);
+  --color-course-banner-foreground: var(--course-banner-foreground);
+  --color-course-banner-muted-foreground: var(--course-banner-muted-foreground);
+  --color-course-banner-border: var(--course-banner-border);
+  --color-course-banner-node: var(--course-banner-node);
+  --color-course-banner-glow: var(--course-banner-glow);
   /* Data visualisation, and only that. Two families, and the difference is the whole
      point of having them separate:
 
@@ -316,6 +329,40 @@
   /* The page ring reads fine on a light band, so it is the same cobalt. Named anyway, so
      the dark and high-contrast blocks have somewhere to differ. 5.9:1 against the band. */
   --navbar-ring: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
+  /* The course banner, and the reason it has a family of its own.
+
+     It is dark in EVERY theme, exactly like --sidebar. A course page opens with one object
+     that says which course this is, and that object is branded rather than themed: it reads
+     as AFCT the product, the way the rail and the sign-in panel do, and not as another card
+     on the page. That is why nothing inside the banner may use a page token or a `dark:`
+     utility. A `text-muted-foreground` in there is near-black in light mode and invisible on
+     navy; every value the banner needs is here instead, so it can be checked in one place.
+
+     Three ground stops, left to right, so the quiet end is behind the title and the light
+     gathers in the empty space beside the badges:
+
+       course-banner         #0F1B36   the left, behind the icon and the course name
+       course-banner-mid     #10285A   the middle
+       course-banner-accent  #123477   the right, where the network is densest
+
+     Related to the rail but not the same as it. --sidebar is a neutral charcoal; this is a
+     saturated navy, so a course page still separates from the chrome around it. */
+  --course-banner: oklch(0.2276 0.0552 264.403); /* #0F1B36 */
+  --course-banner-mid: oklch(0.2909 0.0951 262.701); /* #10285A */
+  --course-banner-accent: oklch(0.3448 0.1216 262.003); /* #123477 */
+  /* 16.3:1 on the left stop, 11.3:1 on the brightest. */
+  --course-banner-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
+  /* Labels and other supporting text. A fixed light blue rather than the foreground at some
+     opacity, for the reason --sidebar-muted-foreground is: an alpha blends with whatever
+     stop of the gradient happens to be behind it, so its contrast would drift across the
+     width. This is 11.2:1 on the left stop and still 7.8:1 on the brightest. */
+  --course-banner-muted-foreground: oklch(0.8619 0.0483 259.099); /* #BFD3F2 */
+  --course-banner-border: oklch(1 0 0 / 12%);
+  /* The network. One colour for the lines and the ordinary nodes, which vary by opacity
+     alone, plus a brighter blue for the handful of highlight nodes. Decoration, so both are
+     deliberately weak; if the network is the first thing you notice, lower these. */
+  --course-banner-node: oklch(0.6231 0.188 259.815); /* #3B82F6 */
+  --course-banner-glow: oklch(0.8091 0.0956 251.813); /* #93C5FD */
   /* Matched to --muted. A mid grey band competed with the header text; this reads as a
      surface. Kept a solid colour, not a tint: the header row is sticky in several tables
      and body rows would scroll through anything translucent. */
@@ -536,6 +583,15 @@
   --navbar-accent-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
   --navbar-border: oklch(0.4141 0.0427 260.212); /* #3E4C63, 1.7:1 on the band */
   --navbar-ring: oklch(0.8091 0.0956 251.813); /* #93C5FD, 8.1:1 */
+  /* The banner is already dark in light mode, so this block only has to keep it apart from a
+     dark page. It goes one step RICHER rather than darker: against a #020617 canvas and the
+     #111827 rail the light-mode navy is close enough to read as more chrome, and the point of
+     the banner is that a course is its own object. The border comes up with it, because at
+     white/12 on a dark page there was nothing marking where the banner ended. */
+  --course-banner: oklch(0.2488 0.0822 263.92); /* #0C1E48 */
+  --course-banner-mid: oklch(0.3028 0.1067 262.335); /* #0E2A63 */
+  --course-banner-accent: oklch(0.3448 0.1216 262.003); /* #123477 */
+  --course-banner-border: oklch(1 0 0 / 18%);
   /* Tables sit on the card surface, with the header one rung up and the row highlight
      between the two, mirroring how light mode spaces them. */
   --table-background: oklch(0.2077 0.0398 265.755); /* #0F172A, the card */
@@ -687,6 +743,23 @@
   --navbar-accent-foreground: oklch(0 0 0); /* #000000 */
   --navbar-border: oklch(0 0 0); /* #000000 */
   --navbar-ring: oklch(0.4118 0.1759 262.7938); /* #0F3FA8, 7.7:1 */
+
+  /* The course banner goes fully black with a white edge, the same move this theme makes on
+     the sidebar, and the network disappears: transparent nodes and lines rather than a
+     `display: none` somewhere in a component, so the whole treatment is switched from the one
+     place the rest of it is defined. Nothing is lost by that. The network is decoration and
+     carries no meaning, and everything the banner is for -- the course name, the faculty, the
+     registration code, the badges -- is text at 21:1 on the black. The muted label colour
+     comes up to the same #D6D6D6 the rail uses for its supporting lines, 15.9:1, because at
+     AAA a light blue on black is contrast this theme has no reason to spend. */
+  --course-banner: oklch(0 0 0); /* #000000 */
+  --course-banner-mid: oklch(0 0 0); /* #000000 */
+  --course-banner-accent: oklch(0 0 0); /* #000000 */
+  --course-banner-foreground: oklch(1 0 89.8756); /* #FFFFFF, 21:1 */
+  --course-banner-muted-foreground: oklch(0.8761 0 89.8756); /* #D6D6D6, 15.9:1 */
+  --course-banner-border: oklch(1 0 89.8756); /* #FFFFFF */
+  --course-banner-node: transparent;
+  --course-banner-glow: transparent;
 
   /* Tables. */
   --table-background: oklch(1 0 89.8756); /* #FFFFFF */
