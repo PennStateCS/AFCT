@@ -245,11 +245,15 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
             id="course-page-title"
             className="flex min-w-0 basis-full items-start gap-3 text-2xl leading-tight font-semibold tracking-tight sm:min-w-96 sm:grow sm:basis-0 sm:gap-4"
           >
-            {/* The Book that marks a course everywhere else in the app, in a tile built for
-                this surface: a translucent white square rather than the assignment panel's
-                emerald one, which would be the old identity treatment on a navy ground. */}
-            <span className="mt-0.5 flex size-12 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 sm:size-14">
-              <Book className="size-6 sm:size-7" aria-hidden="true" />
+            {/* The Book that marks a course everywhere else in the app, as a bare glyph. It
+                had a translucent white tile around it, which on a surface this dark read as a
+                second object rather than as part of the title. The span stays as a fixed slot
+                even without the box: the metadata line below indents to its width, so the
+                geometry is doing real work whether or not anything is painted on it. The glyph
+                is bigger than it was inside the tile, which is what an unboxed icon needs to
+                hold its own beside a text-2xl title. */}
+            <span className="mt-0.5 flex size-12 shrink-0 items-center justify-center sm:size-14">
+              <Book className="size-7 sm:size-9" aria-hidden="true" />
             </span>
             {/* One title, one colour. The code used to be muted and the name foreground,
                 which broke "CMPSC 131: Programming and Computation I" into two ranks for no
@@ -262,7 +266,13 @@ export function CourseHeaderContent({ course, isStudent }: CourseHeaderProps) {
           {/* Indented to the title's text on the same terms the metadata below is, which only
               shows when the row has wrapped underneath: pushed right by justify-between on a
               wide banner, the padding costs nothing. Without it a wrapped badge row sat
-              against the banner edge while the faculty line under it started 72px in. */}
+              against the banner edge while the faculty line under it started 72px in.
+
+              The padding also decides, as a side effect, when the row wraps at all: it counts
+              towards the badges' flex width, so between roughly 640 and 700px of banner the
+              badges take their own line and the title gets the full width rather than being
+              squeezed to its 24rem floor. Removing it puts a long course name into four lines
+              beside three chips, which is taller than the wrap it avoids. */}
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:pl-[4.5rem]">
             <Badge variant="secondary" className={BANNER_BADGE}>
               {course.semester}
