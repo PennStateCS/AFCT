@@ -63,8 +63,40 @@ describe('an assignment no LMS opens', () => {
   it('says where to add it rather than showing an empty list', () => {
     show([]);
 
-    expect(screen.getByText(/has not been added to a course in your LMS/)).toBeInTheDocument();
+    expect(screen.getByText(/not linked from an LMS course yet/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  });
+
+  /*
+   * The empty state has to name the workflow, because it happens somewhere else. A link is
+   * made in the LMS, which then asks AFCT which assignment to open; nothing on this page
+   * creates one. "Add it from the LMS itself, where an AFCT link asks which assignment it
+   * should open" said that, but only to somebody who already knew it.
+   */
+  it('says the link is made in the LMS course, not here', () => {
+    show([]);
+
+    expect(screen.getByText(/add an AFCT link in your LMS course/)).toBeInTheDocument();
+    expect(screen.getByText(/choose this assignment/)).toBeInTheDocument();
+  });
+
+  // Nothing here knows whether the COURSE is connected: this card reads assignment links only.
+  it('does not claim anything about the course connection', () => {
+    show([]);
+
+    expect(screen.queryByText(/course is( not)? connected/i)).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * The card names what it lists. "In your LMS" was two problems at once: it did not say the
+ * card is about links, and "in" overclaims for a link the platform has not confirmed.
+ */
+describe('what the card is called', () => {
+  it('is titled LMS assignment links', () => {
+    show([link]);
+
+    expect(screen.getByRole('heading', { name: 'LMS assignment links' })).toBeInTheDocument();
   });
 });
 
@@ -82,13 +114,35 @@ describe('an assignment an LMS opens', () => {
     expect(screen.getByText('Canvas')).toBeInTheDocument();
   });
 
-  it('says the LMS link keeps working, which is the thing people get wrong', async () => {
+  /*
+   * The one misreading this card exists to prevent: Remove is AFCT's bookkeeping, and the link
+   * in the LMS goes on working. Somebody who believes otherwise leaves a live link nobody is
+   * watching. Said in the card and again in the confirmation, so it cannot be missed by
+   * clicking through.
+   */
+  it('says removal does not delete the link from the LMS course', async () => {
     show([link]);
 
-    expect(screen.getByText(/keeps working until you delete it there/)).toBeInTheDocument();
+    expect(screen.getByText(/does not delete the link from the LMS course/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    expect(await screen.findByText(/Nothing changes in your LMS/)).toBeInTheDocument();
+    expect(await screen.findByText(/will not be deleted/)).toBeInTheDocument();
+  });
+
+  /*
+   * The dialog leads with the consequence to the reader, and names the course being forgotten.
+   * It used to open with "AFCT stops treating this assignment as already added to", which
+   * describes the implementation rather than the outcome.
+   */
+  it('names the LMS course in the confirmation, and says the link can be made again', async () => {
+    show([link]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    const dialog = await screen.findByRole('alertdialog').catch(() => screen.getByRole('dialog'));
+    expect(dialog).toHaveTextContent(/AFCT will forget/);
+    expect(dialog).toHaveTextContent('CMPSC 464 Fall 2026 in Canvas');
+    expect(dialog).toHaveTextContent(/link the assignment again/);
   });
 
   it('removes the record and tells its owner, so the badge can follow', async () => {
@@ -137,10 +191,10 @@ describe('when the links cannot be read', () => {
   it('says so, and does not claim the assignment is absent from the LMS', () => {
     show([], vi.fn(), false, { failed: true });
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/could not check/i);
-    expect(
-      screen.queryByText(/has not been added to a course in your LMS/),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /could not check this assignment's LMS links/i,
+    );
+    expect(screen.queryByText(/not linked from an LMS course yet/)).not.toBeInTheDocument();
   });
 
   it('offers a retry', async () => {
@@ -155,8 +209,15 @@ describe('when the links cannot be read', () => {
   it('still says plainly when the answer really is none', () => {
     show([]);
 
-    expect(screen.getByText(/has not been added to a course in your LMS/)).toBeInTheDocument();
+    expect(screen.getByText(/not linked from an LMS course yet/)).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  // The reason the failure state exists at all, said in the copy rather than only in a comment.
+  it('warns against adding a second link before retrying', () => {
+    show([], vi.fn(), false, { failed: true });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/try again before adding another one/i);
   });
 });
 
@@ -166,16 +227,28 @@ describe('when the links cannot be read', () => {
  * "remove it and add it again" into the obvious next step.
  */
 describe('a link nobody has opened yet', () => {
-  it('says AFCT cannot tell whether the LMS kept it', () => {
+  /*
+   * Names the platform in the instruction. "Open it there once to settle it" left the reader
+   * to work out where "there" was; "Open it once from Canvas" is something they can do.
+   */
+  it('says AFCT cannot confirm the link, and where to open it', () => {
     show([neverOpened]);
 
-    expect(screen.getByText(/cannot tell whether your LMS kept it/)).toBeInTheDocument();
+    expect(screen.getByText(/Not opened from Canvas yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Open it once from Canvas to confirm it/)).toBeInTheDocument();
+  });
+
+  // It says what AFCT does not know, not that the link is broken. Most unopened links are fine.
+  it('does not call the link broken', () => {
+    show([neverOpened]);
+
+    expect(screen.queryByText(/broken|failed|refused/i)).not.toBeInTheDocument();
   });
 
   it('says nothing of the kind about a link that has been opened', () => {
     show([link]);
 
-    expect(screen.queryByText(/cannot tell whether your LMS kept it/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot confirm the link was set up/)).not.toBeInTheDocument();
   });
 
   /** Removing is still offered: a refused link is exactly what it is there for. */
@@ -183,6 +256,53 @@ describe('a link nobody has opened yet', () => {
     show([neverOpened]);
 
     expect(screen.getByRole('button', { name: 'Remove' })).toBeEnabled();
+  });
+});
+
+/**
+ * The announced half of each state.
+ *
+ * One region, deliberately not a copy of the visible paragraph: a screen reader would then hear
+ * the same sentence twice, once announced and once in the page. Short enough to be the answer.
+ */
+describe('what is announced', () => {
+  it('says it is checking while the links load', () => {
+    render(
+      <AssignmentLmsLinksCard
+        courseId="c-1"
+        assignmentId="a-1"
+        links={[]}
+        loading
+        onRemoved={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('Checking LMS assignment links.');
+  });
+
+  it('says none were found', () => {
+    show([]);
+
+    expect(screen.getByRole('status')).toHaveTextContent('No LMS assignment links found.');
+  });
+
+  it('counts the courses an assignment is linked from', () => {
+    show([link, { ...link, id: 'link-3', context: 'CMPSC 464 Spring 2027' }]);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Linked from 2 LMS courses.');
+  });
+
+  it('counts one in the singular', () => {
+    show([link]);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Linked from 1 LMS course.');
+  });
+
+  // A failed read announces nothing: the visible alert is announced by its own role.
+  it('announces nothing when the read failed, so the alert is not doubled', () => {
+    show([], vi.fn(), false, { failed: true });
+
+    expect(screen.getByRole('status')).toHaveTextContent('');
   });
 });
 
@@ -207,7 +327,7 @@ describe('where focus goes after removing a link', () => {
     await waitFor(() => expect(onRemoved).toHaveBeenCalledWith('link-1'));
     await waitFor(() => {
       expect(document.activeElement).not.toBe(document.body);
-      expect(document.activeElement).toHaveTextContent('In your LMS');
+      expect(document.activeElement).toHaveTextContent('LMS assignment links');
     });
   });
 });

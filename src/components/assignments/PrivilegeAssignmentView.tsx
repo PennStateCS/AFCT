@@ -335,9 +335,9 @@ export default function AssignmentDashboardPage({
      * A failure here is a failure, not an answer.
      *
      * This used to map any refusal or network error onto an empty list, so the card told
-     * somebody "this assignment has not been added to a course in your LMS", which is a
-     * statement about their LMS made from no information at all. Acting on it means adding a
-     * second link for work that already has one. Throwing lets the card say it could not check.
+     * somebody "this assignment is not linked from an LMS course yet", which is a statement
+     * about their LMS made from no information at all. Acting on it means adding a second link
+     * for work that already has one. Throwing lets the card say it could not check.
      */
     queryFn: () => fetchAssignmentLmsLinks(id, aid),
     enabled: !!id && !!aid,
