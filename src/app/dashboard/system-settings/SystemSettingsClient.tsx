@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
-import { SETTINGS_ASIDE_GRID, SETTINGS_WORKSPACE } from './settings-layout';
+import { SETTINGS_ASIDE_GRID, SETTINGS_WORKSPACE } from '@/components/settings/settings-layout';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';

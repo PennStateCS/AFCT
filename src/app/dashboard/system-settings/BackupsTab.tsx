@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
-import { SettingsFormLayout, SettingsSection } from './settings-layout';
+import { SettingsFormLayout, SettingsSection } from '@/components/settings/settings-layout';
 import SwitchField from '@/components/ui/SwitchField';
 import { DataTable } from '@/components/ui/data-table';
 import { apiPaths } from '@/lib/api-paths';

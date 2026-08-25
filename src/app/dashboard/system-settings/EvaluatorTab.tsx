@@ -1,6 +1,6 @@
 'use client';
 
-import { SettingsFormLayout, SettingsSection } from './settings-layout';
+import { SettingsFormLayout, SettingsSection } from '@/components/settings/settings-layout';
 import InputGroup from '@/components/ui/InputGroup';
 import {
   MIN_SUBMISSION_EVAL_TIMEOUT_MS,

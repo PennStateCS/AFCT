@@ -1,7 +1,7 @@
 'use client';
 
 import { CopyableValue } from './CopyableValue';
-import { SettingsAsideCard } from './settings-layout';
+import { SettingsAsideCard } from '@/components/settings/settings-layout';
 
 /**
  * The server's public address, as reference rather than as a field.

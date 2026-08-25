@@ -2,7 +2,7 @@
 
 import type React from 'react';
 
-import { SettingsAsideLayout, SettingsSection } from './settings-layout';
+import { SettingsAsideLayout, SettingsSection } from '@/components/settings/settings-layout';
 import { PublicAddressCard } from './PublicAddressCard';
 import InputGroup from '@/components/ui/InputGroup';
 import SelectField from '@/components/ui/SelectField';

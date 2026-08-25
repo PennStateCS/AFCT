@@ -32,7 +32,7 @@ import {
   SettingsStatusCard,
   SettingsAsideLayout,
   SettingsStatusText,
-} from './settings-layout';
+} from '@/components/settings/settings-layout';
 
 /**
  * One way of getting a certificate, as a card you click.

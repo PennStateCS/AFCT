@@ -3,10 +3,35 @@ import type React from 'react';
 import { CircleAlert, CircleCheck, CircleOff } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 
 /**
- * The width vocabulary for System Settings.
+ * One settings panel: the outlined box a section groups its fields in.
+ *
+ * One constant rather than a class repeated per tab, because the tabs are meant to look
+ * like one screen with sections and the quickest way to lose that is for each to drift on
+ * its own.
+ *
+ * Comfortable horizontally, compact vertically: 20px of side padding gives labels and
+ * helper text room to breathe, while 16px top and bottom keeps a three-field card from
+ * becoming tall. The `space-y-4` is the page's one field-to-field measure, and it also
+ * sets the gap from the heading block to the first control, so a card's content always
+ * starts the same distance under its description.
+ *
+ * rounded-lg with shadow-xs, matching the local nav rail beside it and `ui/card`: the
+ * panels were rounded-md and flat, so the rail read as the more finished object of the two
+ * even though the form is the page. Full-strength border, deliberately: a fainter one is
+ * the first thing to disappear in the high-contrast theme, where the boundary is the only
+ * thing separating a panel from the page.
+ */
+export const SETTINGS_BOX_CLASS = 'space-y-4 rounded-lg border px-5 py-4 shadow-xs';
+
+/**
+ * The width vocabulary for AFCT's settings forms.
+ *
+ * It began on System Settings and now also carries the course and assignment forms, which
+ * had each grown their own widths (`max-w-xl` here, `max-w-2xl` there) and so lined up with
+ * nothing. One vocabulary means a professor moving between System Settings and a course's
+ * Settings tab meets the same page, not two that resemble each other.
  *
  * The workspace itself is wide; the CONTENT inside it is not, and those are two different
  * decisions. A settings page that stops at 768px wastes a 1920px monitor, but a page that
@@ -57,6 +82,7 @@ export function SettingsSection({
   action,
   className,
   boxed = true,
+  headingLevel = 2,
   children,
 }: {
   title: string;
@@ -65,17 +91,28 @@ export function SettingsSection({
   action?: React.ReactNode;
   className?: string;
   boxed?: boolean;
+  /**
+   * Which heading tag the title gets. 2 where the page title is the only thing above it,
+   * which is System Settings. 3 on a course or assignment tab, where the tab already
+   * contributes an h2 ("Course Settings") between the page's h1 and these sections, and an
+   * h2 here would claim to be that heading's sibling rather than its content.
+   *
+   * The level is semantic only: a section looks the same either way, because what marks it
+   * as a major group is the panel it is drawn on, not the size of its text.
+   */
+  headingLevel?: 2 | 3;
   children: React.ReactNode;
 }) {
   const id = settingsSectionId(title);
+  const Heading = headingLevel === 3 ? 'h3' : 'h2';
 
-  // h2, under the page's "System Settings" h1. A major group must not look like a field
-  // label, which is what text-sm font-medium made it, nor compete with the page title.
+  // A major group must not look like a field label, which is what text-sm font-medium made
+  // it, nor compete with the page title.
   const heading = (
     <div className="space-y-1">
-      <h2 id={id} className="text-base font-semibold">
+      <Heading id={id} className="text-base font-semibold">
         {title}
-      </h2>
+      </Heading>
       {description ? (
         <p className="text-muted-foreground max-w-3xl text-sm">{description}</p>
       ) : null}
@@ -124,8 +161,8 @@ export function SettingsSection({
  * The breakpoint is measured, not picked off the scale.
  *
  * Two rails are already in front of this content: the dashboard sidebar (~255px) and the
- * Settings Menu (240px + a 24px gutter), so the workspace starts about 567px narrower than
- * the viewport. Splitting it again needs the form to keep ~520px, which is where the Email
+ * page's own local nav (the Settings, Course or Assignment menu, 240px + a 24px gutter), so
+ * the workspace starts about 567px narrower than the viewport. Splitting it again needs the form to keep ~520px, which is where the Email
  * tab's From address stops truncating, plus the 288px rail and its 24px gap. That lands at
  * about 1400px. At Tailwind's `xl` (1280) the form came out at 386px with every helper on
  * three lines and the address cut off, which is the cramped two-column case to avoid; at
@@ -246,21 +283,25 @@ export function SettingsFormLayout({
 export function SettingsAsideCard({
   title,
   className,
+  headingLevel = 2,
   children,
 }: {
   title: string;
   className?: string;
+  /** See {@link SettingsSection}. The rail's heading sits at the same level as the form's. */
+  headingLevel?: 2 | 3;
   children: React.ReactNode;
 }) {
   const id = settingsSectionId(title);
+  const Heading = headingLevel === 3 ? 'h3' : 'h2';
   return (
     <aside
       aria-labelledby={id}
       className={cn('bg-card rounded-lg border p-4 shadow-xs', className)}
     >
-      <h2 id={id} className="text-base font-semibold">
+      <Heading id={id} className="text-base font-semibold">
         {title}
-      </h2>
+      </Heading>
       {/* 12px, not the 16 a form panel uses: this column is 288px, so padding and gaps
           cost more here than they do beside a field. */}
       <div className="mt-3">{children}</div>
@@ -305,6 +346,7 @@ export function SettingsStatusCard({
   badge,
   headline,
   className,
+  headingLevel = 2,
   children,
 }: {
   /** The card's own heading, e.g. "Current status" or "Current certificate". */
@@ -316,6 +358,8 @@ export function SettingsStatusCard({
   /** One short line: what is true right now. */
   headline: string;
   className?: string;
+  /** See {@link SettingsSection}. */
+  headingLevel?: 2 | 3;
   /** Detail and, where there is one, the next step. Keep it to a few short lines. */
   children?: React.ReactNode;
 }) {
@@ -324,7 +368,7 @@ export function SettingsStatusCard({
   return (
     // No role="status": this is a summary of the current state, not a live region, and
     // announcing the whole card on every render would talk over the form beside it.
-    <SettingsAsideCard title={title} className={className}>
+    <SettingsAsideCard title={title} className={className} headingLevel={headingLevel}>
       <div className="space-y-3">
         <div className="flex items-center gap-2.5">
           {/* A neutral disc, with the colour on the glyph inside it. A bare 16px icon next

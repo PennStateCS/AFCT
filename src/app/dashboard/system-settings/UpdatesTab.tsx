@@ -25,7 +25,7 @@ import {
   SettingsStatusCard,
   SettingsStatusText,
   type SettingsStatusTone,
-} from './settings-layout';
+} from '@/components/settings/settings-layout';
 import { CopyableValue } from './CopyableValue';
 
 /**

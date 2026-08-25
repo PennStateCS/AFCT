@@ -7,7 +7,7 @@ import InputGroup from '@/components/ui/InputGroup';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { LtiPlatformSchema } from '@/schemas/lti';
-import { SettingsAsideCard, SettingsAsideLayout, SettingsSection } from './settings-layout';
+import { SettingsAsideCard, SettingsAsideLayout, SettingsSection } from '@/components/settings/settings-layout';
 import { CopyableValue } from './CopyableValue';
 
 type Platform = {

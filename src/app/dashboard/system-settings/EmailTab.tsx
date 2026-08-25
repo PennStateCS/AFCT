@@ -13,7 +13,7 @@ import {
   SettingsAsideLayout,
   SettingsStatusNextStep,
   SettingsStatusText,
-} from './settings-layout';
+} from '@/components/settings/settings-layout';
 import type { SetField } from './system-settings-shared';
 
 type TestState =
