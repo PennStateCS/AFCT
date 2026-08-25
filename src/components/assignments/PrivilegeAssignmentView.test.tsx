@@ -374,8 +374,13 @@ describe('PrivilegeAssignmentView — header', () => {
     renderView();
     // Title appears in the heading and as the selected assignment option.
     expect(screen.getAllByText('Regular Languages').length).toBeGreaterThan(0);
-    const link = screen.getByRole('link', { name: /Theory of Computation \(CS401\)/ });
+    // "CS401: Theory of Computation", the same shape the course page's own title uses. It
+    // read "Theory of Computation (CS401)" here and the other way round there, which is the
+    // sort of small disagreement that makes two screens feel like two products.
+    const link = screen.getByRole('link', { name: 'CS401: Theory of Computation' });
     expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
+    // The label is outside the link, so the link's accessible name stays the course itself.
+    expect(screen.getByText('Course:')).toBeInTheDocument();
   });
 
   // Whether this is group work never changes as you page through students, so it is stated

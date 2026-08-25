@@ -356,6 +356,16 @@ export default function AssignmentDashboardPage({
    */
   const confirmedLmsLinks = lmsLinks.filter((link) => link.confirmedAt);
 
+  // The course, written exactly the way the course page's own title writes it, so the two
+  // screens name the same thing the same way. It used to read "Theory (CS401)" here and
+  // "CS401: Theory" there, which is the sort of small disagreement that makes two pages feel
+  // like two products. The code is not always present, so the name has to stand alone.
+  // Optional chaining because this sits above the loading guard, where `assignment` is still
+  // null; the banner that reads it only renders below that guard.
+  const courseCode = assignment?.course?.code ?? assignment?.courseCode ?? '';
+  const courseName = assignment?.course?.name ?? assignment?.courseName ?? assignment?.courseId;
+  const courseLabel = courseCode ? `${courseCode}: ${courseName}` : courseName;
+
   async function handleAddProblems(
     problemIds: string[],
     problemSettings?: {
@@ -552,37 +562,102 @@ export default function AssignmentDashboardPage({
             colours instead of the ones their primitives ship with. See the note on IdentityPanel
             for the rule and IDENTITY_BADGE / IDENTITY_LINK for the two common cases. */}
         <IdentityPanel labelledBy="assignment-page-title">
-          <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
-            {/*
-              Same basis split as the course banner, and load-bearing for the same reason. The
-              control column beside this is shrink-0 at the picker's 224px. At a plain `flex-1`
-              the title's own basis is zero, so back when that column was a 550px row of four
-              things, a 768px screen left the title about 55px and it came down one letter per
-              line: the banner measured 674px tall. A full basis below sm gives the title its
-              own row, and the 24rem floor above sm makes flex-wrap drop the column to its own
-              line until there is genuinely room for both.
+          {/*
+            Two columns that stretch to the same height: the identity on the left, the two
+            controls on the right. items-stretch plus justify-between in that right column is
+            what floats the assignment picker down to the foot of the banner rather than
+            leaving it tucked under the toggle; without the stretch the column is only as tall
+            as its own content and there is no room to float anything into.
 
-              break-words, not overflow-wrap:anywhere. `anywhere` also shrinks an element's
-              min-content width, which is what let that collapse happen; this only breaks a word
-              that cannot fit. Never truncated: this is the one place the whole title belongs.
-            */}
-            <h1
-              id="assignment-page-title"
-              className="flex min-w-0 basis-full items-start gap-3 text-2xl leading-tight font-semibold tracking-tight sm:min-w-96 sm:grow sm:basis-0 sm:gap-4"
-            >
-              {/* BookOpen, the icon the local rail and the course page already use for
-                  assignments. */}
-              <IdentityPanelIcon icon={BookOpen} />
-              <span className="min-w-0 break-words">{assignment.title}</span>
-            </h1>
-            {/* Two controls stacked rather than a row of four things beside the title. The
-                badges moved down to the metadata line, which leaves this column as just the
-                things you operate: the publish state and the jump to another assignment.
-                Right-aligned to the picker's edge, the only fixed width here, once the column
-                is actually beside the title. Below sm it has wrapped underneath instead, and
-                right-aligning inside a 224px block sitting at the left of the banner just
-                indents the toggle for no reason, so it squares up on the left there. */}
-            <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+            Same basis split as the course banner, and load-bearing for the same reason. The
+            control column is shrink-0 at the picker's 224px. At a plain `flex-1` the left
+            column's basis is zero, so back when the right side was a 550px row of four things
+            a 768px screen left the title about 55px and it came down one letter per line: the
+            banner measured 674px tall. A full basis below sm gives the identity its own row,
+            and the 24rem floor above sm makes flex-wrap drop the controls to their own line
+            until there is genuinely room for both.
+          */}
+          <div className="flex flex-wrap items-stretch justify-between gap-x-6 gap-y-4">
+            <div className="flex min-w-0 basis-full flex-col gap-3 sm:min-w-96 sm:grow sm:basis-0">
+              <div className="flex items-start gap-3 sm:gap-4">
+                {/* BookOpen, the icon the local rail and the course page already use for
+                    assignments. */}
+                <IdentityPanelIcon icon={BookOpen} />
+                {/*
+                  The badges are siblings of the heading, not children of it. Everything inside
+                  an h1 becomes part of its accessible name, and "Boolean Algebra Basics
+                  Individual assignment In Canvas" is not the name of this page.
+
+                  break-words, not overflow-wrap:anywhere. `anywhere` also shrinks an element's
+                  min-content width, which is what let the collapse above happen; this only
+                  breaks a word that genuinely cannot fit. Never truncated: this is the one
+                  place the whole title belongs.
+                */}
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <h1
+                    id="assignment-page-title"
+                    className="min-w-0 text-2xl leading-tight font-semibold tracking-tight break-words"
+                  >
+                    {assignment.title}
+                  </h1>
+                  {/*
+                    Whether this is group work belongs to the assignment, so it is stated once
+                    here rather than repeated beside every student on the Submissions tab. The
+                    dates are NOT here on purpose: those resolve per student through date
+                    overrides, so a single header value would hide an extension.
+
+                    Tinted so it registers at a glance. The two tones differ to tell them apart,
+                    not to say one is better: an icon carries the same distinction for anyone who
+                    cannot separate the hues. Fixed palette values, not the --status-* tokens
+                    this used to take. Those flip with the theme while the banner does not, so in
+                    dark mode both chips became a dark translucent fill on a dark navy ground and
+                    neither could be found. These are light chips in every theme, and they keep
+                    the amber/blue split.
+                  */}
+                  <Badge
+                    variant="outline"
+                    className={`shrink-0 gap-1.5 text-xs font-normal ${
+                      assignment.groupSetId
+                        ? 'border-amber-300/70 bg-amber-100 text-amber-900'
+                        : 'border-sky-300/70 bg-sky-100 text-sky-900'
+                    }`}
+                  >
+                    {assignment.groupSetId ? (
+                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <User className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                    {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
+                  </Badge>
+                  {/* Only when an LMS opens it, which is why the badge renders nothing
+                      otherwise. Settings holds the detail and the way to remove one. */}
+                  <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
+                </div>
+              </div>
+              {/* Indented to the title's text on wide screens, so the identity block reads as
+                  one column, matching the course banner: the sm icon slot is 56px and the gap
+                  beside it 16. Labelled "Course:" in the same shape as the course banner's own
+                  Faculty and TAs lines, so the label says what the value is rather than leaving
+                  a bare link to be worked out. */}
+              <div className="flex flex-wrap items-center gap-2 text-sm sm:pl-[4.5rem]">
+                <span className="max-w-full">
+                  <span className="text-course-banner-muted-foreground">Course: </span>
+                  <Link
+                    href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+                    className={cn(IDENTITY_LINK, 'font-medium break-words')}
+                  >
+                    {courseLabel}
+                  </Link>
+                </span>
+              </div>
+            </div>
+
+            {/* The two things you operate, and nothing else. Right-aligned to the picker's
+                edge, the only fixed width here, once the column is actually beside the title.
+                Below sm it has wrapped underneath instead, and right-aligning inside a 224px
+                block sitting at the left of the banner just indents the toggle for no reason,
+                so it squares up on the left there. */}
+            <div className="flex shrink-0 flex-col items-start justify-between gap-3 sm:items-end">
               {/* Server enforces the guards (e.g. no unpublish after submissions). */}
               <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
                 {/* The switch ships with page-token colours: an --input track that goes pure
@@ -631,65 +706,19 @@ export default function AssignmentDashboardPage({
                   searchPlaceholder="Search assignments..."
                   emptyStateText="No assignments found."
                   disabled={assignmentsLoading}
-                  // The trigger's shared field class is built for a light page: a --card fill
-                  // and a --muted-foreground label, both of which vanish on navy. The chevron
-                  // is coloured inside the component, so it takes a descendant rule.
+                  // h-9, a step down from the shared field height. At h-11 this one control set
+                  // the banner's height on its own and left it taller than the course page's.
+                  //
+                  // The trigger's shared field class is otherwise built for a light page: a
+                  // --card fill and a --muted-foreground label, both of which vanish on navy.
+                  // The chevron is coloured inside the component, so it takes a descendant rule.
                   triggerClassName={
-                    'border-white/25 bg-white/10 text-white hover:bg-white/15 ' +
+                    'h-9 text-sm border-white/25 bg-white/10 text-white hover:bg-white/15 ' +
                     'focus-visible:border-white focus-visible:ring-white/80 [&_svg]:text-white/70'
                   }
                 />
               </div>
             </div>
-          </div>
-          {/* Indented to the title's text on wide screens, so the identity block reads as one
-              column, matching the course banner: the sm icon slot is 56px and the gap beside it
-              16. */}
-          <div className="flex flex-wrap items-center gap-2 text-sm sm:pl-[4.5rem]">
-            {/* Whether this is group work belongs to the assignment, so it is stated once here
-                rather than repeated beside every student on the Submissions tab. It sits under
-                the title rather than beside it: it describes the assignment, and the column on
-                the right is for the two things you actually operate. The dates are NOT here on
-                purpose: those resolve per student through date overrides, so a single header
-                value would hide an extension.
-
-                Tinted so it registers at a glance. The two tones differ to tell them apart, not
-                to say one is better: an icon carries the same distinction for anyone who cannot
-                separate the hues. Fixed palette values, not the --status-* tokens this used to
-                take. Those flip with the theme while the banner does not, so in dark mode both
-                chips became a dark translucent fill on a dark navy ground and neither could be
-                found. These are light chips in every theme, and they keep the amber/blue
-                split. */}
-            <Badge
-              variant="outline"
-              className={`shrink-0 gap-1.5 text-xs font-normal ${
-                assignment.groupSetId
-                  ? 'border-amber-300/70 bg-amber-100 text-amber-900'
-                  : 'border-sky-300/70 bg-sky-100 text-sky-900'
-              }`}
-            >
-              {assignment.groupSetId ? (
-                <Users className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : (
-                <User className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
-              {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
-            </Badge>
-            {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
-                Settings holds the detail and the way to remove one. */}
-            <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
-            {/* Show course name/code as a link to the course page (fallback to courseId) */}
-            <Link
-              href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-              className={cn(IDENTITY_LINK, 'max-w-full break-all')}
-            >
-              {assignment.course?.name || assignment.courseName || assignment.courseId}
-              {assignment.course?.code
-                ? ` (${assignment.course.code})`
-                : assignment.courseCode
-                  ? ` (${assignment.courseCode})`
-                  : ''}
-            </Link>
           </div>
         </IdentityPanel>
 
