@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
-import { SETTINGS_STANDARD, SETTINGS_WORKSPACE } from './settings-layout';
+import { SETTINGS_COMPACT, SETTINGS_STANDARD, SETTINGS_WORKSPACE } from './settings-layout';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
@@ -539,6 +539,16 @@ export default function SystemSettingsClient() {
   // Backups included (its schedule is part of the form), needs it.
   const showSave = tab !== 'tls' && tab !== 'updates';
 
+  /*
+   * How wide the Save row is, per tab.
+   *
+   * It has to match the content it saves. Every tab's form sits at SETTINGS_STANDARD except
+   * Captcha, whose two keys are a short form at SETTINGS_COMPACT: a footer 256px wider than
+   * the panel above it puts Save out past the form's right edge, reading as a page control
+   * that happens to be nearby rather than this form's action.
+   */
+  const saveWidth = tab === 'captcha' ? SETTINGS_COMPACT : SETTINGS_STANDARD;
+
   // xl rather than lg: a rail plus a settings form needs more room than a table does.
   const railNav = useIsDesktopNav(1280);
 
@@ -693,17 +703,16 @@ export default function SystemSettingsClient() {
                 fields (TLS, Updates), which run their own actions instead. */}
           {showSave && (
             <div
-              className={`mt-6 flex items-center justify-start gap-3 border-t pt-4 ${SETTINGS_STANDARD}`}
+              // Right-aligned, and the same width as the panels above it, so Save sits under
+              // the right edge of the form rather than out on the left margin where it read
+              // as a page-level control that happened to be nearby. Status first, then the
+              // escape hatch, then the primary action last: the order a footer is read in.
+              // flex-wrap so the three do not fight for room at 390px.
+              className={`mt-6 flex flex-wrap items-center justify-end gap-3 border-t pt-4 ${saveWidth}`}
             >
-              <Button
-                type="submit"
-                form="system-settings-form"
-                size="sm"
-                aria-label="Save system settings"
-                disabled={disabled}
-              >
-                {saving ? 'Saving…' : 'Save changes'}
-              </Button>
+              {isDirty && (
+                <span className="text-muted-foreground mr-auto text-sm">Unsaved changes</span>
+              )}
               {isDirty && (
                 <Button
                   type="button"
@@ -715,7 +724,15 @@ export default function SystemSettingsClient() {
                   Reset
                 </Button>
               )}
-              {isDirty && <span className="text-muted-foreground text-sm">Unsaved changes</span>}
+              <Button
+                type="submit"
+                form="system-settings-form"
+                size="sm"
+                aria-label="Save system settings"
+                disabled={disabled}
+              >
+                {saving ? 'Saving…' : 'Save changes'}
+              </Button>
             </div>
           )}
         </LocalNavLayout>

@@ -41,27 +41,42 @@ export function GeneralTab({
           between tabs; only the arrangement within this one changed. */}
       <div className="space-y-6">
         <SettingsSection title="Server Configuration" className={SETTINGS_STANDARD}>
-          {/* Read-only: NEXTAUTH_URL is a server-level env var, not a stored
-              setting. Shown for reference with instructions to change it. */}
-          <div className="space-y-1">
-            <p className="text-sm font-medium">Configured URL</p>
-            <p className="bg-muted rounded-md border px-3 py-2 font-mono text-sm break-all">
-              {loading ? 'Loading…' : configuredUrl ? configuredUrl : 'Not set'}
-            </p>
-            <p className="text-muted-foreground text-xs">
-              The public address AFCT uses for sign-in links and redirects (the{' '}
-              <code className="font-mono">NEXTAUTH_URL</code> environment variable). It is read-only
-              here because it is set at the server level and only takes effect after a restart. To
-              change it, re-run the installer on the server with the new address (
-              <code className="font-mono">sh install.sh --reconfigure</code>, or pass{' '}
-              <code className="font-mono">APP_URL=https://new.address</code>). That rewrites the
-              value, restarts the stack, and preserves your data and secrets.
-            </p>
-          </div>
-          {/* A timezone name is short; a select stretched across the section reads as a
-              mistake. The read-only URL above it keeps the full width, because that is a
-              value you inspect. */}
-          <div className="max-w-2xl">
+          {/* A grid rather than a stack of hand-picked max-widths. The URL is a value you
+              inspect, so it takes the full measure; a timezone name is short, so it takes
+              one column and the empty half beside it is deliberate rather than a select
+              stretched across the panel. The switch spans both again: a setting row whose
+              label and control are on the same line has nothing to align with a select,
+              whose control sits a label's height lower. */}
+          <div className="grid gap-x-5 gap-y-5 md:grid-cols-2">
+            <div className="space-y-1 md:col-span-2">
+              {/* Read-only: NEXTAUTH_URL is a server-level env var, not a stored setting.
+                  Shown for reference, with instructions to change it. The explanation is a
+                  separate paragraph rather than the field's own `description` so it can
+                  keep a readable measure while the field itself spans the panel; it is
+                  wired to the input through additionalDescribedBy, which is what that prop
+                  is for. */}
+              <InputGroup
+                label="Configured URL"
+                name="configuredUrl"
+                value={loading ? 'Loading…' : (configuredUrl ?? 'Not set')}
+                setValue={() => {}}
+                readOnly
+                additionalDescribedBy="configured-url-help"
+              />
+              <p
+                id="configured-url-help"
+                className="text-muted-foreground max-w-3xl text-xs leading-4.5"
+              >
+                The public address AFCT uses for sign-in links and redirects (the{' '}
+                <code className="font-mono">NEXTAUTH_URL</code> environment variable). It is
+                read-only here because it is set at the server level and only takes effect after a
+                restart. To change it, re-run the installer on the server with the new address (
+                <code className="font-mono">sh install.sh --reconfigure</code>, or pass{' '}
+                <code className="font-mono">APP_URL=https://new.address</code>). That rewrites the
+                value, restarts the stack, and preserves your data and secrets.
+              </p>
+            </div>
+
             <SelectField
               label="Timezone"
               name="timezone"
@@ -74,17 +89,20 @@ export function GeneralTab({
               description="Default timezone for the server. Users can override this in their profile."
               options={timezoneOptions}
             />
+
+            <div className="md:col-span-2">
+              <SwitchField
+                id="clock-24-hour"
+                name="clock-24-hour"
+                label="24-hour clock"
+                checked={form.clock24Hour}
+                onCheckedChange={(v) => setField('clock24Hour', v)}
+                disabled={disabled}
+                descriptionPlacement="inline"
+                description="Display times on a 24-hour clock (e.g. 23:59) instead of 12-hour AM/PM, app-wide."
+              />
+            </div>
           </div>
-          <SwitchField
-            id="clock-24-hour"
-            name="clock-24-hour"
-            label="24-hour clock"
-            checked={form.clock24Hour}
-            onCheckedChange={(v) => setField('clock24Hour', v)}
-            disabled={disabled}
-            descriptionPlacement="inline"
-            description="Display times on a 24-hour clock (e.g. 23:59) instead of 12-hour AM/PM, app-wide."
-          />
         </SettingsSection>
 
         <SettingsSection title="Uploads &amp; Retention" className={SETTINGS_STANDARD}>
@@ -168,25 +186,32 @@ export function GeneralTab({
               description={`How long a locked account must wait. ${MIN_LOGIN_LOCKOUT_MINUTES}–${MAX_LOGIN_LOCKOUT_MINUTES} min.`}
             />
           </div>
-          <SwitchField
-            id="allow-signup"
-            name="allow-signup"
-            label="Allow user signup"
-            checked={form.allowSignup}
-            onCheckedChange={(v) => setField('allowSignup', v)}
-            disabled={disabled}
-            descriptionPlacement="inline"
-            description="When enabled, the Sign up option appears on the login page."
-          />
-          <InputGroup
-            label="Allowed signup email domains"
-            name="signup-allowed-domains"
-            value={form.signupAllowedDomains}
-            setValue={(v) => setField('signupAllowedDomains', v)}
-            disabled={disabled || !form.allowSignup}
-            placeholder="psu.edu, example.edu"
-            description="Restrict self-signup to these email domains (comma-separated). Leave blank to allow any domain."
-          />
+          {/* Two groups in one panel, split by a rule rather than a second card: the three
+              fields above are about an existing account's session, and these two are about
+              whether new accounts can be made at all. The domain list only means anything
+              while signup is on, which is why it sits with the switch and greys out with
+              it. */}
+          <div className="space-y-5 border-t pt-4">
+            <SwitchField
+              id="allow-signup"
+              name="allow-signup"
+              label="Allow user signup"
+              checked={form.allowSignup}
+              onCheckedChange={(v) => setField('allowSignup', v)}
+              disabled={disabled}
+              descriptionPlacement="inline"
+              description="When enabled, the Sign up option appears on the login page."
+            />
+            <InputGroup
+              label="Allowed signup email domains"
+              name="signup-allowed-domains"
+              value={form.signupAllowedDomains}
+              setValue={(v) => setField('signupAllowedDomains', v)}
+              disabled={disabled || !form.allowSignup}
+              placeholder="psu.edu, example.edu"
+              description="Restrict self-signup to these email domains (comma-separated). Leave blank to allow any domain."
+            />
+          </div>
         </SettingsSection>
       </div>
     </>

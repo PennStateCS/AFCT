@@ -435,4 +435,13 @@ export const EMPTY_FORM: FormSnapshot = {
  * One constant rather than a class repeated per tab: the tabs are meant to look like one
  * screen with sections, and the quickest way to lose that is for each to drift on its own.
  */
-export const SETTINGS_BOX_CLASS = 'space-y-5 rounded-md border p-4';
+/*
+ * One settings panel.
+ *
+ * rounded-lg with shadow-xs, matching the Settings Menu rail beside it and `ui/card`: the
+ * panels were rounded-md and flat, so the rail read as the more finished object of the two
+ * even though the form is the page. Full-strength border, deliberately: a fainter one is
+ * the first thing to disappear in the high-contrast theme, where the boundary is the only
+ * thing separating a panel from the page.
+ */
+export const SETTINGS_BOX_CLASS = 'space-y-5 rounded-lg border p-4 shadow-xs';

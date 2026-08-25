@@ -7,7 +7,6 @@ import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
 import { SETTINGS_BOX_CLASS } from './system-settings-shared';
 import {
   SETTINGS_COMPACT,
-  SETTINGS_READABLE,
   SETTINGS_STANDARD,
   SettingsSection,
   SettingsStatusPanel,
@@ -145,12 +144,11 @@ export function SignInTab({
         />
       </div>
 
-      <div className={`mt-6 space-y-3 border-t pt-5 ${SETTINGS_READABLE}`}>
-        <h2 className="text-base font-semibold">Give this to your IT department</h2>
-        <p className="text-muted-foreground text-xs">
-          The redirect URL AFCT will use. Registration usually fails without it, with an error about
-          a mismatched redirect.
-        </p>
+      <SettingsSection
+        title="Give this to your IT department"
+        description="The redirect URL AFCT will use. Registration usually fails without it, with an error about a mismatched redirect."
+        className={`${SETTINGS_STANDARD} mt-6`}
+      >
         <InputGroup
           label="Redirect URL"
           name="oidcRedirectUri"
@@ -158,15 +156,13 @@ export function SignInTab({
           setValue={() => {}}
           readOnly
         />
-      </div>
+      </SettingsSection>
 
-      <div className={`mt-6 space-y-3 border-t pt-5 ${SETTINGS_READABLE}`}>
-        <h2 className="text-base font-semibold">Matching people to accounts</h2>
-        <p className="text-muted-foreground text-xs">
-          When somebody signs in for the first time, AFCT attaches their institutional identity to
-          an existing account with the same email address, but only if the provider states that the
-          address is verified.
-        </p>
+      <SettingsSection
+        title="Matching people to accounts"
+        description="When somebody signs in for the first time, AFCT attaches their institutional identity to an existing account with the same email address, but only if the provider states that the address is verified."
+        className={`${SETTINGS_STANDARD} mt-6`}
+      >
         <SwitchField
           id="oidc-trust-email"
           name="oidc-trust-email"
@@ -180,7 +176,7 @@ export function SignInTab({
         {/* Not hidden behind a tooltip: this is the one setting on the page that can hand
             somebody another person's account, and the reason it exists at all is that the
             common case (Microsoft) omits the claim. */}
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground max-w-3xl text-xs leading-4.5">
           Some providers, including Microsoft Entra, never mark addresses as verified. Without this,
           nobody at those institutions is matched automatically. With it on at a provider where
           people can choose their own address, someone could reach an account that is not theirs.
@@ -188,35 +184,33 @@ export function SignInTab({
         </p>
         {/* The distinction people got wrong: this setting answers an unverified address, not a
             missing one, and Entra can send no address at all unless the claim is released. */}
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground max-w-3xl text-xs leading-4.5">
           This does not help if your provider sends no address at all. On Entra the email claim has
           to be released on the app registration, or through the OpenID scope on v2.0 endpoints;
           without it, people are refused with &ldquo;your institution did not share an email
           address&rdquo; whatever this setting says.
         </p>
-      </div>
-      <div className="mt-6 space-y-2">
-        <h2 className="text-base font-semibold">AFCT passwords</h2>
-        <div className={SETTINGS_BOX_CLASS}>
-          <SwitchField
-            id="allow-linked-account-passwords"
-            name="allow-linked-account-passwords"
-            label="Let people who sign in through an institution or an LMS also set an AFCT password"
-            checked={allowLinkedAccountPasswords}
-            onCheckedChange={(v) => setField('allowLinkedAccountPasswords', v)}
-            disabled={disabled}
-            descriptionPlacement="inline"
-            description="They can set one from their own Account page. Turn this off if people must always sign in the way your institution requires."
-          />
-          <p className="text-muted-foreground mt-2 text-sm">
-            You can always set a password for someone yourself, whichever way this is set, so
-            turning it off cannot leave anybody with no way back in. Note that the AFCT desktop
-            client signs in with an email and a password, so a student who only ever opens AFCT from
-            your LMS needs one to use it. With this off, an administrator who signs in through your
-            institution also cannot confirm an LMS launch, which asks for an AFCT password.
-          </p>
-        </div>
-      </div>
+      </SettingsSection>
+
+      <SettingsSection title="AFCT passwords" className={`${SETTINGS_STANDARD} mt-6`}>
+        <SwitchField
+          id="allow-linked-account-passwords"
+          name="allow-linked-account-passwords"
+          label="Let people who sign in through an institution or an LMS also set an AFCT password"
+          checked={allowLinkedAccountPasswords}
+          onCheckedChange={(v) => setField('allowLinkedAccountPasswords', v)}
+          disabled={disabled}
+          descriptionPlacement="inline"
+          description="They can set one from their own Account page. Turn this off if people must always sign in the way your institution requires."
+        />
+        <p className="text-muted-foreground max-w-3xl text-sm">
+          You can always set a password for someone yourself, whichever way this is set, so turning
+          it off cannot leave anybody with no way back in. Note that the AFCT desktop client signs
+          in with an email and a password, so a student who only ever opens AFCT from your LMS needs
+          one to use it. With this off, an administrator who signs in through your institution also
+          cannot confirm an LMS launch, which asks for an AFCT password.
+        </p>
+      </SettingsSection>
     </>
   );
 }

@@ -38,9 +38,16 @@ export function settingsSectionId(title: string) {
  * `text-base font-semibold`, which meant a major section could look exactly like a field
  * label. One component, so equivalent hierarchy looks equivalent.
  *
+ * The heading sits INSIDE the panel, which is how the rest of AFCT works: CardTitle lives
+ * in CardHeader inside the card, and the settings pages were the outlier. Outside, a
+ * heading floated 12px above its own panel and 24px below the previous one, which is a
+ * weak enough ratio that it read as a caption between two boxes rather than the title of
+ * the one below it. Inside, a section is one object.
+ *
  * `className` takes the width, because that is the one thing that legitimately differs per
  * section. `boxed={false}` drops the card for a group that is only a heading and some
- * prose, where a border would imply a form that is not there.
+ * prose, where a border would imply a form that is not there; that variant keeps its
+ * heading outside for the obvious reason that there is no panel to put it in.
  */
 export function SettingsSection({
   title,
@@ -56,17 +63,35 @@ export function SettingsSection({
   children: React.ReactNode;
 }) {
   const id = settingsSectionId(title);
+
+  // h2, under the page's "System Settings" h1. A major group must not look like a field
+  // label, which is what text-sm font-medium made it, nor compete with the page title.
+  const header = (
+    <div className="space-y-1">
+      <h2 id={id} className="text-base font-semibold">
+        {title}
+      </h2>
+      {description ? (
+        <p className="text-muted-foreground max-w-3xl text-sm">{description}</p>
+      ) : null}
+    </div>
+  );
+
+  if (!boxed) {
+    return (
+      <section aria-labelledby={id} className={cn('space-y-3', className)}>
+        {header}
+        {children}
+      </section>
+    );
+  }
+
   return (
-    <section aria-labelledby={id} className={cn('space-y-3', className)}>
-      <div className="space-y-1">
-        {/* h2, under the page's "System Settings" h1. A major group must not look like a
-            field label, which is what text-sm font-medium made it. */}
-        <h2 id={id} className="text-base font-semibold">
-          {title}
-        </h2>
-        {description ? <p className="text-muted-foreground text-sm">{description}</p> : null}
+    <section aria-labelledby={id} className={className}>
+      <div className={cn('bg-card', SETTINGS_BOX_CLASS)}>
+        {header}
+        {children}
       </div>
-      {boxed ? <div className={cn('bg-card', SETTINGS_BOX_CLASS)}>{children}</div> : children}
     </section>
   );
 }
