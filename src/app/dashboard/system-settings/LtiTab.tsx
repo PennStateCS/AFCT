@@ -169,7 +169,6 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
     }
   };
 
-
   const set = (key: keyof typeof EMPTY) => (value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
@@ -276,7 +275,7 @@ export function LtiTab({ siteUrl }: { siteUrl: string }) {
 
             {/* Short identifiers pair up; the URLs below stay full rows, because half a
                 URL is harder to check than a taller form. */}
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <InputGroup
                 label="Name"
                 name="lti-name"

@@ -174,9 +174,9 @@ export function SettingsAsideLayout({
   children: React.ReactNode;
 }) {
   const railColumn = (
-    // space-y-6, the same gap the main column uses between its sections: a tab may put more
-    // than one card here (Sign-in has its status and the URL its IT department needs).
-    <div className="space-y-6 min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1">
+    // The same 20px the main column uses between its sections: a tab may put more than one
+    // card here (Sign-in has its status and the URL its IT department needs).
+    <div className="space-y-5 min-[1400px]:sticky min-[1400px]:top-6 min-[1400px]:col-start-2 min-[1400px]:row-start-1">
       {aside}
     </div>
   );
@@ -192,7 +192,7 @@ export function SettingsAsideLayout({
           what would otherwise make position:sticky a no-op. */}
       {asidePlacement === 'before' ? railColumn : null}
 
-      <div className="min-w-0 space-y-6 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
+      <div className="min-w-0 space-y-5 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
         {children}
       </div>
 
@@ -222,7 +222,7 @@ export function SettingsFormLayout({
 }) {
   return (
     <div className={cn(SETTINGS_WORKSPACE, SETTINGS_ASIDE_GRID, 'items-start', className)}>
-      <div className="min-w-0 space-y-6 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
+      <div className="min-w-0 space-y-5 min-[1400px]:col-start-1 min-[1400px]:row-start-1">
         {children}
       </div>
     </div>
@@ -256,12 +256,14 @@ export function SettingsAsideCard({
   return (
     <aside
       aria-labelledby={id}
-      className={cn('bg-card rounded-lg border p-5 shadow-xs', className)}
+      className={cn('bg-card rounded-lg border p-4 shadow-xs', className)}
     >
       <h2 id={id} className="text-base font-semibold">
         {title}
       </h2>
-      <div className="mt-4">{children}</div>
+      {/* 12px, not the 16 a form panel uses: this column is 288px, so padding and gaps
+          cost more here than they do beside a field. */}
+      <div className="mt-3">{children}</div>
     </aside>
   );
 }

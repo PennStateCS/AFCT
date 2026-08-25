@@ -157,7 +157,7 @@ export function EmailTab({
         />
         {/* Host and port belong together, and the port is capped so it does not inherit a
             text field's width just because it shares a row with one. */}
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <InputGroup
             label="Mail server"
             name="smtpHost"
@@ -222,7 +222,7 @@ export function EmailTab({
             description="Deletes the stored password when you save."
           />
         )}
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <InputGroup
             label="From address"
             name="smtpFromAddress"

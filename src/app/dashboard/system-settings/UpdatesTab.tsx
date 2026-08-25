@@ -7,11 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import {
-  useUpgrade,
-  isUpgradeInProgress,
-  isUpdaterMisconfigured,
-} from './useUpgrade';
+import { useUpgrade, isUpgradeInProgress, isUpdaterMisconfigured } from './useUpgrade';
 import {
   upgradePhaseLabel,
   formatBackupTs,

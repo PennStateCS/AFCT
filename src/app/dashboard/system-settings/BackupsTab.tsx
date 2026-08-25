@@ -102,7 +102,7 @@ export function BackupsTab({
             descriptionPlacement="inline"
             description="When off, no scheduled dumps are taken."
           />
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <InputGroup
               label="Daily backup time (hour)"
               name="backupHour"

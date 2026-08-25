@@ -75,9 +75,11 @@ export function CopyableValue({
     <div className={cn('space-y-1', className)}>
       {label ? <p className="text-foreground text-sm font-medium">{label}</p> : null}
 
-      {/* min-w-0 + break-all so a production hostname wraps inside the rail instead of
-          pushing the button out of it; shrink-0 keeps the button reachable either way. */}
-      <div className="bg-muted flex items-start gap-2 rounded-md border p-2">
+      {/* px-3 py-2, not a field's height: this is something to read and take away, and
+          matching an input would say it is something to fill in. min-w-0 + break-all so a
+          production hostname wraps inside the rail instead of pushing the button out of
+          it; shrink-0 keeps the button reachable either way. */}
+      <div className="bg-muted flex items-start gap-2 rounded-md border px-3 py-2">
         <span className="text-foreground min-w-0 flex-1 font-mono text-xs break-all">{value}</span>
         <Button
           type="button"
@@ -104,8 +106,10 @@ export function CopyableValue({
         {copied ? `${name.charAt(0).toUpperCase()}${name.slice(1)} copied to the clipboard.` : ''}
       </p>
 
+      {/* 8px, not the stack's 4: a label belongs tight to its value, an explanation about
+          the value does not, and at 4px the two read as one block. */}
       {description ? (
-        <p className="text-muted-foreground text-xs leading-4.5">{description}</p>
+        <p className="text-muted-foreground mt-2 text-xs leading-4.5">{description}</p>
       ) : null}
     </div>
   );

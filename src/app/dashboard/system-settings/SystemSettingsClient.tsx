@@ -707,7 +707,7 @@ export default function SystemSettingsClient() {
                * also keeps Save under the schedule it saves, rather than out at the right
                * edge of the backup table, which is a wider section it does not touch.
                */
-              className={`${SETTINGS_WORKSPACE} ${SETTINGS_ASIDE_GRID} mt-6`}
+              className={`${SETTINGS_WORKSPACE} ${SETTINGS_ASIDE_GRID} mt-5`}
             >
               <div
                 // Status first, then the escape hatch, then the primary action last: the order

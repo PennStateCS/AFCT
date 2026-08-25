@@ -35,7 +35,7 @@ export function EvaluatorTab({
           lg rather than md: below that the rail and the sidebar leave too little room and
           two columns would just cramp the labels. */}
       <SettingsSection title="Evaluation limits">
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <InputGroup
             label="Evaluation timeout (seconds)"
             name="evalTimeoutSec"

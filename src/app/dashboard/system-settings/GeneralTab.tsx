@@ -80,7 +80,7 @@ export function GeneralTab({
         title="Uploads &amp; Retention"
         description="Ceilings on what the server stores: how big one upload may be, and how long the audit trail is kept."
       >
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <InputGroup
             label="Max upload size (MB)"
             name="maxUploadSizeMb"
@@ -121,7 +121,7 @@ export function GeneralTab({
           {/* Two columns, not three. The rail took ~280px off this panel, and at three
                 columns "Account lockout duration (minutes)" wrapped, which left its
                 required marker floating on the far side of a two-line label. */}
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             <InputGroup
               label="Session timeout (minutes)"
               name="sessionTimeoutMinutes"

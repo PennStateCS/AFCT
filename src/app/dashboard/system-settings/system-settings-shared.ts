@@ -438,10 +438,16 @@ export const EMPTY_FORM: FormSnapshot = {
 /*
  * One settings panel.
  *
+ * Comfortable horizontally, compact vertically: 20px of side padding gives labels and
+ * helper text room to breathe, while 16px top and bottom keeps a three-field card from
+ * becoming tall. The `space-y-4` is the page's one field-to-field measure, and it also
+ * sets the gap from the heading block to the first control, so a card's content always
+ * starts the same distance under its description.
+ *
  * rounded-lg with shadow-xs, matching the Settings Menu rail beside it and `ui/card`: the
  * panels were rounded-md and flat, so the rail read as the more finished object of the two
  * even though the form is the page. Full-strength border, deliberately: a fainter one is
  * the first thing to disappear in the high-contrast theme, where the boundary is the only
  * thing separating a panel from the page.
  */
-export const SETTINGS_BOX_CLASS = 'space-y-5 rounded-lg border p-4 shadow-xs';
+export const SETTINGS_BOX_CLASS = 'space-y-4 rounded-lg border px-5 py-4 shadow-xs';
