@@ -168,10 +168,13 @@ export function SettingsAsideLayout({
 /**
  * The shell every card in the rail shares: a titled, quiet, self-labelling box.
  *
- * `bg-muted` and never `bg-card`. The white panels are the editable form; the rail is what
- * you consult while filling it in, and matching the form's surface would make a reference
- * card look like another thing to fill in. It also keeps all five tabs' rails identical,
- * which is the point of having a rail at all.
+ * `bg-card`, the same surface as the form panels, so the rail reads as another panel in the
+ * page rather than a different kind of thing. It also fixes the badges: a neutral badge's
+ * fill is within a few percent of `bg-muted`, so on a muted card "Disabled" all but
+ * disappeared, which is exactly the state that most needs to be legible.
+ *
+ * The card never takes a status colour. A green or red panel would make a standing
+ * configuration summary read as a transient alert.
  *
  * The heading lives inside the box, and the box names itself with it, so the rail is one
  * named landmark rather than an anonymous aside wrapping a titled div.
@@ -189,7 +192,7 @@ export function SettingsAsideCard({
   return (
     <aside
       aria-labelledby={id}
-      className={cn('bg-muted rounded-lg border p-5 shadow-xs', className)}
+      className={cn('bg-card rounded-lg border p-5 shadow-xs', className)}
     >
       <h2 id={id} className="text-base font-semibold">
         {title}
@@ -257,12 +260,19 @@ export function SettingsStatusCard({
     // announcing the whole card on every render would talk over the form beside it.
     <SettingsAsideCard title={title} className={className}>
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Icon className={cn('size-4 shrink-0', toneClass)} aria-hidden="true" />
+        <div className="flex items-center gap-2.5">
+          {/* A neutral disc, with the colour on the glyph inside it. A bare 16px icon next
+              to a badge read as a bullet point; the disc gives the row a fixed anchor so
+              the state is identifiable before any of the words are. The disc stays muted
+              in every state on purpose: tinting it too would be a second, larger colour
+              field competing with the badge. */}
+          <span className="bg-muted flex size-7 shrink-0 items-center justify-center rounded-full">
+            <Icon className={cn('size-4', toneClass)} aria-hidden="true" />
+          </span>
           {badge}
         </div>
 
-        <p className="text-foreground text-sm font-medium">{headline}</p>
+        <p className="text-foreground text-sm font-semibold">{headline}</p>
 
         {children ? <div className="space-y-2">{children}</div> : null}
       </div>

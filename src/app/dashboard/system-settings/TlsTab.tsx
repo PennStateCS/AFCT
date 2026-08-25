@@ -108,17 +108,17 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             }
             headline={
               !tls?.installed
-                ? 'Using the built-in certificate'
+                ? 'Browser warnings are expected'
                 : tls.expired
-                  ? 'This certificate has expired'
+                  ? 'Certificate has expired'
                   : tls.selfSigned
-                    ? 'Browsers will warn visitors'
+                    ? 'Browser warnings are expected'
                     : 'Certificate is trusted'
             }
           >
             <SettingsStatusText>
               {!tls?.installed
-                ? 'The connection is still encrypted, but browsers will show a security warning until you install a trusted certificate.'
+                ? 'The server is using its built-in certificate. The connection is still encrypted, but browsers will warn until you install a trusted one.'
                 : tls.expired
                   ? 'Browsers will show a security warning until you install a valid one.'
                   : tls.selfSigned

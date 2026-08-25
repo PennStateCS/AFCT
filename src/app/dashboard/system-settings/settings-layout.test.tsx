@@ -90,6 +90,21 @@ describe('SettingsStatusCard', () => {
     }
   });
 
+  /*
+   * The surface stays neutral in every state. A green or red panel would make a standing
+   * configuration summary read as a transient alert, and it is the badge and the glyph that
+   * are supposed to carry the meaning. Asserted as "no status token on the card", not as a
+   * class-string match, so the check survives a change of neutral surface.
+   */
+  it('never tints the card itself with a status colour', () => {
+    for (const tone of ['ok', 'off', 'warn', 'bad'] as const) {
+      const { unmount } = renderCard(tone);
+      const card = screen.getByRole('complementary', { name: 'Current status' });
+      expect(card.className).not.toMatch(/status-|destructive/);
+      unmount();
+    }
+  });
+
   it('draws a different tone glyph for a healthy state than a failed one', () => {
     const { container: off } = renderCard('off');
     const offIcon = off.querySelector('svg')?.getAttribute('class') ?? '';

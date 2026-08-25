@@ -63,10 +63,10 @@ export function PublicAddressCard({
     <SettingsAsideCard title="Public address">
       <div className="space-y-3">
         {/* The value on its own surface so it reads as a thing to take away, not as prose.
-            bg-card because the card around it is bg-muted: on the rail the white one is the
-            value. min-w-0 + break-all so a long institutional hostname wraps inside the
+            bg-muted because the card around it is bg-card: the value is the quieter inset,
+            not another panel. min-w-0 + break-all so a long institutional hostname wraps inside the
             288px rail instead of pushing the button out of it. */}
-        <div className="bg-card flex items-start gap-2 rounded-md border p-2">
+        <div className="bg-muted flex items-start gap-2 rounded-md border p-2">
           <span className="text-foreground min-w-0 flex-1 font-mono text-sm break-all">
             {value}
           </span>
@@ -106,7 +106,7 @@ export function PublicAddressCard({
             environment variable, and cannot be edited here. Re-run the installer on the server with
             the new address:
           </p>
-          <p className="bg-card text-foreground rounded-md border p-2 font-mono text-xs break-all">
+          <p className="bg-muted text-foreground rounded-md border p-2 font-mono text-xs break-all">
             sh install.sh --reconfigure
           </p>
           <p className="text-muted-foreground text-xs leading-4.5">
