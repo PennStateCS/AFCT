@@ -5,7 +5,7 @@ import LoadingSpinner from '@/components/ui/loading-spinner';
 import {
   AlignLeft,
   BarChart3,
-  BookOpen,
+  ClipboardList,
   FileText,
   Fingerprint,
   Package,
@@ -561,7 +561,7 @@ export default function AssignmentDashboardPage({
             That surface is dark in every theme, which is why the controls below carry explicit
             colours instead of the ones their primitives ship with. See the note on IdentityPanel
             for the rule and IDENTITY_BADGE / IDENTITY_LINK for the two common cases. */}
-        <IdentityPanel labelledBy="assignment-page-title">
+        <IdentityPanel labelledBy="assignment-page-title" tone="operational">
           {/*
             Two columns that stretch to the same height: the identity on the left, the two
             controls on the right. items-stretch plus justify-between in that right column is
@@ -580,107 +580,120 @@ export default function AssignmentDashboardPage({
           <div className="flex flex-wrap items-stretch justify-between gap-x-6 gap-y-4">
             <div className="flex min-w-0 basis-full flex-col gap-3 sm:min-w-96 sm:grow sm:basis-0">
               <div className="flex items-start gap-3 sm:gap-4">
-                {/* BookOpen, the icon the local rail and the course page already use for
-                    assignments. */}
-                <IdentityPanelIcon icon={BookOpen} />
+                {/* ClipboardList, not the BookOpen this used to carry. The course banner leads
+                    with a Book, and at banner size an open book beside a closed one is not a
+                    distinction anybody reads: the two pages looked like the same page. A
+                    clipboard says "a thing set to be done" and is the one glyph here that could
+                    not be mistaken for a course. */}
+                <IdentityPanelIcon icon={ClipboardList} />
                 {/*
-                  The badges are siblings of the heading, not children of it. Everything inside
-                  an h1 becomes part of its accessible name, and "Boolean Algebra Basics
-                  Individual assignment In Canvas" is not the name of this page.
-
                   break-words, not overflow-wrap:anywhere. `anywhere` also shrinks an element's
-                  min-content width, which is what let the collapse above happen; this only
-                  breaks a word that genuinely cannot fit. Never truncated: this is the one
-                  place the whole title belongs.
+                  min-content width, which is what let the title collapse to one letter per line
+                  at 768px; this only breaks a word that genuinely cannot fit. Never truncated:
+                  this is the one place the whole title belongs.
                 */}
-                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+                <div className="flex min-w-0 flex-col gap-1">
                   <h1
                     id="assignment-page-title"
                     className="min-w-0 text-2xl leading-tight font-semibold tracking-tight break-words"
                   >
                     {assignment.title}
                   </h1>
-                  {/*
-                    Whether this is group work belongs to the assignment, so it is stated once
-                    here rather than repeated beside every student on the Submissions tab. The
-                    dates are NOT here on purpose: those resolve per student through date
-                    overrides, so a single header value would hide an extension.
-
-                    Tinted so it registers at a glance. The two tones differ to tell them apart,
-                    not to say one is better: an icon carries the same distinction for anyone who
-                    cannot separate the hues. Fixed palette values, not the --status-* tokens
-                    this used to take. Those flip with the theme while the banner does not, so in
-                    dark mode both chips became a dark translucent fill on a dark navy ground and
-                    neither could be found. These are light chips in every theme, and they keep
-                    the amber/blue split.
-                  */}
-                  <Badge
-                    variant="outline"
-                    className={`shrink-0 gap-1.5 text-xs font-normal ${
-                      assignment.groupSetId
-                        ? 'border-amber-300/70 bg-amber-100 text-amber-900'
-                        : 'border-sky-300/70 bg-sky-100 text-sky-900'
-                    }`}
-                  >
-                    {assignment.groupSetId ? (
-                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                    ) : (
-                      <User className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                    {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
-                  </Badge>
-                  {/* Only when an LMS opens it, which is why the badge renders nothing
-                      otherwise. Settings holds the detail and the way to remove one. */}
-                  <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
+                  {/* The parent course, directly under the title rather than on its own indented
+                      row. Title and subtitle are one block here: an assignment's own name is the
+                      identity and the course is the context it hangs from, which is the whole
+                      difference between this banner and the course page's. Labelled "Course:"
+                      in the same shape as the course banner's Faculty and TAs lines, so the
+                      label says what the value is rather than leaving a bare link to be worked
+                      out, and written the way the course page's own title writes it. */}
+                  <span className="max-w-full text-sm">
+                    <span className="text-course-banner-muted-foreground">Course: </span>
+                    <Link
+                      href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+                      className={cn(IDENTITY_LINK, 'font-medium break-words')}
+                    >
+                      {courseLabel}
+                    </Link>
+                  </span>
                 </div>
-              </div>
-              {/* Indented to the title's text on wide screens, so the identity block reads as
-                  one column, matching the course banner: the sm icon slot is 56px and the gap
-                  beside it 16. Labelled "Course:" in the same shape as the course banner's own
-                  Faculty and TAs lines, so the label says what the value is rather than leaving
-                  a bare link to be worked out. */}
-              <div className="flex flex-wrap items-center gap-2 text-sm sm:pl-[4.5rem]">
-                <span className="max-w-full">
-                  <span className="text-course-banner-muted-foreground">Course: </span>
-                  <Link
-                    href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                    className={cn(IDENTITY_LINK, 'font-medium break-words')}
-                  >
-                    {courseLabel}
-                  </Link>
-                </span>
               </div>
             </div>
 
-            {/* The two things you operate, and nothing else. Right-aligned to the picker's
-                edge, the only fixed width here, once the column is actually beside the title.
-                Below sm it has wrapped underneath instead, and right-aligning inside a 224px
-                block sitting at the left of the banner just indents the toggle for no reason,
-                so it squares up on the left there. */}
-            <div className="flex shrink-0 flex-col items-start justify-between gap-3 sm:items-end">
-              {/* Server enforces the guards (e.g. no unpublish after submissions). */}
-              <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
-                {/* The switch ships with page-token colours: an --input track that goes pure
+            {/*
+              One control group, two rows, not three. What the assignment IS and what you can do
+              to it share the top line; the jump to another assignment sits under them because it
+              is the only thing here that leaves the page.
+
+              Two rows rather than the three these four things would naturally take: at 24px for
+              the publish row, 22 for the badges and 36 for the picker, three rows plus their gaps
+              come to 98px of content, which makes this banner TALLER than the course page's
+              rather than shorter. Pairing the badges with the publish control gets it to 68 and
+              the banner to 104.
+
+              Right-aligned to the picker's edge, the only fixed width here, once the group is
+              actually beside the title. Below sm it has wrapped underneath instead, and
+              right-aligning inside a 224px block sitting at the left of the banner just indents
+              everything for no reason, so it squares up on the left there. justify-between so a
+              title long enough to grow the banner leaves the picker at its foot rather than
+              stranding it in the middle.
+            */}
+            <div className="flex shrink-0 flex-col items-start justify-between gap-2 sm:items-end">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:justify-end">
+                {/*
+                  Whether this is group work belongs to the assignment, so it is stated once here
+                  rather than repeated beside every student on the Submissions tab. The dates are
+                  NOT here on purpose: those resolve per student through date overrides, so a
+                  single header value would hide an extension.
+
+                  Categorical, not a status: the two tones differ to tell them apart, not to say
+                  one is better, and an icon carries the same distinction for anyone who cannot
+                  separate the hues. Fixed palette values, not the --status-* tokens this used to
+                  take. Those flip with the theme while the banner does not, so in dark mode both
+                  chips became a dark translucent fill on a dark navy ground and neither could be
+                  found. These are light chips in every theme, and they keep the amber/blue split.
+                */}
+                <Badge
+                  variant="outline"
+                  className={`shrink-0 gap-1.5 text-xs font-normal ${
+                    assignment.groupSetId
+                      ? 'border-amber-300/70 bg-amber-100 text-amber-900'
+                      : 'border-sky-300/70 bg-sky-100 text-sky-900'
+                  }`}
+                >
+                  {assignment.groupSetId ? (
+                    <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <User className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
+                </Badge>
+                {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
+                    Settings holds the detail and the way to remove one. */}
+                <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
+                {/* Server enforces the guards (e.g. no unpublish after submissions). */}
+                <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+                  {/* The switch ships with page-token colours: an --input track that goes pure
                     black in high contrast (invisible on a black banner) and a thumb that flips
                     to near-white in dark mode. Pinned here instead. The thumb stays white in
                     both states and the track carries the state, which is how a switch is
                     normally read, and the white border keeps the track findable whatever is
                     behind it. The important modifier is not decoration: the thumb's own
                     `dark:` rules are a specificity step above a plain descendant selector. */}
-                <Switch
-                  aria-label="Published"
-                  checked={!!assignment.isPublished}
-                  onCheckedChange={(checked) => setPublishTarget(!!checked)}
-                  disabled={courseIsArchived}
-                  className={
-                    'border-white/40 data-[state=checked]:bg-blue-400 ' +
-                    'data-[state=unchecked]:bg-white/20 dark:data-[state=unchecked]:bg-white/20 ' +
-                    'focus-visible:border-white focus-visible:ring-white/80 ' +
-                    '[&_[data-slot=switch-thumb]]:bg-white!'
-                  }
-                />
-                Published
-              </label>
+                  <Switch
+                    aria-label="Published"
+                    checked={!!assignment.isPublished}
+                    onCheckedChange={(checked) => setPublishTarget(!!checked)}
+                    disabled={courseIsArchived}
+                    className={
+                      'border-white/40 data-[state=checked]:bg-blue-400 ' +
+                      'data-[state=unchecked]:bg-white/20 dark:data-[state=unchecked]:bg-white/20 ' +
+                      'focus-visible:border-white focus-visible:ring-white/80 ' +
+                      '[&_[data-slot=switch-thumb]]:bg-white!'
+                    }
+                  />
+                  Published
+                </label>
+              </div>
               {/* Quick jump to another assignment in this course. */}
               <div className="w-56 shrink-0">
                 <SearchableSelect

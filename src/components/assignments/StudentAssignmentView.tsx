@@ -8,8 +8,9 @@ import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
+import { IdentityPanel, IdentityPanelIcon, IDENTITY_LINK } from '@/components/IdentityPanel';
 import { ProblemListCard } from '@/components/assignments/ProblemListCard';
 import ProblemWorkspace from '@/components/assignments/ProblemWorkspace';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
@@ -25,7 +26,6 @@ import type {
   StudentProblemComment,
   StudentProblemSubmission,
 } from '@/lib/assignment-details';
-import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
 
 type StudentAssignmentViewProps = {
@@ -353,6 +353,13 @@ export default function StudentAssignmentPage({
       : 'Accepted anytime';
   const gradeDisplay = assignmentGrade !== null ? `${assignmentGrade}` : '-';
   const courseIsArchived = assignment.course?.isArchived ?? false;
+  // The course, written the way the course page's own title writes it, so a student sees the
+  // same name in the banner they just came from. The code is not always present, so the name
+  // has to stand alone.
+  const courseCode = assignment.course?.code ?? assignment.courseCode ?? '';
+  const courseName = assignment.course?.name ?? assignment.courseName ?? assignment.courseId;
+  const courseLabel = courseCode ? `${courseCode}: ${courseName}` : courseName;
+
   const selectedProblem = selectedProblemId
     ? assignment.problems.find((ap) => ap.problem.id === selectedProblemId) || null
     : null;
@@ -374,55 +381,67 @@ export default function StudentAssignmentPage({
 
   return (
     <div className="space-y-6 p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle
-            role="heading"
-            aria-level={1}
-            className="flex min-w-0 flex-wrap items-start gap-2 text-2xl tracking-tight break-words"
-          >
-            <span className="font-semibold">Assignment:</span>
-            <span className="min-w-0 [overflow-wrap:anywhere] break-words">{assignment.title}</span>
-          </CardTitle>
-          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+      {/*
+        The same branded banner the course page and the staff assignment page lead with, in its
+        quieter tone. A student who opens a course gets the navy banner and then landed on a plain
+        white card one click later, which read as two different applications.
+
+        Staff-only controls are absent rather than disabled: no publish switch, no assignment
+        picker, no LMS state. That is a matter of not rendering them here at all, not of hiding
+        them, so nothing staff-only travels into the student bundle through the shared shell. The
+        shell owns the surface; each page owns what goes in it.
+
+        No "Assignment:" prefix on the title any more. It was doing the work the icon and the
+        course line under it now do, and it pushed the assignment's own name to second place in
+        its own heading.
+      */}
+      <IdentityPanel labelledBy="assignment-page-title" tone="operational">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <IdentityPanelIcon icon={ClipboardList} />
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1
+              id="assignment-page-title"
+              className="min-w-0 text-2xl leading-tight font-semibold tracking-tight break-words"
+            >
+              {assignment.title}
+            </h1>
             {assignment.course || assignment.courseName ? (
-              <Link
-                href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                className={cn(TEXT_LINK_CLASS, 'max-w-full break-all')}
-              >
-                {assignment.course?.name || assignment.courseName || assignment.courseId}
-                {assignment.course?.code
-                  ? ` (${assignment.course.code})`
-                  : assignment.courseCode
-                    ? ` (${assignment.courseCode})`
-                    : ''}
-              </Link>
+              <span className="max-w-full text-sm">
+                <span className="text-course-banner-muted-foreground">Course: </span>
+                <Link
+                  href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+                  className={cn(IDENTITY_LINK, 'font-medium break-words')}
+                >
+                  {courseLabel}
+                </Link>
+              </span>
             ) : null}
           </div>
-        </CardHeader>
-        <CardContent>
-          {Boolean(assignment.description || assignment.descriptionJson) && (
-            <div>
-              <h2 className="mb-2 font-semibold">Description</h2>
-              {/* A div, not a p: a rich description can contain headings, lists, and rules,
-                  which are invalid inside a paragraph. */}
-              <div
-                className="text-muted-foreground max-h-96 resize-y overflow-y-auto rounded-md border p-3"
-                tabIndex={0}
-                role="group"
-                aria-label="Assignment description"
-              >
-                <RichDescription
-                  // Heading base: sits under the h2 "Description", so the description starts one level below it.
-                  headingBaseLevel={3}
-                  description={assignment.description}
-                  descriptionJson={assignment.descriptionJson}
-                />
-              </div>
+        </div>
+      </IdentityPanel>
+
+      {Boolean(assignment.description || assignment.descriptionJson) && (
+        <Card>
+          <CardContent className="pt-6">
+            <h2 className="mb-2 font-semibold">Description</h2>
+            {/* A div, not a p: a rich description can contain headings, lists, and rules,
+                which are invalid inside a paragraph. */}
+            <div
+              className="text-muted-foreground max-h-96 resize-y overflow-y-auto rounded-md border p-3"
+              tabIndex={0}
+              role="group"
+              aria-label="Assignment description"
+            >
+              <RichDescription
+                // Heading base: sits under the h2 "Description", so the description starts one level below it.
+                headingBaseLevel={3}
+                description={assignment.description}
+                descriptionJson={assignment.descriptionJson}
+              />
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {assignment.problems.length > 0 ? (
         <Card>

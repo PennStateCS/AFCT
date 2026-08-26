@@ -338,6 +338,11 @@ export function IdentityNetwork({ className }: { className?: string }) {
         // Quieter on a phone, where the banner is a stack of full-width rows and every part of
         // it has text over it. One opacity on the whole figure rather than hiding a group: half
         // a graph reads as a rendering fault, a faint one reads as a background.
+        //
+        // The caller's className comes last so a banner tone can dial the whole figure back
+        // further; see TONE in IdentityPanel. It is an opacity on the <svg>, so it scales the
+        // per-node and per-line values underneath rather than replacing them, and the internal
+        // hierarchy survives.
         'opacity-70 sm:opacity-100',
         className,
       )}

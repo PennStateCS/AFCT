@@ -29,16 +29,53 @@ import { cn } from '@/lib/utils';
  * because the network carries its own left-to-right weighting. Two mechanisms doing one job
  * multiplied, and the mesh on the left third came out at a fraction of a percent of opacity.
  */
+/**
+ * How much weight a banner carries. Two values, and deliberately not three knobs.
+ *
+ * `identity` is the course page: the thing you navigated TO, the surface that says AFCT before
+ * it says anything else. `operational` is the assignment page, one level down inside a course
+ * that has already introduced itself, where the banner is mostly a place to publish from and
+ * jump between assignments.
+ *
+ * One prop rather than separate `networkIntensity`, `minHeight` and `padding` props, because
+ * the three have to move together or the two pages stop reading as a family. A quieter network
+ * on a full-height banner is just a washed-out course header. Adding a third tone should mean
+ * adding a row to the table below, not adding a fourth knob.
+ */
+export type IdentityTone = 'identity' | 'operational';
+
+const TONE = {
+  identity: {
+    // 20px of vertical padding on a desktop against 24 either side; see the note below.
+    padding: 'px-4 py-4 sm:px-5 lg:px-6 lg:py-5',
+    floor: 'sm:min-h-[7.25rem]',
+    network: undefined,
+  },
+  operational: {
+    // A step tighter top and bottom, which is most of the 14px between the two banners.
+    padding: 'px-4 py-3 sm:px-5 sm:py-4 lg:px-6',
+    floor: 'sm:min-h-[6.5rem]',
+    // Same mesh, same palette, three quarters the weight. Not a second SVG and not a different
+    // crop: the figure is recognisably the one from the course page, standing further back.
+    network: 'opacity-[0.55] sm:opacity-75',
+  },
+} as const satisfies Record<IdentityTone, { padding: string; floor: string; network?: string }>;
+
 export function IdentityPanel({
   children,
   labelledBy,
+  tone = 'identity',
   className,
 }: {
   children: React.ReactNode;
   /** Id of the banner's own heading, so the region is named by what it is about. */
   labelledBy: string;
+  /** See IdentityTone. Defaults to the fuller course-page treatment. */
+  tone?: IdentityTone;
   className?: string;
 }) {
+  const { padding, floor, network } = TONE[tone];
+
   return (
     // overflow-hidden clips the network to the rounded corners; relative anchors it. shadow-xs
     // rather than a real shadow: the separation comes from this being a different kind of thing
@@ -52,7 +89,7 @@ export function IdentityPanel({
         className,
       )}
     >
-      <IdentityNetwork />
+      <IdentityNetwork className={network} />
 
       {/*
         Everything real sits above the decoration. The padding lives here rather than on the
@@ -72,7 +109,7 @@ export function IdentityPanel({
         MINIMUM and only above sm: a long title, a second line of faculty or a wrapped badge row
         all push past it, and on a phone the rows stack and there is no spare height to hand out.
       */}
-      <div className="relative flex flex-col justify-center gap-3 px-4 py-4 sm:min-h-[7.25rem] sm:px-5 lg:px-6 lg:py-5">
+      <div className={cn('relative flex flex-col justify-center gap-3', padding, floor)}>
         {children}
       </div>
     </section>
