@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import DashboardClient from './DashboardClient';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
+import { WelcomePanel } from '@/components/dashboard/WelcomePanel';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
 import { assignedToStudentWhere } from '@/lib/assignment-visibility';
@@ -252,19 +253,14 @@ export default async function DashboardPage({
     <div className="grid w-full items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
       <section className="min-w-0">
         {/* Replaces the sr-only "Dashboard" h1, and sits inside the left column so the
-            rail starts level with it rather than below the whole greeting. On a surface
-            of its own so it balances the Join a Course card opposite it, but a shallow
-            one: content-driven height, no accent, no illustration. Its own mb-6 rather
-            than space-y on the section, so the launch notice below keeps the one margin
-            it already carries. */}
-        <section className="border-border bg-card mb-6 rounded-lg border p-5">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {courseSummary} &middot; {assignmentSummary}
-          </p>
-        </section>
+            rail starts level with it rather than below the whole greeting. The counts are
+            passed in already worded: they are counted off the two arrays this page has
+            just built, so the panel is presentation and costs no query. */}
+        <WelcomePanel
+          firstName={firstName}
+          courseSummary={courseSummary}
+          assignmentSummary={assignmentSummary}
+        />
 
         {/* Renders nothing unless an LMS launch sent them here, which is most of the time. */}
         <LaunchNotice notice={lms} courseTitle={lmsCourseTitle} />

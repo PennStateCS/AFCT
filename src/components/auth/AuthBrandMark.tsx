@@ -1,5 +1,8 @@
 import { cn } from '@/lib/utils';
 
+/** The hexagon, as one constant, so the frame and the optional fill below cannot drift apart. */
+const HEX_PATH = 'M32 2 57.98 17 57.98 47 32 62 6.02 47 6.02 17Z';
+
 /**
  * The AFCT mark: a three-state automaton inside a bounded hexagon.
  *
@@ -23,15 +26,23 @@ import { cn } from '@/lib/utils';
  * the same component sits on the near-black brand panel and on a white card, so a literal
  * second colour would be invisible on one of them.
  *
+ * The interior is open by default, which is right on a plain surface and wrong on a patterned
+ * one: on the dashboard's welcome panel the node network ran straight through the hexagon and
+ * the mark stopped reading as an object. `backdropClassName` fills the frame with a third
+ * caller-supplied colour to close it. Left unset, nothing is drawn and the mark is unchanged.
+ *
  * Decorative in every place it is used: the wordmark beside it already says AFCT, so naming
  * it here would make a screen reader say the same thing twice.
  */
 export function AuthBrandMark({
   className,
   accentClassName,
+  backdropClassName,
 }: {
   className?: string;
   accentClassName?: string;
+  /** Fills the hexagon so a patterned surface cannot show through it. Off unless set. */
+  backdropClassName?: string;
 }) {
   return (
     <svg
@@ -44,8 +55,13 @@ export function AuthBrandMark({
       strokeLinecap="round"
       strokeLinejoin="round"
     >
+      {/* Behind everything, and only when the caller asks for it: see backdropClassName. */}
+      {backdropClassName ? (
+        <path d={HEX_PATH} className={backdropClassName} fill="currentColor" stroke="none" />
+      ) : null}
+
       {/* The bound: a language is a set, and the hexagon is the box round it. */}
-      <path d="M32 2 57.98 17 57.98 47 32 62 6.02 47 6.02 17Z" strokeWidth="2.3" />
+      <path d={HEX_PATH} strokeWidth="2.3" />
 
       {/* Ordinary states and transitions, in the second colour. State centres are 15 units
           from the hexagon's centre along the vertex rays; that leaves the states 6.6 units
