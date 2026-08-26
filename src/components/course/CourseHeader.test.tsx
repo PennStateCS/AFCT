@@ -4,7 +4,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CourseHeader } from './CourseHeader';
+import { CourseHeaderContent } from './CourseHeader';
 import type { FullCourse } from '@/types/course';
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -59,12 +59,15 @@ const mockCourse: FullCourse = {
   ],
 };
 
-describe('CourseHeader', () => {
+describe('CourseHeaderContent', () => {
   it('renders course metadata, status, and staff info for instructors', () => {
-    render(<CourseHeader course={mockCourse} isStudent={false} />);
+    render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
 
-    expect(screen.getByText(/CMPSC 431/)).toBeInTheDocument();
-    expect(screen.getByText('Software Engineering')).toBeInTheDocument();
+    // One heading, one string: the code and the name are the same title now, not a muted
+    // code beside a foreground name.
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('CMPSC 431: Software Engineering');
+    expect(heading).toHaveAttribute('id', 'course-page-title');
     expect(screen.getByText('Fall 2025')).toBeInTheDocument();
     expect(screen.getByText('3 credits')).toBeInTheDocument();
     // Course status badge lives next to the metadata badges.
@@ -74,15 +77,17 @@ describe('CourseHeader', () => {
   });
 
   it('hides the staff/date line for students', () => {
-    render(<CourseHeader course={mockCourse} isStudent />);
+    render(<CourseHeaderContent course={mockCourse} isStudent />);
 
     // Title and badges still render, but the faculty/TA line does not.
-    expect(screen.getByText('Software Engineering')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'CMPSC 431: Software Engineering',
+    );
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
   });
 
   it('omits the TAs label when the course has no TAs', () => {
-    render(<CourseHeader course={mockCourse} isStudent={false} />);
+    render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
     expect(screen.queryByText('TAs:')).not.toBeInTheDocument();
   });
 
@@ -94,7 +99,7 @@ describe('CourseHeader', () => {
         { id: 'ta-1', firstName: 'Alan', lastName: 'Turing', role: 'STUDENT', courseRole: 'TA' },
       ],
     };
-    render(<CourseHeader course={withTa} isStudent={false} />);
+    render(<CourseHeaderContent course={withTa} isStudent={false} />);
     expect(screen.getByText('TAs:')).toBeInTheDocument();
     expect(screen.getByText('Alan Turing')).toBeInTheDocument();
   });
@@ -103,7 +108,7 @@ describe('CourseHeader', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<CourseHeader course={mockCourse} isStudent={false} />);
+    render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
 
     // Displayed grouped as ABCD-2345 for readability.
     expect(screen.getByText('ABCD-2345')).toBeInTheDocument();
@@ -112,5 +117,80 @@ describe('CourseHeader', () => {
     fireEvent.click(screen.getByRole('button', { name: /copy registration code/i }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('ABCD2345'));
     expect(toastMock.success).toHaveBeenCalled();
+  });
+
+  it('is a single page-level heading, whichever view renders it', () => {
+    const { unmount } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    unmount();
+
+    render(<CourseHeaderContent course={mockCourse} isStudent />);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('keeps the decorative banner out of the accessibility tree', () => {
+    const { container } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
+    // The network carries no meaning, so it must not be reachable or clickable. One decoration
+    // now, not two: the navy wash that used to sit over it is gone, because it and the SVG's
+    // own fade were two mechanisms multiplying to hide the left of the mesh entirely.
+    const decorations = container.querySelectorAll('[aria-hidden="true"].pointer-events-none');
+    expect(decorations.length).toBeGreaterThanOrEqual(1);
+    // The banner is a named region, so the heading names it rather than the ground doing so.
+    const banner = container.querySelector('section[aria-labelledby="course-page-title"]');
+    expect(banner).not.toBeNull();
+  });
+
+  it('draws the network inside the banner, hidden and unfocusable', () => {
+    const { container } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
+    const svg = container.querySelector('svg[aria-hidden="true"]');
+    expect(svg).not.toBeNull();
+    // Decoration only: no name, no focus, no pointer events, and clipped to the banner.
+    expect(svg).toHaveAttribute('focusable', 'false');
+    expect(svg?.getAttribute('class')).toContain('pointer-events-none');
+    expect(svg?.querySelectorAll('circle').length).toBeGreaterThan(40);
+    expect(svg?.querySelectorAll('line').length).toBeGreaterThan(60);
+    // A few edges are drawn as directed transitions, which is the one nod to what the app is
+    // for. A marker that stopped resolving would drop them silently back to plain lines.
+    const marker = svg?.querySelector('marker');
+    expect(marker).not.toBeNull();
+    const arrowGroup = svg?.querySelector('g[marker-end]');
+    expect(arrowGroup?.getAttribute('marker-end')).toBe(`url(#${marker?.id})`);
+    expect(arrowGroup?.querySelectorAll('line').length).toBeGreaterThan(3);
+    const banner = container.querySelector('section[aria-labelledby="course-page-title"]');
+    expect(banner?.className).toContain('overflow-hidden');
+  });
+
+  it('puts no page-theme colour inside the banner', () => {
+    // The banner is dark in every theme, so a page token or a `dark:` utility in here is a
+    // value that follows the page instead: near-black text on navy in light mode, and no way
+    // to see it from the markup. Every colour comes from the --course-banner-* family.
+    const { container } = render(<CourseHeaderContent course={mockCourse} isStudent={false} />);
+    const banner = container.querySelector('section[aria-labelledby="course-page-title"]');
+    const classes = Array.from(banner?.querySelectorAll<HTMLElement>('[class]') ?? [])
+      .map((el) => el.getAttribute('class') ?? '')
+      .join(' ')
+      .split(/\s+/)
+      // The badge and button primitives carry `[a&]:hover:...` rules for the anchor form of
+      // themselves. Nothing in the banner is an anchor, so those never apply and are not
+      // worth overriding one by one.
+      .filter((c) => !c.includes('[a&]:'));
+    const themed = classes.filter((c) =>
+      /(^|:)(text|bg|border)-(foreground|background|card|muted|accent|secondary|primary|popover)(\b|-|\/)/.test(
+        c,
+      ),
+    );
+    expect(themed).toEqual([]);
+  });
+
+  it('never truncates the course title', () => {
+    const longCourse = {
+      ...mockCourse,
+      name: 'Advanced Topics in Programming Languages and Software Engineering',
+    };
+    render(<CourseHeaderContent course={longCourse} isStudent={false} />);
+    const heading = screen.getByRole('heading', { level: 1 });
+    // This is the one place the whole name belongs: it wraps rather than clipping.
+    expect(heading.className).not.toContain('truncate');
+    expect(heading).toHaveTextContent(longCourse.name);
   });
 });

@@ -92,6 +92,60 @@ export function formatWeekdayInTimeZone(value: DateInput, timeZone = 'UTC') {
   }).format(date);
 }
 
+export type ShortDateParts = {
+  /** Abbreviated month, e.g. "Aug". Uppercase it in CSS if a tile wants "AUG". */
+  month: string;
+  /** Day of month with no leading zero, e.g. "5". */
+  day: string;
+};
+
+/**
+ * The month and day of an instant, as seen in `timeZone`. Split into parts so a caller
+ * can stack them (a date tile) or join them ("Aug 5") without re-deriving either.
+ */
+export function formatShortDateParts(value: DateInput, timeZone = 'UTC'): ShortDateParts {
+  const date = toDate(value);
+  if (!Number.isFinite(date.getTime())) return { month: '', day: '' };
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    month: 'short',
+    day: 'numeric',
+  }).formatToParts(date);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return { month: lookup.month ?? '', day: lookup.day ?? '' };
+}
+
+/**
+ * Whole calendar days from `from` to `value`, counted in `timeZone`.
+ *
+ * Calendar days, not 24-hour spans: something due at 1am tomorrow is one day away even
+ * though it is six hours off, which is the difference between a reader seeing "Tomorrow"
+ * and seeing "Due today". Both instants are reduced to their Y/M/D in the zone and
+ * compared as UTC midnights, so a DST shift in between cannot move the answer.
+ */
+export function daysUntilInTimeZone(
+  value: DateInput,
+  timeZone = 'UTC',
+  from: DateInput = new Date(),
+): number | null {
+  const target = toDate(value);
+  const origin = toDate(from);
+  if (!Number.isFinite(target.getTime()) || !Number.isFinite(origin.getTime())) return null;
+
+  const midnightUtc = (date: Date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return Date.UTC(Number(lookup.year), Number(lookup.month) - 1, Number(lookup.day));
+  };
+
+  return Math.round((midnightUtc(target) - midnightUtc(origin)) / 86_400_000);
+}
+
 /** The short zone abbreviation (e.g. "EST", "GMT+2") for an instant in a zone. */
 export function zoneAbbrev(value: DateInput, timeZone = 'UTC'): string {
   const date = toDate(value);

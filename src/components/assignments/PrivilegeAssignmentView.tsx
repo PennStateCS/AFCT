@@ -5,12 +5,12 @@ import LoadingSpinner from '@/components/ui/loading-spinner';
 import {
   AlignLeft,
   BarChart3,
+  ClipboardList,
   FileText,
   Fingerprint,
   Package,
   Plus,
   Shapes,
-  User,
   Users,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -18,10 +18,14 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
+import {
+  IdentityPanel,
+  IdentityPanelIcon,
+  IDENTITY_BADGE,
+  IDENTITY_LINK,
+} from '@/components/IdentityPanel';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import {
   Dialog,
@@ -37,7 +41,9 @@ import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsF
 import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentStatisticsPanel';
 import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { TabBar } from '@/components/course/course-tabs';
+import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
+import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { useConfirmIfDirty } from '@/components/unsaved-changes/UnsavedChangesProvider';
 import AssignmentSubmissions from '@/components/AssignmentSubmissions';
 import Link from 'next/link';
@@ -55,6 +61,7 @@ import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 import { LmsLinkBadge } from '@/components/lti/LmsLinkBadge';
 import { AssignmentLmsLinksCard } from '@/components/lti/AssignmentLmsLinksCard';
 import { fetchAssignmentLmsLinks, type AssignmentLmsLink } from '@/lib/lti/fetch-assignment-links';
+import { cn } from '@/lib/utils';
 
 /**
  * The dialogs and the settings tab load on demand. Between them they were the only things
@@ -127,6 +134,10 @@ function normalizeProblem(p: Problem) {
   };
 }
 
+// Sections that are a form get a readable measure; everything else is a table, a chart
+// or a comparison and takes the full column.
+const FORM_TABS = new Set(['description', 'type', 'assign-to', 'settings']);
+
 type PrivilegeAssignmentViewProps = {
   initialAssignment?: AssignmentWithDetails | null;
   initialAssignments?: AssignmentSummary[];
@@ -137,6 +148,8 @@ export default function AssignmentDashboardPage({
   initialAssignments,
 }: PrivilegeAssignmentViewProps) {
   const { timezone } = useEffectiveTimezone();
+  // xl rather than lg: a rail plus a submissions table needs the room.
+  const railNav = useIsDesktopNav(1280);
   const { id, aid } = useParams<{ id: string; aid: string }>();
   const epsSymbol = useEmptyStringSymbol(id);
   const searchParams = useSearchParams();
@@ -324,9 +337,9 @@ export default function AssignmentDashboardPage({
      * A failure here is a failure, not an answer.
      *
      * This used to map any refusal or network error onto an empty list, so the card told
-     * somebody "this assignment has not been added to a course in your LMS", which is a
-     * statement about their LMS made from no information at all. Acting on it means adding a
-     * second link for work that already has one. Throwing lets the card say it could not check.
+     * somebody "this assignment is not linked from an LMS course yet", which is a statement
+     * about their LMS made from no information at all. Acting on it means adding a second link
+     * for work that already has one. Throwing lets the card say it could not check.
      */
     queryFn: () => fetchAssignmentLmsLinks(id, aid),
     enabled: !!id && !!aid,
@@ -340,6 +353,16 @@ export default function AssignmentDashboardPage({
    * is unconfirmed is the one screen that should.
    */
   const confirmedLmsLinks = lmsLinks.filter((link) => link.confirmedAt);
+
+  // The course, written exactly the way the course page's own title writes it, so the two
+  // screens name the same thing the same way. It used to read "Theory (CS401)" here and
+  // "CS401: Theory" there, which is the sort of small disagreement that makes two pages feel
+  // like two products. The code is not always present, so the name has to stand alone.
+  // Optional chaining because this sits above the loading guard, where `assignment` is still
+  // null; the banner that reads it only renders below that guard.
+  const courseCode = assignment?.course?.code ?? assignment?.courseCode ?? '';
+  const courseName = assignment?.course?.name ?? assignment?.courseName ?? assignment?.courseId;
+  const courseLabel = courseCode ? `${courseCode}: ${courseName}` : courseName;
 
   async function handleAddProblems(
     problemIds: string[],
@@ -518,58 +541,167 @@ export default function AssignmentDashboardPage({
 
   return (
     <div className="mx-auto w-full text-sm">
-      <Tabs value={tab} onValueChange={handleTabChange}>
-        <Card>
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-3">
-              <CardTitle
-                role="heading"
-                aria-level={1}
-                className="flex min-w-0 flex-wrap items-center gap-2 text-2xl break-words"
-              >
-                <span className="font-semibold">Assignment:</span>{' '}
-                <span className="min-w-0 [overflow-wrap:anywhere] break-words">
+      <Tabs
+        value={tab}
+        onValueChange={handleTabChange}
+        orientation={railNav ? 'vertical' : 'horizontal'}
+        // gap-4, not space-y-6. The Tabs primitive is `flex flex-col gap-2`, and a
+        // space-y-* on top of that does not replace the gap, it ADDS to it: tailwind-merge
+        // only reconciles classes that set the same property, and gap and margin are not
+        // the same property. So the panel sat 8px + 24px = 32px above the workspace while
+        // the navbar left only the layout's own 16px above it. One mechanism, one value.
+        className="gap-4"
+      >
+        {/* The same banner the course page leads with, so an assignment reads as the same kind
+            of object one level down. The navy, the network, the padding and the height floor
+            all come from the shared component; only what goes inside differs.
+
+            That surface is dark in every theme, which is why the controls below carry explicit
+            colours instead of the ones their primitives ship with. See the note on IdentityPanel
+            for the rule and IDENTITY_BADGE / IDENTITY_LINK for the two common cases. */}
+        <IdentityPanel labelledBy="assignment-page-title" tone="operational">
+          {/*
+            Two columns that stretch to the same height: the identity on the left, the two
+            controls on the right. items-stretch plus justify-between in that right column is
+            what floats the assignment picker down to the foot of the banner rather than
+            leaving it tucked under the toggle; without the stretch the column is only as tall
+            as its own content and there is no room to float anything into.
+
+            Same basis split as the course banner, and load-bearing for the same reason. The
+            control column is shrink-0 at the picker's 224px. At a plain `flex-1` the left
+            column's basis is zero, so back when the right side was a 550px row of four things
+            a 768px screen left the title about 55px and it came down one letter per line: the
+            banner measured 674px tall. A full basis below sm gives the identity its own row,
+            and the 24rem floor above sm makes flex-wrap drop the controls to their own line
+            until there is genuinely room for both.
+          */}
+          <div className="flex flex-wrap items-stretch justify-between gap-x-6 gap-y-4">
+            <div className="flex min-w-0 basis-full flex-col gap-3 sm:min-w-96 sm:grow sm:basis-0">
+              {/*
+                Title row then metadata row, which is the course banner's shape rather than a
+                shape of its own, and that is the point. This used to be the icon beside a
+                COLUMN holding both the title and the metadata. Same pixels, different geometry:
+                the row was as tall as title plus gap plus metadata instead of as tall as the
+                icon, so the two banners centred content blocks of different heights inside the
+                same 118px and the text landed 4px and 8px out between the two pages. Matching
+                the structure is what makes the text land in the same place; matching the height
+                alone did not.
+              */}
+              <div className="flex items-start gap-3 sm:gap-4">
+                {/* ClipboardList, not the BookOpen this used to carry. The course banner leads
+                    with a Book, and at banner size an open book beside a closed one is not a
+                    distinction anybody reads: the two pages looked like the same page. A
+                    clipboard says "a thing set to be done" and is the one glyph here that could
+                    not be mistaken for a course. */}
+                <IdentityPanelIcon icon={ClipboardList} />
+                {/*
+                  break-words, not overflow-wrap:anywhere. `anywhere` also shrinks an element's
+                  min-content width, which is what let the title collapse to one letter per line
+                  at 768px; this only breaks a word that genuinely cannot fit. Never truncated:
+                  this is the one place the whole title belongs.
+                */}
+                <h1
+                  id="assignment-page-title"
+                  className="min-w-0 text-2xl leading-tight font-semibold tracking-tight break-words"
+                >
                   {assignment.title}
+                </h1>
+              </div>
+              {/*
+                Everything that DESCRIBES the assignment, on one wrapping row under the title, in
+                the same muted-label / medium-value shape the course banner uses for Faculty and
+                TAs. The split this row exists to make is passive against active: what the
+                assignment is belongs here, and the column on the right is only the two things you
+                operate. Type and the LMS link were both chips in that column, and four objects
+                competing there made the right side the busiest part of a banner whose job is to
+                name one assignment.
+
+                min-h-6 and the 4.5rem indent are both borrowed from the course banner's metadata
+                row rather than chosen here: 24px because that row is as tall as the copy buttons
+                in it, and 72px because that is the icon slot plus its gap. Matching them is what
+                puts this line at the same height on both pages.
+
+                gap-x-5 with gap-y-1: far enough apart to read as separate facts on one line,
+                close enough to read as one row when a long course name wraps them onto two.
+              */}
+              <div className="flex min-h-6 flex-wrap items-center gap-x-5 gap-y-1 text-sm sm:pl-[4.5rem]">
+                {/* The course is the context the assignment hangs from, and the only value
+                        here that is a link. Written the way the course page's own title writes
+                        it, so the two screens name it the same. */}
+                <span className="max-w-full">
+                  <span className="text-course-banner-muted-foreground">Course: </span>
+                  <Link
+                    href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+                    className={cn(IDENTITY_LINK, 'font-medium break-words')}
+                  >
+                    {courseLabel}
+                  </Link>
                 </span>
-              </CardTitle>
-              {/* Publish toggle sits next to the title; server enforces the guards
-                  (e.g. no unpublish after submissions). */}
+                {/*
+                      Text, not a chip, and no Users glyph beside it. As a tinted badge this read
+                      as a state worth acting on, which group work is not: it is a fact about the
+                      assignment in the same class as which course owns it. "Individual" rather
+                      than "Individual assignment" because the banner it sits in has already said
+                      what kind of thing this is.
+
+                      Same groupSetId test as before, unchanged: a group set means group work.
+                      The word is the whole signal now, which is a gain rather than a loss, since
+                      the two hues it used to rely on were never readable by everyone anyway.
+                    */}
+                <span>
+                  <span className="text-course-banner-muted-foreground">Type: </span>
+                  <span className="font-medium">
+                    {assignment.groupSetId ? 'Group' : 'Individual'}
+                  </span>
+                </span>
+                {/* Only when an LMS opens it, which is why the badge renders nothing
+                        otherwise. Kept as the shared badge rather than restated as a
+                        "LMS: Canvas" pair, because that component is how an LMS link is written
+                        everywhere else in the app, including the course banner beside it. */}
+                <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
+              </div>
+            </div>
+
+            {/*
+              Controls only. Two rows, and both of them do something: the publish state, and the
+              jump to another assignment underneath because it is the only thing here that leaves
+              the page. The type and LMS chips that used to share this column are descriptive
+              rather than actionable and have moved to the metadata row on the left, which is the
+              whole point of the change: nothing in this column is here to be read.
+
+              Right-aligned to the picker's edge, the only fixed width here, once the group is
+              actually beside the title. Below sm it has wrapped underneath instead, and
+              right-aligning inside a fixed block sitting at the left of the banner just indents
+              everything for no reason, so it squares up on the left there. justify-between so a
+              title long enough to grow the banner leaves the picker at its foot rather than
+              stranding it in the middle.
+            */}
+            <div className="flex shrink-0 flex-col items-start justify-between gap-2 sm:items-end">
+              {/* Server enforces the guards (e.g. no unpublish after submissions). */}
               <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+                {/* The switch ships with page-token colours: an --input track that goes pure
+                    black in high contrast (invisible on a black banner) and a thumb that flips
+                    to near-white in dark mode. Pinned here instead. The thumb stays white in
+                    both states and the track carries the state, which is how a switch is
+                    normally read, and the white border keeps the track findable whatever is
+                    behind it. The important modifier is not decoration: the thumb's own
+                    `dark:` rules are a specificity step above a plain descendant selector. */}
                 <Switch
                   aria-label="Published"
                   checked={!!assignment.isPublished}
                   onCheckedChange={(checked) => setPublishTarget(!!checked)}
                   disabled={courseIsArchived}
+                  className={
+                    'border-white/40 data-[state=checked]:bg-blue-400 ' +
+                    'data-[state=unchecked]:bg-white/20 dark:data-[state=unchecked]:bg-white/20 ' +
+                    'focus-visible:border-white focus-visible:ring-white/80 ' +
+                    '[&_[data-slot=switch-thumb]]:bg-white!'
+                  }
                 />
                 Published
               </label>
-              {/* Whether this is group work belongs to the assignment, so it is stated once
-                  here rather than repeated beside every student on the Submissions tab. The
-                  dates are NOT here on purpose: those resolve per student through date
-                  overrides, so a single header value would hide an extension. */}
-              {/* Tinted so it registers at a glance. The two tones differ to tell them apart,
-                  not to say one is better: an icon carries the same distinction for anyone who
-                  cannot separate the hues. */}
-              <Badge
-                variant="outline"
-                className={`shrink-0 gap-1.5 text-xs font-normal ${
-                  assignment.groupSetId
-                    ? 'bg-status-warning-bg border-status-warning-border text-status-warning'
-                    : 'bg-status-info-bg border-status-info-border text-status-info'
-                }`}
-              >
-                {assignment.groupSetId ? (
-                  <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                ) : (
-                  <User className="h-3.5 w-3.5" aria-hidden="true" />
-                )}
-                {assignment.groupSetId ? 'Group assignment' : 'Individual assignment'}
-              </Badge>
-              {/* Only when an LMS opens it, which is why the badge renders nothing otherwise.
-                  Settings holds the detail and the way to remove one. */}
-              <LmsLinkBadge links={confirmedLmsLinks} />
               {/* Quick jump to another assignment in this course. */}
-              <div className="ml-auto w-56 shrink-0">
+              <div className="w-56 shrink-0">
                 <SearchableSelect
                   items={allAssignments.map((a) => ({ id: a.id, label: a.title }))}
                   onSelect={(assignmentId) => {
@@ -593,51 +725,71 @@ export default function AssignmentDashboardPage({
                   searchPlaceholder="Search assignments..."
                   emptyStateText="No assignments found."
                   disabled={assignmentsLoading}
+                  // h-9, a step down from the shared field height. At h-11 this one control set
+                  // the banner's height on its own and left it taller than the course page's.
+                  //
+                  // The trigger's shared field class is otherwise built for a light page: a
+                  // --card fill and a --muted-foreground label, both of which vanish on navy.
+                  // The chevron is coloured inside the component, so it takes a descendant rule.
+                  triggerClassName={
+                    'h-9 text-sm border-white/25 bg-white/10 text-white hover:bg-white/15 ' +
+                    'focus-visible:border-white focus-visible:ring-white/80 [&_svg]:text-white/70'
+                  }
                 />
               </div>
             </div>
-            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
-              {/* Show course name/code as a link to the course page (fallback to courseId) */}
-              <Link
-                href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                className="text-primary max-w-full break-all hover:underline"
-              >
-                {assignment.course?.name || assignment.courseName || assignment.courseId}
-                {assignment.course?.code
-                  ? ` (${assignment.course.code})`
-                  : assignment.courseCode
-                    ? ` (${assignment.courseCode})`
-                    : ''}
-              </Link>
+          </div>
+        </IdentityPanel>
+
+        {/* Below xl this is a plain stack, so the strip sits above the panels as it did.
+            At xl the rail takes a fixed column beside them. One control at a time: two
+            tablists under one Tabs root would duplicate its ARIA wiring. */}
+        {/* Form sections stay a readable measure; the data sections (Problems,
+            Submissions, Statistics, Similarity) take the whole column, since they are
+            tables, charts and comparisons. */}
+        <LocalNavLayout
+          contentClassName={cn(FORM_TABS.has(tab) && 'max-w-3xl')}
+          nav={
+            railNav ? (
+              <TabRail
+                tabs={assignmentTabs}
+                ariaLabel="Assignment sections"
+                menuLabel="Assignment Menu"
+              />
+            ) : (
+              <TabBar
+                ariaLabel="Assignment sections"
+                selectId="assignment-tab-select"
+                value={tab}
+                onValueChange={handleTabChange}
+                tabs={assignmentTabs}
+              />
+            )
+          }
+        >
+          <TabsContent value="description">
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <AlignLeft className="h-6 w-6" />
+                Details
+              </h2>
+              <AssignmentBasicsForm
+                courseId={id}
+                assignmentId={assignment.id}
+                initialTitle={assignment.title}
+                initialDescription={assignment.description ?? ''}
+                initialDescriptionJson={asRichDescription(assignment.descriptionJson)}
+                courseIsArchived={courseIsArchived}
+                onSaved={() => void invalidateAssignment()}
+              />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Tab selector, matching the underline style used on the course page. */}
-            <TabBar
-              ariaLabel="Assignment sections"
-              selectId="assignment-tab-select"
-              value={tab}
-              onValueChange={handleTabChange}
-              tabs={assignmentTabs}
-            />
-            <TabsContent value="description">
-              <div className="space-y-4">
-                <h2 className="flex items-center gap-2 text-2xl font-semibold">
-                  <AlignLeft className="h-6 w-6" />
-                  Details
-                </h2>
-                <AssignmentBasicsForm
-                  courseId={id}
-                  assignmentId={assignment.id}
-                  initialTitle={assignment.title}
-                  initialDescription={assignment.description ?? ''}
-                  initialDescriptionJson={asRichDescription(assignment.descriptionJson)}
-                  courseIsArchived={courseIsArchived}
-                  onSaved={() => void invalidateAssignment()}
-                />
-              </div>
-            </TabsContent>
-            <TabsContent value="type">
+          </TabsContent>
+          <TabsContent value="type">
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <Shapes className="h-6 w-6" />
+                Type
+              </h2>
               <AssignmentTypeCard
                 courseId={id}
                 assignmentId={assignment.id}
@@ -645,101 +797,113 @@ export default function AssignmentDashboardPage({
                 courseIsArchived={courseIsArchived}
                 onChanged={() => void invalidateAssignment()}
               />
-            </TabsContent>
-            <TabsContent
-              value="problems"
-              className="animate-fade-in-up transition-opacity duration-300"
-            >
-              <div className="space-y-4">
-                <div className="flex w-full items-center justify-between">
-                  <h2 className="flex items-center gap-2 text-2xl font-semibold">
-                    <FileText className="h-6 w-6" />
-                    Problems
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="default"
-                      aria-label="Create Problem"
-                      onClick={handleCreateProblem}
-                      disabled={problemsLoading}
-                      hidden={courseIsArchived}
-                    >
-                      <Plus />
-                      Create Problem
-                    </Button>
-                    <Button
-                      variant="default"
-                      aria-label="Add Existing Problem"
-                      onClick={handleAddExistingProblem}
-                      disabled={problemsLoading}
-                      hidden={courseIsArchived}
-                    >
-                      <Plus />
-                      Add Existing Problem
-                    </Button>
-                  </div>
+            </div>
+          </TabsContent>
+          <TabsContent
+            value="problems"
+            className="animate-fade-in-up transition-opacity duration-300"
+          >
+            <div className="space-y-4">
+              <div className="flex w-full items-center justify-between">
+                <h2 className="flex items-center gap-2 text-xl font-semibold">
+                  <FileText className="h-6 w-6" />
+                  Problems
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="default"
+                    aria-label="Create Problem"
+                    onClick={handleCreateProblem}
+                    disabled={problemsLoading}
+                    hidden={courseIsArchived}
+                  >
+                    <Plus />
+                    Create Problem
+                  </Button>
+                  <Button
+                    variant="default"
+                    aria-label="Add Existing Problem"
+                    onClick={handleAddExistingProblem}
+                    disabled={problemsLoading}
+                    hidden={courseIsArchived}
+                  >
+                    <Plus />
+                    Add Existing Problem
+                  </Button>
                 </div>
-                <p
-                  className="text-muted-foreground max-w-3xl text-sm text-balance"
-                  hidden={courseIsArchived}
-                >
-                  This assignment consists of the following problems. You may add an existing
-                  problem from this course using the <strong>Add Existing Problem</strong> button in
-                  the upper-right corner, or create a new problem using the{' '}
-                  <strong>Create Problem</strong> button.
-                </p>
-                <DataTable
-                  columns={problemColumns}
-                  data={problemTableData}
-                  tableLabel="Assignment problems table"
-                  defaultSorting={[{ id: 'title', desc: false }]}
-                  // Max States and Deterministic are niche; hide them by default. They
-                  // stay available through the Columns menu.
-                  defaultColumnVisibility={{ maxStates: false, isDeterministic: false }}
-                  emptyTitle="No problems on this assignment"
-                  emptyDescription="Add problems so students have something to solve."
-                  emptyIcon={FileText}
-                />
               </div>
-            </TabsContent>
-            <TabsContent value="submissions">
-              <AssignmentSubmissions
-                courseIsArchived={courseIsArchived}
+              <p
+                className="text-muted-foreground max-w-3xl text-sm text-balance"
+                hidden={courseIsArchived}
+              >
+                This assignment consists of the following problems. You may add an existing problem
+                from this course using the <strong>Add Existing Problem</strong> button in the
+                upper-right corner, or create a new problem using the{' '}
+                <strong>Create Problem</strong> button.
+              </p>
+              <DataTable
+                columns={problemColumns}
+                data={problemTableData}
+                tableLabel="Assignment problems table"
+                defaultSorting={[{ id: 'title', desc: false }]}
+                // Max States and Deterministic are niche; hide them by default. They
+                // stay available through the Columns menu.
+                defaultColumnVisibility={{ maxStates: false, isDeterministic: false }}
+                emptyTitle="No problems on this assignment"
+                emptyDescription="Add problems so students have something to solve."
+                emptyIcon={FileText}
+              />
+            </div>
+          </TabsContent>
+          <TabsContent value="submissions">
+            <AssignmentSubmissions
+              courseIsArchived={courseIsArchived}
+              courseId={id}
+              assignmentId={aid}
+              maxAssignmentGrade={assignment.maxPoints}
+              problems={submissionTabProblems}
+            />
+          </TabsContent>
+          <TabsContent value="statistics">
+            <AssignmentStatisticsPanel />
+          </TabsContent>
+          <TabsContent value="similarity">
+            <AssignmentSimilarityPanel />
+          </TabsContent>
+          <TabsContent value="settings">
+            {/* This tab had no heading at all: two panels appeared under the tab rail with
+                nothing naming what they were. */}
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <SlidersHorizontal className="h-6 w-6" />
+                Settings
+              </h2>
+              <GradeSyncCard assignmentId={aid} variant="settings" />
+              <AssignmentLmsLinksCard
                 courseId={id}
                 assignmentId={aid}
-                maxAssignmentGrade={assignment.maxPoints}
-                problems={submissionTabProblems}
+                links={lmsLinks}
+                loading={lmsLinksQuery.isLoading}
+                failed={lmsLinksQuery.isError}
+                onRetry={() => void lmsLinksQuery.refetch()}
+                courseIsArchived={courseIsArchived}
+                onRemoved={(linkId) =>
+                  queryClient.setQueryData(
+                    ['course', id, 'assignment', aid, 'lms-links'],
+                    (current: AssignmentLmsLink[] | undefined) =>
+                      (current ?? []).filter((link) => link.id !== linkId),
+                  )
+                }
               />
-            </TabsContent>
-            <TabsContent value="statistics">
-              <AssignmentStatisticsPanel />
-            </TabsContent>
-            <TabsContent value="similarity">
-              <AssignmentSimilarityPanel />
-            </TabsContent>
-            <TabsContent value="settings">
-              <div className="space-y-4">
-                <GradeSyncCard assignmentId={aid} variant="settings" />
-                <AssignmentLmsLinksCard
-                  courseId={id}
-                  assignmentId={aid}
-                  links={lmsLinks}
-                  loading={lmsLinksQuery.isLoading}
-                  failed={lmsLinksQuery.isError}
-                  onRetry={() => void lmsLinksQuery.refetch()}
-                  courseIsArchived={courseIsArchived}
-                  onRemoved={(linkId) =>
-                    queryClient.setQueryData(
-                      ['course', id, 'assignment', aid, 'lms-links'],
-                      (current: AssignmentLmsLink[] | undefined) =>
-                        (current ?? []).filter((link) => link.id !== linkId),
-                    )
-                  }
-                />
-              </div>
-            </TabsContent>
+            </div>
+          </TabsContent>
 
-            <TabsContent value="assign-to">
+          <TabsContent value="assign-to">
+            <div className="space-y-4">
+              <h2 className="flex items-center gap-2 text-xl font-semibold">
+                <Users className="h-6 w-6" />
+                Assign To
+              </h2>
               {settingsAssignment ? (
                 <AssignmentSettingsCard
                   courseId={id}
@@ -752,9 +916,9 @@ export default function AssignmentDashboardPage({
                   }}
                 />
               ) : null}
-            </TabsContent>
-          </CardContent>
-        </Card>
+            </div>
+          </TabsContent>
+        </LocalNavLayout>
       </Tabs>
       {/* Submission viewer dialog, keyed off the problem type. */}
       {viewerOpen && viewerSrc && (

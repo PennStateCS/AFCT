@@ -4,7 +4,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import type { Problem } from '@prisma/client';
 import { useState, type JSX } from 'react';
-import { ChevronDown, Copy, Pencil, Trash2, FileText, Eye, Download } from 'lucide-react';
+import { EllipsisVertical, Copy, Pencil, Trash2, FileText, Eye, Download } from 'lucide-react';
 import type { DuplicateSourceProblem } from '@/components/dialogs/DuplicateProblemDialog';
 import { Badge as StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 const typeLabels: Record<string, string> = {
   FA: 'Finite Automaton',
@@ -83,7 +85,7 @@ export const useProblemColumns = ({
               <button
                 type="button"
                 onClick={() => setDescDialog({ open: true, problem: row.original })}
-                className="text-primary hover:text-primary/80 self-start text-xs underline"
+                className={cn(TEXT_LINK_CLASS, 'self-start text-xs')}
                 title="View description"
               >
                 View description
@@ -117,7 +119,7 @@ export const useProblemColumns = ({
             <button
               type="button"
               onClick={() => setOpenDialog({ open: true, problem: row.original })}
-              className="text-primary text-xs break-all hover:underline"
+              className={cn(TEXT_LINK_CLASS, 'text-xs break-all')}
               title={`View ${file}`}
             >
               {file}
@@ -168,16 +170,17 @@ export const useProblemColumns = ({
     },
     {
       id: 'actions',
-      header: () => <span className="sr-only">Actions</span>,
+      // Visible now rather than sr-only: the trigger used to say "Manage" on its face, so
+      // the column named itself. A bare ellipsis does not.
+      header: 'Actions',
       cell: ({ row }) => {
         const problemWithMeta = row.original as Problem & { usedByAssignment?: boolean };
         const disabled = Boolean(problemWithMeta.usedByAssignment);
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="secondary" aria-label={`Manage problem ${row.original.title}`}>
-                <ChevronDown />
-                Manage
+              <Button variant="ghost" size="icon" aria-label={`Actions for ${row.original.title}`}>
+                <EllipsisVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

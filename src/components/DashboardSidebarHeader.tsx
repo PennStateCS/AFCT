@@ -1,71 +1,132 @@
 'use client';
 
 import React from 'react';
-import {
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  useSidebar,
-} from '@/components/ui/sidebar';
+import { SidebarHeader, useSidebar } from '@/components/ui/sidebar';
 import { usePathname } from 'next/navigation';
 
 import Link from 'next/link';
-import { LayoutDashboard } from 'lucide-react';
+import { AuthBrandMark } from '@/components/auth/AuthBrandMark';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+/**
+ * The AFCT lockup at the top of the dashboard sidebar.
+ *
+ * The same mark and the same two-line wordmark the sign-in page uses, so the product a person
+ * signs into and the product they land in are visibly one thing. It used to be a nav row like
+ * any other: a generic Lucide dashboard glyph and the words "AFCT Dashboard" at row size,
+ * which made the brand the least distinctive thing in a column of fifteen labels.
+ *
+ * `AuthBrandMark` is reused rather than redrawn. It is presentation-only and takes both of its
+ * colours from the caller, which is exactly why it can sit on the near-black sign-in panel and
+ * on this rail without a second interpretation of the logo existing anywhere.
+ *
+ * Not the sign-in lockup wholesale, though: that one is a hero, sized in `text-5xl` with the
+ * "Automated Feedback for Computing Theory" line under it. In a persistent 256px rail the
+ * tagline turns navigation into a marketing panel, so only the mark, AFCT and DASHBOARD are
+ * here. The colours are the sign-in page's: cobalt frame, near-white states, tracked blue
+ * DASHBOARD. No teal, and none of the green the course rows use.
+ */
 export default function DashboardSidebarHeader() {
   const pathname = usePathname();
   const { state, isMobile, setOpenMobile } = useSidebar();
-  const collapsed = state === 'collapsed';
-  const isActive = pathname === '/dashboard';
+  // The mobile drawer is always the full-width one: `state` tracks the DESKTOP sidebar and is
+  // whatever it was last left at, so a drawer opened after collapsing the rail would otherwise
+  // show a lone mark in 288px of space. Same test the nav below uses.
+  const collapsed = state === 'collapsed' && !isMobile;
+  const isDashboard = pathname === '/dashboard';
 
   return (
-    <SidebarHeader>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <TooltipProvider delayDuration={100}>
-            {/* Leave the tooltip uncontrolled and hide its content when expanded
-                (the label is already visible), rather than toggling `open` between
-                false and undefined, which warns about controlled/uncontrolled switch. */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive}
-                  className={
-                    'text-sidebar-foreground hover:bg-brand-teal focus-visible:bg-brand-teal active:bg-brand-teal data-[active=true]:bg-brand-teal data-[active=true]:text-white'
-                  }
-                >
-                  {/* aria-current pairs the visual active state with a programmatic one,
-                      and the mobile drawer closes on navigation (the layout persists). */}
-                  <Link
-                    href="/dashboard"
-                    aria-current={isActive ? 'page' : undefined}
-                    onClick={() => {
-                      if (isMobile) setOpenMobile(false);
-                    }}
-                    className="flex min-w-0 items-center gap-2"
-                  >
-                    <LayoutDashboard className="h-4 w-4 shrink-0" />
-                    <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                      AFCT Dashboard
-                    </span>
-                  </Link>
-                </SidebarMenuButton>
-              </TooltipTrigger>
-              <TooltipContent
-                side="right"
-                hidden={!collapsed}
-                className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
-                sideOffset={10}
-              >
-                AFCT Dashboard
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </SidebarMenuItem>
-      </SidebarMenu>
+    // p-0 so the padding below is the brand's own. The header's default `p-2` would add to it
+    // and put the mark 8px further in than the nav icons underneath.
+    <SidebarHeader className="p-0">
+      <TooltipProvider delayDuration={100}>
+        {/* Uncontrolled, with the content hidden while expanded rather than `open` toggled
+            between false and undefined, which warns about a controlled/uncontrolled switch. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              href="/dashboard"
+              aria-current={isDashboard ? 'page' : undefined}
+              onClick={() => {
+                if (isMobile) setOpenMobile(false);
+              }}
+              /*
+               * Deliberately not a SidebarMenuButton. That primitive carries the cobalt
+               * `data-[active=true]` fill, so standing on /dashboard painted the brand as a
+               * selected nav row, which is the one thing a wordmark should never look like.
+               *
+               * Hover is a foreground shift and nothing else: a background would put the brand
+               * back in the same visual family as the rows it sits above. The focus ring is
+               * the sidebar's own, kept because this is a real link.
+               */
+              className={
+                'focus-visible:ring-sidebar-ring flex items-center rounded-md outline-hidden ' +
+                'transition-opacity hover:opacity-80 focus-visible:ring-2 ' +
+                // 18px expanded, 16 in the rail. The air belongs around the lockup and not
+                // inside it: at 17 outside against 6 between the two brand lines, the ratio
+                // was 2.8:1 and the block read as three loosely stacked things rather than as
+                // one object with a margin. It is 6:1 now, and the header is 80px.
+                (collapsed ? 'justify-center px-2 py-4' : 'gap-3 px-4 py-[18px]')
+              }
+            >
+              {/*
+                44px expanded, which is what the mark needs for its internal detail to survive:
+                three states, three arrowheads and a double accepting ring. Below about 40 the
+                transitions start closing up against the states. 28px in the 56px rail, which
+                leaves 14px of air either side and still reads as the hexagon-and-automaton.
+
+                Cobalt frame, near-white states: the sign-in page's pairing for a dark surface,
+                set here rather than inside the mark because the same component takes the
+                card's navy on the light mobile header.
+              */}
+              <AuthBrandMark
+                className={'shrink-0 text-blue-400 ' + (collapsed ? 'size-7' : 'size-11')}
+                accentClassName="text-sidebar-foreground"
+              />
+
+              {/* Hidden outright in the rail rather than clipped: half a wordmark reads as a
+                  rendering fault. The tooltip carries the name there instead. */}
+              {collapsed ? null : (
+                // aria-hidden, with the accessible name supplied once below. Left readable,
+                // the link announces "AFCT Dashboard AFCT Dashboard": the two visible spans
+                // concatenate into the same words the sr-only name has to provide for the
+                // rail, where there is no visible text at all.
+                <span aria-hidden="true" className="flex min-w-0 flex-col">
+                  <span className="text-sidebar-foreground text-2xl leading-none font-semibold tracking-tight">
+                    AFCT
+                  </span>
+                  {/*
+                    3px under AFCT, not 6: these two lines are one wordmark, and the gap that
+                    separates them should be smaller than any gap around them.
+
+                    0.34em rather than 0.28. The sign-in page tracks this line at 0.32em on
+                    12px text, which is 3.84px between letters; matching the em here would give
+                    only 2.8px at 10px and read as ordinary small text set slightly loose. 3.4px
+                    is the nearest this size gets to the same rhythm, and tracking is what makes
+                    the line a brand element rather than a caption. It measures 95px inside a
+                    167px column, so there is room to spare.
+                  */}
+                  <span className="mt-[3px] text-[10px] font-medium tracking-[0.34em] text-blue-300 uppercase">
+                    Dashboard
+                  </span>
+                </span>
+              )}
+
+              {/* One accessible name in both states. The mark is decorative and the wordmark
+                  is hidden from AT, so in the rail this is the only thing naming the link. */}
+              <span className="sr-only">AFCT Dashboard</span>
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent
+            side="right"
+            hidden={!collapsed}
+            className="text-sidebar-foreground px-5 text-sm shadow [--tooltip-surface:var(--sidebar)]"
+            sideOffset={10}
+          >
+            AFCT Dashboard
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </SidebarHeader>
   );
 }

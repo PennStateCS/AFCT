@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: Geist, ui-sans-serif, system-ui, sans-serif; background: oklch(0.9401 0 0); color: oklch(0 0 0); }
+    a { color: oklch(0.37 0.1221 262.228); } a:hover { color: oklch(0.30 0.12 262.228); }
+    .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 900px; display: flex; flex-direction: column; overflow: hidden;">
+
+  <!-- Slim context bar: where you are, nothing more. -->
+  <div style="display: flex; align-items: center; gap: 12px; padding: 14px 40px; background: oklch(1 0 0); border-bottom: 1px solid oklch(0.92 0.004 286.32);">
+    <div style="width: 26px; height: 26px; border-radius: 7px; background: oklch(0.52 0.09 203.328); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 600;">A</div>
+    <div style="font-size: 13px; color: oklch(0.329 0 0);">Theory of Computation</div>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.329 0 0)" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+    <div style="font-size: 13px; font-weight: 500;">Finite Automata</div>
+    <div style="flex-grow: 1;"></div>
+    <div style="font-size: 13px; color: oklch(0.329 0 0);">Due Friday, 5:00 PM</div>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; padding: 36px 40px; gap: 22px; overflow: hidden;">
+
+    <!-- The problem, and only the problem. -->
+    <div style="width: 760px; display: flex; flex-direction: column; gap: 22px;">
+
+      <div style="display: flex; align-items: baseline; gap: 14px;">
+        <div style="font-size: 13px; font-weight: 600; color: oklch(0.52 0.09 203.328);">PROBLEM 2 OF 5</div>
+        <div style="flex-grow: 1;"></div>
+        <div style="font-size: 13px; color: oklch(0.329 0 0);">2 of 3 attempts used</div>
+        <div style="display: flex; gap: 4px;">
+          <div style="width: 22px; height: 5px; border-radius: 3px; background: oklch(0.52 0.09 203.328);"></div>
+          <div style="width: 22px; height: 5px; border-radius: 3px; background: oklch(0.52 0.09 203.328);"></div>
+          <div style="width: 22px; height: 5px; border-radius: 3px; background: oklch(0.86 0.01 286);"></div>
+        </div>
+      </div>
+
+      <div>
+        <h1 style="margin: 0 0 10px; font-size: 30px; font-weight: 600; letter-spacing: -0.02em; text-wrap: pretty;">Strings ending in 01</h1>
+        <p style="margin: 0; font-size: 16px; line-height: 1.6; color: oklch(0.329 0 0); text-wrap: pretty;">Build a deterministic finite automaton over the alphabet {0, 1} that accepts exactly the strings ending in 01.</p>
+      </div>
+
+      <!-- The verdict is the hero of this direction: the thing a student came back for. -->
+      <div style="border-radius: 12px; border: 1px solid oklch(0.80 0.09 27.325); background: oklch(0.97 0.02 27.325); padding: 24px 26px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="oklch(0.50 0.20 27.325)" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+          <div style="font-size: 18px; font-weight: 600; color: oklch(0.45 0.20 27.325);">Not accepted yet</div>
+          <div style="flex-grow: 1;"></div>
+          <div style="font-size: 13px; color: oklch(0.329 0 0);">Attempt 2 &middot; 4 minutes ago</div>
+        </div>
+        <div style="font-size: 15px; line-height: 1.6;">Your machine accepts <span class="mono" style="background: oklch(1 0 0); border: 1px solid oklch(0.88 0.03 27.325); border-radius: 6px; padding: 2px 7px; font-size: 14px;">0101</span> but it should not.</div>
+        <div style="display: flex; gap: 10px; align-items: center; padding-top: 4px;">
+          <div style="font-size: 13px; color: oklch(0.329 0 0);">Trace this string through your automaton and see where it ends.</div>
+        </div>
+      </div>
+
+      <!-- Your work, kept quiet: it is the input, not the answer. -->
+      <div style="border-radius: 12px; border: 1px solid oklch(0.92 0.004 286.32); background: oklch(1 0 0); padding: 18px 22px; display: flex; align-items: center; gap: 14px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="oklch(0.329 0 0)" stroke-width="1.8"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/></svg>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div class="mono" style="font-size: 14px;">ending01.jff</div>
+          <div style="font-size: 12px; color: oklch(0.329 0 0);">Submitted from JFLAP, 4 minutes ago</div>
+        </div>
+        <div style="flex-grow: 1;"></div>
+        <button style="font-family: inherit; font-size: 14px; font-weight: 500; height: 40px; padding: 0 18px; border-radius: 10px; border: 1px solid oklch(0.92 0.004 286.32); background: oklch(1 0 0); cursor: pointer;">View diagram</button>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center; padding-top: 6px;">
+        <button style="font-family: inherit; font-size: 14px; font-weight: 500; height: 44px; padding: 0 20px; border-radius: 10px; border: 1px solid oklch(0.92 0.004 286.32); background: oklch(1 0 0); cursor: pointer; display: flex; align-items: center; gap: 8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>
+          Previous
+        </button>
+        <div style="flex-grow: 1;"></div>
+        <div style="font-size: 13px; color: oklch(0.329 0 0);">One more attempt on this problem</div>
+        <button style="font-family: inherit; font-size: 14px; font-weight: 600; height: 44px; padding: 0 22px; border-radius: 10px; border: none; background: oklch(0.37 0.1221 262.228); color: #fff; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+          Next problem
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -28,7 +28,7 @@ export default async function LtiRegisterPage({
   if (!token) {
     return (
       <main className="mx-auto max-w-lg p-6 text-sm">
-        <h1 className="mb-2 text-base font-medium">This link is not usable</h1>
+        <h1 className="mb-2 text-xl font-semibold">This link is not usable</h1>
         <p className="text-muted-foreground">
           Registration links are created in AFCT. Sign in as an administrator, open System Settings,
           then the LTI tab, and create one there.
@@ -42,7 +42,7 @@ export default async function LtiRegisterPage({
   if (!openidConfiguration) {
     return (
       <main className="mx-auto max-w-lg p-6 text-sm">
-        <h1 className="mb-2 text-base font-medium">Start this from your LMS</h1>
+        <h1 className="mb-2 text-xl font-semibold">Start this from your LMS</h1>
         <p className="text-muted-foreground">
           Paste this link into the automatic-registration field in your LMS instead of opening it in
           a browser. Your LMS then reopens it with the details AFCT needs.

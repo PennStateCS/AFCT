@@ -57,8 +57,17 @@ export function SimilarityMatchCard({
   return (
     <article
       aria-labelledby={headingId}
+      /*
+       * bg-card, like the cards everywhere else. These were transparent, which was invisible
+       * while the workspace was white and left the tab reading as a list of outlines.
+       *
+       * A common answer is set aside rather than acted on, so it stays quieter: bg-muted, one
+       * step off the card the others sit on. It was `bg-muted/30`, which over the page rather
+       * than over a card came out within a percent or two of no fill at all, so the one thing
+       * the tint had to do, tell a set-aside group from a live one, it did not do.
+       */
       className={`space-y-3 rounded-lg border p-4 ${ACCENT_BORDER[cluster.type]} ${
-        cluster.type === 'common' ? 'bg-muted/30' : ''
+        cluster.type === 'common' ? 'bg-muted' : 'bg-card'
       }`}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -82,7 +91,9 @@ export function SimilarityMatchCard({
           ) : null}
         </h4>
         {isGroup ? (
-          <p className="text-muted-foreground text-sm">{relationshipSummary(cluster).join(' · ')}</p>
+          <p className="text-muted-foreground text-sm">
+            {relationshipSummary(cluster).join(' · ')}
+          </p>
         ) : (
           <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-sm">
             {details.map((line) => (
@@ -92,7 +103,11 @@ export function SimilarityMatchCard({
         )}
       </div>
 
-      <SimilarityTimeline students={cluster.students} formatDay={formatDay} formatTime={formatTime} />
+      <SimilarityTimeline
+        students={cluster.students}
+        formatDay={formatDay}
+        formatTime={formatTime}
+      />
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         {isGroup ? (

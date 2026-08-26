@@ -137,8 +137,10 @@ describe('buildProblemColumns', () => {
     expect(screen.getByText('No file')).toBeInTheDocument();
   });
 
-  it('actions cell exposes a per-problem Manage menu trigger', () => {
+  // The trigger is an unlabelled ellipsis, so the accessible name is the only thing
+  // telling one row's menu from another's.
+  it('actions cell names its menu trigger after the problem', () => {
     render(<>{find(cols(), 'actions').cell(arg(problem({ title: 'Widgets' })))}</>);
-    expect(screen.getByRole('button', { name: 'Manage problem Widgets' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions for Widgets' })).toBeInTheDocument();
   });
 });

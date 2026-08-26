@@ -12,8 +12,8 @@ export type AssignmentLmsLink = Omit<LmsLinkSummary, 'addedAt' | 'confirmedAt'> 
  *
  * Separate from the component so the distinction that matters can be tested directly: an empty
  * list is an answer, and everything else is a failure. This used to map a refusal or a dead
- * network onto `[]`, which the screen then reported as "not added to your LMS" - a claim about
- * somebody's LMS made from no information, and one that invites adding a duplicate link.
+ * network onto `[]`, which the screen then reported as "not linked from an LMS course yet" - a claim
+ * about somebody's LMS made from no information, and one that invites adding a duplicate link.
  *
  * Throws on a non-2xx response or a body that is not the expected shape; a network error throws
  * from `fetch` itself and is left to propagate for the same reason.

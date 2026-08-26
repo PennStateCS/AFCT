@@ -8,15 +8,10 @@ import DashboardClient from './DashboardClient';
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
 }));
-vi.mock('@/lib/date-format', () => ({ formatDateTimeInTimeZone: () => 'DATE' }));
 vi.mock('@/lib/course-status', () => ({
   getCourseStatusTag: () => ({ status: 'Open', variant: 'success' }),
 }));
-vi.mock('@/lib/course-roster', () => ({
-  getStudentCount: () => 3,
-  formatInstructorNames: () => 'Prof X',
-  getTAs: () => [],
-}));
+vi.mock('@/lib/course-roster', () => ({ getStudentCount: () => 3 }));
 vi.mock('next/link', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
@@ -38,10 +33,25 @@ const course = (over: Partial<CourseInput> & { id: string; name: string }): Cour
 
 const renderDash = (courses: CourseInput[], isAdmin = false) =>
   render(
-    <DashboardClient sessionUser={{ id: 'u1', isAdmin }} title="Current Courses" courses={courses} />,
+    <DashboardClient sessionUser={{ id: 'u1', isAdmin }} title="Courses" courses={courses} />,
   );
 
 describe('DashboardClient per-course role', () => {
+  // The tile is a visual anchor, not a replacement: dropping the full code from the row
+  // would leave "271" as the only identifier a screen reader could reach.
+  it('shows the course number on the tile while keeping the full code in the row', () => {
+    renderDash([course({ id: 'c1', name: 'Digital Systems', code: 'CMPEN 271' })], true);
+
+    expect(screen.getByText('271')).toBeInTheDocument();
+    expect(screen.getByText('CMPEN 271')).toBeInTheDocument();
+  });
+
+  it('falls back to the whole code when it carries no digits', () => {
+    renderDash([course({ id: 'c1', name: 'Reading Group', code: 'SEMINAR' })], true);
+
+    expect(screen.getAllByText('SEMINAR')).toHaveLength(2);
+  });
+
   it('a student sees only published courses and no enrollment count', () => {
     renderDash([
       course({ id: 'pub', name: 'Published Course', isPublished: true, userRole: 'STUDENT' }),
@@ -50,7 +60,7 @@ describe('DashboardClient per-course role', () => {
 
     expect(screen.getByText('Published Course')).toBeInTheDocument();
     expect(screen.queryByText('Hidden Course')).not.toBeInTheDocument();
-    expect(screen.queryByText('Enrollment:')).not.toBeInTheDocument();
+    expect(screen.queryByText('3 students')).not.toBeInTheDocument();
   });
 
   it('a non-admin faculty member sees their own unpublished course and its enrollment', () => {
@@ -59,14 +69,14 @@ describe('DashboardClient per-course role', () => {
     ]);
 
     expect(screen.getByText('Faculty Course')).toBeInTheDocument();
-    expect(screen.getByText('Enrollment:')).toBeInTheDocument();
+    expect(screen.getByText('3 students')).toBeInTheDocument();
   });
 
   it('a TA likewise sees their unpublished course and its enrollment', () => {
     renderDash([course({ id: 't', name: 'TA Course', isPublished: false, userRole: 'TA' })]);
 
     expect(screen.getByText('TA Course')).toBeInTheDocument();
-    expect(screen.getByText('Enrollment:')).toBeInTheDocument();
+    expect(screen.getByText('3 students')).toBeInTheDocument();
   });
 
   it('a system admin sees an unpublished course + enrollment regardless of course role', () => {
@@ -76,6 +86,6 @@ describe('DashboardClient per-course role', () => {
     );
 
     expect(screen.getByText('Admin View Course')).toBeInTheDocument();
-    expect(screen.getByText('Enrollment:')).toBeInTheDocument();
+    expect(screen.getByText('3 students')).toBeInTheDocument();
   });
 });

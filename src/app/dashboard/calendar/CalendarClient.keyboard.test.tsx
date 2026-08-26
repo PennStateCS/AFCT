@@ -63,8 +63,9 @@ describe('CalendarClient day cells (keyboard model)', () => {
   it('renders each day as a button with a descriptive accessible name', () => {
     renderCalendar();
     const cells = dayCells();
-    // A month grid has ~28-31 day cells.
-    expect(cells.length).toBeGreaterThanOrEqual(28);
+    // `fixedWeeks` pins the grid at six rows, so the page does not change height between
+    // a five-week month and a six-week one. 6 x 7 = 42 cells, every month.
+    expect(cells).toHaveLength(42);
     expect(cells[0]).toHaveAttribute('aria-label', expect.stringContaining('assignment'));
   });
 

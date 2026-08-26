@@ -17,7 +17,7 @@ import type { StorageUsage } from '@/lib/status/types';
  */
 
 /**
- * The five theme-aware chart colours.
+ * The six theme-aware categorical chart colours.
  *
  * Both class names are written out. Deriving the swatch from the stroke with a `replace` looked
  * tidier and produced no colour at all: Tailwind only generates a utility it can see as a
@@ -31,6 +31,7 @@ const SLICE_COLOURS = [
   { stroke: 'stroke-chart-3', swatch: 'bg-chart-3' },
   { stroke: 'stroke-chart-4', swatch: 'bg-chart-4' },
   { stroke: 'stroke-chart-5', swatch: 'bg-chart-5' },
+  { stroke: 'stroke-chart-6', swatch: 'bg-chart-6' },
 ];
 
 /** One headline number, with its unit spelled out underneath rather than in the number. */

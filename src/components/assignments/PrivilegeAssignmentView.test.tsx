@@ -374,20 +374,31 @@ describe('PrivilegeAssignmentView — header', () => {
     renderView();
     // Title appears in the heading and as the selected assignment option.
     expect(screen.getAllByText('Regular Languages').length).toBeGreaterThan(0);
-    const link = screen.getByRole('link', { name: /Theory of Computation \(CS401\)/ });
+    // "CS401: Theory of Computation", the same shape the course page's own title uses. It
+    // read "Theory of Computation (CS401)" here and the other way round there, which is the
+    // sort of small disagreement that makes two screens feel like two products.
+    const link = screen.getByRole('link', { name: 'CS401: Theory of Computation' });
     expect(link).toHaveAttribute('href', '/dashboard/courses/c1');
+    // The label is outside the link, so the link's accessible name stays the course itself.
+    expect(screen.getByText('Course:')).toBeInTheDocument();
   });
 
   // Whether this is group work never changes as you page through students, so it is stated
   // once in the header rather than repeated beside every student on the Submissions tab.
+  // Labelled metadata beside the course now, not a tinted chip in the control column: it
+  // describes the assignment rather than being something you act on. The word is the whole
+  // signal, so these assert the word.
   it('says whether the assignment is group work', () => {
     renderView();
-    expect(screen.getByText('Individual assignment')).toBeInTheDocument();
+    expect(screen.getByText('Type:')).toBeInTheDocument();
+    expect(screen.getByText('Individual')).toBeInTheDocument();
+    expect(screen.queryByText('Group')).not.toBeInTheDocument();
   });
 
   it('says so when the assignment uses a group set', () => {
     renderView({ initialAssignment: makeAssignment({ groupSetId: 'gs1' }) as never });
-    expect(screen.getByText('Group assignment')).toBeInTheDocument();
+    expect(screen.getByText('Group')).toBeInTheDocument();
+    expect(screen.queryByText('Individual')).not.toBeInTheDocument();
   });
 
   it('renders the description in the editable form', async () => {
@@ -456,6 +467,50 @@ describe('PrivilegeAssignmentView — tabs', () => {
     searchState.value = 'tab=submissions';
     renderView();
     expect(screen.getByTestId('assignment-submissions')).toBeInTheDocument();
+  });
+});
+
+/*
+ * The four form tabs, as pages rather than as four sets of loose fields.
+ *
+ * Each had grown its own shape: Details was a bare stack, Type and Assign To each rendered
+ * their own icon heading, and Settings had no heading at all, so the tab a professor landed
+ * on decided what the page looked like. They now share the settings vocabulary: the tab's
+ * name as an h2, then titled panels under it as h3s.
+ *
+ * Pinned here rather than in each component's own file because the failure is a mismatch
+ * BETWEEN them, which no single component can see. The heading level is the load-bearing
+ * part: as h2s the panels claimed to be the tab heading's siblings, which is the flat
+ * structure this replaces.
+ */
+describe('PrivilegeAssignmentView - one shape across the form tabs', () => {
+  // Every form tab, including Settings, which had no heading of any kind before this.
+  it.each(['Details', 'Type', 'Assign To', 'Settings'])(
+    'names the %s tab with an h2 above its panels',
+    async (tab) => {
+      const user = userEvent.setup();
+      renderView();
+      await user.click(screen.getByRole('tab', { name: new RegExp(tab) }));
+
+      expect(await screen.findByRole('heading', { level: 2, name: tab })).toBeVisible();
+    },
+  );
+
+  /*
+   * The panels themselves are h3, under that h2. Only the two tabs whose components this file
+   * renders for real can be checked here: AssignmentSettingsCard is stubbed above, and its own
+   * test pins its panels instead.
+   */
+  it.each([
+    ['Details', 'Title and description'],
+    ['Type', 'How students work'],
+  ])("puts %s's panel under that heading rather than beside it", async (tab, title) => {
+    const user = userEvent.setup();
+    renderView();
+    await user.click(screen.getByRole('tab', { name: new RegExp(tab) }));
+
+    const panel = await screen.findByRole('region', { name: title });
+    expect(within(panel).getByRole('heading', { level: 3, name: title })).toBeVisible();
   });
 });
 
@@ -762,5 +817,48 @@ describe('PrivilegeAssignmentView - the LMS badge', () => {
     // One confirmed link of two, so the badge names it. Counting both would say "In 2 LMS
     // courses", and one of those two is a course that may never have received the link.
     expect(await screen.findByText('In Canvas')).toBeInTheDocument();
+  });
+
+  it('leads with a single identity panel headed by the assignment title', () => {
+    const { container } = renderView({});
+    const headings = screen.getAllByRole('heading', { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveAttribute('id', 'assignment-page-title');
+    // The panel is a named region, named by the heading rather than by its tint.
+    expect(
+      container.querySelector('section[aria-labelledby="assignment-page-title"]'),
+    ).not.toBeNull();
+    // The network carries no meaning, so it stays out of the accessibility tree and cannot
+    // swallow a click. One decoration now, not three: the pale wash and its two circles are
+    // gone with the tinted panel, and the banner's node figure is a single SVG.
+    const decoration = container.querySelectorAll(
+      'section[aria-labelledby="assignment-page-title"] [aria-hidden="true"].pointer-events-none',
+    );
+    expect(decoration.length).toBeGreaterThanOrEqual(1);
+    // The same shared banner the course page leads with, network and all.
+    const svg = container.querySelector(
+      'section[aria-labelledby="assignment-page-title"] svg[aria-hidden="true"][focusable="false"]',
+    );
+    expect(svg?.querySelectorAll('circle').length ?? 0).toBeGreaterThan(40);
+  });
+
+  it('keeps every header control inside the panel', () => {
+    renderView({});
+    // The publish switch and the assignment switcher still work from the header; the panel is
+    // a shell, not a rewrite.
+    expect(screen.getByRole('switch', { name: 'Published' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Theory/ })).toBeInTheDocument();
+  });
+
+  it('leaves only controls in the right-hand column', () => {
+    // The point of the last pass on this header: what the assignment IS reads on the left
+    // beside the course, and the column on the right holds only things you operate. A chip
+    // reappearing in there is the regression worth catching, since it looks harmless.
+    const { container } = renderView({});
+    const banner = container.querySelector('section[aria-labelledby="assignment-page-title"]');
+    const controls = banner?.querySelector('[data-slot="switch"]')?.closest('div.flex-col');
+    expect(controls).not.toBeNull();
+    expect(controls?.querySelectorAll('[data-slot="badge"]').length).toBe(0);
+    expect(controls?.textContent).not.toMatch(/Individual|Group|Course:/);
   });
 });

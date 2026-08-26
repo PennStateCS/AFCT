@@ -15,14 +15,16 @@ type Props = {
   unitPlural: string;
 };
 
-// Light-to-dark teal ramp: 1 attempt (easy) is lightest, 5+ (grindy) is darkest. "Not
-// solved yet" is a muted trailing segment so each bar covers everyone who submitted.
+// The shared sequential scale, low to high: 1 attempt (easy) is the lightest step, 5+
+// (grindy) the deepest. Colour is a quantity here, not a category, which is why this is
+// --chart-sequential-* and not chart-1..6. "Not solved yet" is a muted trailing segment so
+// each bar covers everyone who submitted.
 const BUCKET_STYLE = [
-  { bg: 'var(--color-brand-teal)', opacity: 0.3 },
-  { bg: 'var(--color-brand-teal)', opacity: 0.45 },
-  { bg: 'var(--color-brand-teal)', opacity: 0.62 },
-  { bg: 'var(--color-brand-teal)', opacity: 0.8 },
-  { bg: 'var(--color-brand-teal)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-1)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-2)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-3)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-4)', opacity: 1 },
+  { bg: 'var(--color-chart-sequential-5)', opacity: 1 },
 ];
 const NOT_SOLVED_STYLE = { bg: 'var(--color-muted-foreground)', opacity: 0.35 };
 

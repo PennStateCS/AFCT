@@ -165,7 +165,7 @@ function FilterPopoverShell({
     <Popover>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant="secondary"
           aria-label={activeCount > 0 ? `Filters, ${activeCount} active` : 'Filters'}
         >
           <ListFilter className="h-4 w-4" aria-hidden="true" />

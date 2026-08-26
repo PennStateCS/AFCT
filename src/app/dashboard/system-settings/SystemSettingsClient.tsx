@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import { TabBar } from '@/components/course/course-tabs';
+import { TabBar, TabRail } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
+import { SETTINGS_ASIDE_GRID, SETTINGS_WORKSPACE } from '@/components/settings/settings-layout';
+import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
@@ -26,6 +28,7 @@ import {
 import { parseDomainList } from '@/lib/email';
 import { SystemSettingsUpdateSchema } from '@/schemas/systemSettings';
 import {
+  Settings,
   SlidersHorizontal,
   Cpu,
   DatabaseBackup,
@@ -536,155 +539,209 @@ export default function SystemSettingsClient() {
   // Backups included (its schedule is part of the form), needs it.
   const showSave = tab !== 'tls' && tab !== 'updates';
 
+  // xl rather than lg: a rail plus a settings form needs more room than a table does.
+  const railNav = useIsDesktopNav(1280);
+
   return (
-    <div className="space-y-4 pb-8">
+    // Spacing stated per element rather than through `space-y`, because the first child is
+    // the sr-only status line: it is out of flow, so a wrapper gap would put nothing above
+    // the title. The 24px above comes from <main>'s py-6; this supplies the matching 24
+    // below, so the title sits in equal air.
+    <div>
       <p className="sr-only" aria-live="polite">
         {loading ? 'Loading system settings' : saving ? 'Saving system settings' : ''}
       </p>
 
-      <Card className="p-4">
-        <CardHeader className="pb-2">
-          <CardTitle role="heading" aria-level={1} className="text-2xl">
-            System Settings
-          </CardTitle>
-          <p className="text-muted-foreground text-sm">
-            Manage server-wide configuration, security, uploads, evaluator behavior, and TLS.
-          </p>
-        </CardHeader>
+      <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+        {/* Decorative: the heading beside it already says what this is. The icon the
+            sidebar already uses for this page, on the neutral muted surface the other
+            admin pages use. */}
+        <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+          <Settings className="size-5" aria-hidden="true" />
+        </span>
+        <span>System Settings</span>
+      </h1>
 
-        <CardContent>
-          <Tabs value={tab} onValueChange={handleTabChange} className="w-full gap-6">
-            <TabBar
-              ariaLabel="System settings sections"
-              selectId="system-settings-tab-select"
-              value={tab}
-              onValueChange={handleTabChange}
-              tabs={settingsTabs}
+      {/* With the intro sentence gone, the title sat almost on top of the Settings Menu.
+          This is the other half of the pair above: 24px, matching the gap over the title.
+
+          Nine sections is too many for a strip, so above xl they become a rail beside the
+          form. Below that the strip and its select stay exactly as they were. One control
+          at a time: rendering both would put two tablists under one Tabs root. */}
+      <Tabs
+        value={tab}
+        onValueChange={handleTabChange}
+        orientation={railNav ? 'vertical' : 'horizontal'}
+        className="mt-6 w-full gap-6"
+      >
+        {/* The WORKSPACE is wide; the content inside it is not. Pinning the whole page to
+            max-w-3xl left a 1920px monitor two thirds empty and still wrapped help text
+            into slivers, so each section picks its own measure instead (see
+            settings-layout). */}
+        <LocalNavLayout
+          contentClassName={SETTINGS_WORKSPACE}
+          nav={
+            railNav ? (
+              <TabRail
+                tabs={settingsTabs}
+                ariaLabel="System settings sections"
+                menuLabel="Settings Menu"
+              />
+            ) : (
+              <TabBar
+                ariaLabel="System settings sections"
+                selectId="system-settings-tab-select"
+                value={tab}
+                onValueChange={handleTabChange}
+                tabs={settingsTabs}
+              />
+            )
+          }
+        >
+          <TabsContent value="general">
+            <GeneralTab
+              form={form}
+              setField={setField}
+              disabled={disabled}
+              loading={loading}
+              configuredUrl={settingsData?.configuredUrl}
+              timezoneOptions={timezoneOptions}
             />
+          </TabsContent>
 
-            <TabsContent value="general">
-              <GeneralTab
-                form={form}
-                setField={setField}
-                disabled={disabled}
-                loading={loading}
-                configuredUrl={settingsData?.configuredUrl}
-                timezoneOptions={timezoneOptions}
-              />
-            </TabsContent>
+          <TabsContent value="queue">
+            <EvaluatorTab form={form} setField={setField} disabled={disabled} />
+          </TabsContent>
 
-            <TabsContent value="queue">
-              <EvaluatorTab form={form} setField={setField} disabled={disabled} />
-            </TabsContent>
+          <TabsContent value="backups">
+            <BackupsTab form={form} setField={setField} disabled={disabled} />
+          </TabsContent>
 
-            <TabsContent value="backups">
-              <BackupsTab form={form} setField={setField} disabled={disabled} />
-            </TabsContent>
+          <TabsContent value="email">
+            <EmailTab
+              enabled={smtpEnabled}
+              host={smtpHost}
+              port={typeof smtpPort === 'number' ? smtpPort : DEFAULT_SMTP_PORT}
+              security={smtpSecurity}
+              username={smtpUsername}
+              fromAddress={smtpFromAddress}
+              fromName={smtpFromName}
+              setField={setField}
+              disabled={disabled}
+              password={smtpPassword}
+              // A password typed just now is readable by definition; otherwise ask the server.
+              passwordReadable={smtpPassword !== '' || smtpPasswordReadable}
+              setPassword={setSmtpPassword}
+              passwordConfigured={smtpPasswordConfigured}
+              passwordClear={smtpPasswordClear}
+              setPasswordClear={setSmtpPasswordClear}
+              savedHost={settingsData?.smtpHost}
+              dirty={isDirty}
+            />
+          </TabsContent>
 
-            <TabsContent value="email">
-              <EmailTab
-                enabled={smtpEnabled}
-                host={smtpHost}
-                port={typeof smtpPort === 'number' ? smtpPort : DEFAULT_SMTP_PORT}
-                security={smtpSecurity}
-                username={smtpUsername}
-                fromAddress={smtpFromAddress}
-                fromName={smtpFromName}
-                setField={setField}
-                disabled={disabled}
-                password={smtpPassword}
-                // A password typed just now is readable by definition; otherwise ask the server.
-                passwordReadable={smtpPassword !== '' || smtpPasswordReadable}
-                setPassword={setSmtpPassword}
-                passwordConfigured={smtpPasswordConfigured}
-                passwordClear={smtpPasswordClear}
-                setPasswordClear={setSmtpPasswordClear}
-                savedHost={settingsData?.smtpHost}
-                dirty={isDirty}
-              />
-            </TabsContent>
+          <TabsContent value="sign-in">
+            <SignInTab
+              enabled={oidcEnabled}
+              issuer={oidcIssuer}
+              clientId={oidcClientId}
+              buttonLabel={oidcButtonLabel}
+              trustEmail={oidcTrustEmail}
+              allowLinkedAccountPasswords={allowLinkedAccountPasswords}
+              setField={setField}
+              disabled={disabled}
+              clientSecret={oidcClientSecret}
+              setClientSecret={setOidcClientSecret}
+              clientSecretConfigured={oidcClientSecretConfigured}
+              // A secret typed just now is readable by definition; otherwise ask the server.
+              clientSecretReadable={oidcClientSecret !== '' || oidcClientSecretReadable}
+              clientSecretClear={oidcClientSecretClear}
+              setClientSecretClear={setOidcClientSecretClear}
+              // Derived from the site URL the installer set, so an admin can hand it to IT
+              // without guessing at the path.
+              redirectUri={`${(settingsData?.configuredUrl ?? '').replace(/\/+$/, '')}/api/auth/callback/oidc`}
+            />
+          </TabsContent>
 
-            <TabsContent value="sign-in">
-              <SignInTab
-                enabled={oidcEnabled}
-                issuer={oidcIssuer}
-                clientId={oidcClientId}
-                buttonLabel={oidcButtonLabel}
-                trustEmail={oidcTrustEmail}
-                allowLinkedAccountPasswords={allowLinkedAccountPasswords}
-                setField={setField}
-                disabled={disabled}
-                clientSecret={oidcClientSecret}
-                setClientSecret={setOidcClientSecret}
-                clientSecretConfigured={oidcClientSecretConfigured}
-                // A secret typed just now is readable by definition; otherwise ask the server.
-                clientSecretReadable={oidcClientSecret !== '' || oidcClientSecretReadable}
-                clientSecretClear={oidcClientSecretClear}
-                setClientSecretClear={setOidcClientSecretClear}
-                // Derived from the site URL the installer set, so an admin can hand it to IT
-                // without guessing at the path.
-                redirectUri={`${(settingsData?.configuredUrl ?? '').replace(/\/+$/, '')}/api/auth/callback/oidc`}
-              />
-            </TabsContent>
+          <TabsContent value="lti">
+            {/* Same source as the OIDC redirect URL: the site URL the installer set. */}
+            <LtiTab siteUrl={settingsData?.configuredUrl ?? ''} />
+          </TabsContent>
 
-            <TabsContent value="lti">
-              {/* Same source as the OIDC redirect URL: the site URL the installer set. */}
-              <LtiTab siteUrl={settingsData?.configuredUrl ?? ''} />
-            </TabsContent>
+          <TabsContent value="captcha">
+            <CaptchaTab
+              siteKey={hcaptchaSiteKey}
+              setField={setField}
+              disabled={disabled}
+              secretKey={hcaptchaSecretKey}
+              setSecretKey={setHcaptchaSecretKey}
+              secretConfigured={hcaptchaSecretConfigured}
+              secretClear={hcaptchaSecretClear}
+              setSecretClear={setHcaptchaSecretClear}
+              hcaptchaEnabled={hcaptchaEnabled}
+              savedSiteKey={settingsData?.hcaptchaSiteKey}
+            />
+          </TabsContent>
 
-            <TabsContent value="captcha">
-              <CaptchaTab
-                siteKey={hcaptchaSiteKey}
-                setField={setField}
-                disabled={disabled}
-                secretKey={hcaptchaSecretKey}
-                setSecretKey={setHcaptchaSecretKey}
-                secretConfigured={hcaptchaSecretConfigured}
-                secretClear={hcaptchaSecretClear}
-                setSecretClear={setHcaptchaSecretClear}
-                hcaptchaEnabled={hcaptchaEnabled}
-                savedSiteKey={settingsData?.hcaptchaSiteKey}
-              />
-            </TabsContent>
+          <TabsContent value="tls">
+            <TlsTab configuredUrl={settingsData?.configuredUrl} />
+          </TabsContent>
 
-            <TabsContent value="tls">
-              <TlsTab configuredUrl={settingsData?.configuredUrl} />
-            </TabsContent>
+          <TabsContent value="updates">
+            <UpdatesTab disabled={disabled} />
+          </TabsContent>
 
-            <TabsContent value="updates">
-              <UpdatesTab disabled={disabled} />
-            </TabsContent>
-          </Tabs>
-
-          {/* Save action, bottom-left of the card. Hidden on tabs with no savable
-              fields (TLS, Updates), which run their own actions instead. */}
+          {/* Save action, under the section it saves. Hidden on tabs with no savable
+                fields (TLS, Updates), which run their own actions instead. */}
           {showSave && (
-            <div className="mt-6 flex items-center justify-start gap-3 border-t pt-4">
-              <Button
-                type="submit"
-                form="system-settings-form"
-                size="sm"
-                aria-label="Save system settings"
-                disabled={disabled}
+            <div
+              /*
+               * Right-aligned, and exactly as wide as the form it saves, so Save sits under
+               * the form's right edge rather than out on the left margin where it read as a
+               * page-level control that happened to be nearby.
+               *
+               * That width is the grid's first column, which no max-width can name: it
+               * depends on the rail and the gap. So the footer borrows the SAME grid template
+               * every tab's form now uses and takes column one, and the two agree by
+               * construction rather than by two numbers kept in step by hand. On Backups that
+               * also keeps Save under the schedule it saves, rather than out at the right
+               * edge of the backup table, which is a wider section it does not touch.
+               */
+              className={`${SETTINGS_WORKSPACE} ${SETTINGS_ASIDE_GRID} mt-5`}
+            >
+              <div
+                // Status first, then the escape hatch, then the primary action last: the order
+                // a footer is read in. flex-wrap so the three do not fight for room at 390px.
+                className="flex flex-wrap items-center justify-end gap-3 border-t pt-4 min-[1400px]:col-start-1"
               >
-                {saving ? 'Saving…' : 'Save changes'}
-              </Button>
-              {isDirty && (
+                {isDirty && (
+                  <span className="text-muted-foreground mr-auto text-sm">Unsaved changes</span>
+                )}
+                {isDirty && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={resetForm}
+                    disabled={saving}
+                  >
+                    Reset
+                  </Button>
+                )}
                 <Button
-                  type="button"
-                  variant="outline"
+                  type="submit"
+                  form="system-settings-form"
                   size="sm"
-                  onClick={resetForm}
-                  disabled={saving}
+                  aria-label="Save system settings"
+                  disabled={disabled}
                 >
-                  Reset
+                  {saving ? 'Saving…' : 'Save changes'}
                 </Button>
-              )}
-              {isDirty && <span className="text-muted-foreground text-sm">Unsaved changes</span>}
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </LocalNavLayout>
+      </Tabs>
 
       {/* The settings inputs live outside a <form> element, so this empty form
           gives the sticky Save button something to submit via form=. */}

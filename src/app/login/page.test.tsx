@@ -8,8 +8,20 @@ import LoginForm from './LoginForm';
 
 // The page is now a server component that reads the public settings and passes them in, so the
 // tests drive the client form directly and supply those settings as props.
-const LoginPage = (props: { allowSignup?: boolean; hcaptchaSiteKey?: string } = {}) => (
-  <LoginForm allowSignup={props.allowSignup ?? true} hcaptchaSiteKey={props.hcaptchaSiteKey} />
+const LoginPage = (
+  props: {
+    allowSignup?: boolean;
+    hcaptchaSiteKey?: string;
+    mailConfigured?: boolean;
+    oidcButtonLabel?: string | null;
+  } = {},
+) => (
+  <LoginForm
+    allowSignup={props.allowSignup ?? true}
+    hcaptchaSiteKey={props.hcaptchaSiteKey}
+    mailConfigured={props.mailConfigured}
+    oidcButtonLabel={props.oidcButtonLabel}
+  />
 );
 
 const { signInMock, searchState } = vi.hoisted(() => ({
@@ -243,7 +255,7 @@ describe('LoginPage', () => {
     // rather than arriving after a fetch. No waiting required, which is the point.
     render(<LoginPage allowSignup={false} />);
 
-    expect(screen.queryByRole('button', { name: /Sign up/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Create account/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Don't have an account\?/i)).not.toBeInTheDocument();
   });
 
@@ -489,7 +501,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, /Sign up/i);
+    await switchMode(user, /Create account/i);
 
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Ada' } });
     fireEvent.change(screen.getByLabelText('Last Name'), { target: { value: 'Lovelace' } });
@@ -516,7 +528,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, /Sign up/i);
+    await switchMode(user, /Create account/i);
 
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
@@ -587,7 +599,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, /Sign up/i);
+    await switchMode(user, /Create account/i);
 
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
@@ -625,7 +637,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, /Sign up/i);
+    await switchMode(user, /Create account/i);
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/system-settings/public')) {
@@ -659,7 +671,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, /Sign up/i);
+    await switchMode(user, /Create account/i);
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/system-settings/public')) {
@@ -697,7 +709,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, /Sign up/i);
+    await switchMode(user, /Create account/i);
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/system-settings/public')) {
@@ -731,7 +743,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, /Sign up/i);
+    await switchMode(user, /Create account/i);
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/system-settings/public')) {
@@ -765,7 +777,7 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await switchMode(user, /Sign up/i);
+    await switchMode(user, /Create account/i);
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/api/system-settings/public')) {
@@ -837,5 +849,101 @@ describe('signing in with a password after an institutional refusal', () => {
     expect(rewritten).not.toContain('error=');
     expect(rewritten).not.toContain('reason=');
     replaceState.mockRestore();
+  });
+});
+
+/**
+ * The split-screen redesign, asserted on structure rather than on classes.
+ *
+ * These are the parts of the new layout that are behaviour: which heading the page has, that
+ * the picture is decoration, and above all that a production build ships none of the
+ * development shortcuts. The rest of the design is appearance and belongs in front of a human.
+ */
+describe('the sign-in screen', () => {
+  it('has one h1, and it changes its words rather than being replaced', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Sign in to your account');
+
+    await switchMode(user, /Create account/i);
+
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Create your account');
+  });
+
+  it('names the brand panel and keeps every mark in it out of the accessibility tree', () => {
+    render(<LoginPage />);
+
+    const panel = screen.getByRole('region', { name: 'About AFCT' });
+    const marks = panel.querySelectorAll('svg');
+    expect(marks.length).toBeGreaterThan(0);
+    for (const mark of marks) {
+      expect(mark).toHaveAttribute('aria-hidden', 'true');
+    }
+  });
+
+  it('carries the product name for the narrow layout without adding a second heading', () => {
+    render(<LoginPage />);
+
+    // The compact header the phone layout shows in place of the brand panel. Deliberately
+    // not a heading: the form's title is the page's one h1.
+    expect(screen.getByText('AFCT Dashboard')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('offers the seeded-account shortcuts in a development build', () => {
+    render(<LoginPage />);
+
+    expect(screen.getByText('Dev build')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Admin' })).toBeInTheDocument();
+  });
+
+  it('ships no development markup at all in a production build', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      const { container } = render(<LoginPage />);
+
+      expect(screen.queryByText('Dev build')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Admin' })).toBeNull();
+      // Not merely hidden. The four seeded accounts share one password, and neither it nor
+      // their addresses may reach a real deployment's HTML.
+      expect(container.innerHTML).not.toContain('password123');
+      expect(container.innerHTML).not.toContain('@example.com');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('offers the reset link only where the site can send the mail', () => {
+    const { unmount } = render(<LoginPage mailConfigured={false} />);
+    expect(screen.queryByRole('link', { name: /forgot password/i })).toBeNull();
+    unmount();
+
+    render(<LoginPage mailConfigured />);
+    expect(screen.getByRole('link', { name: /forgot password/i })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    );
+  });
+
+  it('leaves out the divider as well as the button when no provider is configured', () => {
+    const { unmount } = render(<LoginPage oidcButtonLabel={null} />);
+    expect(screen.queryByText('or')).toBeNull();
+    unmount();
+
+    render(<LoginPage oidcButtonLabel="Sign in with Penn State" />);
+    expect(screen.getByText('or')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in with Penn State' })).toBeInTheDocument();
+  });
+
+  it('sends an institutional sign-in to the same sanitised destination', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage oidcButtonLabel="Sign in with Penn State" />);
+
+    await user.click(screen.getByRole('button', { name: 'Sign in with Penn State' }));
+
+    expect(signInMock).toHaveBeenCalledWith('oidc', { callbackUrl: '/dashboard' });
   });
 });

@@ -9,27 +9,82 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* next/font defines both variables on the body class (see the root layout). The
+     fallbacks matter for the moment before the webfont arrives, and for anything that
+     renders outside body. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   /* One step below `text-xs`, for the places that genuinely need it: a dense table label, a
      hint under a field. There were four bespoke values doing this job (0.65, 0.68, 0.70 and
      0.80rem), none distinguishable from the others on screen and none of them a decision
      anybody made twice. Reach for this rather than inventing a fifth. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
+  /* One step past 2xl, for the handful of places that want to behave differently only when
+     there is genuinely spare width. Registered as a breakpoint rather than written inline as
+     `min-[1700px]:`, which is not equivalent: Tailwind emits arbitrary media variants before
+     the named ones, so `min-[1700px]:pr-24` lost to `sm:px-6` on the same property at every
+     width above 1700 and silently did nothing.
+
+     In rem, not px, and that matters for the same reason. The built-in breakpoints are rem
+     (sm is 40rem), and a px value sorts into its own group ahead of them rather than by
+     width, which puts this media query before `sm` in the stylesheet and loses again.
+     106.25rem is 1700px. */
+  --breakpoint-3xl: 106.25rem;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  /* The dashboard header. Its own family rather than the sidebar's or the page's: it is
+     light chrome in two themes and dark in one, and nothing else in the app flips that
+     way. See the notes on --navbar in the :root block. */
+  --color-navbar: var(--navbar);
+  --color-navbar-foreground: var(--navbar-foreground);
+  --color-navbar-muted-foreground: var(--navbar-muted-foreground);
+  --color-navbar-border: var(--navbar-border);
+  --color-navbar-accent: var(--navbar-accent);
+  --color-navbar-accent-foreground: var(--navbar-accent-foreground);
+  --color-navbar-ring: var(--navbar-ring);
+  /* The course banner. Like --sidebar, this family is DARK in every theme: the banner is a
+     branded identity surface, not a card that follows the page. Its three ground stops go
+     left-to-right across the banner; --course-banner-node and --course-banner-glow paint the
+     decorative network, and high contrast turns both transparent so it disappears there.
+     See the notes on --course-banner in the :root block. */
+  --color-course-banner: var(--course-banner);
+  --color-course-banner-mid: var(--course-banner-mid);
+  --color-course-banner-accent: var(--course-banner-accent);
+  --color-course-banner-foreground: var(--course-banner-foreground);
+  --color-course-banner-muted-foreground: var(--course-banner-muted-foreground);
+  --color-course-banner-border: var(--course-banner-border);
+  --color-course-banner-node: var(--course-banner-node);
+  --color-course-banner-glow: var(--course-banner-glow);
+  /* Data visualisation, and only that. Two families, and the difference is the whole
+     point of having them separate:
+
+       chart-1..6            CATEGORICAL. Six unrelated series. A colour here means
+                             "series 3", not "warning". Ordered, so series 1 is cobalt on
+                             every chart in the app.
+       chart-sequential-1..5 SEQUENTIAL. One quantity getting bigger. Step 5 is always the
+                             most of something.
+
+     When the colour means success/warning/danger/info, neither of these is right; use the
+     --status-* family, which is what SubmissionStatusBar does. */
+  --color-chart-6: var(--chart-6);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-chart-sequential-5: var(--chart-sequential-5);
+  --color-chart-sequential-4: var(--chart-sequential-4);
+  --color-chart-sequential-3: var(--chart-sequential-3);
+  --color-chart-sequential-2: var(--chart-sequential-2);
+  --color-chart-sequential-1: var(--chart-sequential-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -38,12 +93,17 @@
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
-  --color-tertiary-foreground: var(--tertiary-foreground);
-  --color-tertiary: var(--tertiary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  /* Text that navigates. Deliberately NOT --primary, which is a FILL: it is the colour a
+     button is painted, sized for white text on top of it, and on the dark card it is only
+     3.45:1 as text. A link needs the opposite: readable ON the surface. Two tokens rather
+     than an opacity of one, so the value never depends on what is underneath.
+     Usage: text-link, hover:text-link-hover. */
+  --color-link: var(--link);
+  --color-link-hover: var(--link-hover);
   --color-table-header: var(--table-header);
   --color-table-highlight: var(--table-highlight);
   --color-table-background: var(--table-background);
@@ -53,15 +113,6 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-node-color: var(--node-color);
-  /* The navbar's green/teal (--secondary in light mode), pinned as a literal so it
-     stays the same in both themes: --secondary itself flips to a dark neutral in
-     dark mode, which would make anything drawn in it vanish on a dark background. */
-  --color-brand-teal: oklch(0.6794 0.0938 203.328);
-  /* A darker brand teal for solid swatches that carry WHITE text, such as the initials
-     shown when a user has no profile photo. --brand-teal itself is only 2.78:1 against
-     white, under the 4.5:1 AA floor; this one is 5.3:1. Same hue, and pinned as a
-     literal for the same reason --brand-teal is: it must not flip in dark mode. */
-  --color-brand-teal-dark: oklch(0.52 0.09 203.328);
   --color-badge-success: var(--badge-success);
   --color-badge-success-bg: var(--badge-success-bg);
   --color-badge-success-border: var(--badge-success-border);
@@ -77,6 +128,34 @@
   --color-badge-neutral: var(--badge-neutral);
   --color-badge-neutral-bg: var(--badge-neutral-bg);
   --color-badge-neutral-border: var(--badge-neutral-border);
+  /* Categorical badge hues. These name a COLOUR, not a meaning: a violet badge is violet
+     because Admin and Assignment need to be told apart from their neighbours, never because
+     violet implies anything. Semantic state stays on the --badge-success/warning/danger/info
+     /neutral family above, and the two must not be mixed. */
+  --color-badge-category-slate: var(--badge-category-slate);
+  --color-badge-category-slate-bg: var(--badge-category-slate-bg);
+  --color-badge-category-slate-border: var(--badge-category-slate-border);
+  --color-badge-category-blue: var(--badge-category-blue);
+  --color-badge-category-blue-bg: var(--badge-category-blue-bg);
+  --color-badge-category-blue-border: var(--badge-category-blue-border);
+  --color-badge-category-indigo: var(--badge-category-indigo);
+  --color-badge-category-indigo-bg: var(--badge-category-indigo-bg);
+  --color-badge-category-indigo-border: var(--badge-category-indigo-border);
+  --color-badge-category-violet: var(--badge-category-violet);
+  --color-badge-category-violet-bg: var(--badge-category-violet-bg);
+  --color-badge-category-violet-border: var(--badge-category-violet-border);
+  --color-badge-category-green: var(--badge-category-green);
+  --color-badge-category-green-bg: var(--badge-category-green-bg);
+  --color-badge-category-green-border: var(--badge-category-green-border);
+  --color-badge-category-amber: var(--badge-category-amber);
+  --color-badge-category-amber-bg: var(--badge-category-amber-bg);
+  --color-badge-category-amber-border: var(--badge-category-amber-border);
+  --color-badge-category-orange: var(--badge-category-orange);
+  --color-badge-category-orange-bg: var(--badge-category-orange-bg);
+  --color-badge-category-orange-border: var(--badge-category-orange-border);
+  --color-badge-category-rose: var(--badge-category-rose);
+  --color-badge-category-rose-bg: var(--badge-category-rose-bg);
+  --color-badge-category-rose-border: var(--badge-category-rose-border);
   /* Semantic status/feedback family (foreground / soft -bg / -border) for inline status
      text, alert callouts, and toasts. Badges consume the same values via --badge-* above.
      Usage: text-status-warning, bg-status-warning-bg, border-status-warning-border. */
@@ -97,7 +176,11 @@
   --color-status-danger-solid: var(--status-danger-solid);
   --color-status-info-solid: var(--status-info-solid);
   --color-status-neutral-solid: var(--status-neutral-solid);
-  /* Active-tab brand accent. Usage: text-tab-active, border-tab-active, bg-tab-active-bg. */
+  /* The active tab: cobalt, matching the vertical rails. Kept as its own token pair
+     rather than inlined `text-primary`/`bg-primary/10`, because dark mode needs a lighter
+     blue (primary on the dark card is 3.45:1, under the floor for text) and the theme is
+     the right place for that to live rather than a dark: variant in every tab component.
+     Usage: text-tab-active, border-tab-active, bg-tab-active-bg. */
   --color-tab-active: var(--tab-active);
   --color-tab-active-bg: var(--tab-active-bg);
   --radius-sm: calc(var(--radius) - 4px);
@@ -105,20 +188,47 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
-:root {
+/**
+ * The light palette, and the one place it is written.
+ *
+ * `.auth-light` shares this block rather than copying it. The signed-out pages are a fixed
+ * light composition (see `src/app/login/layout.tsx`): they are seen before anyone has a
+ * session, so they do not follow a dashboard theme the visitor may not even own. next-themes
+ * still puts `.dark` on <html> for every route, so without this the auth card rendered white
+ * text on a white field. Re-declaring the variables on the auth root hands its whole subtree
+ * the light values by inheritance, which is why this is a selector list and not a second copy:
+ * a copy is how the two quietly stop matching.
+ *
+ * High contrast is the deliberate exception and is handled at the end of that block: somebody
+ * who has asked for it needs it more on the sign-in page than anywhere else.
+ */
+:root,
+.auth-light {
   --radius: 0.65rem;
-  --background: oklch(0.9401 0 0);
-  --foreground: oklch(0 0 0);
+  /* Slate-50. Lighter than the old neutral grey, which suits pages that are now mostly
+     canvas rather than one big card. Cards and tables stay pure white; they separate
+     from this by 1.05:1 on fill alone, so their border does most of that work now
+     (it reads 1.21:1 against this canvas, up from 1.06:1 against the old one). */
+  --background: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
+  /* Slate-950, not pure black. One value for every normal-text token below, so the
+     primary/muted split does the hierarchy rather than a mix of blacks. 17.9:1 on a white
+     card, well past AA; the old pure black was 21:1 and read harsher for it. */
+  --foreground: oklch(0.2077 0.0398 265.755); /* #0F172A */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0 0 0);
+  --card-foreground: oklch(0.2077 0.0398 265.755);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
+  --popover-foreground: oklch(0.2077 0.0398 265.755);
   --primary: oklch(0.37 0.1221 262.228);
   --primary-foreground: oklch(1 0.0001 271.152);
-  --secondary: oklch(0.6794 0.0938 203.328);
-  --secondary-foreground: oklch(1 0.0001 271.152);
-  --tertiary: oklch(0.5424 0.1381 45.828);
-  --tertiary-foreground: oklch(1 0 0);
+  /* blue-700 / blue-800. A step past --primary so an underlined run of text holds its own
+     against near-black body copy, and the hover is a step past that again. */
+  --link: oklch(0.4882 0.2172 264.3763); /* #1D4ED8, 6.7:1 on the card */
+  --link-hover: oklch(0.4244 0.1809 265.6377); /* #1E40AF, 8.7:1 */
+  /* Slate-200. A neutral surface for secondary controls: this was the brand teal, which
+     made every "secondary" thing read as a coloured call to action. Cobalt is the action
+     colour; this is the quiet one. Foreground flips to dark to suit a pale surface. */
+  --secondary: oklch(0.9288 0.0126 255.508); /* #E2E8F0 */
+  --secondary-foreground: oklch(0.2077 0.0398 265.755); /* #0F172A */
   /* A muted SURFACE, so it sits just off the page background. It used to be a 56%-lightness
      mid grey, which is a foreground value, not a surface one: anything painted with it solid
      (the keyboard-shortcut keys, the equation hover) came out darker than the toolbar, and
@@ -126,28 +236,139 @@
      This is the conventional light-theme value, and --muted-foreground stays dark so text on
      it keeps its contrast. */
   --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.329 0 0);
+  /* Slate-600, up from a near-black 0.329 grey. At 12.3:1 against a 17.9:1 foreground the
+     old value was barely secondary: descriptions, timestamps, emails and table helper text
+     all read at roughly the weight of body copy. This is clearly quieter and still
+     comfortable at text-2xs: 7.6:1 on the card, 7.2:1 on the canvas, 6.9:1 on muted.
+     Slate rather than neutral grey, so it agrees with the rest of the palette. */
+  --muted-foreground: oklch(0.4455 0.0374 257.2808); /* #475569 */
   --accent: oklch(0.9128 0 0);
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.754 0.0001 271.152);
-  --ring: oklch(0.6604 0.1739 249.672);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.3914 0.0013 17.215);
-  --sidebar-foreground: oklch(1 0.0001 271.152);
-  --sidebar-primary: oklch(0.9415 0.0081 254.087);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.9485 0.0047 258.626);
-  --table-header: oklch(0.9067 0 0);
-  --table-header-foreground: oklch(0 0 0);
+  /* The visible edge of a control, and it has to clear WCAG 1.4.11's 3:1 because a field
+     filled with --card on a --card surface has nothing else marking where it is. The old
+     0.754 grey was 2.19:1 on the card. Computed to land near 3.5:1 rather than picking a
+     palette step: 3.64:1 on the card, 3.48:1 on the canvas, 3.30:1 on muted, which keeps
+     margin without making 80-odd outline buttons read as heavy. --border stays quieter on
+     purpose; structure is not a control. */
+  --input: oklch(0.6202 0.0288 259.0418); /* #7C8798 */
+  /* The focus indicator, which 1.4.11 also holds to 3:1. Two things had to move: the token
+     was #2096F7, and controls render it through `ring-ring/70`, so what matters is the
+     BLENDED colour, not this value. At the old token and the old /50 the rendered ring was
+     1.74:1 on the card. Now 3.57:1 on the card, 3.48:1 on the canvas, 3.39:1 on muted. */
+  --ring: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
+  /* Six categorical hues, deliberately spread around the wheel. The old set had two
+     oranges, a yellow and two teals, so a five-series chart came out as "warm, warm,
+     warm, cold, cold" and the legend did all the work. Cobalt first, because it is the
+     app's own accent and a single-series chart should look like it belongs here. */
+  --chart-1: oklch(0.5461 0.2152 262.8809); /* #2563EB cobalt */
+  --chart-2: oklch(0.5413 0.2466 293.009); /* #7C3AED violet */
+  --chart-3: oklch(0.6461 0.1943 41.1158); /* #EA580C orange */
+  --chart-4: oklch(0.5858 0.222 17.5846); /* #E11D48 rose */
+  --chart-5: oklch(0.5538 0.1207 66.4416); /* #A16207 gold, 4.9:1 on the card */
+  --chart-6: oklch(0.6271 0.1699 149.2138); /* #16A34A green */
+
+  /* One blue ramp, light to dark, for anything where colour is a quantity: the activity
+     heatmap and the attempts-to-solve bars. Both used to fake this with one hue at four
+     or five opacities, which put the lightest step at 1.3:1 on the card. Explicit steps
+     instead, so each one is a decision. */
+  --chart-sequential-1: oklch(0.9705 0.0142 254.6042); /* #EFF6FF */
+  --chart-sequential-2: oklch(0.8823 0.0571 254.1284); /* #BFDBFE */
+  --chart-sequential-3: oklch(0.7137 0.1434 254.624); /* #60A5FA */
+  --chart-sequential-4: oklch(0.5461 0.2152 262.8809); /* #2563EB */
+  --chart-sequential-5: oklch(0.4244 0.1809 265.6377); /* #1E40AF */
+  /* The sidebar is a dark surface in BOTH themes, so every token here is written for
+     light text on it. Three levels that have to stay apart: the rail, a barely-lighter
+     hover, and the sky accent for the current page. */
+  --sidebar: oklch(0.2101 0.0318 264.665); /* #111827 */
+  --sidebar-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 17.0:1 on the rail */
+  /* Section headings and supporting lines. A fixed colour rather than the foreground at
+     70%, because an opacity blends with whatever is behind it: the same class sat at
+     12.2:1 on the rail and 10.1:1 on a hovered row, so its contrast moved with the state
+     it happened to be in. This is 12.0:1 and 9.8:1, and it is one value to check. */
+  --sidebar-muted-foreground: oklch(0.869 0.0198 252.894); /* #CBD5E1 */
+  /* Active row: cobalt. White on it is 5.2:1 and it reads 3.4:1 against the charcoal,
+     so the current page is obvious and its label and icon stay white. */
+  --sidebar-primary: oklch(0.5461 0.2152 262.881); /* #2563EB */
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.2781 0.0296 256.848); /* #1F2937, hover only */
+  --sidebar-accent-foreground: oklch(0.9842 0.0034 247.858);
+  /* Gray-700: the same family as the rail, so the divider reads as part of it. */
+  --sidebar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
+  --sidebar-ring: oklch(0.9842 0.0034 247.858);
+  /* The dashboard header. Its own family rather than the page tokens, because it is a
+     surface in its own right and has to work out which way up it is in three themes.
+
+     One step DOWN from the page canvas, not up:
+
+       sidebar   #111827   the dark rail
+       navbar    #EEF1F4   this band
+       canvas    #F8FAFC   the page
+       card      #FFFFFF   what content sits on
+
+     Given the card colour it vanished into the page it is supposed to cap. Given a dark
+     one it merged with the rail into a single L-shaped block. A step below the canvas
+     leaves it recognisably its own band while still reading as chrome rather than
+     content. It is only 1.08:1 from the canvas, so --navbar-border does most of the
+     separating and is deliberately the strongest value in this family. */
+  --navbar: oklch(0.9567 0.0052 247.878); /* #EEF1F4 */
+  --navbar-foreground: oklch(0.2077 0.0398 265.755); /* #0F172A, 15.8:1 on the band */
+  /* Ancestor breadcrumbs and separators: present, and clearly behind the current page.
+     A fixed value rather than the foreground at some opacity, for the same reason the
+     rail uses one: an alpha blends with whatever is behind it, so its contrast would
+     move with the hover state underneath. 6.7:1. */
+  --navbar-muted-foreground: oklch(0.4455 0.0374 257.281); /* #475569 */
+  /* Hover surface for the two controls. Both put the full foreground on it: 14.0:1. */
+  --navbar-accent: oklch(0.9168 0.0098 252.815); /* #DFE4EA */
+  --navbar-accent-foreground: oklch(0.2077 0.0398 265.755); /* #0F172A */
+  /* The one value here doing real work. With the band and the canvas 1.08:1 apart, this
+     rule is what says where the header ends: 1.6:1 against the band above it and 1.7:1
+     against the page below. Lighten it and the header floats; this is the lever. */
+  --navbar-border: oklch(0.81 0.0202 252.907); /* #B8C2CE */
+  /* The page ring reads fine on a light band, so it is the same cobalt. Named anyway, so
+     the dark and high-contrast blocks have somewhere to differ. 5.9:1 against the band. */
+  --navbar-ring: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
+  /* The course banner, and the reason it has a family of its own.
+
+     It is dark in EVERY theme, exactly like --sidebar. A course page opens with one object
+     that says which course this is, and that object is branded rather than themed: it reads
+     as AFCT the product, the way the rail and the sign-in panel do, and not as another card
+     on the page. That is why nothing inside the banner may use a page token or a `dark:`
+     utility. A `text-muted-foreground` in there is near-black in light mode and invisible on
+     navy; every value the banner needs is here instead, so it can be checked in one place.
+
+     Three ground stops, left to right, so the quiet end is behind the title and the light
+     gathers in the empty space beside the badges:
+
+       course-banner         #142347   the left, behind the icon and the course name
+       course-banner-mid     #153167   the middle
+       course-banner-accent  #163C85   the right, where the network is densest
+
+     Related to the rail but not the same as it. --sidebar is a neutral charcoal; this is a
+     saturated navy, so a course page still separates from the chrome around it. */
+  --course-banner: oklch(0.2649 0.0702 264.978); /* #142347 */
+  --course-banner-mid: oklch(0.3255 0.101 261.88); /* #153167 */
+  --course-banner-accent: oklch(0.3761 0.1302 261.749); /* #163C85 */
+  /* 14.8:1 on the left stop, 9.9:1 on the brightest. */
+  --course-banner-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
+  /* Labels and other supporting text. A fixed light blue rather than the foreground at some
+     opacity, for the reason --sidebar-muted-foreground is: an alpha blends with whatever
+     stop of the gradient happens to be behind it, so its contrast would drift across the
+     width. This is 10.2:1 on the left stop, where every label actually sits, and 6.8:1 at the
+     far right, which no text reaches. */
+  --course-banner-muted-foreground: oklch(0.8619 0.0483 259.099); /* #BFD3F2 */
+  --course-banner-border: oklch(1 0 0 / 12%);
+  /* The network. One colour for the lines and the ordinary nodes, which vary by opacity
+     alone, plus a brighter blue for the handful of highlight nodes. Decoration, so both are
+     deliberately weak; if the network is the first thing you notice, lower these. */
+  --course-banner-node: oklch(0.6231 0.188 259.815); /* #3B82F6 */
+  --course-banner-glow: oklch(0.8091 0.0956 251.813); /* #93C5FD */
+  /* Matched to --muted. A mid grey band competed with the header text; this reads as a
+     surface. Kept a solid colour, not a tint: the header row is sticky in several tables
+     and body rows would scroll through anything translucent. */
+  --table-header: oklch(0.967 0.001 286.375);
+  --table-header-foreground: oklch(0.2077 0.0398 265.755); /* 16.2:1 on the header surface */
   --table-highlight: oklch(0.9431 0 0);
   --table-background: oklch(1 0 0);
   --node-color: oklch(0.9588 0.1093 102.632);
@@ -159,16 +380,16 @@
      label, a soft -bg surface, and a matching -border -- so a state can be recolored in
      one place for a UI refresh or a high-contrast theme. `neutral` stays badge-scoped
      below because a general neutral is already covered by --muted / --accent. */
-  --status-success: oklch(0.4204 0.1055 138.019);       /* tint of --success */
+  --status-success: oklch(0.4204 0.1055 138.019); /* tint of --success */
   --status-success-bg: oklch(0.9447 0.0228 128.733);
   --status-success-border: oklch(0.8347 0.0835 129.018);
-  --status-warning: oklch(0.5424 0.1381 45.828);       /* = --tertiary */
+  --status-warning: oklch(0.5424 0.1381 45.828);
   --status-warning-bg: oklch(0.9482 0.0135 60.567);
   --status-warning-border: oklch(0.7886 0.0733 61.632);
-  --status-danger: oklch(0.4437 0.1613 26.899);        /* tint of --destructive */
+  --status-danger: oklch(0.4437 0.1613 26.899); /* tint of --destructive */
   --status-danger-bg: oklch(0.9478 0.023 17.565);
   --status-danger-border: oklch(0.8383 0.071 18.674);
-  --status-info: oklch(0.37 0.1221 262.228);          /* = --primary */
+  --status-info: oklch(0.37 0.1221 262.228); /* = --primary */
   --status-info-bg: oklch(0.9475 0.0149 260.73);
   --status-info-border: oklch(0.8314 0.0587 264.656);
 
@@ -176,17 +397,21 @@
      on a filled swatch (e.g. a toast's icon strip). Unlike the status foregrounds above,
      these must stay a mid, white-legible shade in BOTH themes, so they are not derived
      from --status-*. neutral covers the untyped/loading case. */
-  --status-success-solid: oklch(0.6271 0.1699 149.214);   /* green-600, chosen so the white glyph clears 3:1 */
-  --status-warning-solid: oklch(0.6658 0.1574 58.318);   /* amber-600, same */
+  --status-success-solid: oklch(
+    0.6271 0.1699 149.214
+  ); /* green-600, chosen so the white glyph clears 3:1 */
+  --status-warning-solid: oklch(0.6658 0.1574 58.318); /* amber-600, same */
   --status-danger-solid: oklch(0.6368 0.2078 25.331);
   --status-info-solid: oklch(0.6231 0.188 259.815);
   --status-neutral-solid: oklch(0.551 0.0234 264.364);
 
-  /* Active-tab accent (brand teal). A darker teal in light so 14px active-tab labels
-     clear WCAG AA 4.5:1 on the card; a lighter teal in dark. -bg is the soft fill behind
-     a tab's count pill. Interim brand accent until the visual redesign. */
-  --tab-active: oklch(0.5109 0.0861 186.391);           /* teal-700 */
-  --tab-active-bg: oklch(0.9527 0.0498 180.801);        /* teal-100 */
+  /* Active-tab accent: cobalt, aligned with --primary and the vertical local-navigation
+     rails. Light mode uses primary itself, which clears WCAG AA 4.5:1 for 14px active-tab
+     labels on the card; dark mode overrides it with a lighter blue (see .dark), since
+     cobalt on the dark card is only 3.45:1. -bg is the soft fill behind a tab's count
+     pill. */
+  --tab-active: oklch(0.37 0.1221 262.228); /* = --primary, 10.6:1 on the card */
+  --tab-active-bg: oklch(0.37 0.1221 262.228 / 10%);
 
   /* Badge tokens derive from the status family (values unchanged), so badges and the
      other status surfaces can never drift apart. Dark mode overrides only --status-*
@@ -203,63 +428,186 @@
   --badge-info: var(--status-info);
   --badge-info-bg: var(--status-info-bg);
   --badge-info-border: var(--status-info-border);
-  --badge-neutral: oklch(0.3867 0 0);        /* tint of --muted-foreground */
+  --badge-neutral: oklch(0.3867 0 0); /* tint of --muted-foreground */
   --badge-neutral-bg: oklch(0.9551 0 0);
   --badge-neutral-border: oklch(0.8699 0 0);
+  /* Eight categorical hues, tinted the same way the status badges are: dark text on a pale
+     wash with a slightly stronger border. Every pair is 6.3:1 or better. */
+  --badge-category-slate: oklch(0.2795 0.0368 260.031);
+  --badge-category-slate-bg: oklch(0.9683 0.0069 247.896);
+  --badge-category-slate-border: oklch(0.9288 0.0126 255.508);
+  --badge-category-blue: oklch(0.4244 0.1809 265.638);
+  --badge-category-blue-bg: oklch(0.9319 0.0316 255.585);
+  --badge-category-blue-border: oklch(0.8823 0.0571 254.128);
+  --badge-category-indigo: oklch(0.3984 0.1773 277.366);
+  --badge-category-indigo-bg: oklch(0.9299 0.0334 272.788);
+  --badge-category-indigo-border: oklch(0.8699 0.0622 274.039);
+  --badge-category-violet: oklch(0.432 0.2106 292.759);
+  --badge-category-violet-bg: oklch(0.9433 0.0284 294.588);
+  --badge-category-violet-border: oklch(0.8943 0.0549 293.283);
+  --badge-category-green: oklch(0.4479 0.1083 151.328);
+  --badge-category-green-bg: oklch(0.9624 0.0434 156.743);
+  --badge-category-green-border: oklch(0.925 0.0806 155.995);
+  --badge-category-amber: oklch(0.4732 0.1247 46.201);
+  --badge-category-amber-bg: oklch(0.9619 0.058 95.617);
+  --badge-category-amber-border: oklch(0.9243 0.1151 95.746);
+  --badge-category-orange: oklch(0.4698 0.143 37.304);
+  --badge-category-orange-bg: oklch(0.9542 0.0372 75.164);
+  --badge-category-orange-border: oklch(0.9015 0.0729 70.697);
+  --badge-category-rose: oklch(0.4546 0.1713 13.697);
+  --badge-category-rose-bg: oklch(0.9414 0.0298 12.58);
+  --badge-category-rose-border: oklch(0.8924 0.0559 10.001);
 }
 
+/**
+ * The two places the signed-out pages deliberately differ from the light palette above.
+ *
+ * Kept to a short list on purpose: everything else about the auth surface is the ordinary
+ * light theme, and a second full palette would be a second thing to keep in step. High
+ * contrast still outranks this, because `.high-contrast .auth-light` is the more specific
+ * selector whatever the order here.
+ */
+.auth-light {
+  /* A step down from the page canvas, not the same white as the card. On the dashboard a
+     card sits among other cards and its edges are obvious; here one card floats alone in a
+     large empty pane, and at 1.05:1 against --background it had nothing to sit on. 1.23:1
+     is small but it is a surface change rather than a rounding error. */
+  --background: oklch(0.9288 0.0126 255.508); /* #E2E8F0 */
+}
+
+/**
+ * The sign-in form's half of that screen, and only that half.
+ *
+ * Cobalt rather than the app's deep navy: the left pane is built from blue-400 and blue-300,
+ * and a navy Sign In button beside it reads as a control borrowed from somewhere else. This
+ * is --link's value, so the button and the links on this surface finally agree. White on it
+ * is 6.7:1, and 5.5:1 on the /90 hover, which is why it is not the brighter #2563EB, whose
+ * hover lands at 4.3:1.
+ *
+ * Scoped to the form rather than to `.auth-light` because the brand panel paints its own
+ * gradient with `to-primary/50`. Changing the variable at the root would have relit that
+ * gradient too, which is a change to the half of the screen nobody asked to change.
+ */
+.auth-form-surface {
+  --primary: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
+}
 
 .dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.9851 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  /* Dark surfaces climb an elevation ladder so layered states read apart:
-     background < card < popover < muted < accent (hover) < secondary (selected).
+  /* Slate/navy, chosen to sit under the charcoal sidebar rather than beside it. Dark
+     surfaces climb an elevation ladder so layered states read apart:
+     background < card < popover < muted/accent (hover) < secondary (selected).
      In light mode these are already distinct hues, so only the dark values ladder. */
-  --popover: oklch(0.24 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.546 0.245 262.881);
-  --primary-foreground: oklch(0.379 0.146 265.522);
-  --secondary: oklch(0.35 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --tertiary: oklch(0.2966 0.0507 205.135);
-  --tertiary-foreground: oklch(1 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.31 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.1288 0.0406 264.695); /* #020617 */
+  --foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 19.3:1 on the background */
+  --card: oklch(0.2077 0.0398 265.755); /* #0F172A */
+  --card-foreground: oklch(0.9842 0.0034 247.858);
+  /* Note: this is the same lightness as --card (they differ in hue only), so a popover
+     over a card is told apart by its border rather than by its fill. */
+  --popover: oklch(0.2101 0.0318 264.665); /* #111827 */
+  --popover-foreground: oklch(0.9842 0.0034 247.858);
+  /* Cobalt, the same value as light mode: it is the brand accent, not a dark-mode tint.
+     The foreground was a mid blue here, which put roughly 1.9:1 on a filled primary
+     button; white is 5.2:1. */
+  --primary: oklch(0.5461 0.2152 262.881); /* #2563EB */
+  --primary-foreground: oklch(1 0 0);
+  /* blue-400 / blue-300. Cobalt itself is 3.45:1 as text on this card, which is why links
+     get their own token here rather than borrowing the fill colour. */
+  --link: oklch(0.7137 0.1434 254.624); /* #60A5FA, 7.0:1 on the card */
+  --link-hover: oklch(0.8091 0.0956 251.8128); /* #93C5FD, 9.9:1 */
+  /* One step above --accent, so a selected row still reads apart from a hovered one. */
+  --secondary: oklch(0.3717 0.0392 257.287); /* #334155 */
+  --secondary-foreground: oklch(0.9842 0.0034 247.858);
+  --muted: oklch(0.2795 0.0368 260.031); /* #1E293B */
+  /* Slate-400, down from #CBD5E1. At 13.6:1 the old value was barely a step below the
+     near-white foreground, so "secondary" text read as ordinary text and the hierarchy on
+     a dense page flattened out. This still clears AA everywhere it lands: 7.0:1 on the
+     card, 7.9:1 on the background, 5.7:1 on the muted surface. */
+  --muted-foreground: oklch(0.7107 0.0351 256.7878); /* #94A3B8 */
+  --accent: oklch(0.2795 0.0368 260.031); /* #1E293B */
+  --accent-foreground: oklch(0.9842 0.0034 247.858);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.488 0.243 264.376);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
-  --sidebar-primary-foreground: oklch(0.379 0.146 265.522);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.488 0.243 264.376);
-  --table-header: oklch(0.2101 0.0318 264.665);
+  /* Solid slate, not a white veil. The veil put a 1px near-black edge on a field sitting
+     in a card, so inputs disappeared into the surface they were drawn on.
+     The two used to be the same value, which meant a card edge, a row separator and a text
+     field all drew at the same weight and every surface looked boxed in. Structure is a
+     step quieter now; a form control, which you have to be able to find and click, keeps
+     the stronger one. Light mode already made this distinction. */
+  --border: oklch(0.3268 0.0376 259.4297); /* #293548 */
+  /* Slate-500. #334155 was 1.72:1 on the card, well under the 3:1 a control boundary
+     needs, and the fill inside is the card colour itself. 3.75:1 on the card, 4.24:1 on
+     the background, 3.07:1 on muted. */
+  --input: oklch(0.5544 0.0407 257.4166); /* #64748B */
+  /* Light blue rather than the mid blue this was: at 0.488 the ring barely showed on a
+     0.13 background. 9.8:1 or better on every dark surface. */
+  --ring: oklch(0.8091 0.0956 251.813); /* #93C5FD */
+  /* Same six hues, one step lighter so they carry on the dark card. The hue identity is
+     what must not move: a series that is cobalt in light has to stay cobalt in dark, or a
+     reader's understanding of the chart breaks when they flip the theme. The old dark set
+     reordered the palette outright (chart-2 went from teal to green, chart-4 from yellow
+     to violet), which did exactly that. */
+  --chart-1: oklch(0.7137 0.1434 254.624); /* #60A5FA cobalt */
+  --chart-2: oklch(0.709 0.1592 293.5412); /* #A78BFA violet */
+  --chart-3: oklch(0.7576 0.159 55.9344); /* #FB923C orange */
+  --chart-4: oklch(0.7192 0.169 13.428); /* #FB7185 rose */
+  --chart-5: oklch(0.8606 0.1731 91.9357); /* #FACC15 gold */
+  --chart-6: oklch(0.8003 0.1821 151.711); /* #4ADE80 green */
+
+  /* Low to high is still low to high; what flips is which end is dark. "Darker means
+     more" cannot work on a dark card, where the darkest step would be the background.
+     Step 1 is the deepest navy and step 5 the brightest blue, so the ramp still reads as
+     one quantity increasing. */
+  --chart-sequential-1: oklch(0.2823 0.0874 267.9352); /* #172554 */
+  --chart-sequential-2: oklch(0.3791 0.1378 265.5222); /* #1E3A8A */
+  --chart-sequential-3: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
+  --chart-sequential-4: oklch(0.6231 0.188 259.8145); /* #3B82F6 */
+  --chart-sequential-5: oklch(0.8091 0.0956 251.8128); /* #93C5FD */
+  /* Same rail in both themes: it is already a dark surface in light mode, so letting it
+     drift here would make the sidebar the one thing that changes identity between
+     themes. Kept in step with the light block above; see the notes there. */
+  --sidebar: oklch(0.2101 0.0318 264.665); /* #111827 */
+  --sidebar-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
+  --sidebar-muted-foreground: oklch(0.869 0.0198 252.894); /* #CBD5E1 */
+  --sidebar-primary: oklch(0.5461 0.2152 262.881); /* #2563EB */
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.2781 0.0296 256.848); /* #1F2937 */
+  --sidebar-accent-foreground: oklch(0.9842 0.0034 247.858);
+  --sidebar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
+  --sidebar-ring: oklch(0.9842 0.0034 247.858);
+  /* The same move as light, upside down: one rung away from the surfaces around it
+     rather than a colour of its own. Slate-800, which puts it above both the card
+     (#0F172A) and the rail (#111827) and clear of the page (#020617). The steps are
+     small here too, so the border again carries the separation. */
+  --navbar: oklch(0.2795 0.0368 260.031); /* #1E293B */
+  --navbar-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 14.0:1 on the band */
+  --navbar-muted-foreground: oklch(0.7107 0.0351 256.788); /* #94A3B8, 5.7:1 */
+  --navbar-accent: oklch(0.3717 0.0392 257.287); /* #334155, full foreground 9.9:1 */
+  --navbar-accent-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
+  --navbar-border: oklch(0.4141 0.0427 260.212); /* #3E4C63, 1.7:1 on the band */
+  --navbar-ring: oklch(0.8091 0.0956 251.813); /* #93C5FD, 8.1:1 */
+  /* The banner is already dark in light mode, so this block only has to keep it apart from a
+     dark page. It goes one step RICHER rather than darker: against a #020617 canvas and the
+     #111827 rail the light-mode navy is close enough to read as more chrome, and the point of
+     the banner is that a course is its own object. The border comes up with it, because at
+     white/12 on a dark page there was nothing marking where the banner ended. */
+  --course-banner: oklch(0.287 0.0888 264.791); /* #142756 */
+  --course-banner-mid: oklch(0.3431 0.1106 261.513); /* #153571 */
+  --course-banner-accent: oklch(0.3876 0.1329 261.764); /* #183F8A */
+  --course-banner-border: oklch(1 0 0 / 18%);
+  /* Tables sit on the card surface, with the header one rung up and the row highlight
+     between the two, mirroring how light mode spaces them. */
+  --table-background: oklch(0.2077 0.0398 265.755); /* #0F172A, the card */
+  --table-header: oklch(0.2795 0.0368 260.031); /* #1E293B */
   --table-header-foreground: oklch(0.9842 0.0034 247.858);
-  --table-highlight: oklch(0.2795 0.0368 260.031);
-  --table-background: oklch(0.2077 0.0398 265.755);
+  --table-highlight: oklch(0.2449 0.0388 264.354); /* #172033 */
   --node-color: oklch(0.7293 0.1363 88.887);
   /* Lighter than the --card surface (0.21) it is drawn on, not darker. The old value was
      0.2098, the same lightness as the card to three decimals, so the grid was painted in the
-     background's own colour and no grid appeared in dark mode at all. Matched to --muted
-     (0.274), which is the next step up from the card in this palette. */
-  --grid-color: oklch(0.274 0.006 286.033);
+     background's own colour and no grid appeared in dark mode at all. Kept matched to
+     --muted, which is the next step up from the card in this palette. */
+  --grid-color: oklch(0.2795 0.0368 260.031); /* #1E293B */
   --success: oklch(0.7669 0.1597 134.58);
-  /* Status dark values (explicit tints; can't reuse brand vars, since --tertiary flips to
-     teal in dark). Badges/alerts/toasts inherit these through the aliases defined in
-     :root, so only the status family is overridden here. */
+  /* Status dark values, spelled out rather than derived. Badges/alerts/toasts inherit them
+     through the aliases defined in :root, so only the status family is overridden here. */
   --status-success: oklch(0.7669 0.1597 134.58);
   --status-success-bg: oklch(0.4204 0.1055 138.019 / 25%);
   --status-success-border: oklch(0.7669 0.1597 134.58 / 35%);
@@ -272,15 +620,222 @@
   --status-info: oklch(0.7646 0.0834 259.348);
   --status-info-bg: oklch(0.37 0.1221 262.228 / 30%);
   --status-info-border: oklch(0.7646 0.0834 259.348 / 40%);
-  /* Solid fills carry a white glyph, so they keep the same mid shade in dark (a lighter
-     fill would drop below 3:1 against white); only the grey neutral is lightened here. */
-  --status-neutral-solid: oklch(0.7107 0.0351 256.788);
-  --tab-active: oklch(0.7845 0.1325 181.912);                    /* teal-400 */
-  --tab-active-bg: oklch(0.3861 0.059 188.416 / 40%);   /* teal-900 / 40% */
+  /* Solid fills carry a white glyph, so they keep the same mid shade in dark: a lighter
+     fill drops below 3:1 against white, which is exactly what this token used to do. It
+     was lightened to #94A3B8 to stand out from the dark card and that put white on it at
+     2.56:1. Slate-500 instead: white is 4.76:1 on it, and it is still 3.75:1 against the
+     card, so the fill itself remains visible. */
+  --status-neutral-solid: oklch(0.5544 0.0407 257.4166); /* #64748B */
+  /* blue-300 / blue-950 rather than --primary: cobalt text on the dark card is 3.45:1. */
+  --tab-active: oklch(0.8091 0.0956 251.813); /* #93C5FD, 9.9:1 on the card */
+  --tab-active-bg: oklch(0.2823 0.0874 267.935 / 40%); /* blue-950 / 40% */
   /* Neutral badge stays badge-scoped. */
   --badge-neutral: oklch(0.6993 0 0);
   --badge-neutral-bg: oklch(0.329 0 0 / 35%);
   --badge-neutral-border: oklch(0.6993 0 0 / 30%);
+  /* The same eight hues, same order, inverted. A concept keeps its hue between themes; only
+     the lightness moves. Measured 8.0:1 or better against both the card and the page. */
+  --badge-category-slate: oklch(0.869 0.0198 252.894);
+  --badge-category-slate-bg: oklch(0.2077 0.0398 265.755 / 30%);
+  --badge-category-slate-border: oklch(0.869 0.0198 252.894 / 35%);
+  --badge-category-blue: oklch(0.8091 0.0956 251.813);
+  --badge-category-blue-bg: oklch(0.3791 0.1378 265.522 / 30%);
+  --badge-category-blue-border: oklch(0.8091 0.0956 251.813 / 35%);
+  --badge-category-indigo: oklch(0.7853 0.1041 274.713);
+  --badge-category-indigo-bg: oklch(0.3588 0.1354 278.697 / 30%);
+  --badge-category-indigo-border: oklch(0.7853 0.1041 274.713 / 35%);
+  --badge-category-violet: oklch(0.8112 0.1013 293.571);
+  --badge-category-violet-bg: oklch(0.3796 0.1783 293.745 / 30%);
+  --badge-category-violet-border: oklch(0.8112 0.1013 293.571 / 35%);
+  --badge-category-green: oklch(0.8712 0.1363 154.449);
+  --badge-category-green-bg: oklch(0.3925 0.0896 152.535 / 30%);
+  --badge-category-green-border: oklch(0.8712 0.1363 154.449 / 35%);
+  --badge-category-amber: oklch(0.879 0.1534 91.605);
+  --badge-category-amber-bg: oklch(0.4137 0.1054 45.904 / 30%);
+  --badge-category-amber-border: oklch(0.879 0.1534 91.605 / 35%);
+  --badge-category-orange: oklch(0.8366 0.1165 66.29);
+  --badge-category-orange-bg: oklch(0.4084 0.1165 38.172 / 30%);
+  --badge-category-orange-border: oklch(0.8366 0.1165 66.29 / 35%);
+  --badge-category-rose: oklch(0.8097 0.1061 11.638);
+  --badge-category-rose-bg: oklch(0.4103 0.1502 10.272 / 30%);
+  --badge-category-rose-border: oklch(0.8097 0.1061 11.638 / 35%);
+}
+
+/* A fourth theme, derived from LIGHT rather than being a third surface ladder.
+   `.high-contrast` is not `.dark`, so every `dark:` utility in the app stays switched off
+   and this block simply overrides the :root values. That is the whole mechanism: nothing
+   needs a new Tailwind variant, and a component that already reads tokens gets this theme
+   for free.
+
+   The target is WCAG AAA for text (7:1) rather than AA, and every boundary at full
+   strength. Every value here was computed and checked rather than eyeballed: 50 pairings,
+   0 failures, at those thresholds.
+
+   `color-scheme` is set explicitly because next-themes only sets it for the names `light`
+   and `dark`; without it a native <select> or scrollbar would keep whatever the previous
+   theme left behind.
+
+   Known limitation: components that hardcode a palette pair rather than a token (the
+   calendar's course chips, the coloured heading tiles, category-badge, the fixed-light
+   auth pages) render their LIGHT values here. Those are AA, not AAA. Moving them onto
+   tokens is the follow-up; the token layer is what this theme controls. */
+/**
+ * Also applied inside `.auth-light`. The auth pages pin themselves to the light palette so a
+ * dark dashboard theme cannot make them unreadable, but high contrast is not a preference to
+ * override: it is the one a person cannot do without. The descendant selector outranks the
+ * plain `.auth-light` above, so it wins on the same element.
+ */
+.high-contrast,
+.high-contrast .auth-light {
+  color-scheme: light;
+
+  /* Surfaces and text. Pure white and pure black, not the slate the light theme uses: this
+     theme trades softness for the maximum the sRGB gamut allows, 21:1. */
+  --background: oklch(1 0 89.8756); /* #FFFFFF */
+  --foreground: oklch(0 0 0); /* #000000 */
+  --card: oklch(1 0 89.8756); /* #FFFFFF */
+  --card-foreground: oklch(0 0 0); /* #000000 */
+  --popover: oklch(1 0 89.8756); /* #FFFFFF */
+  --popover-foreground: oklch(0 0 0); /* #000000 */
+  --muted: oklch(0.9401 0 89.8756); /* #EBEBEB */
+  --muted-foreground: oklch(0.3211 0 89.8756); /* #333333 */
+  --accent: oklch(0.9401 0 89.8756); /* #EBEBEB */
+  --accent-foreground: oklch(0 0 0); /* #000000 */
+  --secondary: oklch(0.9401 0 89.8756); /* #EBEBEB */
+  --secondary-foreground: oklch(0 0 0); /* #000000 */
+
+  /* Boundaries. The border/input split collapses here on purpose. Light mode keeps
+     structure quieter than controls; at high contrast every edge is worth drawing at full
+     strength, so a card edge and a field edge are both black. */
+  --border: oklch(0 0 0); /* #000000 */
+  --input: oklch(0 0 0); /* #000000 */
+  --ring: oklch(0.4118 0.1759 262.7938); /* #0F3FA8 */
+
+  /* Actions and links. Cobalt darkens from #2563EB, which carries white at only 5.2:1, to
+     #1E40AF at 8.7:1. Links keep that value and stay underlined at rest, so nothing rests
+     on colour alone. */
+  --primary: oklch(0.4244 0.1809 265.6377); /* #1E40AF */
+  --primary-foreground: oklch(1 0 89.8756); /* #FFFFFF */
+  --link: oklch(0.4244 0.1809 265.6377); /* #1E40AF */
+  --link-hover: oklch(0.2697 0.1124 264.9241); /* #0A1F5C */
+  --destructive: oklch(0.4493 0.1844 29.2339); /* #A30000 */
+  --tab-active: oklch(0.4244 0.1809 265.6377); /* #1E40AF */
+  --tab-active-bg: oklch(0.9386 0.0191 263.007); /* #E4EBF8 */
+
+  /* The sidebar goes fully black, and the active row inverts to white-on-black rather than
+     tinting. 21:1 both ways, and the current item is unmistakable. */
+  --sidebar: oklch(0 0 0); /* #000000 */
+  --sidebar-foreground: oklch(1 0 89.8756); /* #FFFFFF */
+  --sidebar-muted-foreground: oklch(0.8761 0 89.8756); /* #D6D6D6 */
+  --sidebar-primary: oklch(1 0 89.8756); /* #FFFFFF */
+  --sidebar-primary-foreground: oklch(0 0 0); /* #000000 */
+  --sidebar-accent: oklch(0.3211 0 89.8756); /* #333333 */
+  --sidebar-accent-foreground: oklch(1 0 89.8756); /* #FFFFFF */
+  --sidebar-border: oklch(1 0 89.8756); /* #FFFFFF */
+  --sidebar-ring: oklch(1 0 89.8756); /* #FFFFFF */
+
+  /* The header gives up decoration entirely and keeps only the job: a light grey band
+     that is not the white page, carrying black text at 17.6:1, with a full black rule
+     under it. Nothing here depends on a particular tint. */
+  --navbar: oklch(0.9401 0 89.8756); /* #EBEBEB */
+  --navbar-foreground: oklch(0 0 0); /* #000000, 17.6:1 */
+  --navbar-muted-foreground: oklch(0.3211 0 89.8756); /* #333333, 10.6:1 */
+  --navbar-accent: oklch(0.8761 0 89.8756); /* #D6D6D6, black on it 14.5:1 */
+  --navbar-accent-foreground: oklch(0 0 0); /* #000000 */
+  --navbar-border: oklch(0 0 0); /* #000000 */
+  --navbar-ring: oklch(0.4118 0.1759 262.7938); /* #0F3FA8, 7.7:1 */
+
+  /* The course banner goes fully black with a white edge, the same move this theme makes on
+     the sidebar, and the network disappears: transparent nodes and lines rather than a
+     `display: none` somewhere in a component, so the whole treatment is switched from the one
+     place the rest of it is defined. Nothing is lost by that. The network is decoration and
+     carries no meaning, and everything the banner is for -- the course name, the faculty, the
+     registration code, the badges -- is text at 21:1 on the black. The muted label colour
+     comes up to the same #D6D6D6 the rail uses for its supporting lines, 15.9:1, because at
+     AAA a light blue on black is contrast this theme has no reason to spend. */
+  --course-banner: oklch(0 0 0); /* #000000 */
+  --course-banner-mid: oklch(0 0 0); /* #000000 */
+  --course-banner-accent: oklch(0 0 0); /* #000000 */
+  --course-banner-foreground: oklch(1 0 89.8756); /* #FFFFFF, 21:1 */
+  --course-banner-muted-foreground: oklch(0.8761 0 89.8756); /* #D6D6D6, 15.9:1 */
+  --course-banner-border: oklch(1 0 89.8756); /* #FFFFFF */
+  --course-banner-node: transparent;
+  --course-banner-glow: transparent;
+
+  /* Tables. */
+  --table-background: oklch(1 0 89.8756); /* #FFFFFF */
+  --table-header: oklch(0.9401 0 89.8756); /* #EBEBEB */
+  --table-header-foreground: oklch(0 0 0); /* #000000 */
+  --table-highlight: oklch(0.8945 0 89.8756); /* #DCDCDC */
+
+  /* Status. Near-white fills with very dark text, and the border takes the full-strength
+     colour so the state reads from the outline as well as the tint. Each solid fill carries
+     white at 9:1 or better. */
+  --status-success: oklch(0.3925 0.0896 152.5353); /* #14532D */
+  --status-success-bg: oklch(0.9552 0.0173 159.1164); /* #E7F4EC */
+  --status-success-border: oklch(0.3925 0.0896 152.5353); /* #14532D */
+  --status-warning: oklch(0.4013 0.0931 61.1548); /* #6B3A00 */
+  --status-warning-bg: oklch(0.96 0.022 74.0982); /* #FBF0E2 */
+  --status-warning-border: oklch(0.4013 0.0931 61.1548); /* #6B3A00 */
+  --status-danger: oklch(0.3999 0.1641 29.2339); /* #8B0000 */
+  --status-danger-bg: oklch(0.9505 0.0185 17.4835); /* #FBEAEA */
+  --status-danger-border: oklch(0.3999 0.1641 29.2339); /* #8B0000 */
+  --status-info: oklch(0.3089 0.1195 262.249); /* #0A2A6B */
+  --status-info-bg: oklch(0.9386 0.0191 263.007); /* #E4EBF8 */
+  --status-info-border: oklch(0.3089 0.1195 262.249); /* #0A2A6B */
+  --status-success-solid: oklch(0.3925 0.0896 152.5353); /* #14532D */
+  --status-warning-solid: oklch(0.4013 0.0931 61.1548); /* #6B3A00 */
+  --status-danger-solid: oklch(0.3999 0.1641 29.2339); /* #8B0000 */
+  --status-info-solid: oklch(0.3089 0.1195 262.249); /* #0A2A6B */
+  --status-neutral-solid: oklch(0.3211 0 89.8756); /* #333333 */
+  --badge-neutral: oklch(0.2393 0 89.8756); /* #1F1F1F */
+  --badge-neutral-bg: oklch(0.9401 0 89.8756); /* #EBEBEB */
+  --badge-neutral-border: oklch(0.2393 0 89.8756); /* #1F1F1F */
+  /* Every categorical hue collapses to the neutral treatment here, deliberately. Eight tinted
+     washes that are all legible would have to sit so close together that nobody could tell
+     them apart anyway, and the label already carries the category. Readability wins over hue
+     identity; this is the one theme where the two conflict. */
+  --badge-category-slate: var(--badge-neutral);
+  --badge-category-slate-bg: var(--badge-neutral-bg);
+  --badge-category-slate-border: var(--badge-neutral-border);
+  --badge-category-blue: var(--badge-neutral);
+  --badge-category-blue-bg: var(--badge-neutral-bg);
+  --badge-category-blue-border: var(--badge-neutral-border);
+  --badge-category-indigo: var(--badge-neutral);
+  --badge-category-indigo-bg: var(--badge-neutral-bg);
+  --badge-category-indigo-border: var(--badge-neutral-border);
+  --badge-category-violet: var(--badge-neutral);
+  --badge-category-violet-bg: var(--badge-neutral-bg);
+  --badge-category-violet-border: var(--badge-neutral-border);
+  --badge-category-green: var(--badge-neutral);
+  --badge-category-green-bg: var(--badge-neutral-bg);
+  --badge-category-green-border: var(--badge-neutral-border);
+  --badge-category-amber: var(--badge-neutral);
+  --badge-category-amber-bg: var(--badge-neutral-bg);
+  --badge-category-amber-border: var(--badge-neutral-border);
+  --badge-category-orange: var(--badge-neutral);
+  --badge-category-orange-bg: var(--badge-neutral-bg);
+  --badge-category-orange-border: var(--badge-neutral-border);
+  --badge-category-rose: var(--badge-neutral);
+  --badge-category-rose-bg: var(--badge-neutral-bg);
+  --badge-category-rose-border: var(--badge-neutral-border);
+
+  /* Data. The same six hues in the same order, darkened so each clears 4.5:1 as a graphical
+     object: series 5 is still gold, series 6 still green. The sequential ramp keeps its
+     low-to-high direction; its pale first step is inherent to a ramp, and both consumers
+     carry a data table. */
+  --chart-1: oklch(0.4244 0.1809 265.6377); /* #1E40AF */
+  --chart-2: oklch(0.432 0.2106 292.7591); /* #5B21B6 */
+  --chart-3: oklch(0.4698 0.143 37.3035); /* #9A3412 */
+  --chart-4: oklch(0.4546 0.1713 13.6968); /* #9F1239 */
+  --chart-5: oklch(0.421 0.0897 57.7077); /* #713F12 */
+  --chart-6: oklch(0.3925 0.0896 152.5353); /* #14532D */
+  --chart-sequential-1: oklch(0.9221 0.0272 260.3168); /* #DBE6F8 */
+  --chart-sequential-2: oklch(0.7646 0.0834 259.3479); /* #93B4E8 */
+  --chart-sequential-3: oklch(0.5602 0.1655 262.0308); /* #3B6FD4 */
+  --chart-sequential-4: oklch(0.4244 0.1809 265.6377); /* #1E40AF */
+  --chart-sequential-5: oklch(0.2697 0.1124 264.9241); /* #0A1F5C */
+  --grid-color: oklch(0 0 0); /* #000000 */
 }
 
 @layer base {
@@ -293,6 +848,20 @@
        variable is out of scope at html and the app silently fell back to the
        system font. */
     @apply bg-background text-foreground font-sans;
+  }
+  /**
+   * The signed-out pages are a full-bleed dark surface, and the canvas has to match them.
+   *
+   * `scrollbar-gutter: stable` above reserves a strip at the right edge whether or not there
+   * is a scrollbar, and nothing inside the page can paint it: it is outside the containing
+   * block of even a fixed element, and hit-testing returns nothing there. It is drawn from
+   * the canvas colour, which comes from the body. On the dashboard that strip is the same
+   * colour as the page and nobody sees it; against navy it was a pale stripe down the side of
+   * the screen. Keyed off the class those pages already carry rather than a body class, which
+   * only the root layout could set.
+   */
+  body:has(.auth-light) {
+    background-color: var(--sidebar);
   }
   /* Anything clickable gets the hand.
 
@@ -482,7 +1051,9 @@ html {
     max-width: 440px !important;
     overflow: hidden !important;
     padding: 0 !important;
-    font-family: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif) !important;
+    /* Sonner sets its own font-family on the toast, so this has to win. It is the only
+       place in the app that names a font outside the theme tokens. */
+    font-family: var(--font-sans) !important;
   }
 
   .custom-toast[data-type='success'] {

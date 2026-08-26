@@ -33,7 +33,10 @@ export function FirstAttemptChart({ problems, unitPlural }: Props) {
               : `${p.title}: no submissions yet`;
           return (
             <div key={p.id} className="flex items-center gap-2">
-              <div className="text-foreground w-24 shrink-0 truncate text-xs sm:w-36" title={p.title}>
+              <div
+                className="text-foreground w-24 shrink-0 truncate text-xs sm:w-36"
+                title={p.title}
+              >
                 {p.title}
               </div>
               <div
@@ -47,8 +50,13 @@ export function FirstAttemptChart({ problems, unitPlural }: Props) {
                 onFocus={(e) => showAtElement(e.currentTarget, label)}
                 onBlur={hide}
               >
+                {/* chart-1, the first categorical series, not --primary. One bar, one
+                    series, and it is a chart: it should follow the visualisation palette
+                    rather than the app's action colour, which is what it happened to
+                    share. Not a success/failure colour either, since the bar is a rate
+                    rather than a verdict. */}
                 {p.submitted > 0 && (
-                  <div className="bg-brand-teal h-full rounded-l-md" style={{ width: `${pct}%` }} />
+                  <div className="bg-chart-1 h-full rounded-l-md" style={{ width: `${pct}%` }} />
                 )}
               </div>
               <div className="text-muted-foreground w-10 shrink-0 text-right text-xs tabular-nums">

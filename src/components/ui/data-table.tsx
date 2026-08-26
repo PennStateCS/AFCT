@@ -373,28 +373,66 @@ export function DataTable<TData, TValue>({
 
   const stacked = useStackedView();
 
+  /*
+   * The controls that drive the table, drawn ON the table rather than above it.
+   *
+   * They used to float on the page background: outside the shell, outside its border, with
+   * nothing tying Search and Filters to the rows they filter. That was invisible while every
+   * table sat inside a white card, and became obvious once the shell started painting its own
+   * surface, because the toolbar was then the one part of the table showing the page through
+   * itself. Every table that sits inside a settings or status panel already passes
+   * `showToolbar={false}`, so nothing gains a second header band from this.
+   *
+   * The band is the table's own surface with a rule under it, NOT `bg-muted`: --table-header
+   * and --muted are the same value in all three themes, so a muted toolbar directly above the
+   * muted header row read as one grey block split by a hairline.
+   */
+  const toolbar = showToolbar ? (
+    <div className="border-b p-3">
+      <DataTableToolbar
+        table={table}
+        globalFilter={globalFilter}
+        setGlobalFilter={setGlobalFilter}
+        searchScope={searchScope}
+        setSearchScope={setSearchScope}
+        scopeOptions={scopeOptions}
+        filterableColumns={filterableColumns}
+        activeFilterCount={activeFilterCount}
+        actionButtons={actionButtons}
+        showExportButton={showExportButton}
+        onExport={exportToCSV}
+        onResetColumns={resetColumns}
+        getColumnLabel={columnLabel}
+      />
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-4">
-      {showToolbar && (
-        <DataTableToolbar
-          table={table}
-          globalFilter={globalFilter}
-          setGlobalFilter={setGlobalFilter}
-          searchScope={searchScope}
-          setSearchScope={setSearchScope}
-          scopeOptions={scopeOptions}
-          filterableColumns={filterableColumns}
-          activeFilterCount={activeFilterCount}
-          actionButtons={actionButtons}
-          showExportButton={showExportButton}
-          onExport={exportToCSV}
-          onResetColumns={resetColumns}
-          getColumnLabel={columnLabel}
-        />
-      )}
-
       {stacked ? (
         <div className="space-y-3">
+          {/* Stacked, there is no single shell to sit on: the cards are separate objects. The
+              toolbar takes the same box the pagination strip below them takes, so the two
+              controls that bracket the list match each other. */}
+          {showToolbar ? (
+            <div className="overflow-hidden rounded-md border bg-[var(--table-background)] p-3">
+              <DataTableToolbar
+                table={table}
+                globalFilter={globalFilter}
+                setGlobalFilter={setGlobalFilter}
+                searchScope={searchScope}
+                setSearchScope={setSearchScope}
+                scopeOptions={scopeOptions}
+                filterableColumns={filterableColumns}
+                activeFilterCount={activeFilterCount}
+                actionButtons={actionButtons}
+                showExportButton={showExportButton}
+                onExport={exportToCSV}
+                onResetColumns={resetColumns}
+                getColumnLabel={columnLabel}
+              />
+            </div>
+          ) : null}
           <DataTableCards
             table={table}
             loading={loading}
@@ -406,7 +444,9 @@ export function DataTable<TData, TValue>({
             loadingMessage={loadingMessage}
             emptyAction={emptyAction}
           />
-          <div className="rounded-md border p-3">
+          {/* Same reason as the table shell below: the card view's pagination strip was
+              transparent, so it took the page's colour instead of the table's. */}
+          <div className="rounded-md border bg-[var(--table-background)] p-3">
             <PaginationControls
               table={table}
               rowCount={rowCount}
@@ -418,8 +458,17 @@ export function DataTable<TData, TValue>({
         /* Single scroll container: the Table primitive already wraps the table in an
            overflow-x-auto div, so this wrapper only frames it (a second overflow-x-auto
            here produced a doubled/flaky horizontal scrollbar). overflow-hidden keeps the
-           rounded corners clipping the scrolling content. */
-        <div className="overflow-hidden rounded-md border">
+           rounded corners clipping the scrolling content.
+
+           The surface belongs to the shell, not only to the rows. It used to be painted
+           per row, which looks right until a table has no rows: an empty state, the
+           loading state and the pagination strip were all transparent, so on any page whose
+           background is not the card colour the table showed the page through itself. That
+           went unnoticed while every table sat inside a white card. `--table-background`
+           is the card colour in all three themes, so this is invisible where that is still
+           true and is the fix everywhere else. */
+        <div className="overflow-hidden rounded-md border bg-[var(--table-background)]">
+          {toolbar}
           <Table
             // `bordered` adds gridlines: a right border on every cell except the last
             // column (vertical lines) plus a bottom border on body rows (horizontal
@@ -477,7 +526,7 @@ export function DataTable<TData, TValue>({
                           <button
                             type="button"
                             onClick={handleSortClick}
-                            className={`flex w-full cursor-pointer items-center select-none ${flexClass || 'text-left'}`}
+                            className={`group/sort flex w-full cursor-pointer items-center select-none ${flexClass || 'text-left'}`}
                             /*
                              * When the header renders plain text, that text IS the button's
                              * accessible name -- an aria-label here would override it, and
@@ -499,8 +548,15 @@ export function DataTable<TData, TValue>({
                             {sorted === 'desc' && (
                               <ArrowDown className="ml-1 h-3 w-3" aria-hidden />
                             )}
+                            {/* Only while pointing at or focused on the header. Twelve
+                                permanent double-arrows made every column look sorted and
+                                none of them look sorted. aria-sort on the cell is what
+                                actually reports the state. */}
                             {!sorted && (
-                              <ArrowUpDown className="ml-1 h-3 w-3 opacity-40" aria-hidden />
+                              <ArrowUpDown
+                                className="ml-1 h-3 w-3 opacity-0 transition-opacity group-hover/sort:opacity-40 group-focus-visible/sort:opacity-40"
+                                aria-hidden
+                              />
                             )}
                           </button>
                         ) : (

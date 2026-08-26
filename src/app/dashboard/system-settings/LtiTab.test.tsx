@@ -41,6 +41,9 @@ function show(platforms: (typeof platform)[] = [], siteUrl = 'https://afct.test'
 const section = (heading: string) =>
   within(screen.getByRole('heading', { name: heading }).parentElement as HTMLElement);
 
+/** The manual endpoints are reference values now, not fields, so they are read as text. */
+const manual = () => within(screen.getByRole('complementary', { name: 'Manual configuration' }));
+
 /** Fills the add form with something the shared schema accepts. */
 async function fillForm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Add an LMS/ }));
@@ -66,27 +69,71 @@ describe('what AFCT hands over', () => {
   it('builds its URLs from the site address', async () => {
     show([], 'https://afct.example.edu');
 
-    await screen.findByRole('heading', { name: 'Or give these to your LMS by hand' });
-    const give = section('Or give these to your LMS by hand');
-    expect(give.getByLabelText(/Target link URI/)).toHaveValue(
-      'https://afct.example.edu/api/lti/launch',
-    );
-    expect(give.getByLabelText(/Login initiation URL/)).toHaveValue(
-      'https://afct.example.edu/api/lti/login',
-    );
-    expect(give.getByLabelText(/Public keyset URL/)).toHaveValue(
-      'https://afct.example.edu/api/lti/jwks',
-    );
+    await screen.findByRole('heading', { name: 'Manual configuration' });
+    const give = manual();
+    expect(give.getByText('https://afct.example.edu/api/lti/login')).toBeInTheDocument();
+    expect(give.getByText('https://afct.example.edu/api/lti/jwks')).toBeInTheDocument();
+    // Target link URI and Redirection URI are deliberately the same endpoint.
+    expect(give.getAllByText('https://afct.example.edu/api/lti/launch')).toHaveLength(2);
+  });
+
+  /*
+   * These are display text now, not read-only inputs. A value nobody can edit should not
+   * look like a field that refuses to work, and the thing you came to do with it is copy it.
+   */
+  it('presents the endpoints as values, not as form controls', async () => {
+    show([], 'https://afct.example.edu');
+
+    await screen.findByRole('heading', { name: 'Manual configuration' });
+    expect(manual().queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('gives every endpoint its own named copy action', async () => {
+    show([], 'https://afct.example.edu');
+
+    await screen.findByRole('heading', { name: 'Manual configuration' });
+    const give = manual();
+    for (const name of [
+      'Copy Target link URI',
+      'Copy Login initiation URL',
+      'Copy Redirection URI',
+      'Copy Public keyset URL',
+    ]) {
+      expect(give.getByRole('button', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('copies the endpoint the button belongs to', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+      writable: true,
+    });
+    show([], 'https://afct.example.edu');
+
+    await screen.findByRole('heading', { name: 'Manual configuration' });
+    await user.click(manual().getByRole('button', { name: 'Copy Public keyset URL' }));
+
+    expect(writeText).toHaveBeenCalledWith('https://afct.example.edu/api/lti/jwks');
+  });
+
+  // Each caveat sits with the endpoint it is about, rather than in one paragraph under all four.
+  it('keeps the endpoint-specific warnings', async () => {
+    show([], 'https://afct.example.edu');
+
+    await screen.findByRole('heading', { name: 'Manual configuration' });
+    expect(manual().getByText(/trailing slash or a different host/)).toBeInTheDocument();
+    expect(manual().getByText(/reachable from your LMS/)).toBeInTheDocument();
   });
 
   // A trailing slash in the configured site URL would otherwise produce a double slash.
   it('does not double the slash when the site URL ends in one', async () => {
     show([], 'https://afct.test/');
 
-    await screen.findByRole('heading', { name: 'Or give these to your LMS by hand' });
-    expect(
-      section('Or give these to your LMS by hand').getByLabelText(/Target link URI/),
-    ).toHaveValue('https://afct.test/api/lti/launch');
+    await screen.findByRole('heading', { name: 'Manual configuration' });
+    expect(manual().getAllByText('https://afct.test/api/lti/launch').length).toBeGreaterThan(0);
   });
 });
 
@@ -121,8 +168,9 @@ describe('creating a registration link', () => {
       }),
     });
 
-    const field = await screen.findByLabelText(/Registration link/);
-    expect(field).toHaveValue('https://afct.test/lti/register?rt=secret-token');
+    expect(
+      await screen.findByText('https://afct.test/lti/register?rt=secret-token'),
+    ).toBeInTheDocument();
   });
 
   it('says what went wrong rather than showing an empty field', async () => {
@@ -136,7 +184,7 @@ describe('creating a registration link', () => {
     await waitFor(() =>
       expect(toastMock.error).toHaveBeenCalledWith('Only administrators can do that.'),
     );
-    expect(screen.queryByLabelText(/Registration link/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/lti\/register\?rt=/)).not.toBeInTheDocument();
   });
 
   it('copies the link, and says so where a screen reader will hear it', async () => {
@@ -152,10 +200,16 @@ describe('creating a registration link', () => {
       }),
     });
 
-    await user.click(await screen.findByRole('button', { name: /Copy link/ }));
+    await user.click(await screen.findByRole('button', { name: 'Copy registration link' }));
 
     expect(writeText).toHaveBeenCalledWith('https://afct.test/lti/register?rt=secret-token');
-    expect(await screen.findByRole('status')).toHaveTextContent(/copied/i);
+    // Every copyable value carries its own live region, so scope to the one that spoke:
+    // an assertion on "the" status region would now be ambiguous rather than wrong.
+    await waitFor(() =>
+      expect(screen.getAllByRole('status').map((el) => el.textContent)).toContain(
+        'Registration link copied to the clipboard.',
+      ),
+    );
   });
 });
 
@@ -163,7 +217,8 @@ describe('the registered list', () => {
   it('says plainly when nothing is registered yet', async () => {
     show([]);
 
-    expect(await screen.findByText(/No LMS is registered/)).toBeInTheDocument();
+    expect(await screen.findByText('No LMSs registered')).toBeInTheDocument();
+    expect(screen.getByText(/Nobody can open AFCT from an LMS yet/)).toBeInTheDocument();
   });
 
   it('shows a registration with the values that identify it', async () => {

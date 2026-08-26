@@ -67,7 +67,7 @@ export function ProgressRing({
             fill="none"
             strokeWidth="4"
             strokeLinecap="round"
-            className="stroke-brand-teal"
+            className="stroke-primary"
             strokeDasharray={circumference}
             strokeDashoffset={circumference * (1 - fraction)}
           />

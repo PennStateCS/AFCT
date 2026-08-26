@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { FieldMessage } from '@/components/ui/field';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { cn } from '@/lib/utils';
 
@@ -47,8 +48,11 @@ export function LimitField({
   const errorId = `${inputId}-error`;
 
   return (
-    <div className={cn('flex flex-col', className)}>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+    // gap-1 on the wrapper, like InputGroup, so the number input and its error keep the
+    // same 4px rhythm as every other field. The label row keeps a little more air under it
+    // because the segmented control shares that line.
+    <div className={cn('flex flex-col gap-1', className)}>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
         {/* Only associate the label with the input when the input is actually rendered. */}
         <Label htmlFor={unlimited ? undefined : inputId} className="text-sm font-medium">
           {label}
@@ -83,13 +87,11 @@ export function LimitField({
             aria-label={label}
             aria-invalid={!!error || undefined}
             aria-describedby={error ? errorId : undefined}
-            className={cn('bg-card dark:bg-card h-11 border-input', error && 'border-destructive')}
+            // Only the height. border-input and the invalid border are Input's own, and
+            // restating them here was a second copy that could disagree with the first.
+            className="h-11"
           />
-          {error && (
-            <p id={errorId} role="alert" className="mt-1 text-xs text-destructive">
-              {error}
-            </p>
-          )}
+          <FieldMessage error={error} errorId={errorId} descriptionId={`${inputId}-desc`} />
         </>
       )}
     </div>

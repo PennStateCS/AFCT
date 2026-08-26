@@ -145,9 +145,9 @@ describe('upgradePhaseLabel', () => {
  */
 describe('describeSettingsIssue', () => {
   it('names the field a message belongs to', () => {
-    expect(
-      describeSettingsIssue({ path: ['smtpFromAddress'], message: 'Enter an address.' }),
-    ).toBe('From address: Enter an address.');
+    expect(describeSettingsIssue({ path: ['smtpFromAddress'], message: 'Enter an address.' })).toBe(
+      'From address: Enter an address.',
+    );
   });
 
   it('falls back to the key rather than losing the field entirely', () => {

@@ -121,7 +121,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
               width={Math.max(0, barW)}
               height={Math.max(0, h)}
               rx={2}
-              className="fill-brand-teal outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
+              className="fill-chart-1 outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
               tabIndex={0}
               role="img"
               aria-label={label}
@@ -152,7 +152,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
             x2={xOf(median)}
             y1={M.top}
             y2={M.top + plotH}
-            className="stroke-tertiary"
+            className="stroke-border"
             strokeWidth={1.5}
             strokeDasharray="2 3"
           />
@@ -163,7 +163,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
           x={M.left + plotW / 2}
           y={HEIGHT - 4}
           textAnchor="middle"
-          className="fill-muted-foreground text-[11px]"
+          className="fill-muted-foreground text-2xs"
           aria-hidden="true"
         >
           Assignment score (%)
@@ -171,7 +171,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
         <text
           transform={`translate(11 ${M.top + plotH / 2}) rotate(-90)`}
           textAnchor="middle"
-          className="fill-muted-foreground text-[11px]"
+          className="fill-muted-foreground text-2xs"
           aria-hidden="true"
         >
           Number of {unitPlural}
@@ -205,7 +205,7 @@ export function ScoreHistogramChart({ bins, mean, median, includedCount, unitPlu
                   y1="4"
                   x2="20"
                   y2="4"
-                  className="stroke-tertiary"
+                  className="stroke-border"
                   strokeWidth={1.5}
                   strokeDasharray="2 3"
                 />

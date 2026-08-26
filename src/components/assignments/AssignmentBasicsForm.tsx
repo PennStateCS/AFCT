@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { RichDescriptionField } from '@/components/rich-description/RichDescriptionField';
+import { SettingsSection } from '@/components/settings/settings-layout';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { apiPaths } from '@/lib/api-paths';
 import { showToast } from '@/lib/toast';
@@ -21,6 +22,10 @@ import { useUnsavedChangesGuard } from '@/components/unsaved-changes/UnsavedChan
  * assignment converts to rich JSON when the author edits the description and saves, never
  * merely because the tab was opened. A save that touches only the title re-sends whatever
  * form the description is already in.
+ *
+ * Laid out in the shared settings panel, the same one the course Settings tab and System
+ * Settings use, so a professor meets one form grammar across the three. It was a bare
+ * max-w-2xl stack before, which is a third width on a page that already had two.
  */
 export function AssignmentBasicsForm({
   courseId,
@@ -151,51 +156,72 @@ export function AssignmentBasicsForm({
   };
 
   return (
+    // No width of its own: the tab already gives every form section a max-w-3xl measure,
+    // which is the same one the settings vocabulary calls SETTINGS_COMPACT and picks for a
+    // form this short. A second cap here would only be a number to keep in step with it.
     <form
-      className="max-w-2xl space-y-4"
+      className="space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
         void save();
       }}
     >
-      <div className="space-y-2">
-        <Label htmlFor={titleId}>Title</Label>
-        <Input
-          id={titleId}
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          maxLength={200}
+      <SettingsSection
+        title="Title and description"
+        description="What students see at the top of the assignment."
+        headingLevel={3}
+      >
+        <div className="space-y-2">
+          <Label htmlFor={titleId}>Title</Label>
+          <Input
+            id={titleId}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={200}
+            disabled={courseIsArchived}
+            aria-invalid={!!error}
+            aria-describedby={error ? errorId : undefined}
+          />
+        </div>
+
+        {/* Remounted when the record changes so the editor reloads its initial content; it is
+              not a controlled input, so a prop change alone would not replace the open document. */}
+        <RichDescriptionField
+          key={assignmentId}
+          value={initialDescriptionJson ?? initialDescription}
+          onChange={(value) => {
+            setDescriptionJson(value);
+            setCurrentKey(serializeRichDescription(value));
+          }}
+          onDocumentReady={(value) => {
+            const key = serializeRichDescription(value);
+            setLoadedKey(key);
+            setCurrentKey(key);
+          }}
           disabled={courseIsArchived}
-          aria-invalid={!!error}
-          aria-describedby={error ? errorId : undefined}
+          placeholder="Enter assignment description"
+          /*
+           * Taller than the editor's default, because this is a page and not a dialog. The
+           * default 160px box (115px of writing area, about five lines) is sized for the
+           * problem dialogs, where the editor competes with a file picker and a set of
+           * limits for a fixed amount of room. Here the description IS the tab, and that box
+           * left an assignment brief being written through a slot with 400px of empty page
+           * under it. 288px is about eleven lines; the drag grip still takes it further, up
+           * to 80vh.
+           */
+          minHeightClassName="min-h-72"
         />
-      </div>
 
-      {/* Remounted when the record changes so the editor reloads its initial content; it is not
-          a controlled input, so a prop change alone would not replace the open document. */}
-      <RichDescriptionField
-        key={assignmentId}
-        value={initialDescriptionJson ?? initialDescription}
-        onChange={(value) => {
-          setDescriptionJson(value);
-          setCurrentKey(serializeRichDescription(value));
-        }}
-        onDocumentReady={(value) => {
-          const key = serializeRichDescription(value);
-          setLoadedKey(key);
-          setCurrentKey(key);
-        }}
-        disabled={courseIsArchived}
-        placeholder="Enter assignment description"
-      />
+        {error && (
+          <p id={errorId} role="alert" className="text-destructive text-xs">
+            {error}
+          </p>
+        )}
+      </SettingsSection>
 
-      {error && (
-        <p id={errorId} role="alert" className="text-destructive text-xs">
-          {error}
-        </p>
-      )}
-
-      <div className="flex justify-end">
+      {/* The same footer the other settings forms use: a rule, then the action at the
+            form's right edge. */}
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
         <Button type="submit" disabled={busy || !dirty || courseIsArchived}>
           {busy ? 'Saving…' : 'Save'}
         </Button>

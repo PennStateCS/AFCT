@@ -52,7 +52,31 @@ describe('a course with no LMS', () => {
   it('explains itself on the settings tab, which is somewhere you navigated to', async () => {
     show({ linked: false }, 'settings');
 
-    expect(await screen.findByText(/not connected to an LMS/)).toBeInTheDocument();
+    // Why it is unavailable, and where the connection is actually made. The old copy opened
+    // with the procedure ("once somebody opens AFCT from your LMS and connects the course"),
+    // which asks the reader to follow a recipe before learning what the card is for.
+    expect(await screen.findByText(/not connected to an LMS course/)).toBeInTheDocument();
+    expect(screen.getByText(/opening AFCT from a link in your LMS course/)).toBeInTheDocument();
+  });
+
+  /*
+   * The heading is the feature's name, not a description of where grades end up. It has to
+   * match the panel beside a student's grade, because a professor moves between the two while
+   * marking and two names for one thing reads as two features.
+   */
+  it('calls the card Grade sync, connected or not', async () => {
+    show({ linked: false }, 'settings');
+
+    expect(await screen.findByRole('heading', { name: 'Grade sync' })).toBeInTheDocument();
+  });
+
+  // It must not claim anything about assignment links: it never asked about them. That is a
+  // separate card reading a separate endpoint.
+  it('says nothing about assignment links, which it has not read', async () => {
+    show({ linked: false }, 'settings');
+
+    await screen.findByRole('heading', { name: 'Grade sync' });
+    expect(screen.queryByText(/assignment link/i)).not.toBeInTheDocument();
   });
 
   it('shows nothing at all next to the grades', async () => {
@@ -79,7 +103,7 @@ describe('what the status says', () => {
   it('leads with failures, since those need somebody to act', async () => {
     show({ failed: 2, pending: 5, sent: 9 }, 'status');
 
-    expect(await screen.findByText(/2 grades could not be sent/)).toBeInTheDocument();
+    expect(await screen.findByText(/2 grades could not be sent to the LMS/)).toBeInTheDocument();
   });
 
   it('counts one failure in the singular', async () => {
@@ -94,10 +118,16 @@ describe('what the status says', () => {
     expect(await screen.findByText(/3 grades are waiting/)).toBeInTheDocument();
   });
 
+  it('counts one pending grade in the singular', async () => {
+    show({ pending: 1 }, 'status');
+
+    expect(await screen.findByText(/^1 grade is waiting/)).toBeInTheDocument();
+  });
+
   it('says everything is sent once nothing is pending', async () => {
     show({ sent: 4 }, 'status');
 
-    expect(await screen.findByText('All grades have been sent.')).toBeInTheDocument();
+    expect(await screen.findByText('All grades have been sent to the LMS.')).toBeInTheDocument();
   });
 
   it('says so before anything has ever been sent', async () => {
@@ -118,6 +148,19 @@ describe('what the status says', () => {
  * screen claims grades are syncing automatically when the setting never saved.
  */
 describe('the automatic-sync switch', () => {
+  /*
+   * What the switch promises has to name where grades go, because "automatically" on its own
+   * does not say whether that means into AFCT's own gradebook or out to the LMS. It says the
+   * connected LMS course rather than "your LMS": grades land in one course's gradebook, and
+   * which one is exactly what a professor with two linked sections needs to know.
+   */
+  it('says where grades go, not just that they go', async () => {
+    show({}, 'settings');
+
+    expect(await screen.findByRole('switch', { name: /Send grades automatically/ })).toBeVisible();
+    expect(screen.getByText(/connected LMS course/)).toBeInTheDocument();
+  });
+
   it('saves the new setting', async () => {
     const fetchMock = show({}, 'settings');
     const user = userEvent.setup();
@@ -158,7 +201,7 @@ describe('sending grades now', () => {
     await user.click(await screen.findByRole('button', { name: /Send grades now/ }));
 
     await waitFor(() =>
-      expect(toastMock.success).toHaveBeenCalledWith('3 grades are on their way to your LMS.'),
+      expect(toastMock.success).toHaveBeenCalledWith('3 grades are on their way to the LMS.'),
     );
     // Third call is the reload, so the counts shown are the server's, not a guess.
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -173,10 +216,9 @@ describe('sending grades now', () => {
 
     await user.click(await screen.findByRole('button', { name: /Send grades now/ }));
 
+    // No destination on this one: nothing was sent, so naming the LMS only lengthens it.
     await waitFor(() =>
-      expect(toastMock.success).toHaveBeenCalledWith(
-        'Every grade is already up to date in your LMS.',
-      ),
+      expect(toastMock.success).toHaveBeenCalledWith('Every grade is already up to date.'),
     );
   });
 
@@ -200,7 +242,7 @@ describe('the inline placement', () => {
   it('starts open, since whether grades arrived is worth seeing unasked', async () => {
     show({ sent: 2 }, 'inline');
 
-    expect(await screen.findByRole('button', { name: /Collapse LMS sync/ })).toHaveAttribute(
+    expect(await screen.findByRole('button', { name: /Collapse grade sync/ })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
@@ -210,10 +252,10 @@ describe('the inline placement', () => {
     show({ sent: 2 }, 'inline');
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole('button', { name: /Collapse LMS sync/ }));
+    await user.click(await screen.findByRole('button', { name: /Collapse grade sync/ }));
 
     expect(screen.queryByRole('button', { name: /Send grades now/ })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Expand LMS sync/ }));
+    await user.click(screen.getByRole('button', { name: /Expand grade sync/ }));
     expect(screen.getByRole('button', { name: /Send grades now/ })).toBeInTheDocument();
   });
 });
@@ -260,7 +302,7 @@ describe('the panel beside one student', () => {
         expect.objectContaining({ method: 'POST', body: JSON.stringify({ userId: 'u-7' }) }),
       ),
     );
-    expect(toastMock.success).toHaveBeenCalledWith('This grade is on its way to your LMS.');
+    expect(toastMock.success).toHaveBeenCalledWith('This grade is on its way to the LMS.');
   });
 
   it("quotes why this student's grade failed, which is the part somebody can act on", async () => {
@@ -273,13 +315,15 @@ describe('the panel beside one student', () => {
       },
     });
 
+    // The server's own sentence, verbatim. It is stored on the queue row, so the component
+    // must not paraphrase it: an old failure would then be shown in words nobody wrote.
     expect(await screen.findByText(/does not list this student/)).toBeInTheDocument();
   });
 
   it("does not report the rest of the class as this student's state", async () => {
     showFor({ failed: 2, student: { state: 'SENT', sentAt: null, lastError: null } });
 
-    expect(await screen.findByText('This grade has been sent to your LMS.')).toBeInTheDocument();
+    expect(await screen.findByText('This grade has been sent to the LMS.')).toBeInTheDocument();
     expect(screen.queryByText(/2 grades could not be sent/)).not.toBeInTheDocument();
   });
 
@@ -319,7 +363,7 @@ describe('the panel beside one student', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<GradeSyncCard assignmentId="a-1" variant="inline" />);
 
-    expect(await screen.findByText(/2 grades could not be sent/)).toBeInTheDocument();
+    expect(await screen.findByText(/2 grades could not be sent to the LMS/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send grades now/ })).toBeInTheDocument();
   });
 });

@@ -3,8 +3,18 @@
 import { Badge } from '@/components/ui/badge';
 import InputGroup from '@/components/ui/InputGroup';
 import SwitchField from '@/components/ui/SwitchField';
+
+import { CopyableValue } from './CopyableValue';
 import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
-import { SETTINGS_BOX_CLASS } from './system-settings-shared';
+
+import {
+  SettingsAsideCard,
+  SettingsSection,
+  SettingsStatusCard,
+  SettingsAsideLayout,
+  SettingsStatusNextStep,
+  SettingsStatusText,
+} from '@/components/settings/settings-layout';
 import type { SetField } from './system-settings-shared';
 
 /**
@@ -54,32 +64,72 @@ export function SignInTab({
   redirectUri: string;
 }) {
   return (
-    <>
-      <p className="text-muted-foreground mb-4 text-sm">
-        Let people sign in with their institution&apos;s account. Your IT department will give you
-        these values, and will need the redirect URL below.
-      </p>
-
-      <div className="mb-5 space-y-2">
-        <h2 className="text-sm font-medium">Current status</h2>
-        <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
-          <Badge
-            variant={!enabled ? 'warning' : clientSecretReadable ? 'success' : 'destructive'}
-            className="w-fit"
+    <SettingsAsideLayout
+      aside={
+        <>
+          <SettingsStatusCard
+            title="Current status"
+            tone={!enabled ? 'off' : clientSecretReadable ? 'ok' : 'bad'}
+            badge={
+              <Badge variant={!enabled ? 'neutral' : clientSecretReadable ? 'success' : 'danger'}>
+                {!enabled
+                  ? 'Disabled'
+                  : clientSecretReadable
+                    ? 'Enabled'
+                    : 'Enabled, but unavailable'}
+              </Badge>
+            }
+            headline={
+              !enabled
+                ? 'Institutional sign-in is off'
+                : clientSecretReadable
+                  ? 'Institutional sign-in is available'
+                  : 'Institutional sign-in is unavailable'
+            }
           >
-            {!enabled ? 'Disabled' : clientSecretReadable ? 'Enabled' : 'Enabled, but unavailable'}
-          </Badge>
-          <p className="text-muted-foreground">
-            {!enabled
-              ? 'Everyone signs in with an AFCT password.'
-              : clientSecretReadable
-                ? 'People can sign in with their institution. AFCT passwords still work as well.'
-                : 'The saved client secret cannot be read, so the institution button is not shown and nobody can sign in that way. This usually means the encryption key this AFCT was set up with has changed. Save the secret again, or restore the key.'}
-          </p>
-        </div>
-      </div>
+            {/* "AFCT passwords still work" belongs here, in both working states: it is the
+                thing an admin is worried about when they touch this page. The provider and
+                email-matching rules do NOT: those are decisions you make in the form. */}
+            {!enabled && (
+              <>
+                <SettingsStatusText>Everyone signs in with an AFCT password.</SettingsStatusText>
+                <SettingsStatusNextStep>Turn it on to add your provider.</SettingsStatusNextStep>
+              </>
+            )}
+            {enabled && clientSecretReadable && (
+              <SettingsStatusText>
+                People can sign in with their institution. AFCT passwords still work as well.
+              </SettingsStatusText>
+            )}
+            {enabled && !clientSecretReadable && (
+              <>
+                <SettingsStatusText>
+                  The saved client secret cannot be read, so the institution button is not shown.
+                  This usually means the encryption key this AFCT was set up with has changed. AFCT
+                  passwords still work.
+                </SettingsStatusText>
+                <SettingsStatusNextStep>
+                  Save the secret again, or restore the key.
+                </SettingsStatusNextStep>
+              </>
+            )}
+          </SettingsStatusCard>
 
-      <div className={`max-w-md ${SETTINGS_BOX_CLASS}`}>
+          {/* Reference, not configuration: a value you hand to somebody else, so it sits in
+              the rail with a copy button rather than as a read-only field in the middle of
+              the form. Same treatment as LTI's manual endpoints and the public address. */}
+          <SettingsAsideCard title="For your IT department">
+            <CopyableValue
+              label="Redirect URL"
+              value={redirectUri}
+              copyName="redirect URL"
+              description="Registration usually fails without it, with an error about a mismatched redirect."
+            />
+          </SettingsAsideCard>
+        </>
+      }
+    >
+      <SettingsSection title="Institutional sign-in">
         <SwitchField
           id="oidc-enabled"
           name="oidc-enabled"
@@ -111,6 +161,9 @@ export function SignInTab({
           label="Client secret"
           name="oidcClientSecret"
           type="password"
+          // The server's credential, not the admin's. Without this a password manager
+          // offers to save it as their AFCT password, and to autofill it back later.
+          autoComplete="off"
           showEye
           value={clientSecret}
           setValue={setClientSecret}
@@ -139,30 +192,12 @@ export function SignInTab({
           placeholder={DEFAULT_OIDC_BUTTON_LABEL}
           description="What the sign-in button says. Use whatever your institution calls its login."
         />
-      </div>
+      </SettingsSection>
 
-      <div className="mt-6 max-w-md space-y-3 border-t pt-5">
-        <h2 className="text-sm font-medium">Give this to your IT department</h2>
-        <p className="text-muted-foreground text-xs">
-          The redirect URL AFCT will use. Registration usually fails without it, with an error about
-          a mismatched redirect.
-        </p>
-        <InputGroup
-          label="Redirect URL"
-          name="oidcRedirectUri"
-          value={redirectUri}
-          setValue={() => {}}
-          readOnly
-        />
-      </div>
-
-      <div className="mt-6 max-w-md space-y-3 border-t pt-5">
-        <h2 className="text-sm font-medium">Matching people to accounts</h2>
-        <p className="text-muted-foreground text-xs">
-          When somebody signs in for the first time, AFCT attaches their institutional identity to
-          an existing account with the same email address, but only if the provider states that the
-          address is verified.
-        </p>
+      <SettingsSection
+        title="Matching people to accounts"
+        description="When somebody signs in for the first time, AFCT attaches their institutional identity to an existing account with the same email address, but only if the provider states that the address is verified."
+      >
         <SwitchField
           id="oidc-trust-email"
           name="oidc-trust-email"
@@ -173,47 +208,50 @@ export function SignInTab({
           descriptionPlacement="inline"
           description="Only turn this on if your provider controls the addresses it reports."
         />
-        {/* Not hidden behind a tooltip: this is the one setting on the page that can hand
-            somebody another person's account, and the reason it exists at all is that the
-            common case (Microsoft) omits the claim. */}
-        <p className="text-muted-foreground text-xs">
-          Some providers, including Microsoft Entra, never mark addresses as verified. Without this,
-          nobody at those institutions is matched automatically. With it on at a provider where
-          people can choose their own address, someone could reach an account that is not theirs.
-          Administrator accounts are never matched automatically either way.
-        </p>
-        {/* The distinction people got wrong: this setting answers an unverified address, not a
-            missing one, and Entra can send no address at all unless the claim is released. */}
-        <p className="text-muted-foreground text-xs">
-          This does not help if your provider sends no address at all. On Entra the email claim has
-          to be released on the app registration, or through the OpenID scope on v2.0 endpoints;
-          without it, people are refused with &ldquo;your institution did not share an email
-          address&rdquo; whatever this setting says.
-        </p>
-      </div>
-      <div className="mt-6 space-y-2">
-        <h2 className="text-sm font-medium">AFCT passwords</h2>
-        <div className={SETTINGS_BOX_CLASS}>
-          <SwitchField
-            id="allow-linked-account-passwords"
-            name="allow-linked-account-passwords"
-            label="Let people who sign in through an institution or an LMS also set an AFCT password"
-            checked={allowLinkedAccountPasswords}
-            onCheckedChange={(v) => setField('allowLinkedAccountPasswords', v)}
-            disabled={disabled}
-            descriptionPlacement="inline"
-            description="They can set one from their own Account page. Turn this off if people must always sign in the way your institution requires."
-          />
-          <p className="text-muted-foreground mt-2 text-sm">
-            You can always set a password for someone yourself, whichever way this is set, so
-            turning it off cannot leave anybody with no way back in. Note that the AFCT desktop
-            client signs in with an email and a password, so a student who only ever opens AFCT from
-            your LMS needs one to use it. With this off, an administrator who signs in through your
-            institution also cannot confirm an LMS launch, which asks for an AFCT password.
+        {/*
+          One note, not two loose paragraphs after a switch. Neutral bg-muted and not a
+          warning colour: this is a detail about how providers behave, and the page has no
+          warning state to report. Deliberately NOT a tooltip either: this is the one
+          setting here that can hand somebody another person's account, and the reason it
+          exists at all is that the common case (Microsoft) omits the claim.
+        */}
+        <div className="bg-muted/40 max-w-3xl space-y-2 rounded-md border p-3">
+          <p className="text-foreground text-xs font-medium">If your provider is Microsoft Entra</p>
+          <p className="text-muted-foreground text-xs leading-4.5">
+            Entra never marks addresses as verified, so without this setting nobody at those
+            institutions is matched automatically. With it on at a provider where people can choose
+            their own address, someone could reach an account that is not theirs. Administrator
+            accounts are never matched automatically either way.
+          </p>
+          <p className="text-muted-foreground text-xs leading-4.5">
+            It does not help if your provider sends no address at all. On Entra the email claim has
+            to be released on the app registration, or through the OpenID scope on v2.0 endpoints;
+            without it, people are refused with &ldquo;your institution did not share an email
+            address&rdquo; whatever this setting says.
           </p>
         </div>
-      </div>
-    </>
+      </SettingsSection>
+
+      <SettingsSection title="AFCT passwords">
+        <SwitchField
+          id="allow-linked-account-passwords"
+          name="allow-linked-account-passwords"
+          label="Let people who sign in through an institution or an LMS also set an AFCT password"
+          checked={allowLinkedAccountPasswords}
+          onCheckedChange={(v) => setField('allowLinkedAccountPasswords', v)}
+          disabled={disabled}
+          descriptionPlacement="inline"
+          description="They can set one from their own Account page. Turn this off if people must always sign in the way your institution requires."
+        />
+        <p className="text-muted-foreground max-w-3xl text-sm">
+          You can always set a password for someone yourself, whichever way this is set, so turning
+          it off cannot leave anybody with no way back in. Note that the AFCT desktop client signs
+          in with an email and a password, so a student who only ever opens AFCT from your LMS needs
+          one to use it. With this off, an administrator who signs in through your institution also
+          cannot confirm an LMS launch, which asks for an AFCT password.
+        </p>
+      </SettingsSection>
+    </SettingsAsideLayout>
   );
 }
 

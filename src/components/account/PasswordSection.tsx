@@ -181,6 +181,9 @@ function SetForm({
             fieldProps={field}
             error={errors.newPassword?.message}
             description={NEW_PASSWORD_HELP}
+            // The rules are what you need in order to fix the error, so they stay put
+            // instead of being replaced by it.
+            showDescriptionWithError
           />
         )}
       />
@@ -289,6 +292,9 @@ function ChangeForm({
             fieldProps={field}
             error={errors.newPassword?.message}
             description={NEW_PASSWORD_HELP}
+            // The rules are what you need in order to fix the error, so they stay put
+            // instead of being replaced by it.
+            showDescriptionWithError
           />
         )}
       />

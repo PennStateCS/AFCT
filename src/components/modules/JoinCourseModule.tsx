@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { UserPlus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -75,25 +76,34 @@ export function JoinCourseModule() {
     void joinWithCode(code);
   };
 
+  // Same compact shell as the Deadlines card beside it, so the rail has one rhythm.
   return (
-    <Card className="w-full" aria-labelledby="join-course-title">
-      <CardHeader>
+    <Card role="group" className="w-full gap-4 py-5" aria-labelledby="join-course-title">
+      <CardHeader className="px-5">
         <CardTitle
           id="join-course-title"
           role="heading"
           aria-level={2}
-          className="text-lg font-semibold"
+          className="text-base font-semibold"
         >
-          Join a Course
+          <span className="flex items-center gap-2.5">
+            {/* Decorative: the heading beside it already says what this card is. The dark
+                tint is spelled out because cobalt at 10% behind a cobalt glyph is 2.8:1 on
+                a dark card, under the 3:1 floor for a non-text graphic. */}
+            <span className="bg-primary/10 text-primary dark:bg-blue-950/40 dark:text-blue-300 flex size-8 shrink-0 items-center justify-center rounded-full">
+              <UserPlus className="size-4" aria-hidden="true" />
+            </span>
+            <span>Join a Course</span>
+          </span>
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-5">
         <form onSubmit={handleSubmit}>
           <div>
             <Label htmlFor="course-code" className="mb-2 text-sm">
               Enter a registration code below:
             </Label>
-            <p id="course-code-help" className="text-muted-foreground mb-3 text-xs">
+            <p id="course-code-help" className="text-muted-foreground mb-2 text-xs">
               You can only join while the course registration window is open.
             </p>
 
@@ -131,7 +141,7 @@ export function JoinCourseModule() {
               </InputOTPGroup>
             </InputOTP>
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-3 flex gap-2">
             <Button type="submit" disabled={loading || code.length !== CODE_LENGTH}>
               {loading ? 'Joining...' : 'Join'}
             </Button>

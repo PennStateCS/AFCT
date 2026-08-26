@@ -115,7 +115,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
               const b = p.boxplot;
               // Each problem takes a stable color from the categorical chart palette so
               // its row is easy to pick out; the five colors cycle for longer lists.
-              const color = `var(--color-chart-${(i % 5) + 1})`;
+              const color = `var(--color-chart-${(i % 6) + 1})`;
               if (!b) {
                 return (
                   <text
@@ -123,7 +123,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                     x={xOf(0)}
                     y={cy}
                     dominantBaseline="middle"
-                    className="fill-muted-foreground text-[11px] italic"
+                    className="fill-muted-foreground text-2xs italic"
                     aria-hidden="true"
                   >
                     No graded {unitPlural}

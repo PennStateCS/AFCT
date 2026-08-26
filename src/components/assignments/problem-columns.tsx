@@ -9,8 +9,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, Pencil, Trash2, NotebookText, Eye, Download } from 'lucide-react';
+import { EllipsisVertical, Pencil, Trash2, NotebookText, Eye, Download } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 export const problemTypeLabels: Record<string, string> = {
   FA: 'Finite Automaton',
@@ -70,7 +72,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
               <button
                 type="button"
                 onClick={() => openDescription(problem)}
-                className="text-primary self-start text-xs underline hover:text-primary/80"
+                className={cn(TEXT_LINK_CLASS, 'self-start text-xs')}
                 title="View description"
               >
                 View description
@@ -91,7 +93,10 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
         priority: 1,
         filterVariant: 'multiselect' as const,
         filterLabel: 'Type',
-        filterOptions: Object.entries(problemTypeLabels).map(([value, label]) => ({ value, label })),
+        filterOptions: Object.entries(problemTypeLabels).map(([value, label]) => ({
+          value,
+          label,
+        })),
       },
       enableSorting: true,
     },
@@ -203,7 +208,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
             <button
               type="button"
               onClick={() => openRenderViewer(row.original)}
-              className="text-primary text-xs break-all hover:underline"
+              className={cn(TEXT_LINK_CLASS, 'text-xs break-all')}
               title={`View ${fileName}`}
             >
               {fileName}
@@ -231,8 +236,10 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       cell: ({ row }: { row: { original: Problem } }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="secondary" size="sm" aria-label={`Manage problem ${row.original.title}`}>
-              <ChevronDown className="mr-1 h-4 w-4" /> Manage
+            {/* Every row carries one of these, so the label names the problem: a dozen
+                buttons all called "More" is what a screen reader would otherwise hear. */}
+            <Button variant="ghost" size="icon" aria-label={`Actions for ${row.original.title}`}>
+              <EllipsisVertical className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -270,7 +277,7 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onRemoveProblem(row.original)}
-              className="flex items-center gap-2 text-destructive focus:text-destructive"
+              className="text-destructive focus:text-destructive flex items-center gap-2"
               hidden={courseIsArchived}
             >
               <Trash2 className="mr-2 h-4 w-4" /> Remove Problem

@@ -141,11 +141,26 @@ describe('UpdatesTab: choosing a version', () => {
 
   it('replaces the whole picker with instructions when the updater is not installed', () => {
     mount(undefined, { updaterAvailable: false, versions });
-    expect(screen.getByText(/update service isn’t installed/i)).toBeInTheDocument();
+    // The state and the command it needs moved to the updater's own card; what matters is
+    // that no upgrade action is offered that could not work.
     expect(screen.queryByRole('combobox', { name: /upgrade to/i })).toBeNull();
-    expect(screen.getByText('sh install.sh enable-updater')).toBeInTheDocument();
+    expect(within(serviceCard()).getByText('Not installed')).toBeInTheDocument();
+    expect(within(serviceCard()).getByText('sh install.sh enable-updater')).toBeInTheDocument();
   });
 });
+
+/**
+ * The upgrade status panel.
+ *
+ * Scoped by its section rather than by role: every copyable command on this page carries
+ * its own sr-only live region, so `getByRole('status')` is ambiguous here now.
+ */
+const statusPanel = () =>
+  within(screen.getByRole('region', { name: 'Update status' })).getByRole('status');
+const hasStatusPanel = () => screen.queryByRole('region', { name: 'Update status' }) !== null;
+
+/** The updater's own card in the rail, where all its states now live. */
+const serviceCard = () => screen.getByRole('complementary', { name: 'Update service' });
 
 describe('UpdatesTab: starting an upgrade', () => {
   const versions = [{ tag: 'v1.1.0', notes: 'Adds group sets.', upgradeNote: 'Back up first.' }];
@@ -208,20 +223,19 @@ describe('UpdatesTab: starting an upgrade', () => {
 describe('UpdatesTab: status', () => {
   it('shows nothing until the updater reports a phase', () => {
     mount(undefined, { status: null });
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(hasStatusPanel()).toBe(false);
   });
 
   it('shows the phase and the updater message', () => {
     mount(undefined, { status: { phase: 'failed', message: 'health check timed out' } });
-    const status = screen.getByRole('status');
-    expect(within(status).getByText('health check timed out')).toBeInTheDocument();
+    expect(within(statusPanel()).getByText('health check timed out')).toBeInTheDocument();
   });
 
   it('does not render the step checklist for a stale healthy phase from a previous session', () => {
     // Nothing was started this session, so a leftover `healthy` must not render every step
     // green, which would make a not-yet-started upgrade look already done.
     mount(undefined, { status: { phase: 'healthy' } });
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(hasStatusPanel()).toBe(true);
     expect(screen.queryByRole('list', { name: /progress/i })).toBeNull();
   });
 
@@ -271,9 +285,10 @@ describe('UpdatesTab: the update service banner', () => {
         composeFileOk: true,
       },
     });
-    expect(screen.getByText(/needs restarting before it can upgrade/i)).toBeInTheDocument();
+    expect(within(serviceCard()).getByText('Needs restart')).toBeInTheDocument();
+    expect(within(serviceCard()).getByText(/cannot find the settings file/i)).toBeInTheDocument();
     // Names the path, because that is what an operator has to go and check.
-    expect(screen.getByText('/afct/.env.production')).toBeInTheDocument();
+    expect(within(serviceCard()).getByText('/afct/.env.production')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Update the update service' })).toBeEnabled();
   });
 
@@ -331,10 +346,10 @@ describe('UpdatesTab: the update service banner', () => {
 
   it('tells the operator what to do when it times out', () => {
     mount({ selfUpdate: { phase: 'timeout' } }, {});
-    const banner = screen.getByRole('note');
-    expect(within(banner).getByText(/taking longer than expected/i)).toBeInTheDocument();
-    // The same command also appears in the intro copy, so scope it to the banner.
-    expect(within(banner).getByText('sh install.sh update')).toBeInTheDocument();
+    const card = serviceCard();
+    expect(within(card).getByText(/has not come back yet/i)).toBeInTheDocument();
+    // The same command also appears in the command-line card, so scope it to this one.
+    expect(within(card).getByText('sh install.sh update')).toBeInTheDocument();
   });
 
   it('hides the generic status card while a self-update runs, so phases are not doubled', () => {
@@ -476,5 +491,87 @@ describe('UpdatesTab: forced downgrade after a refused safety backup', () => {
       restorePoint: '20260701-120000',
       force: true,
     });
+  });
+});
+
+/**
+ * The page's shape.
+ *
+ * Updates answers a sequence of questions: what am I running, can this machine upgrade,
+ * is there anything to upgrade to, and how do I get back. The point of the layout is that
+ * the answers stay in that order and in the right column, so these pin where each lives
+ * rather than what it says.
+ */
+describe('UpdatesTab: the operational layout', () => {
+  it('leads with the running version, not with documentation', () => {
+    mount(undefined, { current: 'v1.2.0' });
+
+    const version = screen.getByRole('region', { name: 'Current version' });
+    expect(within(version).getByText('v1.2.0')).toBeInTheDocument();
+    // The three-paragraph intro used to come first. Its content moved into the rail and
+    // the section descriptions; none of it should be back above the version.
+    expect(screen.queryByText(/no server login needed/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps the updater and the command-line reference in the rail', () => {
+    mount(undefined, {});
+
+    expect(serviceCard()).toBeInTheDocument();
+    const cli = screen.getByRole('complementary', { name: 'Command-line update' });
+    expect(within(cli).getByText('sh install.sh update')).toBeInTheDocument();
+  });
+
+  it('copies the command-line update command', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+      writable: true,
+    });
+    mount(undefined, {});
+
+    await user.click(screen.getByRole('button', { name: 'Copy command-line update command' }));
+    expect(writeText).toHaveBeenCalledWith('sh install.sh update');
+  });
+
+  it('reports a healthy updater rather than staying silent about it', () => {
+    mount(undefined, { current: 'v1.1.0', updaterVersion: 'v1.1.0' });
+
+    expect(within(serviceCard()).getByText('Ready')).toBeInTheDocument();
+  });
+
+  /*
+   * A self-update in flight outranks every other updater state. That was the old render
+   * order (the misconfigured note was gated on `selfUpdate.phase === 'idle'`), and folding
+   * the banners into one card is exactly where it could have been lost.
+   */
+  it('lets a running self-update outrank a misconfigured updater', () => {
+    mount(
+      { selfUpdate: { phase: 'updating', targetTag: 'v1.2.0', requestId: 'r', startedAt: 0 } },
+      {
+        current: 'v1.2.0',
+        updaterVersion: 'v1.2.0',
+        updaterReadiness: {
+          envFile: '/afct/.env.production',
+          composeFile: '/afct/docker-compose.yml',
+          envFileOk: false,
+          composeFileOk: true,
+        },
+      },
+    );
+
+    expect(within(serviceCard()).getByText('Updating')).toBeInTheDocument();
+    expect(within(serviceCard()).queryByText('Needs restart')).not.toBeInTheDocument();
+  });
+
+  it('says how many releases are available before asking which one', () => {
+    mount(undefined, {
+      current: 'v1.0.0',
+      versions: [{ tag: 'v1.1.0' }, { tag: 'v1.2.0' }],
+    });
+
+    const upgrade = screen.getByRole('region', { name: 'Upgrade AFCT' });
+    expect(within(upgrade).getByText(/2 newer releases are available/i)).toBeInTheDocument();
   });
 });

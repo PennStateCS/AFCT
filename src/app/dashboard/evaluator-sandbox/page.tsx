@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { isCourseStaffAnywhere } from '@/lib/permissions';
 import EvaluatorSandboxClient from './EvaluatorSandboxClient';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 
 export const metadata: Metadata = {
   title: 'Evaluator Sandbox',
@@ -17,5 +18,10 @@ export default async function EvaluatorSandboxPage() {
     notFound();
   }
 
-  return <EvaluatorSandboxClient />;
+  // A work page, so it sits on the white surface rather than the slate canvas.
+  return (
+    <WorkspaceSurface>
+      <EvaluatorSandboxClient />
+    </WorkspaceSurface>
+  );
 }

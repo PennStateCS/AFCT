@@ -65,37 +65,53 @@ type InputGroupProps = {
   type?: string;
   value?: string | number;
   setValue?: (value: string) => void;
+  onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   fieldProps?: InputGroupFieldProps;
   disabled?: boolean;
+  readOnly?: boolean;
   min?: number | string;
   max?: number | string;
   step?: number | string;
   placeholder?: string;
   description?: string;
   error?: string;
+  showDescriptionWithError?: boolean;
 };
 
+/**
+ * Stands in for the real InputGroup in component tests.
+ *
+ * The parts that matter here are the ones a caller can get wrong: which change handlers
+ * fire and in what order, and which message shows under the field. Those deliberately
+ * mirror the real component, because a mock that updates the value along a path the real
+ * one does not is a test that passes for the wrong reason.
+ */
 const InputGroupMock = ({
   label,
   name,
   type = 'text',
   value,
   setValue,
+  onChange,
   fieldProps,
   disabled,
+  readOnly,
   min,
   max,
   step,
   placeholder,
   description,
   error,
+  showDescriptionWithError,
 }: InputGroupProps) => {
   const restFieldProps = fieldProps ?? {};
-  const resolvedValue = value ?? (restFieldProps?.value !== undefined ? restFieldProps.value : '');
+  const resolvedValue = restFieldProps?.value ?? value ?? '';
+  const showDescription = !!description && (!error || !!showDescriptionWithError);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setValue?.(event.target.value);
     restFieldProps?.onChange?.(event);
+    onChange?.(event);
+    if (!restFieldProps?.onChange) setValue?.(event.target.value);
   };
 
   const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
@@ -113,12 +129,13 @@ const InputGroupMock = ({
         onChange={handleChange}
         onBlur={handleBlur}
         disabled={disabled ?? restFieldProps?.disabled}
+        readOnly={readOnly}
         min={(min ?? restFieldProps?.min) as number | undefined}
         max={(max ?? restFieldProps?.max) as number | undefined}
         step={(step ?? restFieldProps?.step) as number | undefined}
         placeholder={(placeholder ?? restFieldProps?.placeholder) as string | undefined}
       />
-      {description ? <small>{description}</small> : null}
+      {showDescription ? <small>{description}</small> : null}
       {error ? (
         <span role="alert" style={{ color: 'red' }}>
           {error}

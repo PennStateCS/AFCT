@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Unlink } from 'lucide-react';
 import { RosterSyncDialog } from '@/components/course/RosterSyncDialog';
 import { Button } from '@/components/ui/button';
+import { SettingsSection } from '@/components/settings/settings-layout';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
@@ -24,6 +25,11 @@ type Link = {
  *
  * Until this existed the link was invisible once made, and could only be changed in the
  * database. Several links is normal: cross-listed sections are separate courses in the LMS.
+ *
+ * Its own panel in the Settings tab's main column, not a block inside the status card in
+ * the rail. Each row carries a title, a platform, a date and a Disconnect button, which is
+ * more than a 288px rail holds without truncating all four. The component still decides
+ * whether it appears at all, so the panel is never drawn empty.
  */
 export function CourseLmsSection({ courseId }: { courseId: string }) {
   const { timezone, hour12 } = useEffectiveTimezone();
@@ -64,15 +70,11 @@ export function CourseLmsSection({ courseId }: { courseId: string }) {
   if (!links || links.length === 0) return null;
 
   return (
-    <div className="space-y-3 border-t pt-4">
-      <div>
-        <h3 className="text-sm font-medium">Connected to your LMS</h3>
-        <p className="text-muted-foreground mt-1 text-xs">
-          People can open this course from here. Grades are sent per assignment, on each
-          assignment&apos;s Settings tab.
-        </p>
-      </div>
-
+    <SettingsSection
+      title="Connected to your LMS"
+      description="People can open this course from here. Grades are sent per assignment, on each assignment's Settings tab."
+      headingLevel={3}
+    >
       <ul className="divide-y rounded-md border">
         {links.map((link) => (
           <li key={link.id} className="flex items-start justify-between gap-3 p-3">
@@ -117,6 +119,6 @@ export function CourseLmsSection({ courseId }: { courseId: string }) {
         variant="destructive"
         onConfirm={unlink}
       />
-    </div>
+    </SettingsSection>
   );
 }

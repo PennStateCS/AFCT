@@ -41,13 +41,17 @@ export function getMonthRangeIso(
   timezone: string,
 ): { startIso: string; endIso: string } {
   const start = new Date(month.getFullYear(), month.getMonth(), 1);
-  const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
 
   const startOfGrid = new Date(start);
   startOfGrid.setDate(start.getDate() - start.getDay());
 
-  const endOfGrid = new Date(end);
-  endOfGrid.setDate(end.getDate() + (6 - end.getDay()));
+  // Always six weeks, matching the grid's `fixedWeeks`. A February that starts on a
+  // Sunday fills in four rows and pads out to six, so the natural "last day of the
+  // month, rounded up to Saturday" end would leave up to two rendered weeks outside the
+  // fetched range: real assignments in cells that silently showed nothing. Six weeks is
+  // a superset of the old range for every month, so this only ever fetches more.
+  const endOfGrid = new Date(startOfGrid);
+  endOfGrid.setDate(startOfGrid.getDate() + 41);
 
   const startKey = getDateKeyInTimeZone(startOfGrid, timezone);
   const endKey = getDateKeyInTimeZone(endOfGrid, timezone);
@@ -61,17 +65,20 @@ export function getMonthRangeIso(
 /**
  * How many assignments a day cell can usefully show at a given viewport width.
  *
- * A cell is square, so its height is its width, and the chips inside it are text. Below `sm` a
- * cell is about 36 pixels: room for the date and nothing else, and a chip there truncates to
- * three or four characters, which says less than the dot the cell falls back to. The wider tiers
- * are where a cell is tall enough to stack one, two or three legible lines.
+ * Cells used to be square, so height followed width and the tiers here tracked how tall a cell
+ * happened to be. They now carry an explicit min-height per breakpoint (see CalendarClient), so
+ * these tiers mirror those heights instead: roughly 56px on a phone, 80px from `sm`, and 96px
+ * or more from `md`. A cell has about 28px of chrome (the date row and its padding) and each
+ * chip costs about 22px with its gap, which is where the counts come from.
+ *
+ * Below `sm` the answer is still zero: a phone cell is about 45px wide, so a chip truncates to
+ * three or four characters, which says less than the marker the cell falls back to.
  *
  * A function rather than a chain inside the effect, so the breakpoints can be read and tested in
  * one place. Everything downstream of it is layout, which needs a browser and a person.
  */
 export function visibleAssignmentsForWidth(width: number): number {
   if (width < 640) return 0;
-  if (width < 768) return 1;
-  if (width < 1280) return 2;
+  if (width < 768) return 2;
   return 3;
 }

@@ -12,7 +12,13 @@ export default async function ArchivedCoursesPage() {
 
   if (!session?.user) {
     return (
-      <div className="bg-destructive rounded p-4 text-lg text-white">
+      // A callout, not a saturated block. `bg-destructive` with white text is 2.89:1 in
+      // dark, because --destructive lightens there to work as TEXT; the status-danger
+      // triad is the pairing built for a filled message and is theme-aware.
+      <div
+        role="alert"
+        className="border-status-danger-border bg-status-danger-bg text-status-danger rounded border p-4 text-lg"
+      >
         You are not signed in.
       </div>
     );

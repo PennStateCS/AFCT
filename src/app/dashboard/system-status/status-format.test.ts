@@ -6,7 +6,10 @@ import {
   formatRate,
   formatRelative,
   formatUptime,
+  latencyTone,
   toTitleCase,
+  LATENCY_DANGER_MS,
+  LATENCY_WARNING_MS,
 } from './status-format';
 
 const DASH = '—';
@@ -54,6 +57,35 @@ describe('formatMs and formatRate', () => {
     expect(formatMs(Number.POSITIVE_INFINITY)).toBe(DASH);
     expect(formatRate(Number.NaN)).toBe(DASH);
     expect(formatMs(null)).toBe(DASH);
+  });
+});
+
+describe('latencyTone', () => {
+  /**
+   * The badge beside the page heading was amber whenever a latency existed at all, which
+   * meant a healthy server and a struggling one wore the same warning. A colour that is
+   * always on says nothing, so the point of these cases is that a fast reading is quiet.
+   */
+  it('stays quiet on a healthy round trip', () => {
+    expect(latencyTone(0)).toBe('neutral');
+    expect(latencyTone(20)).toBe('neutral');
+    expect(latencyTone(LATENCY_WARNING_MS - 1)).toBe('neutral');
+  });
+
+  it('warns from the warning threshold up', () => {
+    expect(latencyTone(LATENCY_WARNING_MS)).toBe('warning');
+    expect(latencyTone(LATENCY_DANGER_MS - 1)).toBe('warning');
+  });
+
+  it('escalates at the danger threshold', () => {
+    expect(latencyTone(LATENCY_DANGER_MS)).toBe('danger');
+    expect(latencyTone(9000)).toBe('danger');
+  });
+
+  it('treats a missing reading as nothing to say, not as bad news', () => {
+    expect(latencyTone(null)).toBe('neutral');
+    expect(latencyTone(undefined)).toBe('neutral');
+    expect(latencyTone(Number.NaN)).toBe('neutral');
   });
 });
 

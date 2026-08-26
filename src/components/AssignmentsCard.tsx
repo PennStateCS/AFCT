@@ -25,12 +25,15 @@ export function AssignmentsCard({
   isLoading = false,
 }: AssignmentsCardProps) {
   return (
-    <div className="space-y-4">
+    // 24px between the heading/action row and the table, which is now one object: the
+    // toolbar moved inside the table's own shell, so the only gap left on this tab is the
+    // one where the grouping actually changes, from the section's controls to its content.
+    <div className="space-y-6">
       {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
           fit on a phone, and a single row pushed them off the edge. Same shape as the
           User Accounts header. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <BookOpen className="h-6 w-6" />
           Assignments
         </h2>
@@ -40,35 +43,26 @@ export function AssignmentsCard({
               <Download /> Import Assignment
             </Button>
           )}
-          <Button
-            style={{
-              backgroundColor: 'var(--color-primary)',
-              color: 'var(--color-secondary-foreground)',
-            }}
-            onClick={onCreateAssignment}
-            hidden={courseIsArchived}
-          >
+          <Button onClick={onCreateAssignment} hidden={courseIsArchived}>
             <Plus /> Create Assignment
           </Button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <DataTable
-          columns={assignmentColumns}
-          data={assignments}
-          loading={isLoading}
-          tableLabel="Assignments table"
-          defaultSorting={[{ id: 'dueDate', desc: false }]}
-          emptyTitle="No assignments yet"
-          emptyDescription={
-            courseIsArchived
-              ? 'This course was archived without any assignments.'
-              : 'Create an assignment to give students something to submit.'
-          }
-          emptyIcon={BookOpen}
-          loadingMessage="Loading assignments, please wait..."
-        />
-      </div>
+      <DataTable
+        columns={assignmentColumns}
+        data={assignments}
+        loading={isLoading}
+        tableLabel="Assignments table"
+        defaultSorting={[{ id: 'dueDate', desc: false }]}
+        emptyTitle="No assignments yet"
+        emptyDescription={
+          courseIsArchived
+            ? 'This course was archived without any assignments.'
+            : 'Create an assignment to give students something to submit.'
+        }
+        emptyIcon={BookOpen}
+        loadingMessage="Loading assignments, please wait..."
+      />
     </div>
   );
 }

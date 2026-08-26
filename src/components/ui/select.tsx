@@ -4,6 +4,7 @@ import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 
+import { fieldControlClass } from '@/components/ui/field';
 import { cn } from '@/lib/utils';
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
@@ -24,21 +25,37 @@ function SelectTrigger({
   children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
-  size?: 'sm' | 'default';
+  /**
+   * `form` is the field size: full width and 44px tall, matching InputGroup's inputs so a
+   * select sits in a form column as a peer rather than a shorter cousin. `default` and
+   * `sm` stay as they are, for the compact selects in toolbars and filter bars.
+   */
+  size?: 'sm' | 'default' | 'form';
 }) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        // Surface, border, focus, the aria-invalid treatment and the disabled state come
+        // from the shared field class. SelectField used to restate all of it, which meant
+        // two places to change and two chances to disagree.
+        fieldControlClass,
+        "data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground flex w-fit items-center justify-between gap-2 px-3 py-2 text-sm whitespace-nowrap data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        // text-base on small screens only for the form size: it keeps a select's value the
+        // same size as the text typed into the input above it. The toolbar's `sm` select
+        // is width-constrained and would overflow at 16px.
+        'data-[size=form]:h-11 data-[size=form]:w-full data-[size=form]:min-w-0 data-[size=form]:text-base md:data-[size=form]:text-sm',
         className,
       )}
       {...props}
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 opacity-50" />
+        {/* text-muted-foreground, not opacity-50. The rule above already mutes an
+            uncoloured icon, so the two compounded to a muted grey at half alpha, which is
+            why call sites had grown `[&>svg]:!opacity-100` overrides to undo it. */}
+        <ChevronDownIcon className="text-muted-foreground size-4" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   );

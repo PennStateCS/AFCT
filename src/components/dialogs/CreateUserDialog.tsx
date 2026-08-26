@@ -245,6 +245,9 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
                 requiredMark
                 name="email"
                 type="email"
+                // Somebody else's address. Left unmarked, the browser offers the admin's
+                // own, which is how you create an account against the wrong person.
+                autoComplete="off"
                 fieldProps={field}
                 error={errors.email?.message}
                 showStatus
@@ -263,6 +266,10 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
                 requiredMark
                 name="password"
                 type="password"
+                // new-password, not off: this tells the manager the field SETS a password
+                // rather than asks for one, so it neither autofills the admin's own
+                // credential here nor offers to save this one as theirs.
+                autoComplete="new-password"
                 showEye
                 fieldProps={field}
                 error={errors.password?.message}
@@ -282,6 +289,7 @@ export function CreateUserDialog({ open, setOpen, onSuccess }: CreateUserDialogP
                 requiredMark
                 name="confirmPassword"
                 type="password"
+                autoComplete="new-password"
                 showEye
                 fieldProps={field}
                 error={errors.confirmPassword?.message}

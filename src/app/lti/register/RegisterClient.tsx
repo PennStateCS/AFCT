@@ -71,7 +71,7 @@ export default function RegisterClient({
   if (done) {
     return (
       <main className="mx-auto max-w-lg p-6 text-sm">
-        <h1 className="mb-2 text-base font-medium">{done.platform.name} is registered</h1>
+        <h1 className="mb-2 text-xl font-semibold">{done.platform.name} is registered</h1>
         <p className="text-muted-foreground mb-4">
           People can now open AFCT from this LMS. Faculty connect their own courses the first time
           they open an AFCT link.
@@ -98,7 +98,7 @@ export default function RegisterClient({
 
   return (
     <main className="mx-auto max-w-lg p-6 text-sm">
-      <h1 className="mb-2 text-base font-medium">Register this LMS with AFCT</h1>
+      <h1 className="mb-2 text-xl font-semibold">Register this LMS with AFCT</h1>
       <p className="mb-4">
         {platformHost ? <strong>{platformHost}</strong> : 'Your LMS'} is asking to register with
         AFCT. Registering lets it sign people into AFCT, and lets AFCT send grades and read rosters

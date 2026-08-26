@@ -42,13 +42,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <SidebarProvider
       style={
         {
-          '--sidebar-width': '18rem',
+          '--sidebar-width': '16rem',
           // The mobile sheet ignored this variable until now (it hardcoded its own
           // default), so the 10rem declared here never actually applied. Set to the
           // width the drawer has really been rendering at; 10rem is too narrow for
           // rows like "Archived Courses" and has never been seen in practice.
           '--sidebar-width-mobile': '18rem',
-          '--sidebar-width-icon': '3rem',
+          '--sidebar-width-icon': '3.5rem',
         } as React.CSSProperties
       }
       defaultOpen={defaultOpen}
@@ -73,9 +73,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 {/* min-w-0: without it this flex item refuses to shrink below its
                   content's intrinsic width, so a wide table stretches the whole
                   page sideways instead of scrolling inside its own container. */}
-                <div className="flex min-w-0 flex-1 flex-col p-4">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {/* The gutter belongs to the content, not the column: on the column it
+                      inset the navbar too, so the header read as a floating strip with a
+                      divider that stopped short of both edges. */}
                   <Navbar />
-                  <main id="main-content" tabIndex={-1} lang="en">
+                  {/* flex-1 so a page-level surface (see WorkspaceSurface) can fill the
+                      viewport instead of stopping where its content does. */}
+                  <main
+                    id="main-content"
+                    tabIndex={-1}
+                    lang="en"
+                    // py-6, not py-4: 24px is the air a page title wants above it, and
+                    // every page's title sits directly against this padding. Paired with
+                    // the 24px under the title, the heading reads as centred in its own
+                    // band rather than pinned to the navbar. WorkspaceSurface bleeds back
+                    // through these values, so it matches them.
+                    className="flex min-w-0 flex-1 flex-col px-4 py-6 lg:px-6"
+                  >
                     {children}
                   </main>
                 </div>

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useId, useMemo, useState } from 'react';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { FieldLabelRow, FieldMessage, fieldControlClass } from '@/components/ui/field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
@@ -87,12 +87,8 @@ export function SearchableMultiSelect({
     // this control's min-content width the FULL selected text. As a flex or grid child that
     // minimum wins over a 1fr track, so a long selection pushed its siblings off screen and
     // gave the whole page a horizontal scrollbar instead of truncating.
-    <div className="flex min-w-0 flex-col">
-      {label ? (
-        <Label htmlFor={triggerId} className="mb-1.5 text-sm font-medium">
-          {label}
-        </Label>
-      ) : null}
+    <div className="flex min-w-0 flex-col gap-1">
+      {label ? <FieldLabelRow htmlFor={triggerId}>{label}</FieldLabelRow> : null}
       {/* A disclosure (Popover), not a menu: the panel holds a search box and a
           group of real checkboxes, so a menu's role/roving-focus model would be a
           lie. Radix Popover.Trigger supplies aria-haspopup="dialog", aria-expanded,
@@ -110,9 +106,12 @@ export function SearchableMultiSelect({
             aria-describedby={describedBy}
             disabled={disabled}
             className={cn(
-              'border-input text-foreground focus-visible:border-ring focus-visible:ring-ring/40 flex h-11 w-full items-center justify-between rounded-md border bg-transparent px-3 text-sm shadow-xs transition-all duration-150 focus-visible:ring-[3px] focus-visible:outline-none',
-              disabled && 'cursor-not-allowed opacity-60',
-              error && 'border-destructive',
+              // The same shared field class as SelectTrigger and SearchableSelect, so all
+              // three closed controls sit at one surface, border, focus and disabled
+              // treatment. The invalid border comes from aria-invalid above, not a
+              // separate `error &&` class that could disagree with it.
+              fieldControlClass,
+              'text-foreground flex h-11 w-full items-center justify-between px-3 text-base md:text-sm',
             )}
           >
             <span
@@ -123,7 +122,7 @@ export function SearchableMultiSelect({
             >
               {selectedLabels || placeholder}
             </span>
-            <ChevronDown className="text-muted-foreground ml-2 h-4 w-4 shrink-0" />
+            <ChevronDown className="text-muted-foreground ml-2 size-4 shrink-0" />
           </button>
         </PopoverTrigger>
         {/* eslint-enable jsx-a11y/role-supports-aria-props */}
@@ -171,11 +170,11 @@ export function SearchableMultiSelect({
           </div>
         </PopoverContent>
       </Popover>
-      {error ? (
-        <p id={describedBy} role="alert" className="text-destructive mt-1 text-xs">
-          {error}
-        </p>
-      ) : null}
+      <FieldMessage
+        error={error}
+        errorId={`${triggerId}-error`}
+        descriptionId={`${triggerId}-desc`}
+      />
     </div>
   );
 }

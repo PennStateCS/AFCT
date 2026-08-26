@@ -11,6 +11,7 @@ import {
   NotebookText,
   Trash2,
   ChevronDown,
+  EllipsisVertical,
   BookOpen,
   CalendarClock,
   Copy,
@@ -43,6 +44,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 // Lazily fetches the assignment's max points when the row doesn't already have it.
 // Shares the assignment.shell cache entry with StudentAssignmentView/StudentNavigator,
@@ -94,15 +98,18 @@ export function DueDateCell({
       ) : (
         <Popover>
           <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 focus-visible:ring-ring/40 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
-              aria-label={`Multiple due dates (${overrides.length} override${overrides.length === 1 ? '' : 's'}); show details`}
-            >
-              <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-              Multiple
-              <ChevronDown className="h-3 w-3" aria-hidden="true" />
-            </button>
+            {/* A real button, not a badge with a click handler: it opens the popover below,
+                so it keeps its element and borrows the badge's geometry through asChild. */}
+            <Badge asChild variant="info" className="hover:border-status-info cursor-pointer">
+              <button
+                type="button"
+                aria-label={`Multiple due dates (${overrides.length} override${overrides.length === 1 ? '' : 's'}); show details`}
+              >
+                <CalendarClock className="size-3.5" aria-hidden="true" />
+                Multiple
+                <ChevronDown className="size-3" aria-hidden="true" />
+              </button>
+            </Badge>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-72 p-3 text-xs">
             <p className="mb-2 font-medium">Due dates</p>
@@ -219,15 +226,14 @@ export function OverrideAwareCell({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 focus-visible:ring-ring/40 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs leading-none font-medium focus-visible:ring-[3px] focus-visible:outline-none"
-          aria-label={`Multiple ${label.toLowerCase()} values; show details`}
-        >
-          <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
-          Multiple
-          <ChevronDown className="h-3 w-3" aria-hidden="true" />
-        </button>
+        {/* As above: a button that opens a popover, wearing the badge's geometry. */}
+        <Badge asChild variant="info" className="hover:border-status-info cursor-pointer">
+          <button type="button" aria-label={`Multiple ${label.toLowerCase()} values; show details`}>
+            <CalendarClock className="size-3.5" aria-hidden="true" />
+            Multiple
+            <ChevronDown className="size-3" aria-hidden="true" />
+          </button>
+        </Badge>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 p-3 text-xs">
         <p className="mb-2 font-medium">{label}</p>
@@ -308,7 +314,10 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
     <div className="flex min-w-0 flex-col gap-0.5">
       <Link
         href={`/dashboard/courses/${assignment.courseId}/${assignment.id}`}
-        className="text-primary block max-w-[8rem] truncate hover:underline sm:max-w-[12rem] lg:max-w-[16rem]"
+        className={cn(
+          TEXT_LINK_CLASS,
+          'block max-w-[8rem] truncate sm:max-w-[12rem] lg:max-w-[16rem]',
+        )}
         title={assignment.title}
       >
         {assignment.title}
@@ -318,7 +327,7 @@ function AssignmentTitleCell({ assignment }: { assignment: AssignmentWithProblem
           <button
             type="button"
             onClick={() => setDescOpen(true)}
-            className="text-primary hover:text-primary/80 self-start text-xs underline"
+            className={cn(TEXT_LINK_CLASS, 'self-start text-xs')}
             title="View description"
           >
             View description
@@ -465,7 +474,9 @@ export function useAssignmentColumns(
     },
     {
       id: 'actions',
-      header: () => <span className="sr-only">Actions</span>,
+      // Visible now rather than sr-only: the trigger used to say "Manage" on its face, so
+      // the column named itself. A bare ellipsis does not.
+      header: 'Actions',
       cell: ({ row }) => {
         const disabled = !!row.original.hasSubmissionsOrComments || courseIsArchived;
         const title = disabled ? 'Cannot delete' : undefined;
@@ -474,9 +485,12 @@ export function useAssignmentColumns(
           <>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="secondary" aria-label={`Manage assignment ${row.original.title}`}>
-                  <ChevronDown />
-                  Manage
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Actions for ${row.original.title}`}
+                >
+                  <EllipsisVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">

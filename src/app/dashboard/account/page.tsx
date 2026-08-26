@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { getOidcConfig } from '@/lib/oidc-provider';
 import AccountClient from './AccountClient';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 
 export const metadata: Metadata = {
   title: 'Account',
@@ -26,11 +27,15 @@ export default async function AccountPage() {
   // paint, instead of appearing a moment after the page settles.
   const oidc = await getOidcConfig();
 
+  // A settings page, so it sits on the white surface rather than the slate canvas, the
+  // same way System Settings does.
   return (
-    <AccountClient
-      user={session.user}
-      oidcAvailable={oidc !== null}
-      oidcLabel={oidc?.buttonLabel ?? null}
-    />
+    <WorkspaceSurface>
+      <AccountClient
+        user={session.user}
+        oidcAvailable={oidc !== null}
+        oidcLabel={oidc?.buttonLabel ?? null}
+      />
+    </WorkspaceSurface>
   );
 }

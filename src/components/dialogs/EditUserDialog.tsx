@@ -405,6 +405,9 @@ export function EditUserDialog({
               id="edit-user-email"
               name="email"
               type="email"
+              // Another user's address, and readOnly rather than disabled: some browsers
+              // will still autofill a readonly field.
+              autoComplete="off"
               value={user.email}
               readOnly
               aria-readonly="true"

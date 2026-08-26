@@ -121,12 +121,12 @@ export function RosterCard({
   const anyFilterActive = roles.length > 0 || statuses.length > 0 || searchInput.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
           fit on a phone, and a single row pushed them off the edge. Same shape as the
           User Accounts header. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <GraduationCap className="h-5 w-5" />
           Roster
         </h2>
@@ -149,7 +149,7 @@ export function RosterCard({
       </div>
 
       {isError ? (
-        <div className="border-status-danger-border bg-status-danger-bg mb-4 flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+        <div className="border-status-danger-border bg-status-danger-bg flex items-center justify-between gap-3 rounded-md border px-3 py-2">
           <p role="alert" className="text-status-danger text-sm">
             Failed to load the roster. Please try again.
           </p>

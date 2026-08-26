@@ -2,10 +2,13 @@ import dynamic from 'next/dynamic';
 import { Settings } from 'lucide-react';
 
 import { Tabs } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { CourseHeaderContent } from '@/components/course/CourseHeader';
 import { CourseTabBar, CourseTabPanel } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
+import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { CourseStatusCard } from '@/components/course/CourseStatusCard';
+import { CourseLmsSection } from '@/components/course/CourseLmsSection';
+import { SettingsAsideLayout } from '@/components/settings/settings-layout';
 import { ActivityCard } from '@/components/ActivityCard';
 import { AssignmentsCard } from '@/components/AssignmentsCard';
 import { ProblemsCard } from '@/components/ProblemsCard';
@@ -56,9 +59,7 @@ const CourseSettingsForm = dynamic(
   () => import('@/components/course/CourseSettingsForm').then((m) => m.CourseSettingsForm),
   {
     ssr: false,
-    loading: () => (
-      <p className="text-muted-foreground w-full text-sm">Loading course settings…</p>
-    ),
+    loading: () => <p className="text-muted-foreground w-full text-sm">Loading course settings…</p>,
   },
 );
 import type { FullCourse, TabType } from '@/types/course';
@@ -163,36 +164,52 @@ export function AdminCourseView({
         course.id,
         course.isArchived,
         course.viewerRole,
-        course.viewerIsAdmin
+        course.viewerIsAdmin,
       ),
-    [
-      onRefreshCourse,
-      course.id,
-      course.isArchived,
-      course.viewerRole,
-      course.viewerIsAdmin,
-    ],
+    [onRefreshCourse, course.id, course.isArchived, course.viewerRole, course.viewerIsAdmin],
   );
 
+  const railNav = useIsDesktopNav();
+
+  // Tabs orientation follows whichever control is on screen: arrow keys run up and down
+  // in the rail and left and right in the strip, and aria-orientation reports the same.
+  // The header and tab strip sit on the page itself now, not inside a card wrapping
+  // the whole workspace. CourseHeaderContent returns a fragment, so the grid that
+  // spaced its rows came from the CardHeader and has to travel with it.
   return (
     <>
-    <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
-      <Card>
-        <CardHeader className="grid grid-cols-1 gap-3">
-          <CourseHeaderContent course={course} isStudent={false} />
-        </CardHeader>
+      <Tabs
+        defaultValue="assignments"
+        value={tab}
+        onValueChange={onTabChange}
+        orientation={railNav ? 'vertical' : 'horizontal'}
+        // gap-4, not space-y-6. The Tabs primitive is `flex flex-col gap-2`, and a
+        // space-y-* on top of that does not replace the gap, it ADDS to it: tailwind-merge
+        // only reconciles classes that set the same property, and gap and margin are not
+        // the same property. So the panel sat 8px + 24px = 32px above the workspace while
+        // the navbar left only the layout's own 16px above it. One mechanism, one value.
+        className="gap-4"
+      >
+        <CourseHeaderContent course={course} isStudent={false} />
 
-        <CardContent className="space-y-6">
-          <CourseTabBar
-            value={tab}
-            onValueChange={onTabChange}
-            counts={{
-              assignments: assignmentCount,
-              problems: problemCount,
-              roster: rosterCount,
-            }}
-          />
-
+        {/* Below lg this is a plain stack, so the strip sits above the panels exactly as it
+          did. At lg the rail takes a column beside them (LocalNavLayout owns that width, so
+          collapsing the rail actually hands the room to the workspace). */}
+        <LocalNavLayout
+          breakpoint="lg"
+          nav={
+            <CourseTabBar
+              value={tab}
+              onValueChange={onTabChange}
+              rail={railNav}
+              counts={{
+                assignments: assignmentCount,
+                problems: problemCount,
+                roster: rosterCount,
+              }}
+            />
+          }
+        >
           <CourseTabPanel value="assignments" active={tab === 'assignments'}>
             <AssignmentsCard
               courseId={course.id}
@@ -241,96 +258,102 @@ export function AdminCourseView({
           </CourseTabPanel>
 
           <CourseTabPanel value="settings" active={tab === 'settings'}>
-            <div className="space-y-4">
-              <h2 className="flex items-center gap-2 text-2xl font-semibold">
-                <Settings className="h-5 w-5" />
-                Course Settings
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Edit the course name, code, dates, timezone, and self-registration settings.
-              </p>
-              {course.isArchived ? (
-                <p className="text-muted-foreground text-xs">
-                  This course is archived and read-only. Unarchive it to make changes.
+            <div className="space-y-6">
+              {/* Heading and its explanation are one header block, so the 12px below
+                  separates the block from the form rather than the sentence from its
+                  title. Same shape the student Assignments panel already uses. */}
+              <div className="space-y-1">
+                <h2 className="flex items-center gap-2 text-xl font-semibold">
+                  <Settings className="h-5 w-5" />
+                  Course Settings
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  Edit the course name, code, dates, timezone, and self-registration settings.
                 </p>
-              ) : null}
-              {/* Form on the left; the immediate-effect status switches sit in their
-                  own card to the right (stacked below on narrow screens). */}
-              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <CourseSettingsForm course={course} onSaved={onCourseSaved} className="w-full" />
-                <CourseStatusCard
-                  course={course}
-                  onPublishToggle={onPublishToggle}
-                  className="w-full lg:w-80 lg:shrink-0"
-                />
+                {course.isArchived ? (
+                  <p className="text-muted-foreground text-xs">
+                    This course is archived and read-only. Unarchive it to make changes.
+                  </p>
+                ) : null}
               </div>
+              {/* The System Settings layout, not a bespoke one: grouped panels in the main
+                  column and the immediate-effect publish switch in the rail beside them.
+                  Before this the form was a single max-w-xl column of eleven fields with the
+                  status card floating 440px away from its right edge, on a tab a professor
+                  reaches straight from System Settings. */}
+              <SettingsAsideLayout
+                aside={<CourseStatusCard course={course} onPublishToggle={onPublishToggle} />}
+              >
+                <CourseSettingsForm course={course} onSaved={onCourseSaved} />
+                {/* Renders nothing unless an LMS opens this course. */}
+                <CourseLmsSection courseId={course.id} />
+              </SettingsAsideLayout>
             </div>
           </CourseTabPanel>
-        </CardContent>
-      </Card>
-    </Tabs>
+        </LocalNavLayout>
+      </Tabs>
 
-    {duplicateAssignmentMounted && (
-      <DuplicateAssignmentDialog
-        open={!!duplicateTarget}
-        setOpen={(v) => {
-          if (!v) setDuplicateTarget(null);
-        }}
-        courseId={course.id}
-        courseIsArchived={course.isArchived}
-        assignment={duplicateTarget}
-        onDuplicated={() => {
-          setDuplicateTarget(null);
-          // The new (unpublished) assignment now exists; refresh the list to show it.
-          onRefreshCourse();
-        }}
-      />
-    )}
+      {duplicateAssignmentMounted && (
+        <DuplicateAssignmentDialog
+          open={!!duplicateTarget}
+          setOpen={(v) => {
+            if (!v) setDuplicateTarget(null);
+          }}
+          courseId={course.id}
+          courseIsArchived={course.isArchived}
+          assignment={duplicateTarget}
+          onDuplicated={() => {
+            setDuplicateTarget(null);
+            // The new (unpublished) assignment now exists; refresh the list to show it.
+            onRefreshCourse();
+          }}
+        />
+      )}
 
-    {importAssignmentMounted && (
-      <ImportAssignmentDialog
-        open={importAssignmentOpen}
-        setOpen={setImportAssignmentOpen}
-        courseId={course.id}
-        courseIsArchived={course.isArchived}
-        onImported={() => {
-          setImportAssignmentOpen(false);
-          // The imported (unpublished) assignment now exists; refresh the list to show it.
-          onRefreshCourse();
-        }}
-      />
-    )}
+      {importAssignmentMounted && (
+        <ImportAssignmentDialog
+          open={importAssignmentOpen}
+          setOpen={setImportAssignmentOpen}
+          courseId={course.id}
+          courseIsArchived={course.isArchived}
+          onImported={() => {
+            setImportAssignmentOpen(false);
+            // The imported (unpublished) assignment now exists; refresh the list to show it.
+            onRefreshCourse();
+          }}
+        />
+      )}
 
-    {duplicateProblemMounted && (
-      <DuplicateProblemDialog
-        open={!!duplicateProblemTarget}
-        setOpen={(v) => {
-          if (!v) setDuplicateProblemTarget(null);
-        }}
-        courseId={course.id}
-        courseIsArchived={course.isArchived}
-        problem={duplicateProblemTarget}
-        onDuplicated={() => {
-          setDuplicateProblemTarget(null);
-          // Back on the Problems tab: refresh so the new problem appears in the list.
-          onRefreshCourse();
-        }}
-      />
-    )}
+      {duplicateProblemMounted && (
+        <DuplicateProblemDialog
+          open={!!duplicateProblemTarget}
+          setOpen={(v) => {
+            if (!v) setDuplicateProblemTarget(null);
+          }}
+          courseId={course.id}
+          courseIsArchived={course.isArchived}
+          problem={duplicateProblemTarget}
+          onDuplicated={() => {
+            setDuplicateProblemTarget(null);
+            // Back on the Problems tab: refresh so the new problem appears in the list.
+            onRefreshCourse();
+          }}
+        />
+      )}
 
-    {importProblemMounted && (
-      <ImportProblemDialog
-        open={importProblemOpen}
-        setOpen={setImportProblemOpen}
-        courseId={course.id}
-        courseIsArchived={course.isArchived}
-        onImported={() => {
-          setImportProblemOpen(false);
-          // The imported problem now exists in this course; refresh the problems list.
-          onRefreshCourse();
-        }}
-      />
-    )}
+      {importProblemMounted && (
+        <ImportProblemDialog
+          open={importProblemOpen}
+          setOpen={setImportProblemOpen}
+          courseId={course.id}
+          courseIsArchived={course.isArchived}
+          onImported={() => {
+            setImportProblemOpen(false);
+            // The imported problem now exists in this course; refresh the problems list.
+            onRefreshCourse();
+          }}
+        />
+      )}
     </>
   );
 }

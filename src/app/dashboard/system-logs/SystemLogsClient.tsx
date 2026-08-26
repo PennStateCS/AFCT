@@ -7,9 +7,9 @@ import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CategoryBadge } from '@/components/ui/category-badge';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
-import { ScrollText } from 'lucide-react';
+import { Logs, ScrollText } from 'lucide-react';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import dynamic from 'next/dynamic';
 
@@ -288,17 +288,29 @@ export default function SystemLogsClient() {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <Card className="p-4">
-      <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle role="heading" aria-level={1} className="text-2xl">
-          System Logs
-        </CardTitle>
-        <Button onClick={() => setDownloadOpen(true)}>Download Logs</Button>
-      </CardHeader>
+    // Same shape as the Courses page: a work page on the white surface, no outer card
+    // around a table that already has a border, and a real <h1> in place of the CardTitle
+    // that was carrying role="heading" aria-level={1}.
+    <WorkspaceSurface>
+      <section className="space-y-6" aria-labelledby="system-logs-title">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1
+            id="system-logs-title"
+            className="flex items-center gap-3 text-2xl font-semibold tracking-tight"
+          >
+            {/* Decorative: the heading beside it already says what this is. The icon the
+                sidebar already uses for this page, on the neutral muted surface the other
+                admin pages use. */}
+            <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+              <Logs className="size-5" aria-hidden="true" />
+            </span>
+            <span>System Logs</span>
+          </h1>
+          <Button onClick={() => setDownloadOpen(true)}>Download Logs</Button>
+        </div>
 
-      <CardContent>
         {isError ? (
-          <div className="border-status-danger-border bg-status-danger-bg mb-4 flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+          <div className="border-status-danger-border bg-status-danger-bg flex items-center justify-between gap-3 rounded-md border px-3 py-2">
             <p role="alert" className="text-status-danger text-sm">
               Failed to load logs. Please try again.
             </p>
@@ -308,76 +320,76 @@ export default function SystemLogsClient() {
           </div>
         ) : null}
 
-        <DataTable
-          columns={columns}
-          // Off by default: it is a wide column and most rows have nothing to say. Somebody
-          // hunting a specific change turns it on, or opens Full Log.
-          defaultColumnVisibility={{ summary: false }}
-          data={logs}
-          loading={loading}
-          tableLabel="System logs table"
-          showExportButton={false}
-          emptyTitle="No log entries"
-          emptyDescription="No activity matches the current search and filters."
-          emptyIcon={ScrollText}
-          loadingMessage="Loading log entries, please wait..."
-          actionButtons={
-            <DataTableFilterMenu
-              groups={[
-                {
-                  key: 'severity',
-                  label: 'Severity',
-                  options: SEVERITIES.map((s) => ({ label: s, value: s })),
-                  selected: severities,
-                  onChange: (v) => {
-                    setSeverities(v);
-                    setPageIndex(0);
+          <DataTable
+            columns={columns}
+            // Off by default: it is a wide column and most rows have nothing to say. Somebody
+            // hunting a specific change turns it on, or opens Full Log.
+            defaultColumnVisibility={{ summary: false }}
+            data={logs}
+            loading={loading}
+            tableLabel="System logs table"
+            showExportButton={false}
+            emptyTitle="No log entries"
+            emptyDescription="No activity matches the current search and filters."
+            emptyIcon={ScrollText}
+            loadingMessage="Loading log entries, please wait..."
+            actionButtons={
+              <DataTableFilterMenu
+                groups={[
+                  {
+                    key: 'severity',
+                    label: 'Severity',
+                    options: SEVERITIES.map((s) => ({ label: s, value: s })),
+                    selected: severities,
+                    onChange: (v) => {
+                      setSeverities(v);
+                      setPageIndex(0);
+                    },
                   },
-                },
-                {
-                  key: 'category',
-                  label: 'Category',
-                  options: CATEGORIES.map((c) => ({ label: titleCase(c), value: c })),
-                  selected: categories,
-                  onChange: (v) => {
-                    setCategories(v);
-                    setPageIndex(0);
+                  {
+                    key: 'category',
+                    label: 'Category',
+                    options: CATEGORIES.map((c) => ({ label: titleCase(c), value: c })),
+                    selected: categories,
+                    onChange: (v) => {
+                      setCategories(v);
+                      setPageIndex(0);
+                    },
                   },
-                },
-              ]}
-            />
-          }
-          manualPagination
-          pageCount={pageCount}
-          rowCount={total}
-          pagination={{ pageIndex, pageSize }}
-          onPaginationChange={handlePaginationChange}
-          manualFiltering
-          globalFilter={searchInput}
-          onGlobalFilterChange={setSearchInput}
-          searchScopeOptions={SEARCH_FIELDS}
-          searchScope={searchField}
-          onSearchScopeChange={(v) => {
-            setSearchField(v);
-            setPageIndex(0);
-          }}
-          manualSorting
-          sorting={sorting}
-          onSortingChange={handleSortingChange}
-        />
+                ]}
+              />
+            }
+            manualPagination
+            pageCount={pageCount}
+            rowCount={total}
+            pagination={{ pageIndex, pageSize }}
+            onPaginationChange={handlePaginationChange}
+            manualFiltering
+            globalFilter={searchInput}
+            onGlobalFilterChange={setSearchInput}
+            searchScopeOptions={SEARCH_FIELDS}
+            searchScope={searchField}
+            onSearchScopeChange={(v) => {
+              setSearchField(v);
+              setPageIndex(0);
+            }}
+            manualSorting
+            sorting={sorting}
+            onSortingChange={handleSortingChange}
+          />
 
-        {/* Dialogs */}
-        <LogViewerDialog
-          data={selectedData}
-          json={selectedJson}
-          open={viewerOpen}
-          onOpenChange={setViewerOpen}
-          title={title}
-        />
-        {downloadMounted && (
-          <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
-        )}
-      </CardContent>
-    </Card>
+          {/* Dialogs */}
+          <LogViewerDialog
+            data={selectedData}
+            json={selectedJson}
+            open={viewerOpen}
+            onOpenChange={setViewerOpen}
+            title={title}
+          />
+          {downloadMounted && (
+            <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
+          )}
+      </section>
+    </WorkspaceSurface>
   );
 }

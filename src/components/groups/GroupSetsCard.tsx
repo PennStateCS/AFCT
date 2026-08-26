@@ -82,9 +82,9 @@ export function GroupSetsCard({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <Layers className="h-5 w-5" />
           Groups
         </h2>
@@ -96,8 +96,10 @@ export function GroupSetsCard({
       {listQuery.isPending ? (
         <LoadingSpinner label="Loading group sets" fullScreen={false} className="min-h-40" />
       ) : sets.length === 0 ? (
-        <div className="text-muted-foreground rounded-md border border-dashed p-8 text-center">
-          <Layers className="mx-auto mb-2 h-8 w-8 text-muted-foreground" aria-hidden="true" />
+        // bg-card and dashed. The dash is what says "nothing here yet"; leaving it unfilled
+        // as well made the one thing on the tab a hollow outline on the page.
+        <div className="bg-card text-muted-foreground rounded-md border border-dashed p-8 text-center">
+          <Layers className="text-muted-foreground mx-auto mb-2 h-8 w-8" aria-hidden="true" />
           <p className="font-medium">No group sets yet</p>
           <p className="text-sm">
             A group set is one arrangement of students, such as Project 1 or Lab Partners.
@@ -116,7 +118,7 @@ export function GroupSetsCard({
               id={selectorId}
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
-              className="border-input bg-background focus-visible:ring-ring/40 h-9 rounded-md border px-3 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+              className="border-input bg-card focus-visible:border-ring focus-visible:ring-ring/70 h-9 rounded-md border px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
             >
               {sets.map((s) => (
                 <option key={s.id} value={s.id}>

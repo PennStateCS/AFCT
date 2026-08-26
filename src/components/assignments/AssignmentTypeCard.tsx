@@ -2,9 +2,9 @@
 
 import { useEffect, useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Shapes } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import SelectField from '@/components/ui/SelectField';
+import { SettingsSection } from '@/components/settings/settings-layout';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
@@ -29,6 +29,10 @@ const TYPE_OPTIONS = [
  * The type can be changed here, but switching resets the audience to everyone and clears
  * every assignee + date override (they reference the old type's targets), so a change is
  * gated behind a confirmation and applied server-side in one transaction.
+ *
+ * The tab's own heading belongs to the view, the way Details' does; this renders the panel
+ * under it. The button still says "Change type" rather than Save: it opens a confirmation
+ * and throws away work, which is not what Save means anywhere else on this page.
  */
 export function AssignmentTypeCard({
   courseId,
@@ -87,75 +91,73 @@ export function AssignmentTypeCard({
   };
 
   return (
-    <div className="space-y-4">
-      <h2 className="flex items-center gap-2 text-2xl font-semibold">
-        <Shapes className="h-6 w-6" />
-        Type
-      </h2>
-      <p className="text-muted-foreground max-w-3xl text-sm">
-        Whether students work individually or together as a group. Changing the type resets who the
-        assignment is assigned to and clears any date exceptions.
-      </p>
+    <div className="space-y-5">
+      <SettingsSection
+        title="How students work"
+        description="Whether students work individually or together as a group. Changing the type resets who the assignment is assigned to and clears any date exceptions."
+        headingLevel={3}
+      >
+        <fieldset className="grid gap-3 sm:grid-cols-2" aria-label="Assignment type">
+          {TYPE_OPTIONS.map((opt) => {
+            const checked = isGroup === opt.group;
+            return (
+              <label
+                key={opt.label}
+                className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
+                  checked ? 'border-primary bg-primary/5 ring-primary/30 ring-1' : 'hover:bg-muted'
+                } ${courseIsArchived ? 'cursor-not-allowed opacity-50' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name={`${fieldPrefix}-type`}
+                  className="accent-primary mt-1"
+                  checked={checked}
+                  disabled={courseIsArchived}
+                  onChange={() => {
+                    setIsGroup(opt.group);
+                    // Default the set picker to the current set when switching back to group.
+                    if (opt.group && !selectedSetId) setSelectedSetId(groupSetId);
+                  }}
+                />
+                <span>
+                  <span className="block text-sm font-medium">{opt.label}</span>
+                  <span className="text-muted-foreground block text-xs">{opt.desc}</span>
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
 
-      <fieldset className="grid max-w-3xl gap-3 sm:grid-cols-2" aria-label="Assignment type">
-        {TYPE_OPTIONS.map((opt) => {
-          const checked = isGroup === opt.group;
-          return (
-            <label
-              key={opt.label}
-              className={`flex cursor-pointer gap-3 rounded-lg border p-4 transition ${
-                checked ? 'border-primary bg-primary/5 ring-primary/30 ring-1' : 'hover:bg-muted'
-              } ${courseIsArchived ? 'cursor-not-allowed opacity-60' : ''}`}
-            >
-              <input
-                type="radio"
-                name={`${fieldPrefix}-type`}
-                className="accent-primary mt-1"
-                checked={checked}
+        {isGroup ? (
+          <div className="max-w-md">
+            {groupSetsQuery.isPending ? (
+              <p className="text-muted-foreground text-sm">Loading group sets…</p>
+            ) : groupSets.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                This course has no group sets yet. Create one on the course&apos;s Groups tab first.
+              </p>
+            ) : (
+              <SelectField
+                label="Group set"
+                name="groupSetId"
+                placeholder="Choose a group set"
+                description="Students submit and are graded as their group in the chosen set."
+                value={selectedSetId ?? undefined}
+                onValueChange={(v) => setSelectedSetId(v)}
                 disabled={courseIsArchived}
-                onChange={() => {
-                  setIsGroup(opt.group);
-                  // Default the set picker to the current set when switching back to group.
-                  if (opt.group && !selectedSetId) setSelectedSetId(groupSetId);
-                }}
+                options={groupSets.map((gs) => ({
+                  value: gs.id,
+                  label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,
+                }))}
               />
-              <span>
-                <span className="block text-sm font-medium">{opt.label}</span>
-                <span className="text-muted-foreground block text-xs">{opt.desc}</span>
-              </span>
-            </label>
-          );
-        })}
-      </fieldset>
+            )}
+          </div>
+        ) : null}
+      </SettingsSection>
 
-      {isGroup ? (
-        <div className="max-w-md">
-          {groupSetsQuery.isPending ? (
-            <p className="text-muted-foreground text-sm">Loading group sets…</p>
-          ) : groupSets.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              This course has no group sets yet. Create one on the course&apos;s Groups tab first.
-            </p>
-          ) : (
-            <SelectField
-              label="Group set"
-              name="groupSetId"
-              placeholder="Choose a group set"
-              description="Students submit and are graded as their group in the chosen set."
-              value={selectedSetId ?? undefined}
-              onValueChange={(v) => setSelectedSetId(v)}
-              disabled={courseIsArchived}
-              triggerClassName="bg-card border-input"
-              options={groupSets.map((gs) => ({
-                value: gs.id,
-                label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,
-              }))}
-            />
-          )}
-        </div>
-      ) : null}
-
-      <div className="flex max-w-3xl justify-end">
+      {/* The same footer the other assignment forms use: a rule, then the action at the
+          form's right edge. */}
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
         <Button type="button" onClick={() => setConfirmOpen(true)} disabled={!canSave}>
           {saving ? 'Changing…' : 'Change type'}
         </Button>

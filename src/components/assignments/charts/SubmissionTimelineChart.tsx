@@ -82,7 +82,7 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
                 width={barW}
                 height={Math.max(0, M.top + plotH - y)}
                 rx={1.5}
-                className="fill-brand-teal outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
+                className="fill-chart-1 outline-none focus-visible:[outline:2px_solid_var(--color-ring)]"
                 tabIndex={0}
                 role="img"
                 aria-label={label}
@@ -115,7 +115,7 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
               x2={centerX(dueIndex)}
               y1={M.top}
               y2={M.top + plotH}
-              className="stroke-tertiary"
+              className="stroke-border"
               strokeWidth={1.5}
               strokeDasharray="4 3"
             />
@@ -123,7 +123,7 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
               x={centerX(dueIndex)}
               y={M.top - 4}
               textAnchor="middle"
-              className="fill-tertiary text-[10px] font-medium"
+              className="fill-muted-foreground text-[10px] font-medium"
             >
               Due
             </text>

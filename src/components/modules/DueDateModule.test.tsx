@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { DueDateModule } from './DueDateModule';
@@ -14,11 +14,6 @@ vi.mock('next/link', () => ({
 
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'America/New_York' }),
-}));
-
-vi.mock('@/lib/date-format', () => ({
-  formatDateTimeInTimeZone: (value: Date | string) =>
-    typeof value === 'string' ? value : value.toISOString(),
 }));
 
 describe('DueDateModule', () => {
@@ -39,7 +34,7 @@ describe('DueDateModule', () => {
 
     render(<DueDateModule assignments={assignments} />);
 
-    const rows = screen.getAllByRole('link');
+    const rows = within(screen.getByRole('list')).getAllByRole('link');
     expect(rows[0]).toHaveTextContent('Quiz');
     expect(rows[1]).toHaveTextContent('Project');
     expect(rows).toHaveLength(2);
@@ -76,11 +71,31 @@ describe('DueDateModule', () => {
 
     render(<DueDateModule assignments={assignments} />);
 
-    // 5 assignment links + the "more on the calendar" link.
-    const links = screen.getAllByRole('link');
-    expect(links).toHaveLength(6);
+    expect(within(screen.getByRole('list')).getAllByRole('link')).toHaveLength(5);
     const more = screen.getByText('2 more on the calendar');
     expect(more).toHaveAttribute('href', '/dashboard/calendar');
+  });
+
+  it('shows the due date as a tile and a calendar-day label, in the viewer zone', () => {
+    // 02:00Z on 2 March is 21:00 on 1 MARCH in New York, so the zone decides both the
+    // tile and the label: reading these in UTC would say "Mar 2" and "In 2 days".
+    vi.setSystemTime(new Date('2025-02-28T12:00:00Z'));
+
+    render(
+      <DueDateModule
+        assignments={[
+          { id: 'a1', title: 'Quiz', dueDate: '2025-03-02T02:00:00Z', courseId: 'c1' },
+          { id: 'a2', title: 'Project', dueDate: '2025-03-05T12:00:00Z', courseId: 'c1' },
+        ]}
+      />,
+    );
+
+    const [first, second] = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(within(first).getByText('Mar')).toBeInTheDocument();
+    expect(within(first).getByText('1')).toBeInTheDocument();
+    expect(within(first).getByText('Tomorrow')).toBeInTheDocument();
+    expect(within(second).getByText('5')).toBeInTheDocument();
+    expect(within(second).getByText('In 5 days')).toBeInTheDocument();
   });
 
   it('marks a draft assignment', () => {

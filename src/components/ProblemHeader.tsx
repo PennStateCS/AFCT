@@ -8,6 +8,8 @@ import {
   Share2,
   Workflow,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import type { BadgeVariant } from '@/lib/badge-presets';
 import { CardTitle } from '@/components/ui/card';
 import { RichDescription } from '@/components/rich-description/RichDescription';
 
@@ -36,19 +38,18 @@ type ProblemHeaderProps = {
  * One mapping rather than conditional classes at each call site, so a new problem type or a
  * new fact is a row here instead of another branch in the markup.
  *
- * Colour comes from the semantic status tokens, which already carry a soft background, a
- * border and a readable foreground in both themes. Nothing depends on the hue: every badge
- * names itself in text and carries an icon, so the colour is reinforcement rather than the
- * message. That is also why "Autograder" is not styled only for the On case.
+ * Colour comes from the shared badge variants, so these sit in the same language as every
+ * other badge in the app rather than composing token classes of their own. Nothing depends
+ * on the hue: every badge names itself in text and carries an icon, so the colour is
+ * reinforcement rather than the message. That is also why "Autograder" is not styled only
+ * for the On case.
+ *
+ * Which family each fact belongs to is the only real decision here. The problem's type and
+ * its determinism are identities, so they take categorical hues; the type used to be amber,
+ * which read as a caution about a problem that was simply an FA. The limits are plain
+ * metadata. Only the autograder reports a state, and only the On case is a state worth
+ * colouring.
  */
-type BadgeTone = 'type' | 'neutral' | 'info' | 'success';
-
-const toneClasses: Record<BadgeTone, string> = {
-  type: 'bg-status-warning-bg border-status-warning-border text-status-warning',
-  info: 'bg-status-info-bg border-status-info-border text-status-info',
-  success: 'bg-status-success-bg border-status-success-border text-status-success',
-  neutral: 'bg-badge-neutral-bg border-badge-neutral-border text-badge-neutral',
-};
 
 const typeLabels: Record<string, string> = {
   PDA: 'Pushdown Automaton',
@@ -73,19 +74,21 @@ export default function ProblemHeader({
     typeof maxSubmissions === 'number' ? (maxSubmissions < 0 ? 'Unlimited' : maxSubmissions) : null;
   const hasDescription = !!description || !!descriptionJson;
 
-  const badgeClass =
-    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium leading-none';
-
-  const facts: { key: string; icon: LucideIcon; label: string; tone: BadgeTone }[] = [];
+  const facts: { key: string; icon: LucideIcon; label: string; variant: BadgeVariant }[] = [];
   if (type) {
-    facts.push({ key: 'type', icon: Workflow, label: typeLabels[type] ?? type, tone: 'type' });
+    facts.push({
+      key: 'type',
+      icon: Workflow,
+      label: typeLabels[type] ?? type,
+      variant: 'category-indigo',
+    });
   }
   if (typeof maxStates === 'number') {
     facts.push({
       key: 'states',
       icon: Gauge,
       label: `Max States: ${maxStates === -1 ? 'Unlimited' : maxStates}`,
-      tone: 'neutral',
+      variant: 'neutral',
     });
   }
   if (typeof isDeterministic === 'boolean') {
@@ -93,7 +96,7 @@ export default function ProblemHeader({
       key: 'det',
       icon: Share2,
       label: isDeterministic ? 'Deterministic' : 'Nondeterministic',
-      tone: 'info',
+      variant: 'category-blue',
     });
   }
   if (submissionsLabel !== null) {
@@ -101,7 +104,7 @@ export default function ProblemHeader({
       key: 'subs',
       icon: ListOrdered,
       label: `Max Submissions: ${submissionsLabel}`,
-      tone: 'neutral',
+      variant: 'neutral',
     });
   }
   if (typeof autograderEnabled === 'boolean') {
@@ -110,7 +113,7 @@ export default function ProblemHeader({
       icon: autograderEnabled ? CircleCheck : CircleSlash,
       label: `Autograder: ${autograderEnabled ? 'On' : 'Off'}`,
       // Off is not a fault, just not switched on, so it reads neutral rather than alarming.
-      tone: autograderEnabled ? 'success' : 'neutral',
+      variant: autograderEnabled ? 'success' : 'neutral',
     });
   }
 
@@ -122,13 +125,13 @@ export default function ProblemHeader({
       </div>
       {facts.length > 0 ? (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          {facts.map(({ key, icon: Icon, label, tone }) => (
-            <span key={key} className={`${badgeClass} ${toneClasses[tone]}`}>
+          {facts.map(({ key, icon: Icon, label, variant }) => (
+            <Badge key={key} variant={variant} className="gap-1.5 px-2.5 py-1 leading-none">
               {/* Decorative: the label beside it already says the same thing, so announcing
                   the icon would read every badge twice. */}
               <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {label}
-            </span>
+            </Badge>
           ))}
         </div>
       ) : null}

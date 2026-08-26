@@ -115,7 +115,7 @@ export default function ProblemGradeForm({
       <form onSubmit={handleSubmit} className="flex flex-wrap items-start gap-2">
         {/* The field and its "/N" suffix read as one control; the button is separate, so
             saving looks like an action rather than another part of the number. */}
-        <div className="border-input focus-within:border-ring focus-within:ring-ring/50 flex w-fit items-stretch overflow-hidden rounded-md border shadow-xs focus-within:ring-[3px]">
+        <div className="border-input focus-within:border-ring focus-within:ring-ring/70 flex w-fit items-stretch overflow-hidden rounded-md border shadow-xs focus-within:ring-[3px]">
           <Input
             id={GRADE_INPUT_ID}
             type="number"
@@ -152,10 +152,10 @@ export default function ProblemGradeForm({
           </Button>
         </div>
         {error ? (
-        <p id="problem-grade-error" role="alert" className="text-destructive text-xs">
-          {error}
-        </p>
-      ) : null}
+          <p id="problem-grade-error" role="alert" className="text-destructive text-xs">
+            {error}
+          </p>
+        ) : null}
       </form>
     </div>
   );

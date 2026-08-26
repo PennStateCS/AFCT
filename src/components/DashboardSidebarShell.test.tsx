@@ -47,8 +47,26 @@ describe('DashboardSidebarShell', () => {
 
     expect(screen.getByTestId('sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('sidebar-header')).toBeInTheDocument();
-    expect(screen.getByTestId('sidebar-separator')).toHaveClass('!mx-0 !mb-0');
     expect(screen.getByTestId('sidebar-menu')).toBeInTheDocument();
+
+    // Full bleed, so the rule reaches both edges of the rail rather than floating inside it
+    // with the primitive's default 8px inset. The gap under it is a spacing decision that can
+    // move; pinning the exact class made a 6px change a test failure with nothing to say.
+    expect(screen.getByTestId('sidebar-separator')).toHaveClass('!mx-0');
+  });
+
+  // Brand, rule, navigation, in that order. Reversing them or dropping the rule is the whole
+  // of what would make the header stop reading as a header.
+  it('puts the divider between the brand and the navigation', () => {
+    const { container } = render(<DashboardSidebarShell />);
+
+    const order = ['sidebar-header', 'sidebar-separator', 'sidebar-menu'].map((id) =>
+      [...container.querySelectorAll('[data-testid]')].findIndex(
+        (el) => el.getAttribute('data-testid') === id,
+      ),
+    );
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(order.every((i) => i >= 0)).toBe(true);
   });
 
   it('configures the sidebar with icon collapse mode', () => {
