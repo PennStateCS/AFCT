@@ -7,27 +7,36 @@ import { describe, expect, it } from 'vitest';
 import { WelcomePanel } from './WelcomePanel';
 
 describe('WelcomePanel', () => {
-  it('greets by name and states the two counts', () => {
+  it('greets with the wording the page resolved, by name', () => {
     render(
       <WelcomePanel
+        greeting="Good morning"
         firstName="Charles"
         courseSummary="2 current courses"
         assignmentSummary="5 upcoming assignments"
       />,
     );
     const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading).toHaveTextContent('Welcome back, Charles');
-    expect(screen.getByText(/2 current courses/)).toHaveTextContent(
-      '2 current courses · 5 upcoming assignments',
-    );
+    // The greeting is the page's, not this component's: it depends on the reader's timezone,
+    // which a server component cannot get from its own clock. See lib/greeting.
+    expect(heading).toHaveTextContent('Good morning, Charles');
+    expect(screen.getByText('2 current courses')).toBeInTheDocument();
+    expect(screen.getByText('5 upcoming assignments')).toBeInTheDocument();
   });
 
   it('drops the name rather than the greeting when there is no name', () => {
     // The page resolves the name and is allowed to hand over an empty string. Rendering
-    // "Welcome back, " with a dangling comma is the failure this guards.
-    render(<WelcomePanel firstName="" courseSummary="1 current course" assignmentSummary="" />);
+    // "Good morning, " with a dangling comma is the failure this guards.
+    render(
+      <WelcomePanel
+        greeting="Good morning"
+        firstName=""
+        courseSummary="1 current course"
+        assignmentSummary="No upcoming assignments"
+      />,
+    );
     const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading).toHaveTextContent('Welcome back');
+    expect(heading).toHaveTextContent('Good morning');
     expect(heading.textContent).not.toContain(',');
   });
 
@@ -36,19 +45,24 @@ describe('WelcomePanel', () => {
     // second-guess it: these strings go through verbatim.
     render(
       <WelcomePanel
+        greeting="Good morning"
         firstName="Ada"
         courseSummary="0 current courses"
         assignmentSummary="No upcoming assignments"
       />,
     );
-    expect(screen.getByText(/0 current courses/)).toHaveTextContent(
-      '0 current courses · No upcoming assignments',
-    );
+    expect(screen.getByText('0 current courses')).toBeInTheDocument();
+    expect(screen.getByText('No upcoming assignments')).toBeInTheDocument();
   });
 
   it('keeps the decoration out of the accessibility tree', () => {
     const { container } = render(
-      <WelcomePanel firstName="Ada" courseSummary="1 current course" assignmentSummary="" />,
+      <WelcomePanel
+        greeting="Good morning"
+        firstName="Ada"
+        courseSummary="1 current course"
+        assignmentSummary="No upcoming assignments"
+      />,
     );
     // Three decorations: the node network, the glow behind the mark, and the mark itself. None
     // of them may be reachable, focusable or clickable.
@@ -68,7 +82,12 @@ describe('WelcomePanel', () => {
     // page instead: near-black text on navy in light mode, invisible, and no way to see that
     // from the markup. Same rule the course and assignment banners are held to.
     const { container } = render(
-      <WelcomePanel firstName="Ada" courseSummary="1 current course" assignmentSummary="x" />,
+      <WelcomePanel
+        greeting="Good morning"
+        firstName="Ada"
+        courseSummary="1 current course"
+        assignmentSummary="x"
+      />,
     );
     const classes = Array.from(container.querySelectorAll<HTMLElement>('[class]'))
       .map((el) => el.getAttribute('class') ?? '')

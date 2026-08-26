@@ -24,10 +24,18 @@ import { IdentityNetwork } from '@/components/IdentityNetwork';
  * place the page is named.
  */
 export function WelcomePanel({
+  greeting,
   firstName,
   courseSummary,
   assignmentSummary,
 }: {
+  /**
+   * "Good morning" and friends, already resolved against the reader's own timezone by the page.
+   * Passed in rather than worked out here: this is a server component, so computing it from the
+   * clock in this file would use the server's timezone and greet a reader in California with
+   * "good evening" over lunch. See lib/greeting.
+   */
+  greeting: string;
   /** Already resolved and already allowed to be empty; see the note in the dashboard page. */
   firstName: string;
   /** Pluralised by the page, which is where the counts are. */
@@ -71,15 +79,17 @@ export function WelcomePanel({
         <span className="relative flex shrink-0 items-center justify-center">
           {/* Two gradients, not one, and that is what makes it read as neon rather than as a
               smudge. A single soft circle is a fog; a tube glowing has a bright, tight core that
-              falls off fast and a wide dim bloom behind it, so this is one of each: 11rem at a
-              fifth opacity for the bloom, 6rem at nearly half for the core. */}
+              falls off fast and a wide dim bloom behind it, so this is one of each: 9rem for the
+              bloom and 5rem for the core, both scaled to the mark rather than fixed. Both were roughly twice this bright to begin with,
+              which lit the whole left end of the panel; the shape of the falloff is what reads
+              as neon, not the amount of light. */}
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute size-44 rounded-full bg-[radial-gradient(circle,var(--course-banner-glow),transparent_65%)] opacity-20"
+            className="pointer-events-none absolute size-36 rounded-full bg-[radial-gradient(circle,var(--course-banner-glow),transparent_65%)] opacity-[0.14]"
           />
           <span
             aria-hidden="true"
-            className="pointer-events-none absolute size-24 rounded-full bg-[radial-gradient(circle,var(--course-banner-glow),transparent_60%)] opacity-45"
+            className="pointer-events-none absolute size-20 rounded-full bg-[radial-gradient(circle,var(--course-banner-glow),transparent_60%)] opacity-25"
           />
           <AuthBrandMark
             // The third layer: the mark's own silhouette glowing. One small drop-shadow on one
@@ -87,8 +97,9 @@ export function WelcomePanel({
             // filter earns its cost here (unlike putting one on forty network nodes). Written
             // with the glow TOKEN rather than a literal rgba so the high-contrast theme, which
             // sets that token to transparent, switches the halo off along with the two gradients
-            // above it.
-            className="relative size-16 text-blue-300 drop-shadow-[0_0_10px_var(--course-banner-glow)] sm:size-20"
+            // above it; color-mix takes it to just over half strength and keeps that property,
+            // since mixing transparent with transparent is still transparent.
+            className="relative size-14 text-blue-300 drop-shadow-[0_0_8px_color-mix(in_oklch,var(--course-banner-glow)_55%,transparent)] sm:size-16"
             accentClassName="text-course-banner-foreground"
             // Closed rather than open, so the node network does not run through the middle of
             // the mark. The dark end of the panel's own gradient, which is what sits behind the
@@ -101,13 +112,26 @@ export function WelcomePanel({
 
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight break-words lg:text-3xl">
-            {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
+            {firstName ? `${greeting}, ${firstName}` : greeting}
           </h1>
-          {/* One line where it fits, wrapping where it does not. Left uniformly muted rather
-              than emphasising the counts: pulling the numbers out would mean rebuilding the two
-              summary strings the page composes, and the page is where the counts belong. */}
-          <p className="text-course-banner-muted-foreground mt-1.5 text-base">
-            {courseSummary} &middot; {assignmentSummary}
+          {/*
+            Two facts and a separator, not one muted sentence. The counts carry the weight and
+            the dot between them drops to a bit under half, which is enough hierarchy to let the
+            eye pick out the two numbers without either of them turning into a chip.
+
+            A flex row rather than inline text, because that is what buys the space around the
+            separator: gap-x-3 either side against the single word-space it used to have, and the
+            two phrases wrap as whole units on a narrow panel instead of breaking mid-phrase.
+
+            The dot is aria-hidden. It is punctuation between two separate elements, and screen
+            readers already pause between them; announcing "middle dot" adds nothing.
+          */}
+          <p className="text-course-banner-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 text-base">
+            <span className="font-medium">{courseSummary}</span>
+            <span aria-hidden="true" className="opacity-45">
+              &middot;
+            </span>
+            <span className="font-medium">{assignmentSummary}</span>
           </p>
         </div>
       </div>

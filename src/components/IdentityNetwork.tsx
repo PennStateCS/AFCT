@@ -335,9 +335,22 @@ export function IdentityNetwork({ className }: { className?: string }) {
       focusable="false"
       className={cn(
         'text-course-banner-node pointer-events-none absolute inset-0 size-full',
-        // Quieter on a phone, where the banner is a stack of full-width rows and every part of
-        // it has text over it. One opacity on the whole figure rather than hiding a group: half
-        // a graph reads as a rendering fault, a faint one reads as a background.
+        // A left-to-right fade, so the end the title and the icon sit on stays quiet and the
+        // graph only becomes properly apparent past the middle. A fifth of full weight across
+        // the first 38%, which is the band the icon and the heading occupy on all three banners,
+        // then rising to full by 78%. Held flat through that first stretch rather than ramping
+        // from the very edge: a gradient that starts climbing immediately still puts a legible
+        // line through the middle of the title, which is the thing this is for.
+        //
+        // A CSS mask rather than the SVG one this carried at one point, which needed a `<mask>`
+        // element and a generated id to reference it. It is also NOT the same thing as fading
+        // the node opacities: this scales the figure as drawn, so the four tiers keep their
+        // relationship to each other and the mesh reads as one drawing standing further back
+        // rather than as a different, flatter drawing.
+        '[mask-image:linear-gradient(to_right,rgba(0,0,0,0.2)_0%,rgba(0,0,0,0.28)_38%,rgba(0,0,0,0.6)_55%,rgba(0,0,0,1)_78%)]',
+        // Quieter again on a phone, where the banner is a stack of full-width rows and every
+        // part of it has text over it. One opacity on the whole figure rather than hiding a
+        // group: half a graph reads as a rendering fault, a faint one reads as a background.
         //
         // The caller's className comes last so a banner tone can dial the whole figure back
         // further; see TONE in IdentityPanel. It is an opacity on the <svg>, so it scales the

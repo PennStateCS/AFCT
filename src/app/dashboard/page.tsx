@@ -5,6 +5,8 @@ import DashboardClient from './DashboardClient';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
 import { WelcomePanel } from '@/components/dashboard/WelcomePanel';
+import { greetingFor } from '@/lib/greeting';
+import { DEFAULT_SYSTEM_TIMEZONE } from '@/lib/system-settings';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
 import { assignedToStudentWhere } from '@/lib/assignment-visibility';
@@ -235,6 +237,23 @@ export default async function DashboardPage({
     .filter((a) => a.dueDate > now)
     .sort((x, y) => x.dueDate.getTime() - y.dueDate.getTime());
 
+  // Whose morning it is.
+  //
+  // Read from the database rather than from the session, which is the trap here: the session
+  // type declares `timezone`, but the JWT callback never puts one in it, so `session.user
+  // .timezone` is undefined for everybody and reads as "no preference" instead of failing. Two
+  // primary-key lookups in parallel, which is the one query this panel costs and the reason it
+  // can greet correctly: AFCT runs at five universities across four US timezones off a single
+  // installation, and the server's own clock belongs to none of them.
+  const [profile, settings] = await Promise.all([
+    prisma.user.findUnique({ where: { id }, select: { timezone: true } }),
+    prisma.systemSettings.findUnique({ where: { id: 1 }, select: { timezone: true } }),
+  ]);
+  const greeting = greetingFor(
+    new Date(),
+    profile?.timezone || settings?.timezone || DEFAULT_SYSTEM_TIMEZONE,
+  );
+
   // Counted off the two arrays this page already built, so the summary costs no query.
   const courseSummary =
     currentCourses.length === 1 ? '1 current course' : `${currentCourses.length} current courses`;
@@ -257,6 +276,7 @@ export default async function DashboardPage({
             passed in already worded: they are counted off the two arrays this page has
             just built, so the panel is presentation and costs no query. */}
         <WelcomePanel
+          greeting={greeting}
           firstName={firstName}
           courseSummary={courseSummary}
           assignmentSummary={assignmentSummary}
