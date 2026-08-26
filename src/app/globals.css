@@ -584,15 +584,34 @@
   --navbar-accent-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
   --navbar-border: oklch(0.4141 0.0427 260.212); /* #3E4C63, 1.7:1 on the band */
   --navbar-ring: oklch(0.8091 0.0956 251.813); /* #93C5FD, 8.1:1 */
-  /* The banner is already dark in light mode, so this block only has to keep it apart from a
-     dark page. It goes one step RICHER rather than darker: against a #020617 canvas and the
-     #111827 rail the light-mode navy is close enough to read as more chrome, and the point of
-     the banner is that a course is its own object. The border comes up with it, because at
-     white/12 on a dark page there was nothing marking where the banner ended. */
-  --course-banner: oklch(0.287 0.0888 264.791); /* #142756 */
-  --course-banner-mid: oklch(0.3431 0.1106 261.513); /* #153571 */
-  --course-banner-accent: oklch(0.3876 0.1329 261.764); /* #183F8A */
-  --course-banner-border: oklch(1 0 0 / 18%);
+  /* Light mode's banner is a saturated navy because it is the DARK object on a white page,
+     and that contrast is most of its effect. Dark mode kept nearly the same navy (every stop
+     within 1.07:1 of its light value), which left the same bright blue slab sitting on a
+     near-black canvas: loud without being separate, and the first thing on the page shouting
+     over the page.
+
+     So this goes darker and much greyer rather than brighter. Chroma drops from 0.089-0.133
+     to 0.037-0.054, which is what turns it from cobalt into a slate blue, and lightness with
+     it. The banner reads as a deep calm surface the page settles into, and the border does
+     the edge work that the fill no longer does: at 1.16:1 to 1.48:1 against the canvas the
+     boundary is the border, not the tone, which is why it comes up again here.
+
+     Text gains from the darker ground rather than losing: the foreground is 16.7:1 on the
+     left stop and 13.0:1 on the brightest, and the muted blue 11.5:1 where the labels sit.
+
+     Brighter was tried first and looked worse in the browser, which is the only place this
+     can be settled. */
+  --course-banner: oklch(0.2176 0.0367 260.597); /* #101A2B */
+  --course-banner-mid: oklch(0.2568 0.0473 261.222); /* #16233A */
+  --course-banner-accent: oklch(0.3005 0.0543 259.33); /* #1D2E49 */
+  --course-banner-border: oklch(1 0 0 / 22%);
+  /* The decoration follows the ground it is drawn on, or it changes weight for free. On this
+     darker slate the light-mode node and glow would have jumped to 3.71:1 and 7.57:1; cobalt
+     and blue-400 put them back at 2.64:1 and 5.37:1, which is what they measure today. Still
+     decoration, still deliberately weak: if the network is the first thing you notice, lower
+     these. */
+  --course-banner-node: oklch(0.5461 0.2152 262.881); /* #2563EB */
+  --course-banner-glow: oklch(0.7137 0.1434 254.624); /* #60A5FA */
   /* Tables sit on the card surface, with the header one rung up and the row highlight
      between the two, mirroring how light mode spaces them. */
   --table-background: oklch(0.2077 0.0398 265.755); /* #0F172A, the card */
