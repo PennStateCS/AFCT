@@ -30,36 +30,48 @@ import { cn } from '@/lib/utils';
  * multiplied, and the mesh on the left third came out at a fraction of a percent of opacity.
  */
 /**
- * How much weight a banner carries. Two values, and deliberately not three knobs.
+ * How much weight a banner carries.
  *
  * `identity` is the course page: the thing you navigated TO, the surface that says AFCT before
  * it says anything else. `operational` is the assignment page, one level down inside a course
  * that has already introduced itself, where the banner is mostly a place to publish from and
  * jump between assignments.
  *
- * One prop rather than separate `networkIntensity`, `minHeight` and `padding` props, because
- * the three have to move together or the two pages stop reading as a family. A quieter network
- * on a full-height banner is just a washed-out course header. Adding a third tone should mean
- * adding a row to the table below, not adding a fourth knob.
+ * The tone changes ONE thing, and that is the point. It used to carry its own padding and its
+ * own height floor as well, which made the assignment banner physically shorter, and two
+ * banners at 118px and 106px read as a component that had drifted rather than as a family with
+ * two members. The shell is now identical and the difference is carried entirely by the
+ * network weight and by what each page puts inside. A third tone means one more entry here, not
+ * one more knob.
  */
 export type IdentityTone = 'identity' | 'operational';
 
-const TONE = {
-  identity: {
-    // 20px of vertical padding on a desktop against 24 either side; see the note below.
-    padding: 'px-4 py-4 sm:px-5 lg:px-6 lg:py-5',
-    floor: 'sm:min-h-[7.25rem]',
-    network: undefined,
-  },
-  operational: {
-    // A step tighter top and bottom, which is most of the 14px between the two banners.
-    padding: 'px-4 py-3 sm:px-5 sm:py-4 lg:px-6',
-    floor: 'sm:min-h-[6.5rem]',
-    // Same mesh, same palette, three quarters the weight. Not a second SVG and not a different
-    // crop: the figure is recognisably the one from the course page, standing further back.
-    network: 'opacity-[0.55] sm:opacity-75',
-  },
-} as const satisfies Record<IdentityTone, { padding: string; floor: string; network?: string }>;
+/**
+ * The shell every banner shares: padding, and the desktop minimum both pages open at.
+ *
+ * One value in one place rather than a magic number per caller. 20px of vertical padding on a
+ * desktop against 24 either side, because the banner should stay generous across and only as
+ * tall as it needs to be.
+ *
+ * The 7.25rem is a MINIMUM and only above sm. It makes a page open at the same height whoever
+ * is looking and whichever page they are on: a student gets no faculty line and an assignment
+ * has less to say than a course, and without a floor each of those opened at a different height
+ * and moved the content underneath. A long title, a second line of faculty, a wrapped badge row
+ * or a wrapped control column all push past it, and on a phone the rows stack and there is no
+ * spare height to hand out. `justify-center` on the same element is what distributes the spare
+ * above and below rather than leaving it under the title.
+ */
+const BANNER_SHELL = 'px-4 py-4 sm:min-h-[7.25rem] sm:px-5 lg:px-6 lg:py-5';
+
+/**
+ * Same mesh, same palette, three quarters the weight on the quieter tone. Not a second SVG and
+ * not a different crop: the figure is recognisably the one from the course page, standing
+ * further back.
+ */
+const TONE_NETWORK = {
+  identity: undefined,
+  operational: 'opacity-[0.55] sm:opacity-75',
+} as const satisfies Record<IdentityTone, string | undefined>;
 
 export function IdentityPanel({
   children,
@@ -74,8 +86,6 @@ export function IdentityPanel({
   tone?: IdentityTone;
   className?: string;
 }) {
-  const { padding, floor, network } = TONE[tone];
-
   return (
     // overflow-hidden clips the network to the rounded corners; relative anchors it. shadow-xs
     // rather than a real shadow: the separation comes from this being a different kind of thing
@@ -89,27 +99,11 @@ export function IdentityPanel({
         className,
       )}
     >
-      <IdentityNetwork className={network} />
+      <IdentityNetwork className={TONE_NETWORK[tone]} />
 
-      {/*
-        Everything real sits above the decoration. The padding lives here rather than on the
-        section so the network runs edge to edge behind it.
-
-        Vertical padding is a step under the horizontal, which is the whole compaction lever
-        along with the icon slot below: 20px top and bottom against 24 either side on a desktop.
-        The banner should stay generous across and only as tall as it needs to be, and the
-        alternative levers all cost information. Shrinking the title or the metadata would trade
-        hierarchy for pixels, and the 12px gap between the two rows is already at the point where
-        any less reads as glued together.
-
-        The min-height is what makes a page open at the same height whoever is looking. A student
-        gets no faculty/TA/registration line, so without it their course banner came out at 116px
-        against a staff member's 144 and the assignment table started in a different place for
-        the two of them. The spare goes above and below rather than under the title. It is a
-        MINIMUM and only above sm: a long title, a second line of faculty or a wrapped badge row
-        all push past it, and on a phone the rows stack and there is no spare height to hand out.
-      */}
-      <div className={cn('relative flex flex-col justify-center gap-3', padding, floor)}>
+      {/* Everything real sits above the decoration. The padding lives here rather than on the
+          section so the network runs edge to edge behind it; see BANNER_SHELL. */}
+      <div className={cn('relative flex flex-col justify-center gap-3', BANNER_SHELL)}>
         {children}
       </div>
     </section>
