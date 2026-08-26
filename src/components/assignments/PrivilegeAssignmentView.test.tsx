@@ -385,14 +385,20 @@ describe('PrivilegeAssignmentView — header', () => {
 
   // Whether this is group work never changes as you page through students, so it is stated
   // once in the header rather than repeated beside every student on the Submissions tab.
+  // Labelled metadata beside the course now, not a tinted chip in the control column: it
+  // describes the assignment rather than being something you act on. The word is the whole
+  // signal, so these assert the word.
   it('says whether the assignment is group work', () => {
     renderView();
-    expect(screen.getByText('Individual assignment')).toBeInTheDocument();
+    expect(screen.getByText('Type:')).toBeInTheDocument();
+    expect(screen.getByText('Individual')).toBeInTheDocument();
+    expect(screen.queryByText('Group')).not.toBeInTheDocument();
   });
 
   it('says so when the assignment uses a group set', () => {
     renderView({ initialAssignment: makeAssignment({ groupSetId: 'gs1' }) as never });
-    expect(screen.getByText('Group assignment')).toBeInTheDocument();
+    expect(screen.getByText('Group')).toBeInTheDocument();
+    expect(screen.queryByText('Individual')).not.toBeInTheDocument();
   });
 
   it('renders the description in the editable form', async () => {
@@ -838,10 +844,21 @@ describe('PrivilegeAssignmentView - the LMS badge', () => {
 
   it('keeps every header control inside the panel', () => {
     renderView({});
-    // The publish switch, the group badge and the assignment switcher all still work from
-    // the header; the panel is a shell, not a rewrite.
+    // The publish switch and the assignment switcher still work from the header; the panel is
+    // a shell, not a rewrite.
     expect(screen.getByRole('switch', { name: 'Published' })).toBeInTheDocument();
-    expect(screen.getByText(/assignment$/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Theory/ })).toBeInTheDocument();
+  });
+
+  it('leaves only controls in the right-hand column', () => {
+    // The point of the last pass on this header: what the assignment IS reads on the left
+    // beside the course, and the column on the right holds only things you operate. A chip
+    // reappearing in there is the regression worth catching, since it looks harmless.
+    const { container } = renderView({});
+    const banner = container.querySelector('section[aria-labelledby="assignment-page-title"]');
+    const controls = banner?.querySelector('[data-slot="switch"]')?.closest('div.flex-col');
+    expect(controls).not.toBeNull();
+    expect(controls?.querySelectorAll('[data-slot="badge"]').length).toBe(0);
+    expect(controls?.textContent).not.toMatch(/Individual|Group|Course:/);
   });
 });
