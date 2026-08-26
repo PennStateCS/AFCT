@@ -1,6 +1,6 @@
 import type React from 'react';
 
-import { CircleAlert, CircleCheck, CircleOff } from 'lucide-react';
+import { CircleAlert, CircleCheck, CircleOff, Info } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -335,6 +335,10 @@ export function SettingsAsideCard({
 const STATUS_TONES = {
   ok: { Icon: CircleCheck, className: 'text-status-success' },
   off: { Icon: CircleOff, className: 'text-muted-foreground' },
+  // Something to know, not something to do: ordinary updates waiting on the server, a
+  // setting that is on but has nothing to report. A tick would claim it was all handled
+  // and a triangle would claim it was a fault, and it is neither.
+  info: { Icon: Info, className: 'text-status-info' },
   warn: { Icon: CircleAlert, className: 'text-status-warning' },
   bad: { Icon: CircleAlert, className: 'text-destructive' },
 } as const;

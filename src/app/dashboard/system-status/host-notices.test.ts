@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { hostCheckedMessage, hostNotices, hostUnavailableMessage } from './host-notices';
+import {
+  hostCheckedMessage,
+  hostNotices,
+  hostSummary,
+  hostUnavailableMessage,
+} from './host-notices';
 import type { HostBlock } from '@/lib/status/types';
 
 const host = (extra: Partial<HostBlock> = {}): HostBlock => ({
@@ -127,5 +132,43 @@ describe('how fresh the Host section says it is', () => {
       expect(message).not.toContain('Checked');
       expect(message).toMatch(/every 5 minutes/);
     }
+  });
+});
+
+describe('the one-glance summary in the rail', () => {
+  it('says all clear, and still says why', () => {
+    const summary = hostSummary(host());
+
+    expect(summary.tone).toBe('ok');
+    expect(summary.badgeLabel).toBe('All clear');
+    expect(summary.headline).toBe('Nothing needs doing on the server');
+    expect(summary.rest).toEqual([]);
+  });
+
+  it('leads with the thing that needs doing, not the first thing on the list', () => {
+    // Ordinary updates come back before the clock does, but the clock is the one that needs
+    // acting on, and a card that opened with the quieter of the two would bury it.
+    const summary = hostSummary(host({ updatesAvailable: 12, timeSynchronised: false }));
+
+    expect(summary.tone).toBe('warn');
+    expect(summary.badgeLabel).toBe('Needs attention');
+    expect(summary.headline).toBe('The server clock is not keeping time');
+    expect(summary.rest.map((n) => n.id)).toEqual(['updates']);
+  });
+
+  it('keeps ordinary updates as something to know rather than something to do', () => {
+    const summary = hostSummary(host({ updatesAvailable: 12, securityUpdatesAvailable: 0 }));
+
+    expect(summary.tone).toBe('info');
+    expect(summary.badgeLabel).toBe('Updates waiting');
+  });
+
+  it('never reads as an all-clear when it has no report', () => {
+    const summary = hostSummary({ available: false, reason: 'no-report' });
+
+    expect(summary.tone).toBe('off');
+    expect(summary.badgeLabel).toBe('Not available');
+    expect(summary.headline).not.toMatch(/nothing needs doing/i);
+    expect(summary.detail).toBe(hostUnavailableMessage({ available: false, reason: 'no-report' }));
   });
 });

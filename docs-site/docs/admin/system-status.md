@@ -23,7 +23,7 @@ Select **Refresh** for a new snapshot, or turn on **Auto-refresh** to update eve
 
 ## What the server itself needs
 
-The **This server** section on the Server tab reports on the machine AFCT runs on, rather than on AFCT:
+The **This server** card, beside the readings on the Server tab, reports on the computer AFCT is installed on rather than on AFCT itself. It opens with the state of the machine, and lists anything waiting:
 
 - **A restart is waiting.** Updates have been installed that only take effect after the server is restarted. Restart it when nobody is using AFCT, because everyone signed in is signed out and grading stops until it comes back.
 - **Security updates are waiting.** Ask whoever administers the server to install them.
@@ -31,9 +31,9 @@ The **This server** section on the Server tab reports on the machine AFCT runs o
 
 When something needs attention, a **Server needs attention** badge also appears beside the page title.
 
-The section says when it was last checked. AFCT looks again every five minutes, so updates installed on the server are still listed for a few minutes afterwards. That is the report being out of date, not the installation having failed.
+The card says when it was last checked. AFCT looks again every five minutes, so updates installed on the server are still listed for a few minutes afterwards. That is the report being out of date, not the installation having failed.
 
-This information comes from the update service, which is the only part of AFCT allowed to see the machine (the application itself is deliberately walled off from it, because that is where submissions are graded). If that service is not running, or the server does not run Ubuntu or Debian, the section says AFCT cannot tell rather than reporting that everything is fine. Installing the updates themselves is always done on the server, never through AFCT.
+This information comes from the update service, which is the only part of AFCT allowed to see the machine (the application itself is deliberately walled off from it, because that is where submissions are graded). If that service is not running, or the server does not run Ubuntu or Debian, the card says AFCT cannot tell rather than reporting that everything is fine. Installing the updates themselves is always done on the server, never through AFCT.
 
 ## When grading stops
 

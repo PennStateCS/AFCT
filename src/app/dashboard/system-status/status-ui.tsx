@@ -362,3 +362,53 @@ export const Sparkline = ({
     </div>
   );
 };
+
+/**
+ * A status tab with a narrow rail beside its sections: the readings on the left, the state
+ * of the machine they describe on the right.
+ *
+ * The same shape System Settings uses (`SettingsAsideLayout`), and the cards that go in it
+ * are that page's cards, imported. What is not shared is the breakpoint, because the two
+ * pages are held apart by different content.
+ *
+ * Here it is the Server tab's sparklines. They are fixed-width SVGs (240px in a 26px inset)
+ * sitting in the right half of Performance's two-column grid, so that grid needs about
+ * 712px to hold them, which is what it gets today at 1280 with the sidebar and the status
+ * rail both open. Adding a third column costs the 18rem rail plus its 24px gap, and the
+ * page has already spent 256px on the sidebar, 240px on the status rail and 96px on the two
+ * gutters. 712 + 312 + 592 lands just under 1600, so that is where the rail appears; at
+ * Tailwind's 2xl (1536) the sparklines would overflow their inset rather than reflow.
+ *
+ * The workspace stops at 84rem so the rail stays beside the sections rather than drifting
+ * off to the right of an ultrawide monitor. That also keeps the tab honest against its
+ * neighbours: the sections cap themselves at {@link STATUS_STANDARD}, and 84rem is that
+ * measure plus the rail, so on a wide screen the content's right edge is exactly where the
+ * other seven tabs put it and only the rail sits past it.
+ */
+export const StatusAsideLayout = ({
+  aside,
+  className,
+  children,
+}: {
+  aside: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) => (
+  <div
+    className={cn(
+      'grid w-full max-w-[84rem] grid-cols-1 items-start gap-6 min-[1600px]:grid-cols-[minmax(0,1fr)_18rem]',
+      className,
+    )}
+  >
+    {/* The rail is first in the DOM on purpose: stacked on a narrower screen that is the
+        order you want, since it says whether the machine needs anything before the page
+        goes into detail about how hard it is working. Both columns are placed explicitly,
+        so on a wide screen it still sits on the right without anything reordering. */}
+    <div className="space-y-5 min-[1600px]:sticky min-[1600px]:top-6 min-[1600px]:col-start-2 min-[1600px]:row-start-1">
+      {aside}
+    </div>
+    <div className="min-w-0 space-y-5 min-[1600px]:col-start-1 min-[1600px]:row-start-1">
+      {children}
+    </div>
+  </div>
+);
