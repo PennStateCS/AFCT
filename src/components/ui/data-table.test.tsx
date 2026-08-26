@@ -364,6 +364,76 @@ describe('DataTable', () => {
     expect(screen.queryByText('Bob')).not.toBeInTheDocument();
   });
 
+  /*
+   * The toolbar's visual hierarchy, asserted through the tokens that carry it rather than
+   * through whole class strings: neutral utilities, an outlined Export, and cobalt kept for
+   * the one state in the family (filters are on) and for a page's own primary action.
+   *
+   * Class names are a blunt instrument for this, but the alternative is a screenshot nobody
+   * runs. These pin the three distinctions that make the hierarchy readable, and nothing
+   * about padding or radius, so a restyle does not have to come here first.
+   */
+  describe('toolbar hierarchy', () => {
+    const facetColumns: ColumnDef<RowData>[] = [
+      { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
+      { accessorKey: 'role', header: 'Role', meta: { priority: 2, filterVariant: 'multiselect' } },
+    ];
+
+    it('keeps Filters and Columns neutral siblings while nothing is filtered', () => {
+      render(<DataTable columns={facetColumns} data={data} />);
+
+      const filters = screen.getByRole('button', { name: 'Filters' });
+      const cols = screen.getByRole('button', { name: 'Columns' });
+
+      expect(filters.className).toContain('bg-muted');
+      expect(cols.className).toContain('bg-muted');
+      // No cobalt at rest: a view control is not a state until it is doing something.
+      expect(filters.className).not.toContain('tab-active');
+      expect(cols.className).not.toContain('tab-active');
+    });
+
+    it('tints Filters, and counts them, once a filter is on', async () => {
+      const user = userEvent.setup();
+      render(<DataTable columns={facetColumns} data={data} />);
+
+      await user.click(screen.getByRole('button', { name: 'Filters' }));
+      await user.click(await screen.findByRole('checkbox', { name: /^admin/i }));
+
+      // The accessible name carries the state too, so it does not rest on the tint.
+      const active = screen.getByRole('button', { name: 'Filters, 1 active' });
+      expect(active.className).toContain('bg-tab-active-bg');
+      expect(active.className).toContain('text-tab-active');
+      expect(active).toHaveTextContent('1');
+      // Columns is not a state indicator and stays where it was.
+      expect(screen.getByRole('button', { name: 'Columns' }).className).not.toContain('tab-active');
+    });
+
+    it('keeps Export outlined: an action on the data, not a primary one', () => {
+      render(<DataTable columns={facetColumns} data={data} />);
+
+      const exportButton = screen.getByRole('button', { name: /export table data/i });
+      expect(exportButton.className).toContain('border-input');
+      expect(exportButton.className).toContain('bg-card');
+      // Not primary, and not a semantic colour: a CSV is not a success.
+      expect(exportButton.className).not.toContain('bg-primary');
+      expect(exportButton.className).not.toContain('status-success');
+    });
+
+    it('leaves a page action passed into the toolbar alone', () => {
+      render(
+        <DataTable
+          columns={facetColumns}
+          data={data}
+          actionButtons={<Button>Create Course</Button>}
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: 'Create Course' }).className).toContain(
+        'bg-primary',
+      );
+    });
+  });
+
   it('does not render a Filters button when no column opts in', () => {
     render(<DataTable columns={columns} data={data} />);
     expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();

@@ -445,21 +445,23 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           loadingMessage="Loading grades, please wait..."
           actionButtons={
             <>
-              <Button
-                variant="secondary"
-                onClick={() => void refreshGrades()}
-                disabled={loading}
-                className="flex items-center gap-2"
-              >
+              {/* Both sit in the table's toolbar, so both take the toolbar's hierarchy:
+                  Refresh is a view utility (`secondary`, beside Filters and Columns) and
+                  Export is an action on the data (`outline`, the treatment the shared
+                  Export button already uses). Export was solid primary here, which made it
+                  the loudest thing on the gradebook and the odd one out next to every other
+                  table's Export. The page's primary action is not in this row.
+                  The Button component is already an inline flex with a gap, so neither
+                  needs to say so again. */}
+              <Button variant="secondary" onClick={() => void refreshGrades()} disabled={loading}>
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
               {canExport ? (
                 <Button
-                  variant="default"
+                  variant="outline"
                   onClick={() => setExportDialogOpen(true)}
                   disabled={loading || students.length === 0}
-                  className="flex items-center gap-2"
                 >
                   <Download className="h-4 w-4" />
                   Export Grades

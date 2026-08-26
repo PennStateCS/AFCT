@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 export interface FacetOption {
   label: string;
@@ -166,12 +167,32 @@ function FilterPopoverShell({
       <PopoverTrigger asChild>
         <Button
           variant="secondary"
+          // Filtered is a STATE, and the only one in the toolbar: a table showing 12 of 400
+          // rows looks exactly like a table with 12 rows, so the control that did it has to
+          // say so. The tint is the --tab-active family rather than an inline
+          // `bg-primary/10 text-primary`, for the reason that family exists: cobalt on the
+          // dark card is 3.45:1, under the floor for text, and this pair is already
+          // resolved for light, dark and high contrast (see globals.css).
+          //
+          // Colour is not the only cue. The count badge appears with it, and the accessible
+          // name says "Filters, 2 active", so the state survives both a monochrome screen
+          // and a screen reader. No aria-pressed: this is a popover trigger and already
+          // carries aria-expanded, and a control cannot usefully be both.
+          className={cn(
+            activeCount > 0 &&
+              'bg-tab-active-bg text-tab-active border-tab-active hover:bg-tab-active/20 border',
+          )}
           aria-label={activeCount > 0 ? `Filters, ${activeCount} active` : 'Filters'}
         >
           <ListFilter className="h-4 w-4" aria-hidden="true" />
           <span className="hidden sm:inline">Filters</span>
           {activeCount > 0 && (
-            <Badge variant="secondary" aria-hidden="true" className="ml-1 rounded-sm px-1 font-normal">
+            // Neutral, so the number stays legible on the tinted button in all three themes.
+            <Badge
+              variant="secondary"
+              aria-hidden="true"
+              className="ml-1 rounded-sm px-1 font-normal"
+            >
               {activeCount}
             </Badge>
           )}
