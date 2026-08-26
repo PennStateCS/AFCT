@@ -87,12 +87,13 @@ export function JoinCourseModule() {
           className="text-base font-semibold"
         >
           <span className="flex items-center gap-2.5">
-            {/* Decorative: the heading beside it already says what this card is. The dark
-                tint is spelled out because cobalt at 10% behind a cobalt glyph is 2.8:1 on
-                a dark card, under the 3:1 floor for a non-text graphic. */}
-            <span className="bg-primary/10 text-primary dark:bg-blue-950/40 dark:text-blue-300 flex size-8 shrink-0 items-center justify-center rounded-full">
-              <UserPlus className="size-4" aria-hidden="true" />
-            </span>
+            {/* EXPERIMENT: the icon without its tinted disc. Decorative: the heading beside
+                it already says what this card is. The glyph keeps its own dark value, since
+                cobalt itself is too dark to read on a dark card. */}
+            <UserPlus
+              className="text-primary size-4 shrink-0 dark:text-blue-300"
+              aria-hidden="true"
+            />
             <span>Join a Course</span>
           </span>
         </CardTitle>

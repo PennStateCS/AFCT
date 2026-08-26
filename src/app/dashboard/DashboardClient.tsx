@@ -75,12 +75,13 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
     >
       <div className="flex items-center justify-between gap-4 px-4 py-3">
         <h2 id="courses-title" className="flex items-center gap-2.5 text-base font-semibold">
-          {/* Decorative: the heading beside it already says what this is. Matches the
-              treatment on the two rail cards, in a third accent so the three headings
-              are distinguishable at a glance. */}
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-            <Book className="size-4" aria-hidden="true" />
-          </span>
+          {/* EXPERIMENT: the icon without its tinted disc. Decorative: the heading beside it
+              already says what this is. Matches the treatment on the two rail cards, in a
+              third accent so the three headings are distinguishable at a glance. */}
+          <Book
+            className="size-4 shrink-0 text-emerald-700 dark:text-emerald-300"
+            aria-hidden="true"
+          />
           <span>{title}</span>
         </h2>
         {/* A quiet way out to the full list, not an action. Everyone who reaches the
@@ -112,7 +113,7 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                     names it better than any label could. */}
                 <Link
                   href={`/dashboard/courses/${course.id}`}
-                  className="hover:bg-accent/50 focus-visible:ring-ring flex items-start gap-3 px-4 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none focus-visible:-outline-offset-2"
+                  className="hover:bg-accent/50 focus-visible:ring-ring flex items-start gap-3 px-4 py-3 transition-colors focus-visible:ring-2 focus-visible:-outline-offset-2 focus-visible:outline-none"
                 >
                   {/* aria-hidden: the full code is already in the row text right beside
                       it, so announcing "271" first would only stutter. */}
