@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { CheckCircle2, Info, TriangleAlert } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  SettingsStatusCard,
+  SettingsStatusNextStep,
+  SettingsStatusText,
+} from '@/components/settings/settings-layout';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import type { ServerStatusResponse, IpAddr } from '@/lib/status/types';
@@ -12,13 +17,14 @@ import {
   Sparkline,
   Stat,
   StatGrid,
+  StatusAsideLayout,
   StatusInset,
   StatusSection,
   useStatusQuery,
   copy,
 } from '../status-ui';
 import { formatBytes, formatUptime, toTitleCase } from '../status-format';
-import { hostCheckedMessage, hostNotices, hostUnavailableMessage } from '../host-notices';
+import { hostCheckedMessage, hostSummary } from '../host-notices';
 import { readHistory } from '../use-trends';
 
 export default function ServerTab({
@@ -58,11 +64,49 @@ export default function ServerTab({
     return <Loading />;
   }
 
+  const hostState = hostSummary(host);
+
   return (
-    // The tab as a whole, not each section. Below this the individual sections narrow
-    // themselves to what they hold: readings want to sit near their labels, notices want a
-    // readable line, and neither wants the full width of a 1920px monitor.
-    <div className="space-y-5">
+    // The sections keep the page's one measure and the machine's own state sits beside them
+    // in the rail, the way a System Settings tab puts the state you are about to change next
+    // to the form that changes it. Below 1600px the rail stacks above the sections.
+    <StatusAsideLayout
+      aside={
+        <SettingsStatusCard
+          title="This server"
+          tone={hostState.tone}
+          badge={<Badge variant={hostState.badgeVariant}>{hostState.badgeLabel}</Badge>}
+          headline={hostState.headline}
+        >
+          <SettingsStatusText>{hostState.detail}</SettingsStatusText>
+
+          {/* Anything else worth saying, after the one that led. Two things can be true at
+              once: a clock that has drifted and updates waiting are separate jobs for
+              separate people. */}
+          {hostState.rest.map((notice) => (
+            <div key={notice.id} className="space-y-1 border-t pt-2">
+              <SettingsStatusNextStep>{notice.title}</SettingsStatusNextStep>
+              <SettingsStatusText>{notice.detail}</SettingsStatusText>
+            </div>
+          ))}
+
+          {host.available && (
+            <div className="space-y-1 border-t pt-2">
+              <SettingsStatusText>
+                Running {host.osName ?? 'an unknown operating system'}.
+              </SettingsStatusText>
+              <SettingsStatusText>{hostCheckedMessage(host, Date.now())}</SettingsStatusText>
+            </div>
+          )}
+
+          {/* The one sentence that stops this card being mistaken for the readings beside
+              it. "This server" is the machine; everything in the main column is AFCT. */}
+          <SettingsStatusText>
+            This is the computer AFCT is installed on, not AFCT itself.
+          </SettingsStatusText>
+        </SettingsStatusCard>
+      }
+    >
       <StatusSection
         title="Performance"
         description="How hard this server is working right now, and over the chosen window."
@@ -115,7 +159,9 @@ export default function ServerTab({
 
           {/* The SVG is a fixed size rather than a fluid one, so the width here is chosen to
               fit the narrowest this column gets: 1280 with both the sidebar and the status
-              rail open. Widen it and it overflows the card there rather than reflowing. */}
+              rail open. Widen it and it overflows the card there rather than reflowing. It
+              is also what sets the breakpoint the rail beside these sections appears at, so
+              the two numbers move together (see `StatusAsideLayout`). */}
           <div className="space-y-3">
             <StatusInset className="space-y-2">
               <div className="text-muted-foreground text-xs font-semibold">
@@ -137,50 +183,6 @@ export default function ServerTab({
             </StatusInset>
           </div>
         </div>
-      </StatusSection>
-
-      <StatusSection
-        title="This server"
-        description="What the host operating system reports about itself."
-      >
-        {host.available ? (
-          <ul className="space-y-2">
-            {hostNotices(host).map((notice) => (
-              <li
-                key={notice.id}
-                role={notice.tone === 'warn' ? 'alert' : undefined}
-                // Warning colours, not destructive ones. A pending restart or a waiting
-                // security update is something to schedule; red is reserved for what has
-                // already gone wrong, and spending it here leaves nothing louder for that.
-                className={
-                  notice.tone === 'warn'
-                    ? 'border-status-warning-border bg-status-warning-bg space-y-1 rounded-md border p-3'
-                    : 'bg-muted/40 space-y-1 rounded-md border p-3'
-                }
-              >
-                <div className="flex items-center gap-2 font-medium">
-                  {notice.tone === 'warn' ? (
-                    <TriangleAlert className="text-status-warning size-4" aria-hidden />
-                  ) : notice.tone === 'ok' ? (
-                    <CheckCircle2 className="size-4" aria-hidden />
-                  ) : (
-                    <Info className="size-4" aria-hidden />
-                  )}
-                  {notice.title}
-                </div>
-                <p className="text-muted-foreground text-sm">{notice.detail}</p>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-muted-foreground text-sm">{hostUnavailableMessage(host)}</p>
-        )}
-        {host.available && (
-          <div className="space-y-2 border-t pt-3">
-            <Stat label="Operating system" value={host.osName ?? '—'} />
-            <p className="text-muted-foreground text-sm">{hostCheckedMessage(host, Date.now())}</p>
-          </div>
-        )}
       </StatusSection>
 
       <StatusSection title="Software">
@@ -226,6 +228,6 @@ export default function ServerTab({
           <div className="text-muted-foreground text-sm">—</div>
         )}
       </StatusSection>
-    </div>
+    </StatusAsideLayout>
   );
 }
