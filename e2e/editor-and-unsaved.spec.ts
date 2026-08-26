@@ -47,7 +47,13 @@ async function openDetails(page: Page) {
   await page.goto(`/dashboard/courses/${COURSE}/${ASSIGNMENT}?tab=description`);
   // Generous: under `next dev` a first hit on a route compiles it, and that is not the thing
   // being tested.
-  await expect(page.getByLabel('Title')).toBeVisible({ timeout: 60_000 });
+  // getByRole with an exact name, not getByLabel('Title'). The Details tab wraps its form in a
+  // region named "Title and description", and getByLabel matches on substring, so the bare
+  // label resolved to both that region and the input and every test in this file died on strict
+  // mode. The role plus an exact name picks the field and nothing else.
+  await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
 }
 
 const editorBox = (page: Page) =>
@@ -185,7 +191,7 @@ test.describe('unsaved-changes guard', () => {
     page,
   }) => {
     await openDetails(page);
-    await page.getByLabel('Title').fill('Edited and not saved');
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Edited and not saved');
 
     // An ordinary in-app link: the course link in the assignment header.
     await page
@@ -198,7 +204,9 @@ test.describe('unsaved-changes guard', () => {
     await confirm.getByRole('button', { name: 'Stay on page' }).click();
     await expect(confirm).toBeHidden();
     await expect(page).toHaveURL(new RegExp(`${ASSIGNMENT}`));
-    await expect(page.getByLabel('Title')).toHaveValue('Edited and not saved');
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(
+      'Edited and not saved',
+    );
 
     // Programmatic navigation: the tab bar. Discard completes it exactly once.
     await page.getByRole('tab', { name: 'Problems' }).click();
@@ -209,7 +217,7 @@ test.describe('unsaved-changes guard', () => {
 
   test('reverting the edit releases the guard', async ({ page }) => {
     await openDetails(page);
-    const title = page.getByLabel('Title');
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
     const original = await title.inputValue();
 
     await title.fill('Temporarily different');
@@ -261,7 +269,7 @@ test.describe('unsaved-changes guard', () => {
     const before = await page.evaluate(() => typeof window.onbeforeunload);
     expect(before).toBe('object');
 
-    await page.getByLabel('Title').click();
+    await page.getByRole('textbox', { name: 'Title', exact: true }).click();
     await page.keyboard.type(' edited');
 
     // Dirty: a handler exists. Asserting the LISTENER rather than the native prompt is
