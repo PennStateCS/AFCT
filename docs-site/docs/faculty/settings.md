@@ -39,10 +39,11 @@ AFCT will not let you unpublish a course that already has submissions or grades.
 
 ## Connected LMS
 
-When the course has been opened from a connected LMS, the **Course status** card beside the
-settings form names the LMS course it is linked to, offers **Sync roster from your LMS**, and lets
-you **Disconnect**. Disconnecting stops grades being sent and removes the sync option; nothing
-already in AFCT or already in your gradebook is removed. See
+When the course has been opened from a connected LMS, a **Connected to your LMS** card appears
+below **Course Status**, beside the settings form. It names each LMS course this one is linked to
+(a cross-listed course has several), offers **Sync roster from your LMS**, and lets you
+**Disconnect**. Disconnecting stops grades being sent and removes the sync option; nothing already
+in AFCT or already in your gradebook is removed. See
 [Grades and rosters from your LMS](lms.md).
 
 ## Archived courses

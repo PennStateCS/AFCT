@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, Unlink } from 'lucide-react';
 import { RosterSyncDialog } from '@/components/course/RosterSyncDialog';
 import { Button } from '@/components/ui/button';
-import { SettingsSection } from '@/components/settings/settings-layout';
+import { SettingsAsideCard } from '@/components/settings/settings-layout';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
@@ -26,10 +26,17 @@ type Link = {
  * Until this existed the link was invisible once made, and could only be changed in the
  * database. Several links is normal: cross-listed sections are separate courses in the LMS.
  *
- * Its own panel in the Settings tab's main column, not a block inside the status card in
- * the rail. Each row carries a title, a platform, a date and a Disconnect button, which is
- * more than a 288px rail holds without truncating all four. The component still decides
- * whether it appears at all, so the panel is never drawn empty.
+ * Its own card in the Settings tab's rail, under Course Status, because that is what it is:
+ * a standing fact about the course rather than something the form below edits. Nothing here
+ * is saved by Save, and a panel sitting in the form column implied otherwise.
+ *
+ * The rail is 288px, so each connection STACKS rather than putting its Disconnect button out
+ * to the right of its name. That is the whole reason this once lived in the main column: a
+ * row of four things does not survive that width without truncating all of them, and an LMS
+ * course title is the one thing here nobody can afford to have cut off. Wrapping the title
+ * and putting the buttons under it costs a little height and keeps every word.
+ *
+ * The component still decides whether it appears at all, so the card is never drawn empty.
  */
 export function CourseLmsSection({ courseId }: { courseId: string }) {
   const { timezone, hour12 } = useEffectiveTimezone();
@@ -70,43 +77,55 @@ export function CourseLmsSection({ courseId }: { courseId: string }) {
   if (!links || links.length === 0) return null;
 
   return (
-    <SettingsSection
-      title="Connected to your LMS"
-      description="People can open this course from here. Grades are sent per assignment, on each assignment's Settings tab."
-      headingLevel={3}
-    >
-      <ul className="divide-y rounded-md border">
-        {links.map((link) => (
-          <li key={link.id} className="flex items-start justify-between gap-3 p-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">
+    <SettingsAsideCard title="Connected to your LMS" headingLevel={3}>
+      <div className="space-y-3">
+        <p className="text-muted-foreground text-xs leading-4.5">
+          Students open this course from your LMS. Sending grades back is set up on each assignment,
+          under its Settings tab.
+        </p>
+
+        {/* One block per LMS course, each stacked: name, then where it came from, then what
+            you can do about it. A cross-listed course is genuinely several of these. */}
+        <ul className="space-y-3">
+          {links.map((link) => (
+            <li key={link.id} className="space-y-2 border-t pt-3 first:border-t-0 first:pt-0">
+              {/* Wrapped, not truncated. This is the name the professor recognises the
+                  connection by, and half of it is no use. */}
+              <p className="text-sm font-medium break-words">
                 {link.contextTitle ?? `Course ${link.contextId}`}
               </p>
-              <p className="text-muted-foreground truncate text-xs">
+              <p className="text-muted-foreground text-xs leading-4.5">
                 {link.platformName}
                 {link.linkedBy ? `, connected by ${link.linkedBy}` : ''}
                 {' on '}
                 {formatDateTimeInTimeZone(link.linkedAt, timezone, hour12)}
               </p>
               {!link.canSendGrades && (
-                <p className="text-muted-foreground mt-1 text-xs">
+                <p className="text-muted-foreground text-xs leading-4.5">
                   Grades cannot be sent yet. Somebody needs to open AFCT from this LMS course once,
                   so it can tell AFCT where its gradebook is.
                 </p>
               )}
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setRemoving(link)}>
-              <Unlink className="mr-2 h-4 w-4" aria-hidden="true" />
-              Disconnect
-            </Button>
-          </li>
-        ))}
-      </ul>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => setRemoving(link)}
+              >
+                <Unlink className="mr-2 h-4 w-4" aria-hidden="true" />
+                Disconnect
+              </Button>
+            </li>
+          ))}
+        </ul>
 
-      <Button variant="outline" size="sm" onClick={() => setSyncing(true)}>
-        <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
-        Sync roster from your LMS
-      </Button>
+        {/* Under the connections it acts on, and full width like them, so the card reads as
+            one column of controls rather than a list with a stray button beside it. */}
+        <Button variant="outline" size="sm" className="w-full" onClick={() => setSyncing(true)}>
+          <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />
+          Sync roster from your LMS
+        </Button>
+      </div>
 
       <RosterSyncDialog courseId={courseId} open={syncing} onOpenChange={setSyncing} />
 
@@ -119,6 +138,6 @@ export function CourseLmsSection({ courseId }: { courseId: string }) {
         variant="destructive"
         onConfirm={unlink}
       />
-    </SettingsSection>
+    </SettingsAsideCard>
   );
 }

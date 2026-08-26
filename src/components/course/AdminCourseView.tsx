@@ -282,11 +282,17 @@ export function AdminCourseView({
                   status card floating 440px away from its right edge, on a tab a professor
                   reaches straight from System Settings. */}
               <SettingsAsideLayout
-                aside={<CourseStatusCard course={course} onPublishToggle={onPublishToggle} />}
+                aside={
+                  <>
+                    <CourseStatusCard course={course} onPublishToggle={onPublishToggle} />
+                    {/* Under the status card, and renders nothing unless an LMS opens this
+                        course. Both are things the course IS rather than fields Save writes,
+                        which is what the rail is for. */}
+                    <CourseLmsSection courseId={course.id} />
+                  </>
+                }
               >
                 <CourseSettingsForm course={course} onSaved={onCourseSaved} />
-                {/* Renders nothing unless an LMS opens this course. */}
-                <CourseLmsSection courseId={course.id} />
               </SettingsAsideLayout>
             </div>
           </CourseTabPanel>
