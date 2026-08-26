@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/query-fetch';
 import { Badge } from '@/components/ui/badge';
 import { DataTableLoading } from '@/components/ui/data-table-status';
+import { cn } from '@/lib/utils';
 
 /**
  * Shared query for a status tab: fetches its endpoint only while the tab is the
@@ -81,7 +82,7 @@ export const Meter = ({ pct, label }: { pct?: number; label: string }) => {
       aria-valuenow={v}
       aria-valuetext={`${v}%`}
     >
-      <div className="bg-brand-teal h-full" style={{ width: `${v}%` }} />
+      <div className="bg-primary h-full" style={{ width: `${v}%` }} />
     </div>
   );
 };
@@ -115,29 +116,181 @@ export const Stat = ({
   </div>
 );
 
-/** A titled section for the in-card tab content (replaces per-panel Cards). */
-export const Section = ({
+/**
+ * Two columns of `Stat` rows on anything but a phone.
+ *
+ * `Stat` puts its label and value at opposite ends of whatever box it is given, which is why
+ * its callers cap the width: across a 1400px workspace the value ends up an inch from the
+ * screen edge and a long way from the label it belongs to. A tall single column has the
+ * opposite problem, so the tabs that hold a dozen readings pair them up instead. The cap
+ * still belongs to the caller, through `className`: how wide these should be depends on what
+ * is in them.
+ */
+export const StatGrid = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) => (
+  <div className={cn('grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2', className)}>{children}</div>
+);
+
+/**
+ * One content measure for every status section, on every tab.
+ *
+ * This started as four named widths (compact / readable / standard / wide) on the theory
+ * that seven short Docker readings and a diagnostic table want different room. In the
+ * browser that produced two cards of different widths stacked on the Docker tab, and a
+ * right edge that jumped between 768, 1024 and 1152 as you moved through the eight tabs,
+ * which reads as an accident rather than as a decision.
+ *
+ * So: one measure. `StatGrid` already keeps a reading beside its label, and the tables
+ * here are short operational lists, so nothing on these pages actually needed the extra
+ * room it was being given. Add a second width only with a case that survives looking at
+ * it next to its neighbours.
+ */
+export const STATUS_STANDARD = 'w-full max-w-5xl';
+
+/** A stable id from the visible title, so the heading and its section stay associated. */
+export function statusSectionId(title: string) {
+  return `status-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
+/**
+ * One titled group of status information.
+ *
+ * The panel treatment, padding and internal rhythm are deliberately the same numbers
+ * System Settings uses (see `SETTINGS_BOX_CLASS`): a professor moving between the two
+ * admin pages should not have to learn a second visual language. Written out here rather
+ * than imported across page directories, because these are two pages that agree today,
+ * not one shared component.
+ *
+ * `boxed={false}` for content that brings its own surface. A DataTable already draws a
+ * bordered shell and a card around a card is noise, worst of all in the high-contrast
+ * theme where both borders are solid black.
+ */
+export const StatusSection = ({
   title,
+  titleText,
+  description,
   action,
+  className,
+  boxed = true,
   children,
 }: {
   title: React.ReactNode;
+  /**
+   * The section's name, when `title` is markup rather than a string.
+   *
+   * Files builds its headings out of an icon, a label and a count badge, and without this
+   * such a section would quietly become an unnamed landmark: a region a screen reader
+   * announces with no idea what it contains.
+   */
+  titleText?: string;
+  description?: React.ReactNode;
   action?: React.ReactNode;
+  /** The width this section's content wants. Defaults to {@link STATUS_STANDARD}. */
+  className?: string;
+  boxed?: boolean;
+  children: React.ReactNode;
+}) => {
+  const name = titleText ?? (typeof title === 'string' ? title : undefined);
+  const id = name ? statusSectionId(name) : undefined;
+
+  const header = (
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="space-y-1">
+        <h2 id={id} className="flex items-center gap-2 text-base font-semibold">
+          {title}
+        </h2>
+        {description ? (
+          <p className="text-muted-foreground max-w-3xl text-sm">{description}</p>
+        ) : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+
+  if (!boxed) {
+    return (
+      <section aria-labelledby={id} className={cn('space-y-3', className ?? STATUS_STANDARD)}>
+        {header}
+        {children}
+      </section>
+    );
+  }
+
+  return (
+    <section aria-labelledby={id} className={className ?? STATUS_STANDARD}>
+      <div className="bg-card space-y-4 rounded-lg border px-5 py-4 shadow-xs">
+        {header}
+        {children}
+      </div>
+    </section>
+  );
+};
+
+/**
+ * A labelled group inside a section: "Details", "Last migration", "Error rates".
+ *
+ * Seven of these were hand-built as `text-muted-foreground mb-2 text-sm font-semibold`,
+ * which put a subgroup heading in the SAME colour as the `Stat` labels under it and left
+ * weight as the only thing telling them apart. Foreground, so a subgroup sits clearly
+ * between the section title above it and the readings below.
+ */
+export const StatusSubsection = ({
+  title,
+  className,
+  children,
+}: {
+  title: string;
+  className?: string;
   children: React.ReactNode;
 }) => (
-  <section className="space-y-3">
-    <div className="flex items-center justify-between gap-3">
-      <h2 className="flex items-center gap-2 text-base font-semibold">{title}</h2>
-      {action}
-    </div>
+  <div className={cn('space-y-2', className)}>
+    <h3 className="text-foreground text-sm font-semibold">{title}</h3>
     {children}
-  </section>
+  </div>
 );
 
-export const TrendBadge = ({ delta }: { delta: number }) => {
+/**
+ * A small inset inside a panel: a sparkline's plot area, a path list.
+ *
+ * `bg-muted` and no shadow, so it reads as a recess in the card rather than a second card
+ * on top of it. A bare border-inside-a-border is what this replaces, and it is worst in
+ * high contrast where both are solid black.
+ */
+export const StatusInset = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) => <div className={cn('bg-muted rounded-md border p-3', className)}>{children}</div>;
+
+/**
+ * Which direction is the good one for a given reading.
+ *
+ * There is no general answer, which is the whole point: CPU climbing is bad, a database
+ * that has stopped growing may be broken, and more sessions is neither. The badge used to
+ * paint every rise green and every fall red, so a server running out of memory reported it
+ * as a success. Callers say what the number means; `neutral` is the default because most
+ * readings do not have a good direction.
+ */
+export type Polarity = 'up-bad' | 'up-good' | 'neutral';
+
+export const TrendBadge = ({
+  delta,
+  polarity = 'neutral',
+}: {
+  delta: number;
+  polarity?: Polarity;
+}) => {
   const up = delta > 0;
   const flat = Math.abs(delta) < 0.1;
-  const variant = flat ? 'neutral' : up ? 'success' : 'danger';
+  const good = polarity === 'up-bad' ? !up : up;
+  const variant = flat || polarity === 'neutral' ? 'neutral' : good ? 'success' : 'danger';
   const arrow = flat ? '•' : up ? '▲' : '▼';
   const direction = flat ? 'no change' : up ? 'up' : 'down';
   const mag = Math.abs(delta) < 1 ? delta.toFixed(1) : Math.round(delta);
@@ -149,6 +302,13 @@ export const TrendBadge = ({ delta }: { delta: number }) => {
   );
 };
 
+/**
+ * A trend line whose end dot is coloured by direction, assuming a rise is the bad one.
+ *
+ * That assumption holds for every reading this draws today (CPU, memory, latency) and is
+ * the reason it is written down: give this a series where climbing is fine and the dot
+ * says the opposite. Take `Polarity` from `TrendBadge` if that day comes.
+ */
 export const Sparkline = ({
   points,
   height = 30,
@@ -186,7 +346,7 @@ export const Sparkline = ({
         height={height}
         role="img"
         aria-label={`${label ? `${label}: ` : ''}trend ${trendDir}`}
-        className="stroke-current text-brand-teal"
+        className="text-primary stroke-current"
         strokeWidth={1.5}
         fill="none"
       >

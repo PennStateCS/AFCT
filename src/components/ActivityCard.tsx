@@ -162,9 +162,9 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-row items-center justify-between">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <Activity className="h-5 w-5" />
           Activity
           {total > 0 && (
@@ -183,81 +183,79 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
         </Button>
       </div>
-      <div className="overflow-x-auto">
-        <DataTable
-          columns={columns}
-          data={rows}
-          loading={isLoading}
-          tableLabel="Activity log table"
-          // Its own entry: without a key it shared the default one with every other unnamed
-          // table, so hiding a column here hid it on unrelated pages.
-          storageKey="course-activity-columns-v1"
-          // The browser holds one page, so an export from here would silently write that
-          // page and call it the audit trail.
-          showExportButton={false}
-          loadingMessage="Loading activity, please wait..."
-          emptyTitle={anyFilterActive ? 'No activity matches your filters' : 'No activity yet'}
-          emptyDescription={
-            anyFilterActive
-              ? 'Try clearing the search, category, assignment, or problem filter.'
-              : 'Course actions like enrollments, submissions and grade changes will appear here.'
-          }
-          emptyIcon={Activity}
-          actionButtons={
-            <DataTableFilterMenu
-              groups={[
-                {
-                  key: 'category',
-                  label: 'Category',
-                  options: LOG_CATEGORIES.map((c) => ({
-                    label: c.charAt(0) + c.slice(1).toLowerCase(),
-                    value: c,
-                  })),
-                  selected: categories,
-                  onChange: onFilter(setCategories),
-                },
-                {
-                  key: 'assignment',
-                  label: 'Assignment',
-                  options: (filterOptions?.assignments ?? []).map((a) => ({
-                    label: a.title,
-                    value: a.id,
-                  })),
-                  selected: assignmentIds,
-                  onChange: onFilter(setAssignmentIds),
-                },
-                {
-                  key: 'problem',
-                  label: 'Problem',
-                  options: (filterOptions?.problems ?? []).map((p) => ({
-                    label: p.title,
-                    value: p.id,
-                  })),
-                  selected: problemIds,
-                  onChange: onFilter(setProblemIds),
-                },
-              ]}
-            />
-          }
-          manualPagination
-          pageCount={pageCount}
-          rowCount={total}
-          pagination={{ pageIndex, pageSize }}
-          onPaginationChange={handlePaginationChange}
-          manualFiltering
-          globalFilter={searchInput}
-          onGlobalFilterChange={setSearchInput}
-          searchScopeOptions={SEARCH_FIELDS}
-          searchScope={searchField}
-          onSearchScopeChange={(v) => {
-            setSearchField(v);
-            setPageIndex(0);
-          }}
-          manualSorting
-          sorting={sorting}
-          onSortingChange={handleSortingChange}
-        />
-      </div>
+      <DataTable
+        columns={columns}
+        data={rows}
+        loading={isLoading}
+        tableLabel="Activity log table"
+        // Its own entry: without a key it shared the default one with every other unnamed
+        // table, so hiding a column here hid it on unrelated pages.
+        storageKey="course-activity-columns-v1"
+        // The browser holds one page, so an export from here would silently write that
+        // page and call it the audit trail.
+        showExportButton={false}
+        loadingMessage="Loading activity, please wait..."
+        emptyTitle={anyFilterActive ? 'No activity matches your filters' : 'No activity yet'}
+        emptyDescription={
+          anyFilterActive
+            ? 'Try clearing the search, category, assignment, or problem filter.'
+            : 'Course actions like enrollments, submissions and grade changes will appear here.'
+        }
+        emptyIcon={Activity}
+        actionButtons={
+          <DataTableFilterMenu
+            groups={[
+              {
+                key: 'category',
+                label: 'Category',
+                options: LOG_CATEGORIES.map((c) => ({
+                  label: c.charAt(0) + c.slice(1).toLowerCase(),
+                  value: c,
+                })),
+                selected: categories,
+                onChange: onFilter(setCategories),
+              },
+              {
+                key: 'assignment',
+                label: 'Assignment',
+                options: (filterOptions?.assignments ?? []).map((a) => ({
+                  label: a.title,
+                  value: a.id,
+                })),
+                selected: assignmentIds,
+                onChange: onFilter(setAssignmentIds),
+              },
+              {
+                key: 'problem',
+                label: 'Problem',
+                options: (filterOptions?.problems ?? []).map((p) => ({
+                  label: p.title,
+                  value: p.id,
+                })),
+                selected: problemIds,
+                onChange: onFilter(setProblemIds),
+              },
+            ]}
+          />
+        }
+        manualPagination
+        pageCount={pageCount}
+        rowCount={total}
+        pagination={{ pageIndex, pageSize }}
+        onPaginationChange={handlePaginationChange}
+        manualFiltering
+        globalFilter={searchInput}
+        onGlobalFilterChange={setSearchInput}
+        searchScopeOptions={SEARCH_FIELDS}
+        searchScope={searchField}
+        onSearchScopeChange={(v) => {
+          setSearchField(v);
+          setPageIndex(0);
+        }}
+        manualSorting
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
+      />
     </div>
   );
 }

@@ -2,36 +2,52 @@
 
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { RequiredMark } from '@/components/ui/required-mark';
+import {
+  FieldLabelRow,
+  FieldMessage,
+  composeDescribedBy,
+  shouldShowDescription,
+} from '@/components/ui/field';
+import Spinner from '@/components/ui/spinner';
 import { CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /* ---------------- Types ---------------- */
 
-type RHFFieldProps =
-  | {
-      name?: string;
-      onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-      onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
-      value?: string;
-      ref?: React.Ref<HTMLInputElement>;
-    }
-  | Record<string, never>;
+/**
+ * The object a form library hands a field: the value, the two handlers and a ref.
+ *
+ * Written out here rather than imported so this stays a plain UI component with no
+ * dependency on React Hook Form, but it is structurally what RHF's `field` is, so
+ * `fieldProps={field}` type-checks without a cast at any of the call sites.
+ */
+type FieldBinding = {
+  name?: string;
+  value?: string | number | readonly string[];
+  onChange?: React.ChangeEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  ref?: React.Ref<HTMLInputElement>;
+};
 
-interface InputGroupProps extends Omit<
-  React.InputHTMLAttributes<HTMLInputElement>,
-  'onChange' | 'type'
-> {
+interface InputGroupProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label: string;
   name: string;
+  /** Scoped strictly to the <label>. It must never reach the input: see the note below. */
   labelClassName?: string;
-  fieldProps?: RHFFieldProps;
+  /** A form library's field object, e.g. React Hook Form's `field`. */
+  fieldProps?: FieldBinding;
   error?: string;
   description?: string;
+  /**
+   * Keep the description visible while an error is showing. Off by default, because one
+   * message under a field reads better than a stack of them; turn it on where the
+   * description is what you need in order to *fix* the error, such as password rules.
+   */
+  showDescriptionWithError?: boolean;
   additionalDescribedBy?: string | string[];
   showStatus?: boolean;
   isValid?: boolean;
+  /** `true`, or the words to announce while checking. Either way it draws a spinner. */
   isChecking?: boolean | string;
   showEye?: boolean;
   isPasswordVisible?: boolean;
@@ -39,6 +55,7 @@ interface InputGroupProps extends Omit<
   // Marks the field required: renders the visible "*" next to the label and sets
   // aria-required on the input, so the requirement is conveyed both ways.
   requiredMark?: boolean;
+  /** Shorthand for `onChange={(e) => setValue(e.target.value)}`. */
   setValue?: (val: string) => void;
   type?: React.HTMLInputTypeAttribute;
 }
@@ -48,11 +65,12 @@ interface InputGroupProps extends Omit<
 const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function InputGroup(
   {
     label,
-    labelClassName = '',
+    labelClassName,
     name,
     fieldProps,
     error,
     description,
+    showDescriptionWithError,
     additionalDescribedBy,
     showStatus,
     isValid,
@@ -62,53 +80,75 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     togglePasswordVisibility,
     // Destructured so it isn't forwarded onto the DOM input; it drives the label's
     // marker and the input's aria-required below.
-    requiredMark: _requiredMark,
+    requiredMark,
     className,
     setValue,
+    // Destructured, not left in `rest`: it has to go through handleChange, and an
+    // onChange landing on the input directly as well would fire the caller twice.
+    onChange,
     type = 'text',
     id,
     value,
+    defaultValue,
     onBlur,
     placeholder,
     disabled,
+    readOnly,
     ...rest
   },
   ref,
 ) {
   const inputId = id ?? name;
   const labelId = `${inputId}-label`;
+  const descId = `${inputId}-desc`;
+  const errorId = `${inputId}-error`;
+  const statusId = `${inputId}-status`;
 
-  const rhfName = (fieldProps as RHFFieldProps)?.name as string | undefined;
-  const rhfValue = (fieldProps as RHFFieldProps)?.value as string | undefined;
-  const rhfOnChange = (fieldProps as RHFFieldProps)?.onChange;
-  const rhfOnBlur = (fieldProps as RHFFieldProps)?.onBlur;
-  const rhfRef = (fieldProps as RHFFieldProps)?.ref;
+  const fieldName = fieldProps?.name;
+  const fieldValue = fieldProps?.value;
+  const fieldOnChange = fieldProps?.onChange;
+  const fieldOnBlur = fieldProps?.onBlur;
+  const fieldRef = fieldProps?.ref;
+
+  /*
+   * Controlled unless the caller opted out by passing `defaultValue` and no value at all.
+   *
+   * Latched on the first render rather than recomputed, because deciding it per render is
+   * exactly how React's controlled/uncontrolled warning happens: a value that starts
+   * undefined and arrives a tick later would flip the input mid-life. Every call site in
+   * the app is controlled today, so this changes nothing for them; it only makes the
+   * uncontrolled form that the public prop type advertises actually work.
+   */
+  const uncontrolled = React.useRef(
+    value === undefined && fieldValue === undefined && defaultValue !== undefined,
+  ).current;
+  const currentValue = uncontrolled ? undefined : (fieldValue ?? value ?? '');
 
   const [pwdVisibleInternal, setPwdVisibleInternal] = React.useState(false);
   const externallyControlled = typeof isPasswordVisible === 'boolean';
-  const isPasswordish = type === 'password';
-
   const pwdVisible = externallyControlled ? !!isPasswordVisible : pwdVisibleInternal;
-
-  const effectiveType = showEye && isPasswordish ? (pwdVisible ? 'text' : 'password') : type;
 
   const hasEye = !!showEye;
   const hasStatus = !!showStatus;
 
+  const effectiveType = hasEye && type === 'password' ? (pwdVisible ? 'text' : 'password') : type;
+
   const handleChange = (evt: React.ChangeEvent<HTMLInputElement>) => {
-    if (rhfOnChange) return rhfOnChange(evt);
-    if (setValue) return setValue(evt.target.value);
+    // A fixed, documented order rather than whichever prop happens to be set. The form
+    // library goes first because it owns the value, then the caller's own onChange, then
+    // setValue. setValue is skipped when the form library already handled the update, so
+    // a field bound both ways is never written twice.
+    fieldOnChange?.(evt);
+    onChange?.(evt);
+    if (!fieldOnChange) setValue?.(evt.target.value);
   };
 
   const handleBlur = (evt: React.FocusEvent<HTMLInputElement>) => {
-    if (rhfOnBlur) return rhfOnBlur(evt);
-    if (onBlur) return onBlur(evt);
+    fieldOnBlur?.(evt);
+    onBlur?.(evt);
   };
 
-  const currValue = rhfValue ?? value ?? '';
-
   const handleToggleEye = () => {
-    if (!hasEye) return;
     if (externallyControlled) {
       togglePasswordVisibility?.();
     } else {
@@ -116,151 +156,143 @@ const InputGroup = React.forwardRef<HTMLInputElement, InputGroupProps>(function 
     }
   };
 
-  const inputPaddingRight = hasStatus && hasEye ? 'pr-16' : hasStatus || hasEye ? 'pr-10' : '';
+  /*
+   * One message under the field, not a stack of them.
+   *
+   * The error wins, so a dense settings form does not carry helper text and an error at
+   * once and grow taller as it is filled in. Swapping one line for another also keeps the
+   * height roughly stable, which is the cheap version of reserving space for an error.
+   * Where the description is what you need in order to correct the field, the caller asks
+   * for both with showDescriptionWithError.
+   */
+  const showDescription = shouldShowDescription(description, error, showDescriptionWithError);
 
-  const describedByIds: Array<string | null> = [
-    error ? `${inputId}-error` : null,
-    description ? `${inputId}-desc` : null,
-    // The valid/invalid text beside the field. It was rendered as the text equivalent of the
-    // status icon and then pointed at by nothing, so somebody typing a password confirmation
-    // was never told it matched: the information was in the page and not on the control.
-    hasStatus ? `${inputId}-status` : null,
-  ];
+  // Deduplicated, and only ever naming elements that are actually rendered: a repeated id
+  // is read twice, and one pointing at a missing element is a dangling reference.
+  const describedByAttr = composeDescribedBy(
+    error ? errorId : undefined,
+    showDescription ? descId : undefined,
+    hasStatus ? statusId : undefined,
+    additionalDescribedBy,
+  );
 
-  if (additionalDescribedBy) {
-    if (Array.isArray(additionalDescribedBy)) {
-      describedByIds.push(...additionalDescribedBy);
-    } else {
-      describedByIds.push(additionalDescribedBy);
-    }
-  }
+  // Room for the adornments, which sit 4px in from the border and are 32px wide each.
+  const adornmentCount = (hasStatus ? 1 : 0) + (hasEye ? 1 : 0);
+  const inputPaddingRight = adornmentCount === 2 ? 'pr-18' : adornmentCount === 1 ? 'pr-10' : '';
 
-  const describedByAttr = describedByIds
-    .filter((id): id is string => !!id && id.trim().length > 0)
-    .join(' ')
-    .trim();
+  const hasValue = String(currentValue ?? defaultValue ?? '').length > 0;
 
   return (
-    <div className={cn('flex flex-col', className)}>
+    // The vertical rhythm is one gap on the wrapper rather than a margin on each piece:
+    // 4px between the label row, the field and whatever message follows, plus 2px more
+    // under the label. It was an mb-1.5 here and an mt-1 on each of the two messages,
+    // which is three places to keep in step. The 6px under the label is what SelectField
+    // and SearchableSelect use, and a form mixes all three in one column.
+    <div className={cn('flex flex-col gap-1', className)}>
       {/* The marker sits beside the label, not inside it, so the label text stays the
-          bare field name for both the accessible name and label-based queries. */}
-      <div className="flex items-center">
-        <Label
-          id={labelId}
-          htmlFor={inputId}
-          className={`mb-1.5 text-sm font-medium ${labelClassName}`}
-        >
-          {label}
-        </Label>
-        {_requiredMark && <RequiredMark className="mb-1.5" />}
-      </div>
+          bare field name for both the accessible name and label-based queries.
+
+          text-sm and leading-none on the marker so it matches the label it belongs to. It
+          inherited the page's 16px and its default line height, which made it the taller of
+          the two: `items-center` grew the row, and every required field sat 5px lower than
+          its neighbours. The asterisk was also drawn a size larger than its own label. */}
+      <FieldLabelRow
+        id={labelId}
+        htmlFor={inputId}
+        required={requiredMark}
+        labelClassName={labelClassName}
+      >
+        {label}
+      </FieldLabelRow>
 
       <div className="relative">
         <Input
           {...rest}
           id={inputId}
-          name={rhfName ?? name}
-          ref={rhfRef || ref}
+          name={fieldName ?? name}
+          ref={fieldRef || ref}
           type={effectiveType}
-          value={currValue}
+          {...(uncontrolled ? { defaultValue } : { value: currentValue })}
           onChange={handleChange}
           onBlur={handleBlur}
           placeholder={placeholder}
           disabled={disabled}
+          readOnly={readOnly}
           aria-labelledby={labelId}
           aria-invalid={!!error || undefined}
-          aria-required={_requiredMark || undefined}
-          aria-describedby={describedByAttr || undefined}
+          aria-required={requiredMark || undefined}
+          aria-describedby={describedByAttr}
+          // Only what this wrapper owns. Surface, border, focus, the aria-invalid border
+          // and the transition all live on Input; repeating them here meant two places to
+          // change and two chances to disagree. labelClassName is NOT in this list: it
+          // used to be, so `labelClassName="text-gray-800"` recoloured the typed text too.
           className={cn(
-            'h-11 transition-all duration-150',
-            // Explicit opaque surface: the base Input is bg-transparent in light and
-            // dark:bg-input/30 in dark, either of which reads gray when a field sits on
-            // a tinted panel (e.g. the override rows). dark:bg-card overrides the base
-            // dark fill so the field stays opaque in both themes.
-            'bg-card dark:bg-card border-input',
-            error && 'border-destructive',
+            'h-11',
             type === 'number' && 'appearance-auto',
+            // Read-only is a third state, not a shade of disabled. These fields hold LTI
+            // URLs and one-time tokens people are meant to copy, so the value stays at full
+            // contrast with a text cursor; the dimming and the not-allowed cursor mean "you
+            // cannot use this at all", which is a different thing. The surface is the full
+            // muted token, the same one the read-only rich-text editor and the Configured URL
+            // block use: at 40% it was all but invisible on a dark card. Applied from the prop
+            // rather than Tailwind's `read-only:` variant, because a disabled input matches
+            // CSS :read-only too and would pick this up as well.
+            readOnly && !disabled && 'bg-muted cursor-text shadow-none',
             inputPaddingRight,
-            labelClassName,
           )}
         />
 
-        {/* STATUS + EYE */}
-        {hasStatus && hasEye && (
-          <>
-            <div className="absolute inset-y-0 right-10 flex items-center pr-1">
-              <StatusAdornment
-                id={`${inputId}-status`}
-                isChecking={isChecking}
-                isValid={isValid}
-                hasValue={String(currValue).length > 0}
-              />
-            </div>
-            <div className="absolute inset-y-0 right-3 flex items-center">
+        {adornmentCount > 0 && (
+          // One slot for both adornments instead of a branch per combination, which is what
+          // kept the right-3 / right-10 / pr-10 / pr-16 offsets in sync by hand. Transparent
+          // to the pointer apart from the button, so clicking beside the icons still puts the
+          // caret in the field.
+          <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center">
+            {hasStatus && (
+              <span className="flex size-8 shrink-0 items-center justify-center">
+                <StatusAdornment
+                  id={statusId}
+                  isChecking={isChecking}
+                  isValid={isValid}
+                  hasValue={hasValue}
+                />
+              </span>
+            )}
+
+            {hasEye && (
               <button
                 type="button"
                 onClick={handleToggleEye}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleToggleEye();
-                  }
-                }}
                 /*
                  * A fixed name with a pressed state, not both changing at once.
                  * Flipping the label as well meant a screen reader said "Hide password,
                  * pressed": the name describing the action to come and the state describing
                  * the one already taken, which read as a contradiction.
+                 *
+                 * No onKeyDown. It is a real <button>, so Enter and Space already activate
+                 * it; the handler that used to be here re-fired the toggle on top of the
+                 * click the browser synthesises.
                  */
                 aria-label="Show password"
                 aria-pressed={pwdVisible}
-                className="text-muted-foreground transition-opacity hover:opacity-80"
+                // size-8 for a ~32px target with a size-4 icon: the icon still lines up at
+                // the input's own 12px inset, the box just extends behind the padding.
+                className="text-muted-foreground focus-visible:ring-ring/70 pointer-events-auto flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-opacity outline-none hover:opacity-80 focus-visible:ring-[3px]"
               >
-                {pwdVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                {pwdVisible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
               </button>
-            </div>
-          </>
-        )}
-
-        {/* STATUS only */}
-        {hasStatus && !hasEye && (
-          <div className="absolute inset-y-0 right-3 flex items-center">
-            <StatusAdornment
-              id={`${inputId}-status`}
-              isChecking={isChecking}
-              isValid={isValid}
-              hasValue={String(currValue).length > 0}
-            />
-          </div>
-        )}
-
-        {/* EYE only */}
-        {!hasStatus && hasEye && (
-          <div className="absolute inset-y-0 right-3 flex items-center">
-            <button
-              type="button"
-              onClick={handleToggleEye}
-              aria-label={pwdVisible ? 'Hide password' : 'Show password'}
-              aria-pressed={pwdVisible}
-              className="text-muted-foreground transition-opacity hover:opacity-80"
-            >
-              {pwdVisible ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
+            )}
           </div>
         )}
       </div>
 
-      {description && (
-        <p id={`${inputId}-desc`} className="text-muted-foreground mt-1 text-xs">
-          {description}
-        </p>
-      )}
-
-      {error && (
-        <p id={`${inputId}-error`} role="alert" className="text-destructive mt-1 text-xs">
-          {error}
-        </p>
-      )}
+      <FieldMessage
+        description={description}
+        descriptionId={descId}
+        error={error}
+        errorId={errorId}
+        showDescriptionWithError={showDescriptionWithError}
+      />
     </div>
   );
 });
@@ -282,9 +314,16 @@ function StatusAdornment({
   if (isChecking) {
     const text = typeof isChecking === 'string' ? isChecking : 'Checking...';
     return (
-      <span id={id} className="text-muted-foreground text-xs italic">
-        {text}
-      </span>
+      <>
+        {/* The spinner, not the words. Setting "Checking..." inside the field made its
+            width depend on the message and put text where the value was being typed.
+            The message still reaches assistive tech, through the status element that
+            aria-describedby already points at. */}
+        <Spinner size="sm" />
+        <span id={id} className="sr-only">
+          {text}
+        </span>
+      </>
     );
   }
 
@@ -292,17 +331,19 @@ function StatusAdornment({
   // element for as long as the field is empty.
   if (!hasValue || isValid === undefined) return <span id={id} className="sr-only" />;
 
-  // Pair the color/shape-only status icon with a text equivalent for AT.
+  // Field validation is part of the destructive/error system, not the badge system: it is
+  // text-destructive here rather than the badge palette's `danger`, deliberately. Pair the
+  // colour/shape-only icon with a text equivalent for AT.
   return isValid ? (
     <>
-      <CheckCircle size={18} className="text-status-success" aria-hidden="true" />
+      <CheckCircle className="text-status-success size-4" aria-hidden="true" />
       <span id={id} className="sr-only">
         valid
       </span>
     </>
   ) : (
     <>
-      <XCircle size={18} className="text-destructive" aria-hidden="true" />
+      <XCircle className="text-destructive size-4" aria-hidden="true" />
       <span id={id} className="sr-only">
         invalid
       </span>

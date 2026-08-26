@@ -136,4 +136,97 @@ describe('SelectField', () => {
     expect(screen.getByText('Role is required')).toHaveAttribute('id', 'role-error');
     expect(screen.getByRole('combobox', { name: 'Role' })).toHaveAttribute('aria-invalid', 'true');
   });
+
+  // The InputGroup rule, now shared: one message under a field, and the error wins. A
+  // field that carried both grew taller as it was filled in, and the described-by named
+  // the description that was no longer the point.
+  it('replaces the description with the error, and stops describing the description', () => {
+    render(
+      <SelectField
+        label="Role"
+        name="role"
+        value=""
+        onValueChange={() => {}}
+        description="Who this person is in the course."
+        error="Role is required"
+        placeholder="Select role"
+      />,
+    );
+
+    expect(screen.queryByText('Who this person is in the course.')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Role' })).toHaveAttribute(
+      'aria-describedby',
+      'role-error',
+    );
+  });
+
+  it('keeps both when the caller opts in with showDescriptionWithError', () => {
+    render(
+      <SelectField
+        label="Role"
+        name="role"
+        value=""
+        onValueChange={() => {}}
+        description="Who this person is in the course."
+        error="Role is required"
+        showDescriptionWithError
+        placeholder="Select role"
+      />,
+    );
+
+    expect(screen.getByText('Who this person is in the course.')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Role' })).toHaveAttribute(
+      'aria-describedby',
+      'role-error role-desc',
+    );
+  });
+
+  // The trigger's name has to come from the visible label alone. It carried aria-label as
+  // well, so a caller changing one and not the other would have gone unnoticed.
+  it('names the trigger from the visible label, without a competing aria-label', () => {
+    render(
+      <SelectField
+        label="Timezone"
+        name="timezone"
+        value=""
+        onValueChange={() => {}}
+        placeholder="Select timezone"
+      />,
+    );
+
+    const combobox = screen.getByRole('combobox', { name: 'Timezone' });
+    expect(combobox).not.toHaveAttribute('aria-label');
+    expect(combobox).toHaveAttribute('aria-labelledby', 'timezone-label');
+  });
+
+  // The wrapper must not restate the primitive's styling: that is what let the two drift.
+  // data-size is the contract, so a change to the form size lands in one place.
+  it('asks SelectTrigger for the form size rather than restyling it', () => {
+    render(
+      <SelectField
+        label="Timezone"
+        name="timezone"
+        value=""
+        onValueChange={() => {}}
+        placeholder="Select timezone"
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Timezone' })).toHaveAttribute('data-size', 'form');
+  });
+
+  it('passes a disabled field through to the trigger', () => {
+    render(
+      <SelectField
+        label="Timezone"
+        name="timezone"
+        value=""
+        onValueChange={() => {}}
+        disabled
+        placeholder="Select timezone"
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Timezone' })).toBeDisabled();
+  });
 });

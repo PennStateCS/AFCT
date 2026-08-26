@@ -156,7 +156,7 @@ export function IdentitiesSection({
   return (
     <div className="space-y-4">
       <div>
-        <h2 ref={headingRef} tabIndex={-1} className="text-lg font-medium">
+        <h2 ref={headingRef} tabIndex={-1} className="text-base font-semibold">
           Connected accounts
         </h2>
         <p className="text-muted-foreground mt-1 text-sm">

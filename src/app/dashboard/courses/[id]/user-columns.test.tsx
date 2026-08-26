@@ -123,7 +123,7 @@ function renderManageCell(
   );
 }
 
-const manageButton = () => screen.getByRole('button', { name: /^Manage / });
+const manageButton = () => screen.getByRole('button', { name: /^Actions for / });
 const item = (name: RegExp) => screen.getByRole('button', { name });
 
 /** Render one non-Manage column's cell for a row, to check what it reads off the row. */

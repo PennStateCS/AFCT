@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import DevelopmentTestsClient from './DevelopmentTestsClient';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 
 export const metadata: Metadata = {
   title: 'Development Tests',
@@ -15,5 +16,9 @@ export default async function DevelopmentTestsPage() {
     notFound();
   }
 
-  return <DevelopmentTestsClient />;
+  return (
+    <WorkspaceSurface>
+      <DevelopmentTestsClient />
+    </WorkspaceSurface>
+  );
 }

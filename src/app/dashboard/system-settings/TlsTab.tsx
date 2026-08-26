@@ -2,6 +2,14 @@
 
 import { useState } from 'react';
 import {
+  ChevronRight,
+  FileKey,
+  FileUp,
+  KeyRound,
+  ShieldCheck,
+  type LucideIcon,
+} from 'lucide-react';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -10,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import InputGroup from '@/components/ui/InputGroup';
@@ -18,6 +27,93 @@ import FileUploadInput from '@/components/FileUploadInput';
 import { useTlsCertificate } from './useTlsCertificate';
 import { StepList } from './StepList';
 import { deriveAcmeSteps } from './system-settings-shared';
+import {
+  SettingsSection,
+  SettingsStatusCard,
+  SettingsAsideLayout,
+  SettingsStatusText,
+} from '@/components/settings/settings-layout';
+
+/**
+ * One way of getting a certificate, as a card you click.
+ *
+ * These were four filled primary buttons in a row, which read as one dense cluster of
+ * equally urgent actions when they are actually four alternative routes to the same end.
+ * A card gives each one room for the sentence that tells them apart.
+ *
+ * The whole card is the <button>, so keyboard activation, focus and the accessible name
+ * are the platform's rather than something re-implemented here; that is also why there is
+ * no button nested inside. Neutral by default: choosing one opens a dialog, so none of
+ * them is the page's primary action, and none of them stays "selected" afterwards.
+ */
+function CertificateMethodCard({
+  icon: Icon,
+  title,
+  description,
+  recommended,
+  onClick,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  recommended?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        // bg-background, not bg-card: these sit inside a bg-card panel, and a card on a card
+        // is invisible. This is the surface step the page already uses for an inset.
+        'bg-background group flex w-full items-start gap-3 rounded-lg border p-4 text-left shadow-xs',
+        'transition-[color,background-color,border-color,box-shadow]',
+        'hover:bg-muted/40 hover:border-ring/50',
+        'focus-visible:border-ring focus-visible:ring-ring/70 outline-none focus-visible:ring-[3px]',
+      )}
+    >
+      <Icon
+        className={cn(
+          'mt-0.5 size-5 shrink-0',
+          recommended ? 'text-primary' : 'text-muted-foreground',
+        )}
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1 space-y-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-foreground text-sm font-semibold">{title}</span>
+          {/* info, not success: this is a recommendation, and success is reserved for
+              something that IS in a good state. Nothing here reports a state. */}
+          {recommended && (
+            <Badge variant="info" className="shrink-0">
+              Recommended
+            </Badge>
+          )}
+        </span>
+        <span className="text-muted-foreground block text-xs leading-4.5">{description}</span>
+      </span>
+      <ChevronRight
+        className="text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+        aria-hidden="true"
+      />
+    </button>
+  );
+}
+
+/**
+ * One fact about the installed certificate, label above value.
+ *
+ * The rail is 18rem, so an inline "Issued to: host.example.edu" wraps the value onto its own
+ * line anyway; stacking it deliberately gets the same height with a scannable label column.
+ */
+function CertMeta({ label, value, wrap }: { label: string; value: string; wrap?: boolean }) {
+  return (
+    <div className="space-y-0.5">
+      <div className="text-muted-foreground text-xs">{label}</div>
+      <div className={`text-foreground text-sm${wrap ? 'break-all' : ''}`}>{value}</div>
+    </div>
+  );
+}
 
 /** TLS Certificate tab: current status plus the upload / CSR / self-signed / Let's Encrypt flows. */
 export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined }) {
@@ -66,69 +162,68 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
 
   return (
     <>
-      <p className="text-muted-foreground mb-4 text-sm">
-        The certificate the server presents over HTTPS.
-      </p>
+      <SettingsAsideLayout
+        aside={
+          <SettingsStatusCard
+            title="Current certificate"
+            /* The tab decides what the certificate IS; the card only decides how a state
+               looks. Expired and self-signed are both "browsers will warn", which is a
+               warning rather than a failure: the site is still reachable and encrypted. */
+            tone={!tls?.installed || tls.expired || tls.selfSigned ? 'warn' : 'ok'}
+            badge={
+              !tls?.installed ? (
+                <Badge variant="warning">Self-signed (built-in)</Badge>
+              ) : tls.expired ? (
+                <Badge variant="warning">Expired</Badge>
+              ) : tls.selfSigned ? (
+                <Badge variant="warning">Self-signed certificate</Badge>
+              ) : (
+                <Badge variant="success">Trusted certificate</Badge>
+              )
+            }
+            headline={
+              !tls?.installed
+                ? 'Browser warnings are expected'
+                : tls.expired
+                  ? 'Certificate has expired'
+                  : tls.selfSigned
+                    ? 'Browser warnings are expected'
+                    : 'Certificate is trusted'
+            }
+          >
+            <SettingsStatusText>
+              {!tls?.installed
+                ? 'The server is using its built-in certificate. The connection is still encrypted, but browsers will warn until you install a trusted one.'
+                : tls.expired
+                  ? 'Browsers will show a security warning until you install a valid one.'
+                  : tls.selfSigned
+                    ? 'It is not issued by a trusted authority, so browsers will show a security warning.'
+                    : 'Visitors will not see a security warning.'}
+            </SettingsStatusText>
 
-      <div className="space-y-5">
-        {/* Current status */}
-        <div className="space-y-2">
-          <h2 className="text-sm font-medium">Current certificate</h2>
-          <div className="bg-muted w-fit max-w-2xl space-y-2 rounded-md border p-3 text-sm">
-            {tls?.installed ? (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  {tls.expired ? (
-                    <Badge variant="warning">Expired</Badge>
-                  ) : tls.selfSigned ? (
-                    <Badge variant="warning">Self-signed certificate</Badge>
-                  ) : (
-                    <Badge variant="success">Trusted certificate</Badge>
-                  )}
-                </div>
-                {tls.subject && (
-                  <div className="text-foreground break-all">
-                    <span className="text-muted-foreground">Issued to: </span>
-                    {tls.subject}
-                  </div>
-                )}
-                {tls.validTo && (
-                  <div className="text-foreground">
-                    <span className="text-muted-foreground">Valid until: </span>
-                    {tls.validTo}
-                  </div>
-                )}
-                <p className="text-muted-foreground">
-                  {tls.expired
-                    ? 'This certificate has expired, so browsers will show a security warning until you install a valid one.'
-                    : tls.selfSigned
-                      ? 'This certificate isn’t issued by a trusted authority, so browsers will show a security warning.'
-                      : 'This certificate is trusted by browsers, so visitors won’t see a security warning.'}
-                </p>
-              </>
-            ) : (
-              <>
-                <Badge variant="warning" className="w-fit">
-                  Self-signed (built-in)
-                </Badge>
-                <p className="text-foreground">
-                  The server is using its built-in self-signed certificate.
-                </p>
-                <p className="text-muted-foreground">
-                  The connection is still encrypted, but browsers will show a security warning until
-                  you install a trusted certificate below.
-                </p>
-              </>
-            )}
+            {/* Stacked label over value, not "Issued to: foo" inline: in an 18rem rail the
+                inline form wraps the value onto its own line anyway, so this costs the same
+                height and gains a label column you can scan. */}
+            {tls?.installed && (tls.subject || tls.validTo) ? (
+              <div className="space-y-3 pt-1">
+                {tls.subject && <CertMeta label="Issued to" value={tls.subject} wrap />}
+                {tls.validTo && <CertMeta label="Valid until" value={tls.validTo} />}
+              </div>
+            ) : null}
+
             {tls?.acme?.managed && (
-              <div className="flex flex-wrap items-center gap-2 border-t pt-2">
+              // A second status inside the same card, separated by a rule rather than by a
+              // nested card: renewal is a fact about the certificate above, not a new topic.
+              <div className="space-y-3 border-t pt-3">
                 <Badge variant="success" className="w-fit">
                   Auto-renewing
                 </Badge>
-                <span className="text-muted-foreground">
-                  Let’s Encrypt for {tls.acme.domain}
-                  {tls.acme.staging ? ' (staging)' : ''}. Renews automatically before expiry.
-                </span>
+                <CertMeta
+                  label={`Let’s Encrypt${tls.acme.staging ? ' (staging)' : ''}`}
+                  value={tls.acme.domain}
+                  wrap
+                />
+                <SettingsStatusText>Renews automatically before expiry.</SettingsStatusText>
                 <Button
                   type="button"
                   size="sm"
@@ -140,9 +235,9 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 </Button>
               </div>
             )}
-          </div>
-        </div>
-
+          </SettingsStatusCard>
+        }
+      >
         {/* A CSR was generated but its signed cert isn't installed yet. */}
         {tls?.pendingCsr && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -156,13 +251,20 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
           </div>
         )}
 
-        {/* Method chooser */}
-        <div className="space-y-2">
-          <h2 className="text-sm font-medium">Set up a certificate</h2>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Certificate setup method">
-            <Button
-              type="button"
-              size="sm"
+        <SettingsSection
+          title="Set up a certificate"
+          description="Choose how AFCT should obtain or install its TLS certificate."
+        >
+          <div
+            className="grid grid-cols-1 gap-3 md:grid-cols-2"
+            role="group"
+            aria-label="Certificate setup method"
+          >
+            <CertificateMethodCard
+              icon={ShieldCheck}
+              title="Let’s Encrypt"
+              description="Get a free browser-trusted certificate with automatic renewal."
+              recommended
               onClick={() => {
                 // Prefill the domain from the configured public URL's host.
                 if (!leDomain && configuredUrl) {
@@ -174,20 +276,34 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 }
                 setTlsMethod('lets-encrypt');
               }}
-            >
-              Get a free certificate (Let’s Encrypt)
-            </Button>
-            <Button type="button" size="sm" onClick={() => setTlsMethod('csr')}>
-              Request a CA-signed certificate
-            </Button>
-            <Button type="button" size="sm" onClick={() => setTlsMethod('self-signed')}>
-              Create a self-signed certificate
-            </Button>
-            <Button type="button" size="sm" onClick={() => setTlsMethod('upload')}>
-              Upload an existing certificate
-            </Button>
+            />
+            <CertificateMethodCard
+              icon={FileKey}
+              title="CA-signed certificate"
+              description="Generate a CSR and install the certificate your certificate authority returns."
+              onClick={() => setTlsMethod('csr')}
+            />
+            <CertificateMethodCard
+              icon={KeyRound}
+              title="Self-signed certificate"
+              description="Create one locally. Browsers will still show a trust warning."
+              onClick={() => setTlsMethod('self-signed')}
+            />
+            <CertificateMethodCard
+              icon={FileUp}
+              title="Upload existing certificate"
+              description="Install a certificate and private key you already have."
+              onClick={() => setTlsMethod('upload')}
+            />
           </div>
-        </div>
+
+          {/* The reassurance belongs with the choices, not floating under the card: it is
+              what makes picking any of them safe to try. */}
+          <p className="text-muted-foreground border-t pt-3 text-xs leading-4.5">
+            A new certificate takes effect within about 15 seconds. If it is invalid it is rejected
+            and the current one is kept in place, so the site stays reachable.
+          </p>
+        </SettingsSection>
 
         {/* Let's Encrypt (ACME HTTP-01) form (modal) */}
         <Dialog
@@ -228,6 +344,9 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 label="Contact email"
                 name="leEmail"
                 type="email"
+                // Whoever should hear about certificate expiry, not necessarily whoever
+                // is filling the form in.
+                autoComplete="off"
                 requiredMark
                 placeholder="admin@example.edu"
                 value={leEmail}
@@ -244,7 +363,6 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 disabled={tlsBusy}
                 descriptionPlacement="inline"
                 description="Issues an untrusted test certificate from the staging environment. Use this first to confirm setup without spending the weekly rate limit."
-                boxClassName="border-input"
               />
               <SwitchField
                 id="le-tos"
@@ -255,7 +373,6 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
                 disabled={tlsBusy}
                 descriptionPlacement="inline"
                 description="Required to request a certificate."
-                boxClassName="border-input"
               />
               {leProgress && (
                 <div role="status" className="bg-muted space-y-2 rounded-md border p-3 text-sm">
@@ -464,13 +581,10 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
           </DialogContent>
         </Dialog>
 
-        {/* Footer note + reset */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-muted-foreground max-w-xl text-xs">
-            The new certificate takes effect within about 15 seconds. If the new certificate is
-            invalid, it’s rejected and the current one is kept in place, so the site stays
-            reachable.
-          </p>
+        {/* The timing note moved into the setup card, beside the choices it reassures you
+            about. What is left here is the escape hatch, which is not part of setting one
+            up: it undoes one. */}
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {tls?.installed && (
             <Button
               type="button"
@@ -483,7 +597,7 @@ export function TlsTab({ configuredUrl }: { configuredUrl: string | undefined })
             </Button>
           )}
         </div>
-      </div>
+      </SettingsAsideLayout>
 
       <ConfirmDialog
         open={tlsConfirm === 'reset'}

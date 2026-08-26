@@ -31,9 +31,11 @@ If the course is connected but unpublished, opening the link **enrolls them**, s
 
 Grade sync is set per assignment, so you can autograde practice work in AFCT without it appearing in your gradebook.
 
-To turn it on, open the assignment, go to the **Settings** tab, and switch on **Send grades automatically**. Grades then go to your LMS as you award and change them, including grades from the autograder.
+If the course is not connected to an LMS course yet, the **Grade sync** card says so and there is nothing to switch on. Connect the course first, as above.
 
-To check whether they arrived, look at the **LMS Sync** section beside the grade you are giving. It reports on the student whose work is open: whether their grade has been sent, is waiting, or could not be sent, and why. **Send this grade now** sends that student's grade and nobody else's.
+To turn it on, open the assignment, go to the **Settings** tab, find the **Grade sync** card, and switch on **Send grades automatically**. Grades then go to your LMS as you award and change them, including grades from the autograder.
+
+To check whether they arrived, look at the **Grade sync** section beside the grade you are giving. It reports on the student whose work is open: whether their grade has been sent, is waiting, or could not be sent, and why. **Send this grade now** sends that student's grade and nobody else's.
 
 When other students on the same assignment are waiting or have failed, the section says so and offers **Send all outstanding grades**, which is the button to use after your LMS has been down.
 
@@ -84,7 +86,7 @@ Some assignments appear in the list under **Added before, but never opened**. AF
 
 A course that an LMS opens carries an **In Canvas** badge (or whichever LMS it is) beside its name, and so does each assignment that has been added to an LMS course. Hover it to see which LMS course.
 
-The assignment's **Settings** tab lists the same thing in full, with the LMS course, who added it and when, and a **Remove** beside each one. Removing tells AFCT the assignment is no longer in that LMS course, which is what lets you add it again. **It changes nothing in your LMS:** the link there goes on opening the assignment until you delete it yourself. Use it when you deleted a link in the LMS and want to add it back.
+The assignment's **Settings** tab lists the same thing in full under **LMS assignment links**, with the LMS course, who added it and when, and a **Remove** beside each one. Removing tells AFCT the assignment is no longer in that LMS course, which is what lets you add it again. **It changes nothing in your LMS:** the link there goes on opening the assignment until you delete it yourself. Use it when you deleted a link in the LMS and want to add it back.
 
 A link nobody has opened yet says so here as well. That is the normal state for one added before term and not clicked since, so look in your LMS before removing it. The badge only counts links an LMS has actually opened, so an assignment whose only link is unopened carries no badge.
 

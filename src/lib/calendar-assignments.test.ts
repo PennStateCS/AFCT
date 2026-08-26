@@ -61,7 +61,11 @@ describe('getAssignmentsForUserRange', () => {
           {
             OR: [
               { dueDate: { gte: range.startDate, lte: range.endDate } },
-              { overrides: { some: { userId: 'u1', dueDate: { gte: range.startDate, lte: range.endDate } } } },
+              {
+                overrides: {
+                  some: { userId: 'u1', dueDate: { gte: range.startDate, lte: range.endDate } },
+                },
+              },
             ],
           },
           { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: 'u1' } } }] },
@@ -99,7 +103,11 @@ describe('getAssignmentsForUserRange', () => {
           {
             OR: [
               { dueDate: { gte: range.startDate, lte: range.endDate } },
-              { overrides: { some: { userId: 'admin1', dueDate: { gte: range.startDate, lte: range.endDate } } } },
+              {
+                overrides: {
+                  some: { userId: 'admin1', dueDate: { gte: range.startDate, lte: range.endDate } },
+                },
+              },
             ],
           },
           { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: 'admin1' } } }] },
@@ -132,9 +140,10 @@ describe('getAssignmentsForUserRange', () => {
 /**
  * How much a day cell tries to show at a given viewport width.
  *
- * The cell is square, so its height is its width. Below `sm` that is about 36 pixels, which
- * holds the date and nothing else: a chip there truncates to three or four characters and says
- * less than the dot the cell falls back to.
+ * The cell carries an explicit min-height per breakpoint (roughly 56px on a phone, 80px from
+ * `sm`, 96px or more from `md`), and these tiers mirror those heights. On a phone the cell is
+ * also only about 45px wide, so a chip truncates to three or four characters and says less than
+ * the marker the cell falls back to, which is why the answer there is none.
  *
  * Tested here rather than through the calendar, because this is the part that is a decision. The
  * rendering it drives is layout, and jsdom does no layout: `CalendarClient.test.tsx` mocks the
@@ -147,26 +156,26 @@ describe('how many assignments fit in a day cell', () => {
     expect(visibleAssignmentsForWidth(390)).toBe(0);
   });
 
-  it('shows one on a small tablet', () => {
-    expect(visibleAssignmentsForWidth(640)).toBe(1);
-    expect(visibleAssignmentsForWidth(767)).toBe(1);
+  it('shows two on a small tablet, where the cell is 80px tall', () => {
+    expect(visibleAssignmentsForWidth(640)).toBe(2);
+    expect(visibleAssignmentsForWidth(767)).toBe(2);
   });
 
-  it('shows two at a normal window size', () => {
-    expect(visibleAssignmentsForWidth(768)).toBe(2);
-    expect(visibleAssignmentsForWidth(1279)).toBe(2);
-  });
-
-  it('shows three on a wide screen', () => {
-    expect(visibleAssignmentsForWidth(1280)).toBe(3);
+  it('shows three from a normal window size upward', () => {
+    expect(visibleAssignmentsForWidth(768)).toBe(3);
+    expect(visibleAssignmentsForWidth(1279)).toBe(3);
     expect(visibleAssignmentsForWidth(2560)).toBe(3);
   });
 
   // The boundaries are the whole content of this function, so they are what gets pinned.
+  // Cells carry an explicit height per breakpoint now, so there are two boundaries rather
+  // than three: 1280 no longer changes the answer.
   it('changes exactly at the breakpoints and nowhere else', () => {
     expect(visibleAssignmentsForWidth(639)).toBe(0);
-    expect(visibleAssignmentsForWidth(640)).toBe(1);
-    expect(visibleAssignmentsForWidth(767)).toBe(1);
-    expect(visibleAssignmentsForWidth(768)).toBe(2);
+    expect(visibleAssignmentsForWidth(640)).toBe(2);
+    expect(visibleAssignmentsForWidth(767)).toBe(2);
+    expect(visibleAssignmentsForWidth(768)).toBe(3);
+    expect(visibleAssignmentsForWidth(1279)).toBe(3);
+    expect(visibleAssignmentsForWidth(1280)).toBe(3);
   });
 });

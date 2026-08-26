@@ -1,42 +1,24 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import Link from 'next/link';
-import { Moon, Sun, UserRound, UserPen, LogOut } from 'lucide-react';
-import { Badge } from '@/components/ui/RoleBadge';
+import { Moon, Sun } from 'lucide-react';
 import { useNavbarBreadcrumbs } from '@/components/navbar/NavbarBreadcrumbContext';
-import type { SessionUser } from '@/types/next-auth';
-
-import { getInitials } from '@/app/utils/initials';
-import { safeSignOut } from '@/lib/safe-signout';
 
 /**
- * The two account dialogs load on demand, not with the navbar.
- *
- * The navbar is in the dashboard layout, so it is on every page, and importing these
- * statically put their whole dependency graph, most of it zod and react-hook-form, into the
- * chunk every dashboard route shares: 285 KB paid on every page load for two dialogs most
- * sessions never open.
- *
- * `next/dynamic` only defers until the component RENDERS, so the mount flags below matter as
- * much as the import: rendering these unconditionally with `open={false}`, which is what the
- * navbar used to do, would fetch them on mount and change nothing.
+ * Breadcrumbs, the sidebar trigger and the theme picker. Nothing here reads the session:
+ * the account menu lives in the sidebar footer, which is the one place on desktop that
+ * carries the name, the avatar and Sign out.
  */
 
 // UI Components
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -48,13 +30,26 @@ import {
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb';
 
+import { cn } from '@/lib/utils';
+
 // Local
 import { EnhancedSidebarTrigger } from './ui/EnhancedSidebarTrigger';
-import { apiPaths } from '@/lib/api-paths';
+
+/**
+ * The two controls that sit on the header band rather than on a page.
+ *
+ * Button's own hover and focus colours are the page's, and the band is not the page: its
+ * hover has to separate from #EEF1F4 rather than from a white card, and in dark mode the
+ * band is lighter than the surface those defaults assume. Call-site classes on purpose.
+ * Nothing about the shared Button or SidebarTrigger changes, because both are used on
+ * ordinary surfaces elsewhere.
+ */
+const NAVBAR_CONTROL_CLASS =
+  'text-navbar-foreground hover:bg-navbar-accent hover:text-navbar-accent-foreground ' +
+  'dark:hover:bg-navbar-accent focus-visible:border-navbar-ring focus-visible:ring-navbar-ring/70';
 
 const Navbar: React.FC = () => {
   const { theme, setTheme } = useTheme();
-  const { data, status } = useSession();
   const pathname = usePathname();
   const { courseLabel, assignmentLabel } = useNavbarBreadcrumbs();
 
@@ -70,9 +65,17 @@ const Navbar: React.FC = () => {
     const dashboardIndex = segments.indexOf('dashboard');
     const dashboardSegments = dashboardIndex >= 0 ? segments.slice(dashboardIndex + 1) : segments;
 
-    const nextCrumbs: Array<{ href: string; label: string; isPage?: boolean }> = [
-      { href: '/dashboard', label: 'Dashboard', isPage: dashboardSegments.length === 0 },
-    ];
+    // `flexible` marks a crumb whose label comes from data rather than the route: a course
+    // name or an assignment title, which can be any length. Static crumbs ("Dashboard",
+    // "Courses", "System Settings") are short and known, so they never give up space.
+    // Recorded here rather than inferred from the index later, which would break the
+    // moment the trail gains a level.
+    const nextCrumbs: Array<{
+      href: string;
+      label: string;
+      isPage?: boolean;
+      flexible?: boolean;
+    }> = [{ href: '/dashboard', label: 'Dashboard', isPage: dashboardSegments.length === 0 }];
 
     if (dashboardSegments[0] === 'courses') {
       nextCrumbs.push({
@@ -87,6 +90,7 @@ const Navbar: React.FC = () => {
           href: `/dashboard/courses/${courseId}`,
           label: courseLabel?.id === courseId ? courseLabel.name : toTitleCase(courseId),
           isPage: dashboardSegments.length === 2,
+          flexible: true,
         });
       }
 
@@ -99,6 +103,7 @@ const Navbar: React.FC = () => {
               ? assignmentLabel.title
               : toTitleCase(assignmentId),
           isPage: dashboardSegments.length === 3,
+          flexible: true,
         });
       }
     } else if (dashboardSegments[0] !== undefined) {
@@ -116,49 +121,94 @@ const Navbar: React.FC = () => {
     return nextCrumbs;
   }, [pathname, courseLabel, assignmentLabel]);
 
-  if (status === 'loading') {
-    return (
-      <header className="bg-brand-teal dark:bg-card mb-4 flex h-16 items-center justify-between rounded-lg p-4 text-white shadow-sm" />
-    );
-  }
-
-  if (!data?.user) return null;
-
-  const user: SessionUser = data.user;
-
   return (
-    <div>
-      <header className="bg-brand-teal dark:bg-card mb-4 flex h-16 items-center justify-between rounded-lg p-3 text-white shadow-sm sm:p-4">
+    // Chrome, not content: a band one step off the page canvas, spanning the whole content
+    // column so its divider reaches both edges. The page gutter lives on <main> below, not
+    // around this.
+    //
+    // Every colour comes from the --navbar family rather than the page tokens. The band and
+    // the canvas are close together on purpose, which makes the border the thing that says
+    // where the header ends; see the notes on --navbar in globals.css for the steps and the
+    // contrast figures.
+    //
+    // shrink-0 is load-bearing. This is a flex child of the column that also holds <main>,
+    // and flex items shrink by default, so a tall page squeezed the header below its own
+    // h-14: the bar was 56px on the dashboard and shorter on Submissions.
+    <header className="bg-navbar text-navbar-foreground border-navbar-border flex h-14 shrink-0 items-center justify-between border-b px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
-        <EnhancedSidebarTrigger />
-        <Breadcrumb aria-label="Breadcrumb">
-          <BreadcrumbList className="max-w-[50vw] flex-nowrap overflow-hidden text-sm sm:max-w-[60vw]">
+        <EnhancedSidebarTrigger className={NAVBAR_CONTROL_CLASS} />
+        {/* min-w-0 + flex-1: the trail gets whatever the header has left after the two
+            fixed controls, so collapsing the sidebar hands it that width automatically.
+            It used to be capped at 50/60vw, which is why a long title still truncated on a
+            1920px screen with hundreds of spare pixels: the cap, not the space, was the
+            limit. Nothing here measures anything; flexbox decides. */}
+        <Breadcrumb aria-label="Breadcrumb" className="min-w-0 flex-1 overflow-hidden">
+          <BreadcrumbList className="text-navbar-muted-foreground w-full min-w-0 flex-nowrap overflow-hidden text-sm">
             {crumbs.map((crumb, index) => {
               const isLast = !!crumb.isPage;
-              const isMobileHidden = index > 0 && !isLast;
-              const mobileVisibility = isMobileHidden ? 'hidden sm:inline-flex' : 'inline-flex';
+
+              // Progressive disclosure. Four long levels do not fit a phone, and four
+              // truncated fragments tell you less than one whole title, so levels arrive
+              // as the width does:
+              //   below sm   the current page alone
+              //   sm to lg   Dashboard > current page
+              //   lg and up  the whole trail
+              const visibility = isLast
+                ? 'inline-flex'
+                : index === 0
+                  ? 'hidden sm:inline-flex'
+                  : 'hidden lg:inline-flex';
+
+              // A separator belongs BEFORE an item, and only when something visible
+              // precedes it. Rendering one after every crumb (as this did) leaves a
+              // dangling chevron the moment its neighbour is hidden. The earliest any
+              // earlier crumb appears is `sm` (Dashboard), so a separator shows at
+              // whichever is later: `sm`, or the breakpoint of the item it introduces.
+              const separatorVisibility = isLast
+                ? 'hidden sm:inline-flex'
+                : 'hidden lg:inline-flex';
 
               return (
                 <React.Fragment key={crumb.href}>
-                  <BreadcrumbItem className={`${mobileVisibility} min-w-0`}>
+                  {index > 0 && (
+                    <BreadcrumbSeparator
+                      className={`${separatorVisibility} text-navbar-muted-foreground shrink-0`}
+                    />
+                  )}
+                  <BreadcrumbItem
+                    className={cn(
+                      visibility,
+                      // The current page gets first claim on the leftover width, because
+                      // it is the label that says where you are. A long course name can
+                      // shrink; a static one ("Dashboard", "Courses") is short and known,
+                      // so it holds its size and never truncates.
+                      isLast ? 'min-w-0 flex-1' : crumb.flexible ? 'min-w-0 shrink' : 'shrink-0',
+                    )}
+                  >
                     {isLast ? (
-                      <BreadcrumbPage className="max-w-[14rem] truncate text-white sm:max-w-[22rem]">
+                      // title= so the whole label is readable on hover when CSS clips it.
+                      // The text itself is never shortened, so the accessible name stays
+                      // complete either way.
+                      <BreadcrumbPage
+                        title={crumb.label}
+                        className="text-navbar-foreground block truncate font-medium"
+                      >
                         {crumb.label}
                       </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink
                         href={crumb.href}
-                        className="block max-w-[8rem] truncate text-white hover:underline sm:max-w-[14rem]"
+                        title={crumb.flexible ? crumb.label : undefined}
+                        // Not TEXT_LINK_CLASS. That is for a link inside a document, and
+                        // its cobalt is unreadable here; this is navigation drawn on dark
+                        // chrome, where the trail's own shape is the affordance and the
+                        // underline on hover is the non-colour cue.
+                        className="text-navbar-muted-foreground hover:text-navbar-foreground block truncate hover:underline"
                       >
                         {crumb.label}
                       </BreadcrumbLink>
                     )}
                   </BreadcrumbItem>
-                  {!isLast && (
-                    <BreadcrumbSeparator
-                      className={`text-white ${mobileVisibility}`}
-                    />
-                  )}
                 </React.Fragment>
               );
             })}
@@ -166,74 +216,16 @@ const Navbar: React.FC = () => {
         </Breadcrumb>
       </div>
 
-      <div className="ml-2 flex items-center gap-2 text-right sm:gap-4">
+      {/* shrink-0: the theme control is a fixed cost, and the trail is what yields. */}
+      <div className="ml-2 flex shrink-0 items-center gap-2 text-right sm:gap-4">
         <DropdownMenu>
+          {/* `relative` so the Moon anchors to the button. It was absolutely positioned at
+              its static spot, which the old wide button happened to have room for; in a
+              square icon button it would hang off the right edge. */}
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="h-auto rounded-md px-1 py-1 hover:bg-white/20 sm:px-2 cursor-pointer"
-              aria-label={`${user.firstName} ${user.lastName} account menu`}
-            >
-              <span className="flex items-center gap-2 sm:gap-3">
-                <span className="hidden flex-col items-end sm:flex">
-                  <span className="max-w-[12rem] truncate font-semibold text-white">
-                    {`${user.firstName} ${user.lastName}`}
-                  </span>
-                  <div className="ml-2 flex items-center gap-2 text-right sm:gap-4">
-                    {user.isAdmin && <Badge userRole="ADMIN" className="text-xs" />}
-                  </div>
-                </span>
-                <Avatar className="h-11 w-11">
-                  <AvatarImage
-                    src={user.avatar ? apiPaths.files.pfp(user.avatar) : undefined}
-                    /* Decorative: the trigger button already carries the name. */
-                    alt=""
-                    cropX={user.cropX ?? 0.5}
-                    cropY={user.cropY ?? 0.5}
-                    zoom={user.zoom ?? 1}
-                  />
-                  <AvatarFallback className="text-sm">
-                    {getInitials(user.firstName, user.lastName, user.email)}
-                  </AvatarFallback>
-                </Avatar>
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            {/* Section header, not an action. A Label keeps it out of the menu's
-                focus/arrow-key order; overrides preserve the exact resting look. */}
-            <DropdownMenuLabel className="font-normal [&_svg:not([class*='text-'])]:text-muted-foreground">
-              <span className="flex w-full items-center gap-2 text-left">
-                <UserRound className="h-4 w-4" />
-                User Account
-              </span>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="cursor-pointer">
-              <Link href="/dashboard/account">
-                <UserPen className="h-4 w-4" />
-                Account
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="cursor-pointer"
-              onClick={() => void safeSignOut({ callbackUrl: '/' })}
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="hover:bg-background dark:hover:bg-accent bg-card dark:bg-background text-foreground border-card-foreground/10 border-2 cursor-pointer"
-            >
+            <Button variant="ghost" size="icon" className={cn('relative', NAVBAR_CONTROL_CLASS)}>
               <Sun className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
-              <Moon className="absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
+              <Moon className="absolute top-1/2 left-1/2 h-[1.2rem] w-[1.2rem] -translate-x-1/2 -translate-y-1/2 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
               <span className="sr-only">Toggle theme</span>
             </Button>
           </DropdownMenuTrigger>
@@ -243,12 +235,14 @@ const Navbar: React.FC = () => {
               <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+              {/* Derived from light, not a third surface ladder: AAA text contrast and
+                  full-strength boundaries. See the .high-contrast block in globals.css. */}
+              <DropdownMenuRadioItem value="high-contrast">High contrast</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </header>
-  </div>
   );
 };
 

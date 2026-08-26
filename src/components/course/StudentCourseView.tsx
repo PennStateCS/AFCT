@@ -1,10 +1,15 @@
 'use client';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BookOpen, Table } from 'lucide-react';
+
+import { Tabs } from '@/components/ui/tabs';
+import { CourseHeaderContent } from '@/components/course/CourseHeader';
+import { CourseTabPanel, TabBar, TabRail } from '@/components/course/course-tabs';
+import { LocalNavLayout } from '@/components/local-nav';
+import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { StudentGradesCard } from '@/components/StudentGradesCard';
 import { StudentAssignmentCard } from '@/components/StudentAssignmentCard';
 import type { FullCourse, TabType } from '@/types/course';
-import { BookOpen, Table } from 'lucide-react';
 
 interface StudentCourseViewProps {
   course: FullCourse;
@@ -12,64 +17,75 @@ interface StudentCourseViewProps {
   onTabChange: (value: string) => void;
 }
 
+/**
+ * The student's course page.
+ *
+ * Structurally the same page as {@link AdminCourseView}: the header sits on the workspace,
+ * the shared local rail runs down the side, and the panels take the rest. It reuses every
+ * shared piece rather than keeping a student-shaped copy of them, which is how the two
+ * views stayed out of step before (a bespoke tab strip here, an active state painted with
+ * `bg-secondary` and white text, from back when secondary was a coloured surface).
+ *
+ * Only the sections differ, and they differ because of what a student may see: Assignments
+ * and Grades, and nothing else. No permission is decided here; the sections a student never
+ * had access to simply are not in this list.
+ */
 export function StudentCourseView({ course, tab, onTabChange }: StudentCourseViewProps) {
+  // The same lg breakpoint the staff course page uses, from the same hook, so the two
+  // switch between rail and strip at the same width.
+  const railNav = useIsDesktopNav();
+
+  const publishedCount = course.assignments.filter((a) => a.isPublished).length;
+  const tabs = [
+    { value: 'assignments', label: 'Assignments', Icon: BookOpen, count: publishedCount },
+    { value: 'grades', label: 'Grades', Icon: Table },
+  ] as const;
+
   return (
-    <Tabs defaultValue="assignments" value={tab} onValueChange={onTabChange}>
-      <TabsList
-        aria-label="Course sections"
-        className="bg-card border-border h-12 w-full justify-start gap-1 overflow-x-auto rounded-md border p-1 shadow-sm"
-      >
-        <TabsTrigger
-          id="tab-assignments"
-          aria-controls="panel-assignments"
-          aria-label={`Assignments (${course.assignments.length})`}
-          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
-          value="assignments"
-        >
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4" />
-            Assignments
-          </div>
-        </TabsTrigger>
+    <Tabs
+      defaultValue="assignments"
+      value={tab}
+      onValueChange={onTabChange}
+      orientation={railNav ? 'vertical' : 'horizontal'}
+      // gap-4, not space-y-6. The Tabs primitive is `flex flex-col gap-2`, and a
+      // space-y-* on top of that does not replace the gap, it ADDS to it: tailwind-merge
+      // only reconciles classes that set the same property, and gap and margin are not
+      // the same property. So the panel sat 8px + 24px = 32px above the workspace while
+      // the navbar left only the layout's own 16px above it. One mechanism, one value.
+      className="gap-4"
+    >
+      <CourseHeaderContent course={course} isStudent />
 
-        <TabsTrigger
-          id="tab-grades"
-          aria-controls="panel-grades"
-          className="data-[state=active]:bg-secondary hover:bg-accent px-4 whitespace-nowrap data-[state=active]:text-white"
-          value="grades"
-        >
-          <div className="flex items-center gap-2">
-            <Table className="h-4 w-4" />
-            Grades
-          </div>
-        </TabsTrigger>
-      </TabsList>
-
-      <TabsContent
-        id="panel-assignments"
-        aria-labelledby="tab-assignments"
-        value="assignments"
-        className="animate-fade-in-up transition-opacity duration-300"
+      {/* One control at a time: two tablists under one Tabs root would emit the same
+          `tab-*` ids that each panel points its aria-labelledby at. */}
+      <LocalNavLayout
+        breakpoint="lg"
+        nav={
+          railNav ? (
+            <TabRail tabs={tabs} ariaLabel="Course sections" menuLabel="Course Menu" linkPanels />
+          ) : (
+            <TabBar
+              ariaLabel="Course sections"
+              selectId="student-course-tab-select"
+              value={tab}
+              onValueChange={onTabChange}
+              linkPanels
+              // Two sections. Spreading them across the width reads as a layout accident
+              // rather than a choice.
+              fill={false}
+              tabs={tabs}
+            />
+          )
+        }
       >
-        {tab === 'assignments' ? (
-          <div className="space-y-6">
-            <StudentAssignmentCard course={course} />
-          </div>
-        ) : null}
-      </TabsContent>
+        <CourseTabPanel value="assignments" active={tab === 'assignments'}>
+          <StudentAssignmentCard course={course} />
+        </CourseTabPanel>
 
-      <TabsContent
-        id="panel-grades"
-        aria-labelledby="tab-grades"
-        value="grades"
-        className="animate-fade-in-up transition-opacity duration-300"
-      >
-        {tab === 'grades' ? (
-          <div className="mb-8 space-y-6">
-            <StudentGradesCard courseId={course.id} />
-          </div>
-        ) : null}
-      </TabsContent>
+        <CourseTabPanel value="grades" active={tab === 'grades'}>
+          <StudentGradesCard courseId={course.id} />
+        </CourseTabPanel>
+      </LocalNavLayout>
     </Tabs>
   );
 }

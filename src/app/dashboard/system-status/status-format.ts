@@ -29,6 +29,26 @@ export { formatBytes as formatDbSize } from '@/lib/format-bytes';
 export const formatMs = (ms?: number | null) =>
   typeof ms === 'number' && Number.isFinite(ms) ? `${ms} ms` : DASH;
 
+/**
+ * How worried to be about the summary probe's round trip.
+ *
+ * The badge beside the page heading used to be amber whenever a latency existed at all, so a
+ * healthy 20ms server wore the same warning as a struggling one and the colour stopped
+ * meaning anything. These two lines are judgement, not measurement: the probe is AFCT asking
+ * its own database a handful of questions, so half a second is already slower than that
+ * should ever take, and two seconds is a page that feels broken. They are named rather than
+ * written inline so a site that finds them wrong has one place to change.
+ */
+export const LATENCY_WARNING_MS = 500;
+export const LATENCY_DANGER_MS = 2000;
+
+export const latencyTone = (ms?: number | null): 'neutral' | 'warning' | 'danger' => {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return 'neutral';
+  if (ms >= LATENCY_DANGER_MS) return 'danger';
+  if (ms >= LATENCY_WARNING_MS) return 'warning';
+  return 'neutral';
+};
+
 export const formatRate = (pct?: number | null) =>
   typeof pct === 'number' && Number.isFinite(pct) ? `${pct.toFixed(1)}%` : DASH;
 

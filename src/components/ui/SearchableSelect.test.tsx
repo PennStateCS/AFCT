@@ -49,4 +49,18 @@ describe('SearchableSelect', () => {
 
     expect(screen.getByRole('button', { name: 'Alpha' })).toHaveFocus();
   });
+
+  it('takes no input when disabled', () => {
+    render(
+      <SearchableSelect
+        label="Add a student"
+        items={items}
+        onSelect={() => {}}
+        placeholder="Add a student"
+        disabled
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Add a student' })).toBeDisabled();
+  });
 });

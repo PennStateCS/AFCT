@@ -417,7 +417,6 @@ export function CreateAssignmentWizardDialog({
                               description="Students submit and are graded as their group in the chosen set."
                               value={field.value ?? undefined}
                               onValueChange={(v) => field.onChange(v)}
-                              triggerClassName="bg-card border-input"
                               options={groupSets.map((gs) => ({
                                 value: gs.id,
                                 label: `${gs.name} (${gs.groupCount} ${gs.groupCount === 1 ? 'group' : 'groups'})`,

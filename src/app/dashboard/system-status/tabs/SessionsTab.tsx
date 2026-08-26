@@ -8,7 +8,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { DataTable } from '@/components/ui/data-table';
 import type { SessionsStatusResponse } from '@/lib/status/types';
-import { Loading, Stat, Section, useStatusQuery, copy } from '../status-ui';
+import { Loading, StatusSection, useStatusQuery, copy } from '../status-ui';
 
 type SessionRow = SessionsStatusResponse['activeSessions'][number];
 
@@ -97,17 +97,39 @@ export default function SessionsTab({
 
   const summary = data.summary;
 
-  return (
-    <Section title="Sessions">
-      <div className="space-y-6">
-        <div className="max-w-xl space-y-2">
-          <Stat label="Total (24h)" value={summary.total24h} />
-          <Stat label="Unique users" value={summary.uniqUsers24h} />
-          <Stat label="Last 5m" value={summary.last5m} />
-          <Stat label="Last 15m" value={summary.last15m} />
-          <Stat label="Last 60m" value={summary.last60m} />
-        </div>
+  const figures = [
+    { label: 'Total (24h)', value: summary.total24h },
+    { label: 'Unique users', value: summary.uniqUsers24h },
+    { label: 'Last 5m', value: summary.last5m },
+    { label: 'Last 15m', value: summary.last15m },
+    { label: 'Last 60m', value: summary.last60m },
+  ];
 
+  return (
+    <div className="space-y-5">
+      <StatusSection
+        title="Sessions"
+        description="Sign-ins seen over five spans, so the recent rate can be compared against the day."
+      >
+        {/* Five figures across, in the same tiles as the summary at the top of the page,
+            rather than five label/value rows down a narrow column. They are one reading
+            taken over five spans, so they are meant to be compared at a glance. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {figures.map((f) => (
+            // bg-muted, not bg-card: these sit inside a card now, and a card on a card is
+            // invisible. Same inset step the sparkline plots use on the Server tab.
+            <div key={f.label} className="bg-muted rounded-md border p-3">
+              <div className="text-muted-foreground text-xs">{f.label}</div>
+              <div className="mt-1 text-lg font-semibold">{f.value}</div>
+            </div>
+          ))}
+        </div>
+      </StatusSection>
+
+      <StatusSection
+        title="Active sessions"
+        description="Everyone with a live session in the last 24 hours."
+      >
         <DataTable
           columns={columns}
           data={data.activeSessions}
@@ -121,7 +143,7 @@ export default function SessionsTab({
           emptyTitle="No active sessions"
           emptyDescription="No sessions have been seen in the last 24 hours."
         />
-      </div>
-    </Section>
+      </StatusSection>
+    </div>
   );
 }

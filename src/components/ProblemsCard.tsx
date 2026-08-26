@@ -26,12 +26,12 @@ export function ProblemsCard({
   isLoading = false,
 }: ProblemsCardProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Stacked below sm, side by side above it: the two buttons plus the heading do not
           fit on a phone, and a single row pushed them off the edge. Same shape as the
           User Accounts header. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="flex items-center gap-2 text-2xl font-semibold">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
           <FileText className="h-5 w-5" />
           Problems
         </h2>
@@ -54,25 +54,23 @@ export function ProblemsCard({
           </Button>
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <DataTable
-          columns={problemColumns}
-          data={problems}
-          loading={isLoading}
-          tableLabel="Problems table"
-          // The creation date is rarely needed; hide it by default. It stays available
-          // through the Columns menu.
-          defaultColumnVisibility={{ createdAt: false }}
-          emptyTitle="No problems yet"
-          emptyDescription={
-            courseIsArchived
-              ? 'This course was archived without any problems.'
-              : 'Create a problem to add to an assignment.'
-          }
-          emptyIcon={FileText}
-          loadingMessage="Loading problems, please wait..."
-        />
-      </div>
+      <DataTable
+        columns={problemColumns}
+        data={problems}
+        loading={isLoading}
+        tableLabel="Problems table"
+        // The creation date is rarely needed; hide it by default. It stays available
+        // through the Columns menu.
+        defaultColumnVisibility={{ createdAt: false }}
+        emptyTitle="No problems yet"
+        emptyDescription={
+          courseIsArchived
+            ? 'This course was archived without any problems.'
+            : 'Create a problem to add to an assignment.'
+        }
+        emptyIcon={FileText}
+        loadingMessage="Loading problems, please wait..."
+      />
     </div>
   );
 }

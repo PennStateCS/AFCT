@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
 import { showToast } from '@/lib/toast';
 import { ChangePasswordSchema, type ChangePasswordInput } from '@/schemas/password';
+import { AuthPageBackground } from '@/components/auth/AuthPageBackground';
 import { PasswordRulesHelper } from '@/components/auth/PasswordRulesHelper';
 import { passwordRules } from '@/lib/password-policy';
 import { safeSignOut } from '@/lib/safe-signout';
@@ -64,15 +65,16 @@ export function ForcedPasswordChangeForm() {
   };
 
   return (
-    <div className="relative flex min-h-dvh w-full items-start justify-center overflow-x-hidden pt-24 md:pt-[14vh]">
-      <div className="fixed inset-0 z-0 bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A]" />
-      <div className="fixed inset-0 z-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.15),transparent_70%)]" />
+    <div className="auth-light relative flex min-h-dvh w-full items-start justify-center overflow-x-hidden pt-24 md:pt-[14vh]">
+      {/* The shared signed-out ground, rather than the teal gradient this screen used to draw
+          for itself. It was the last copy of a palette the product no longer uses. */}
+      <AuthPageBackground />
 
       <main className="relative z-10 mx-4 w-full max-w-[430px]">
-        <div className="rounded-2xl bg-white p-8 shadow-[0_25px_60px_rgba(0,0,0,0.25)]">
+        <div className="bg-card rounded-2xl border p-8 shadow-lg">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold text-gray-800">Change Temporary Password</h1>
-            <p className="mt-2 text-sm text-gray-600">
+            <h1 className="text-2xl font-semibold tracking-tight">Change Temporary Password</h1>
+            <p className="text-muted-foreground mt-2 text-sm leading-6">
               Your account is using a temporary password. You must choose a new password before
               continuing to the dashboard.
             </p>

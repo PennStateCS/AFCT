@@ -42,7 +42,7 @@ function CardTitle({
       data-slot="card-title"
       role={role}
       aria-level={role === "heading" ? ariaLevel : undefined}
-      className={cn("leading-none font-semibold", className)}
+      className={cn("text-base leading-none font-semibold", className)}
       {...props}
     />
   )

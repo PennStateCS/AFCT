@@ -546,7 +546,10 @@ export function RichDescriptionToolbar({
       // container knows the difference. Still wraps below the overflow tier, so nothing is ever
       // cut off.
       className={cn(
-        'border-input @container/toolbar flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b px-2 py-1.5',
+        // A muted band over the card the document is written on, so the chrome is visibly
+        // chrome and not the top of the page. It works in all three themes for the same
+        // reason the settings insets do: --muted is one step off --card in each of them.
+        'border-input bg-muted @container/toolbar flex flex-wrap items-center gap-x-1 gap-y-1.5 border-b px-2 py-1.5',
         className,
       )}
     >

@@ -73,6 +73,15 @@ describe('EvaluatorSandboxClient', () => {
     expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled();
   });
 
+  it('says where the output will appear before anything has been run', () => {
+    renderPage();
+
+    // The result card is always on the page, so it is clear where the answer will land.
+    // It used to appear only once a run had started, which left the page ending at Run.
+    expect(screen.getByRole('heading', { name: 'Result' })).toBeInTheDocument();
+    expect(screen.getByText('Run a test to see the evaluator output here.')).toBeInTheDocument();
+  });
+
   it('sends the files and the FA settings the run needs', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => trial() });
     renderPage();
@@ -139,6 +148,9 @@ describe('EvaluatorSandboxClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     expect(await screen.findByText('Correct')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Run a test to see the evaluator output here.'),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('Accepted')).toBeInTheDocument();
     expect(screen.getByText('812 ms')).toBeInTheDocument();
     expect(screen.getByText('Full evaluator output')).toBeInTheDocument();

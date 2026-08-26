@@ -80,7 +80,7 @@ export default function LinkCourseClient({
           was unreachable by keyboard. */}
       <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto p-4" tabIndex={0}>
         <CardHeader className="pb-2">
-          <CardTitle role="heading" aria-level={1} className="text-xl">
+          <CardTitle role="heading" aria-level={1} className="text-xl tracking-tight">
             {notReady ? 'This course is not ready yet' : 'Which course is this?'}
           </CardTitle>
         </CardHeader>
@@ -118,7 +118,7 @@ export default function LinkCourseClient({
                   name="courseId"
                   value={selected}
                   onChange={(event) => setSelected(event.target.value)}
-                  className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                  className="border-input bg-card h-9 w-full rounded-md border px-3 text-sm"
                 >
                   {/* No preselection when there is a choice to make: a course chosen by
                       arriving at the page is one nobody decided on, and this decision sends

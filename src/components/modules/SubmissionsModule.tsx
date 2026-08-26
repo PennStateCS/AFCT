@@ -1,5 +1,11 @@
 'use client';
 
+/* eslint-disable jsx-a11y/no-redundant-roles -- role="list" is not redundant here.
+   Tailwind's preflight sets `list-style: none` on every list, and Safari with VoiceOver
+   drops list semantics from a list that has no markers, so the explicit role is what puts
+   "list, 3 items" back. It also settles axe's aria-prohibited-attr warning, which is that
+   naming a bare <ul> has patchy support. Remove the role only if the marker reset goes. */
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -68,7 +74,7 @@ export function SubmissionsModule({ assignments }: SubmissionsModuleProps) {
           <p className="text-muted-foreground">No submissions need grading.</p>
         ) : (
           <div>
-            <ul className="space-y-3" aria-label="Assignments needing grading">
+            <ul role="list" className="space-y-3" aria-label="Assignments needing grading">
               {assignments.map((item) => (
                 <li key={item.assignmentId} className="flex flex-col">
                   <Link

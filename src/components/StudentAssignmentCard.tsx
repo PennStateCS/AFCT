@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Clock, ChevronRight, BookOpen } from 'lucide-react';
+import { ChevronRight, Clock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import type { FullCourse } from '@/types/course';
@@ -11,123 +11,107 @@ interface StudentAssignmentCardProps {
   course: FullCourse;
 }
 
+/**
+ * The student's Assignments workspace: a heading and a list of assignment rows.
+ *
+ * No outer Card. This IS the page's active panel, so wrapping it put a bounded thing
+ * inside a bounded thing and left the rows reading as cards inside a card. Each row keeps
+ * its own border, because a row is a real object you click.
+ */
 export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
   const { timezone } = useEffectiveTimezone();
   const limitText = (value: string, max = 140) =>
     value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
   const publishedAssignments = course.assignments.filter((assignment) => assignment.isPublished);
+  const stamp = (date: Date) =>
+    `${formatDateInTimeZone(date, timezone)} at ${formatTimeInTimeZone(date, timezone)}`;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-2xl">
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-6 w-6" />
-            Assignments
-          </div>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {course.assignments.length === 0 ? (
-          <p className="text-muted-foreground">No assignments available yet.</p>
-        ) : (
-          <>
-            <p className="text-muted-foreground">
-              Click on any assignment below to view details and work on problems.
-            </p>
-            <div className="space-y-4">
-              {publishedAssignments.map((assignment) => {
-                const dueDate = new Date(assignment.dueDate);
-                const isOverdue = dueDate < new Date();
-                const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
-                const lateCutoffDate = assignment.lateCutoff
-                  ? new Date(assignment.lateCutoff)
-                  : null;
+    <section className="space-y-6" aria-labelledby="student-assignments-title">
+      <div className="space-y-1">
+        <h2 id="student-assignments-title" className="text-xl font-semibold">
+          Assignments
+        </h2>
+        {publishedAssignments.length > 0 ? (
+          <p className="text-muted-foreground text-sm">
+            Click an assignment below to view details and work on problems.
+          </p>
+        ) : null}
+      </div>
 
-                return (
-                  <Link
-                    key={assignment.id}
-                    href={`/dashboard/courses/${course.id}/${assignment.id}`}
-                    className="group border-border bg-card hover:border-primary hover:bg-primary/5 focus-visible:ring-ring flex cursor-pointer overflow-hidden rounded-lg border shadow transition-all hover:shadow-md focus-visible:ring-2 focus-visible:outline-none"
-                  >
-                    <div className="bg-primary w-[15px]" />
-                    <div className="flex w-full flex-col px-4 py-4 sm:p-5">
-                      <div className="mb-2 min-w-0">
-                        <CardTitle
-                          className="truncate text-base font-semibold"
-                          title={assignment.title}
-                        >
-                          {assignment.title}
-                        </CardTitle>
-                        {assignment.description ? (
-                          <div
-                            className="text-muted-foreground mt-1 line-clamp-2 text-sm break-words"
-                            title={assignment.description}
-                          >
-                            {limitText(assignment.description)}
-                          </div>
-                        ) : null}
-                      </div>
+      {publishedAssignments.length === 0 ? (
+        <p className="text-muted-foreground text-sm">No assignments are available yet.</p>
+      ) : (
+        <div className="space-y-6">
+          {publishedAssignments.map((assignment) => {
+            const dueDate = new Date(assignment.dueDate);
+            const isOverdue = dueDate < new Date();
+            const allowLateSubmissions = assignment.allowLateSubmissions ?? false;
+            const lateCutoffDate = assignment.lateCutoff ? new Date(assignment.lateCutoff) : null;
 
-                      <div className="flex flex-wrap items-center gap-4">
-                        <div
-                          className={`flex items-center gap-2 rounded-lg px-3 py-1.5 ${
-                            isOverdue
-                              ? 'border border-status-danger-border bg-status-danger-bg'
-                              : 'border border-status-success-border bg-status-success-bg'
-                          }`}
-                        >
-                          <span
-                            className={`text-sm ${isOverdue ? 'text-status-danger' : 'text-status-success'}`}
-                          >
-                            <Clock className="h-4 w-4" aria-hidden="true" />
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${isOverdue ? 'text-status-danger' : 'text-status-success'}`}
-                          >
-                            {isOverdue ? 'OVERDUE: ' : 'Due: '}
-                            {formatDateInTimeZone(dueDate, timezone)} at{' '}
-                            {formatTimeInTimeZone(dueDate, timezone)}
-                          </span>
-                        </div>
+            // One quiet line rather than four labelled pairs. "Late Cutoff: Never" was the
+            // worst of them: the value is absent, not a date called Never, and what a
+            // student needs to know is that there is no deadline after the due date.
+            const meta = [
+              `${assignment.problemCount} ${assignment.problemCount === 1 ? 'problem' : 'problems'}`,
+              `${assignment.maxPoints} points`,
+              allowLateSubmissions
+                ? lateCutoffDate
+                  ? `Late until ${stamp(lateCutoffDate)}`
+                  : 'Late submissions allowed'
+                : null,
+            ].filter(Boolean);
 
-                        <div className="text-muted-foreground flex flex-wrap items-center gap-4 text-sm">
-                          <div>
-                            <span className="font-semibold">Problems:</span>{' '}
-                            {assignment.problemCount}
-                          </div>
-                          <div>
-                            <span className="font-semibold">Points:</span> {assignment.maxPoints}
-                          </div>
-                          <div>
-                            <span className="font-semibold">Allow Late:</span>{' '}
-                            {allowLateSubmissions ? 'Yes' : 'No'}
-                          </div>
-                          {allowLateSubmissions ? (
-                            <div>
-                              <span className="font-semibold">Late Cutoff:</span>{' '}
-                              {lateCutoffDate
-                                ? `${formatDateInTimeZone(lateCutoffDate, timezone)} at ${formatTimeInTimeZone(
-                                    lateCutoffDate,
-                                    timezone,
-                                  )}`
-                                : 'Never'}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center pr-4 text-muted-foreground">
-                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+            return (
+              <Link
+                key={assignment.id}
+                href={`/dashboard/courses/${course.id}/${assignment.id}`}
+                // A 4px edge, not the 15px block this used to carry: it marks the row
+                // without becoming the loudest thing in the workspace. No shadow jump on
+                // hover either; the tint and the border say enough.
+                className="group border-border border-l-primary bg-card hover:border-primary/50 hover:bg-primary/5 focus-visible:ring-ring flex items-center gap-3 rounded-lg border border-l-4 px-4 py-4 shadow-xs transition-colors focus-visible:ring-2 focus-visible:outline-none sm:px-5"
+              >
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="min-w-0">
+                    <p
+                      className="text-foreground truncate text-sm font-semibold"
+                      title={assignment.title}
+                    >
+                      {assignment.title}
+                    </p>
+                    {assignment.description ? (
+                      <p
+                        className="text-muted-foreground mt-1 line-clamp-2 text-sm break-words"
+                        title={assignment.description}
+                      >
+                        {limitText(assignment.description)}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    {/* A future deadline is information, not a success. Green was claiming
+                        something had gone right about an assignment nobody had started.
+                        Overdue keeps the danger tint AND says so in words. */}
+                    <Badge variant={isOverdue ? 'danger' : 'info'} className="gap-1.5 px-2 py-1">
+                      <Clock className="size-3.5" aria-hidden="true" />
+                      {isOverdue ? 'OVERDUE: ' : 'Due '}
+                      {stamp(dueDate)}
+                    </Badge>
+                    <span className="text-muted-foreground text-xs">{meta.join(' · ')}</span>
+                  </div>
+                </div>
+
+                <ChevronRight
+                  className="text-muted-foreground group-hover:text-foreground size-4 shrink-0 transition-colors"
+                  aria-hidden="true"
+                />
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

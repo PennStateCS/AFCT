@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ChevronDown, Pencil, X } from 'lucide-react';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
 
 export type AudienceItem = { id: string; label: string };
@@ -81,7 +82,7 @@ export function AudienceSelect({
           <button
             type="button"
             onClick={selectAll}
-            className="text-primary text-xs font-medium hover:underline"
+            className={cn(TEXT_LINK_CLASS, 'text-xs font-medium')}
           >
             Select all
           </button>
@@ -95,7 +96,7 @@ export function AudienceSelect({
         )}
       >
         {isAll ? (
-          <span className="bg-primary/10 text-primary rounded-full px-2.5 py-1 text-xs font-medium">
+          <span className="bg-status-info-bg text-status-info rounded-full px-2.5 py-1 text-xs font-medium">
             {allLabel}
           </span>
         ) : value.length === 0 ? (
@@ -104,14 +105,14 @@ export function AudienceSelect({
           value.map((v) => (
             <span
               key={v}
-              className="bg-primary/10 text-primary flex items-center gap-1 rounded-full py-1 pr-1 pl-2.5 text-xs font-medium"
+              className="bg-status-info-bg text-status-info flex items-center gap-1 rounded-full py-1 pr-1 pl-2.5 text-xs font-medium"
             >
               <span className="max-w-[12rem] truncate">{labelById.get(v) ?? v}</span>
               <button
                 type="button"
                 onClick={() => removeOne(v)}
                 aria-label={`Remove ${labelById.get(v) ?? v}`}
-                className="hover:bg-primary/20 rounded-full p-0.5"
+                className="hover:bg-status-info-border focus-visible:ring-ring rounded-full p-0.5 focus-visible:ring-2 focus-visible:outline-none"
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>
@@ -126,7 +127,7 @@ export function AudienceSelect({
               id={triggerId}
               aria-describedby={error ? errorId : undefined}
               className={cn(
-                'text-muted-foreground hover:bg-muted focus-visible:ring-ring/40 ml-auto inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs focus-visible:ring-2 focus-visible:outline-none',
+                'text-muted-foreground hover:bg-muted focus-visible:ring-ring/70 ml-auto inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs focus-visible:ring-2 focus-visible:outline-none',
                 error && 'border-destructive',
               )}
             >
@@ -148,11 +149,7 @@ export function AudienceSelect({
               className="mb-2 h-9 shrink-0 text-sm"
             />
             <div className="mb-1 flex items-center justify-between px-1">
-              <button
-                type="button"
-                onClick={selectAll}
-                className="text-primary text-xs hover:underline"
-              >
+              <button type="button" onClick={selectAll} className={cn(TEXT_LINK_CLASS, 'text-xs')}>
                 Select all
               </button>
               <button
@@ -169,7 +166,9 @@ export function AudienceSelect({
               className="min-h-0 flex-1 overflow-auto rounded border"
             >
               {filtered.length === 0 ? (
-                <div className="text-muted-foreground p-3 text-center text-sm">{emptyStateText}</div>
+                <div className="text-muted-foreground p-3 text-center text-sm">
+                  {emptyStateText}
+                </div>
               ) : (
                 filtered.map((item) => (
                   <label
@@ -190,7 +189,7 @@ export function AudienceSelect({
       </div>
 
       {error ? (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-destructive">
+        <p id={errorId} role="alert" className="text-destructive mt-1 text-xs">
           {error}
         </p>
       ) : null}

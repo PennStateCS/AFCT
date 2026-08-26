@@ -4,14 +4,14 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { CalendarDay, Modifiers } from 'react-day-picker';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { addMonths, subMonths } from 'date-fns';
 import DayAssignmentsDialog from '@/components/dialogs/DayAssignmentsDialog';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { Button } from '@/components/ui/button';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { CalendarDays, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { courseColor } from './course-colors';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
 import {
   getDateKeyInTimeZone,
@@ -23,7 +23,11 @@ import { CalendarCourseFilter, type FilterCourse } from './CalendarCourseFilter'
 
 // Compact course shape from /api/me/courses?view=nav (student: published only;
 // faculty/TA: their courses even when unpublished; admin: all their enrolments).
-type NavCourse = FilterCourse & { isArchived: boolean; startDate?: string | Date | null };
+type NavCourse = FilterCourse & {
+  isArchived: boolean;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+};
 
 // Fetch assignments for courses the current user is enrolled in between given ISO start/end
 async function fetchAssignmentsInRange(startIso: string, endIso: string, signal?: AbortSignal) {
@@ -142,18 +146,25 @@ function CalendarDayButton(props: DayButtonProps) {
         }
       }}
       className={cn(
-        'box-border grid min-h-0 w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-1 focus-visible:outline-none',
-        isToday
-          ? 'bg-sky-100 ring-2 ring-sky-500 ring-inset dark:bg-sky-950/60 dark:ring-sky-400'
-          : 'bg-white dark:bg-neutral-900',
-        !isToday && isWeekend && 'bg-slate-50 dark:bg-neutral-800',
+        'focus-visible:ring-ring box-border grid h-full w-full min-w-0 grid-rows-[auto_1fr] overflow-hidden focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+        // Explicit heights rather than aspect-ratio: 1/1. A square cell takes its height
+        // from its width, so on a wide desktop one week row was ~150px tall and the last
+        // week of the month fell below the fold. These are sized to the chips instead
+        // (about 28px of chrome plus 22px a chip), which is what the cell is actually
+        // for. visibleAssignmentsForWidth mirrors these tiers; change them together.
+        'min-h-14 sm:min-h-20 md:min-h-24 lg:min-h-26 xl:min-h-28',
+        // Today is the date badge plus a faint wash, not a ring around the whole cell:
+        // a 2px cobalt border outshouted the events it was meant to frame. Semantic
+        // tokens throughout, so the cells follow the theme like everything else.
+        isToday ? 'bg-primary/5' : 'bg-card',
+        !isToday && isWeekend && 'bg-muted/40',
       )}
-      style={{ aspectRatio: '1 / 1' }}
     >
       <span
         className={cn(
           'self-start justify-self-start p-1 text-left text-xs select-none',
-          isToday && 'rounded bg-sky-600 px-1.5 py-0.5 font-semibold text-white dark:bg-sky-500',
+          isToday &&
+            'bg-primary text-primary-foreground m-0.5 flex size-5 items-center justify-center rounded-full p-0 font-semibold',
         )}
       >
         {day.date.getDate()}
@@ -173,8 +184,13 @@ function CalendarDayButton(props: DayButtonProps) {
               key={a.id}
               aria-hidden="true"
               className={cn(
-                'assignment-link box-border block min-h-[1rem] w-full min-w-0 truncate overflow-hidden rounded py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap text-white',
-                isDraft ? 'bg-amber-600 dark:bg-amber-600' : 'bg-sky-700 dark:bg-sky-600',
+                'assignment-link box-border block min-h-[1rem] w-full min-w-0 truncate overflow-hidden rounded-md border py-0.5 pl-1 text-left text-xs leading-tight whitespace-nowrap',
+                // Tinted by course, matching the dot beside that course in the filter
+                // list. A draft keeps its own warning tint: which course it belongs to
+                // matters less than the fact that nobody can see it yet.
+                isDraft
+                  ? 'border-status-warning-border bg-status-warning-bg text-status-warning'
+                  : courseColor(a.course.id).chip,
                 a.crossedOut && 'line-through opacity-80',
               )}
               title={`${isDraft ? 'Draft: ' : ''}${a.course.code} - ${a.title}`}
@@ -186,13 +202,23 @@ function CalendarDayButton(props: DayButtonProps) {
         })}
         {dayAssignments.length > visibleCount && (
           <>
-            <div
-              aria-hidden={true}
-              className="h-2 w-2 self-center justify-self-center rounded-full bg-blue-500"
-            ></div>
-            {/* On a phone the cell shows no chips at all, so "N more" would be counting from a
-                number nobody was given. The day's own label already announces the total; this
-                only has to say the cell is not showing it. */}
+            {/* On a phone the cell shows no chips at all, so "+N more" would be counting from a
+                number nobody was given: a marker is the honest version there. Everywhere else
+                the count is the useful thing, and it reads without a legend. Text, not a
+                control: the day cell itself is the button that opens the list. */}
+            {visibleCount === 0 ? (
+              <div
+                aria-hidden={true}
+                className="bg-primary size-1.5 self-center justify-self-center rounded-full"
+              />
+            ) : (
+              <div
+                aria-hidden={true}
+                className="text-muted-foreground text-2xs truncate pl-1 leading-tight"
+              >
+                {`+${hiddenAssignmentCount} more`}
+              </div>
+            )}
             <span className="sr-only">
               {visibleCount === 0
                 ? 'Open day to view assignments.'
@@ -276,17 +302,45 @@ export default function CalendarClient({
     },
     staleTime: 60_000,
   });
+  // Courses with an assignment in the month currently on screen. A course whose term
+  // dates say it is over can still own an assignment here (a late deadline, a term date
+  // nobody updated), and a course you can see chips for must stay filterable.
+  const courseIdsWithAssignments = useMemo(
+    () => new Set(assignments.map((a) => a.course.id)),
+    [assignments],
+  );
+
   const filterCourses = useMemo<FilterCourse[]>(() => {
-    const startMs = (v: string | Date | null | undefined) => {
+    const ms = (v: string | Date | null | undefined, fallback: number) => {
       const t = v ? new Date(v).getTime() : NaN;
-      return Number.isNaN(t) ? Infinity : t; // undated courses sort to the end
+      return Number.isNaN(t) ? fallback : t;
     };
+    // The month on screen, in plain local terms. This only decides which courses are
+    // worth listing, so it does not need the timezone precision the assignment range does.
+    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getTime();
+    const monthEnd = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    ).getTime();
+
+    // Show a course whose term overlaps the visible month, so a Spring course does not sit
+    // in the list all August. A missing date is treated as open-ended rather than as a
+    // reason to hide: the nav payload carries startDate/endDate but neither is required.
+    const overlapsVisibleMonth = (c: NavCourse) =>
+      ms(c.startDate, -Infinity) <= monthEnd && ms(c.endDate, Infinity) >= monthStart;
+
     return navCourses
       .filter((c) => !c.isArchived)
+      .filter((c) => overlapsVisibleMonth(c) || courseIdsWithAssignments.has(c.id))
       .slice()
-      .sort((a, b) => startMs(a.startDate) - startMs(b.startDate))
+      .sort((a, b) => ms(a.startDate, Infinity) - ms(b.startDate, Infinity)) // undated last
       .map((c) => ({ id: c.id, code: c.code, semester: c.semester }));
-  }, [navCourses]);
+  }, [navCourses, currentMonth, courseIdsWithAssignments]);
 
   // Courses the viewer has turned OFF. Empty = everything shown, so all boxes start
   // checked and a course we haven't seen yet defaults to visible. Persists across
@@ -308,19 +362,44 @@ export default function CalendarClient({
     }
   }, []);
 
+  // One place that writes the preference, so the single toggle and the bulk controls can
+  // never drift into two storage formats.
+  const persistUnchecked = (ids: Set<string>) => {
+    try {
+      window.localStorage.setItem(HIDDEN_COURSES_KEY, JSON.stringify([...ids]));
+    } catch {
+      // Non-fatal: the choice still works this session, it just won't persist.
+    }
+    return ids;
+  };
+
   const toggleCourse = useCallback((courseId: string) => {
     setUncheckedCourseIds((prev) => {
       const next = new Set(prev);
       if (next.has(courseId)) next.delete(courseId);
       else next.add(courseId);
-      try {
-        window.localStorage.setItem(HIDDEN_COURSES_KEY, JSON.stringify([...next]));
-      } catch {
-        // Non-fatal: the toggle still works this session, it just won't persist.
-      }
-      return next;
+      return persistUnchecked(next);
     });
   }, []);
+
+  // Bulk controls work on the same set the checkboxes do, and only on the courses
+  // currently listed: a course hidden because its term is not on screen keeps whatever
+  // the viewer last chose for it, so navigating months does not quietly re-show it.
+  const showAllCourses = useCallback(() => {
+    setUncheckedCourseIds((prev) => {
+      const next = new Set(prev);
+      filterCourses.forEach((c) => next.delete(c.id));
+      return persistUnchecked(next);
+    });
+  }, [filterCourses]);
+
+  const hideAllCourses = useCallback(() => {
+    setUncheckedCourseIds((prev) => {
+      const next = new Set(prev);
+      filterCourses.forEach((c) => next.add(c.id));
+      return persistUnchecked(next);
+    });
+  }, [filterCourses]);
 
   // Assignments the calendar and the Upcoming list actually render, after the course
   // filter. When nothing is unchecked this is the full list (no needless copy).
@@ -362,6 +441,13 @@ export default function CalendarClient({
     }).format(currentMonth);
   }, [currentMonth, timezone]);
 
+  // What the single live region says. Both facts in one string so a month change and the
+  // fetch that follows it are one announcement rather than two, and so the end of the
+  // fetch is announced at all.
+  const calendarStatus = loading
+    ? `${monthLabel}. Loading assignments.`
+    : `${monthLabel}. ${visibleAssignments.length} assignment${visibleAssignments.length === 1 ? '' : 's'}.`;
+
   const goToPreviousMonth = () => {
     const nextMonth = subMonths(currentMonth, 1);
     setCurrentMonth(nextMonth);
@@ -370,6 +456,12 @@ export default function CalendarClient({
   const goToNextMonth = () => {
     const nextMonth = addMonths(currentMonth, 1);
     setCurrentMonth(nextMonth);
+  };
+
+  // Back to the month containing today. Same state setter as the arrows, so nothing about
+  // navigation or timezone handling differs.
+  const goToToday = () => {
+    setCurrentMonth(new Date());
   };
 
   // Helper to get a YYYY-MM-DD key in the user's timezone
@@ -407,123 +499,169 @@ export default function CalendarClient({
   };
 
   return (
-    <div className="space-y-4 pb-8">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle role="heading" aria-level={1} className="text-2xl">
-            Calendar
-          </CardTitle>
-          <div className="w-8" aria-hidden="true" />
-        </CardHeader>
-      </Card>
+    <div className="space-y-6">
+      <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+        {/* Decorative: the heading beside it already says what this is. */}
+        <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+          <CalendarDays className="size-5" aria-hidden="true" />
+        </span>
+        <span>Calendar</span>
+      </h1>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-        <Card className="flex h-full w-full flex-col">
-          {/* px-2 on a phone: the card's usual px-6 costs 48px, which is most of the
-              difference between a month grid that fits and one that has to be scrolled. */}
-          <CardContent className="relative flex min-h-0 flex-1 flex-col px-2 pt-6 sm:px-6">
-            {isError ? (
-              <div className="border-status-danger-border bg-status-danger-bg mb-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                <p role="alert" className="text-status-danger text-sm">
-                  Failed to load calendar assignments. Please try again.
-                </p>
-                <Button variant="outline" size="sm" onClick={refresh}>
-                  Retry
-                </Button>
-              </div>
-            ) : null}
-            {/* Mounted whether or not it is loading. Created together with its message, a
-                live region is not reliably announced, so changing month said nothing while
-                the fetch ran. */}
-            <div
-              role="status"
-              aria-live="polite"
-              className={
-                loading
-                  ? 'border-border bg-card pointer-events-none absolute top-3 right-3 z-10 rounded-md border px-2 py-1 shadow-sm'
-                  : 'sr-only'
-              }
-            >
-              {loading ? (
-                <p className="text-muted-foreground text-xs italic">Loading assignments...</p>
-              ) : null}
+      {/* Same rail widths as the dashboard, so the two pages read as one system. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
+        {/* No Card. The calendar IS the page's work surface (the page itself is the white
+            WorkspaceSurface), so wrapping it in a card put a bounded object inside a
+            bounded object and spent 48px of width and 48px of height on the card's own
+            padding. The one boundary that earns its place is around the month grid
+            below. */}
+        <div className="relative flex min-w-0 flex-col gap-3">
+          {isError ? (
+            <div className="border-status-danger-border bg-status-danger-bg flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+              <p role="alert" className="text-status-danger text-sm">
+                Failed to load calendar assignments. Please try again.
+              </p>
+              <Button variant="outline" size="sm" onClick={refresh}>
+                Retry
+              </Button>
             </div>
-            <div className="mx-auto mb-2 flex w-full max-w-6xl items-center justify-center gap-2 px-2">
+          ) : null}
+          {/* The ONLY live region on this page, and it carries the whole state: which month
+              is on screen, and whether its assignments have arrived.
+
+              There used to be two polite regions, this one and the month label in the
+              toolbar. Pressing Next fired both, so the month and "Loading assignments"
+              queued as separate announcements, and nothing at all was said when the fetch
+              finished: the region simply emptied. One region, one message per change, and
+              it ends with a count so "done" is audible.
+
+              Mounted whether or not it is loading. Created together with its message, a
+              live region is not reliably announced. Positioned against this column (hence
+              its `relative`) and floated over the top of the month grid, clear of the
+              toolbar's controls. */}
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className={
+              loading
+                ? 'border-border bg-card pointer-events-none absolute inset-x-0 top-24 z-10 mx-auto w-fit rounded-md border px-2 py-1 shadow-sm'
+                : 'sr-only'
+            }
+          >
+            {/* aria-hidden so the visible chip is not announced a second time; the
+                sr-only line below is the announcement. */}
+            {loading ? (
+              <p aria-hidden="true" className="text-muted-foreground text-xs italic">
+                Loading assignments...
+              </p>
+            ) : null}
+            <span className="sr-only">{calendarStatus}</span>
+          </div>
+          {/* A control bar, not three stacked CTAs: month navigation is a utility, so
+              the buttons are outline rather than the filled primaries they were.
+              Three zones rather than a flex row: the left side carries two controls and
+              the right side one, so a plain row put the month label off-centre. The
+              1fr/auto/1fr grid centres it on the column regardless. */}
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto_1fr] items-center gap-2 px-1">
+            <div className="flex items-center gap-2 justify-self-start">
               <Button
                 type="button"
-                variant="default"
+                variant="outline"
                 size="sm"
-                className="h-8 w-8 p-0"
+                className="h-8 w-8 shrink-0 p-0"
                 onClick={goToPreviousMonth}
                 aria-label="Previous month"
               >
                 <ChevronLeftIcon className="h-4 w-4" />
               </Button>
-              <div
-                aria-live="polite"
-                aria-atomic="true"
-                className="min-w-0 flex-1 truncate px-2 text-center text-base font-medium sm:max-w-56 sm:px-4 sm:text-lg"
-              >
-                {monthLabel}
-              </div>
               <Button
                 type="button"
-                variant="default"
+                variant="outline"
                 size="sm"
-                className="h-8 w-8 p-0"
-                onClick={goToNextMonth}
-                aria-label="Next month"
+                className="h-8 shrink-0"
+                onClick={goToToday}
               >
-                <ChevronRightIcon className="h-4 w-4" />
+                Today
               </Button>
             </div>
-            <div className="h-full w-full overflow-auto">
-              <p id="calendar-keyboard-help" className="sr-only">
-                Use arrow keys to move between calendar days. Press Enter or Space to open
-                assignments for the focused day.
-              </p>
-              <div aria-describedby="calendar-keyboard-help">
-                <CalendarDayContext.Provider value={dayContextValue}>
-                  <Calendar
-                    mode="single"
-                    selected={selected}
-                    onSelect={setSelected}
-                    formatters={{
-                      formatWeekdayName: (date) =>
-                        new Intl.DateTimeFormat('en-US', {
-                          weekday: 'short',
-                          timeZone: timezone,
-                        }).format(date),
-                    }}
-                    month={currentMonth}
-                    onMonthChange={(month: Date) => {
-                      setCurrentMonth(month);
-                    }}
-                    className="text-foreground bg-card mx-auto h-full w-full max-w-6xl p-1 [--cell-size:2.25rem] sm:p-3 sm:[--cell-size:3.25rem] md:[--cell-size:3.5rem]"
-                    timeZone={timezone}
-                    classNames={{
-                      nav: 'hidden',
-                      month_caption: 'hidden',
-                      caption_label: 'hidden',
-                      dropdowns: 'hidden',
-                      weekday:
-                        'text-muted-foreground rounded-md flex-1 font-semibold text-xs select-none text-center',
-                      day: 'relative box-border -m-px w-full h-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day aspect-square select-none border border-border/60',
-                      today: 'rounded-none bg-transparent text-inherit',
-                    }}
-                    components={CALENDAR_DAY_COMPONENTS}
-                  />
-                </CalendarDayContext.Provider>
-              </div>
+            {/* Plain text now. The status region above announces the month change, so a
+                second live region here only produced a competing announcement. */}
+            <div className="min-w-0 truncate px-1 text-center text-base font-semibold sm:px-4 sm:text-lg">
+              {monthLabel}
             </div>
-          </CardContent>
-        </Card>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 shrink-0 justify-self-end p-0"
+              onClick={goToNextMonth}
+              aria-label="Next month"
+            >
+              <ChevronRightIcon className="h-4 w-4" />
+            </Button>
+          </div>
+          {/* The single boundary: it wraps the weekday header and the day grid, and
+              nothing else. overflow-hidden matters as well as rounding the corners: day
+              cells carry -m-px, so their outer 1px of border overhangs and is clipped
+              here rather than doubling up against this edge. The width cap lives here
+              rather than on the Calendar inside it, so the border hugs the grid instead
+              of leaving a margin of empty card inside itself on a wide display. */}
+          <div className="border-border mx-auto w-full max-w-6xl overflow-hidden rounded-lg border">
+            <p id="calendar-keyboard-help" className="sr-only">
+              Use arrow keys to move between calendar days. Press Enter or Space to open assignments
+              for the focused day.
+            </p>
+            <div aria-describedby="calendar-keyboard-help">
+              <CalendarDayContext.Provider value={dayContextValue}>
+                <Calendar
+                  mode="single"
+                  selected={selected}
+                  onSelect={setSelected}
+                  formatters={{
+                    formatWeekdayName: (date) =>
+                      new Intl.DateTimeFormat('en-US', {
+                        weekday: 'short',
+                        timeZone: timezone,
+                      }).format(date),
+                  }}
+                  month={currentMonth}
+                  onMonthChange={(month: Date) => {
+                    setCurrentMonth(month);
+                  }}
+                  // Always six rows, so the page does not jump height between a
+                  // five-week month and a six-week one. getMonthRangeIso fetches the
+                  // same six weeks; see the note there.
+                  fixedWeeks
+                  className="text-foreground bg-card w-full p-0 [--cell-size:2.25rem] sm:[--cell-size:3.25rem] md:[--cell-size:3.5rem]"
+                  timeZone={timezone}
+                  classNames={{
+                    nav: 'hidden',
+                    month_caption: 'hidden',
+                    caption_label: 'hidden',
+                    dropdowns: 'hidden',
+                    // A header row rather than seven labels floating above the grid:
+                    // the faint fill and the shared border tie it to the first week.
+                    weekdays: 'flex gap-0 border-b border-border/60 bg-muted/30 py-2',
+                    weekday:
+                      'text-muted-foreground flex-1 font-semibold text-xs select-none text-center',
+                    day: 'relative box-border -m-px w-full p-0 text-center [&:first-child[data-selected=true]_button]:rounded-l-md [&:last-child[data-selected=true]_button]:rounded-r-md group/day select-none border border-border/60',
+                    today: 'rounded-none bg-transparent text-inherit',
+                  }}
+                  components={CALENDAR_DAY_COMPONENTS}
+                />
+              </CalendarDayContext.Provider>
+            </div>
+          </div>
+        </div>
 
         <div className="w-full space-y-4">
           <CalendarCourseFilter
             courses={filterCourses}
             uncheckedCourseIds={uncheckedCourseIds}
             onToggle={toggleCourse}
+            onShowAll={showAllCourses}
+            onHideAll={hideAllCourses}
           />
           <DueDateModule assignments={visibleAssignments} />
         </div>

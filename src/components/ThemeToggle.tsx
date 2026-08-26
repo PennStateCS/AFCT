@@ -13,6 +13,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+/**
+ * NOTE: this has no call sites. The theme switcher the app actually renders lives in
+ * `Navbar.tsx`, which has the same three options and its own markup. This file is a
+ * duplicate that drifted: its icons carried `group-hover:text-accent`, and since the
+ * Button's own hover paints `bg-accent`, that made the icon exactly the colour of the
+ * surface behind it (1.00:1, both themes) so it vanished on hover. Fixed rather than left
+ * as a trap for whoever copies it, but it should probably be deleted and the Navbar's
+ * switcher extracted here instead if a second one is ever needed.
+ */
 export function ThemeToggler() {
   const { theme, setTheme } = useTheme();
 
@@ -20,8 +29,8 @@ export function ThemeToggler() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon" className="group">
-          <Sun className="group-hover:text-accent h-[1.2rem] w-[1.2rem] scale-100 rotate-0 text-foreground transition-all dark:scale-0 dark:-rotate-90" />
-          <Moon className="group-hover:text-accent absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 text-foreground transition-all dark:scale-100 dark:rotate-0" />
+          <Sun className="group-hover:text-accent-foreground text-foreground h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
+          <Moon className="group-hover:text-accent-foreground text-foreground absolute h-[1.2rem] w-[1.2rem] scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>

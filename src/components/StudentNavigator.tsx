@@ -10,6 +10,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from './ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import { ENROLLMENT_STATUS_BADGE } from '@/lib/badge-presets';
 
 export type StudentNavigatorStudent = {
   id: string;
@@ -22,9 +24,9 @@ export type StudentNavigatorStudent = {
 /** Small "Dropped" badge for a student who is no longer enrolled. */
 function DroppedBadge() {
   return (
-    <span className="inline-flex shrink-0 items-center rounded-full bg-status-warning-bg px-2 py-0.5 text-xs font-medium text-status-warning">
+    <Badge variant={ENROLLMENT_STATUS_BADGE.DROPPED} className="shrink-0">
       Dropped
-    </span>
+    </Badge>
   );
 }
 
@@ -280,8 +282,8 @@ export default function StudentNavigator({
                   list is capped rather than conclude the student is not enrolled. */}
               {hiddenStudentCount > 0 ? (
                 <div className="text-muted-foreground border-t p-2 text-xs">
-                  Showing the first {MAX_VISIBLE_STUDENTS} of {filteredStudents.length}. Type a
-                  name to narrow the list.
+                  Showing the first {MAX_VISIBLE_STUDENTS} of {filteredStudents.length}. Type a name
+                  to narrow the list.
                 </div>
               ) : null}
             </div>
@@ -305,8 +307,8 @@ export default function StudentNavigator({
             as a normal individual submission. */}
         {groupInfo?.isGroupAssignment && !groupInfo.isGroup ? (
           <span className="text-status-warning block text-xs font-medium">
-            Not in a group. Their work below is their own; add them to a group to review it
-            with the rest.
+            Not in a group. Their work below is their own; add them to a group to review it with the
+            rest.
           </span>
         ) : null}
       </div>

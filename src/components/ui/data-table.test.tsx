@@ -249,6 +249,28 @@ describe('DataTable', () => {
     expect(screen.queryByText(/Loading data, please wait/i)).not.toBeInTheDocument();
   });
 
+  /*
+   * The toolbar belongs to the table, so it is drawn on the table.
+   *
+   * It used to sit outside the bordered shell, on the page: Search and Filters floating above
+   * the rows they act on, with nothing joining them. That was invisible while every table sat
+   * inside a white card, and became obvious once the shell started painting its own surface,
+   * because the toolbar was then the one part showing the page through itself.
+   *
+   * jsdom does no layout, so this checks containment rather than pixels. That is the part a
+   * refactor would undo: moving the toolbar back out is a one-line change and looks harmless.
+   */
+  it('draws the toolbar inside the table shell, not above it', () => {
+    const { container } = render(<DataTable columns={columns} data={data} />);
+
+    const shell = container.querySelector('div.overflow-hidden.rounded-md.border')!;
+    expect(shell).toBeInTheDocument();
+    expect(shell).toContainElement(screen.getByRole('button', { name: /Columns/i }));
+    expect(shell).toContainElement(screen.getByRole('textbox'));
+    // Same shell, so the search box and the rows are one object rather than two.
+    expect(shell).toContainElement(container.querySelector('table')!);
+  });
+
   it('renders custom action buttons in the toolbar', () => {
     render(
       <DataTable

@@ -428,11 +428,3 @@ export const EMPTY_FORM: FormSnapshot = {
   oidcTrustEmail: false,
   allowLinkedAccountPasswords: true,
 };
-
-/**
- * The outlined box each settings tab groups its fields in.
- *
- * One constant rather than a class repeated per tab: the tabs are meant to look like one
- * screen with sections, and the quickest way to lose that is for each to drift on its own.
- */
-export const SETTINGS_BOX_CLASS = 'space-y-5 rounded-md border p-4';

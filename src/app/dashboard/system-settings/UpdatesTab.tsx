@@ -7,12 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import SelectField from '@/components/ui/SelectField';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
-import {
-  useUpgrade,
-  isUpgradeInProgress,
-  isUpdaterMisconfigured,
-  type SelfUpdateState,
-} from './useUpgrade';
+import { useUpgrade, isUpgradeInProgress, isUpdaterMisconfigured } from './useUpgrade';
 import {
   upgradePhaseLabel,
   formatBackupTs,
@@ -23,20 +18,28 @@ import {
 } from './system-settings-shared';
 import { UpgradeProgress } from './UpgradeProgress';
 import { UpgradeLiveLog } from './UpgradeLiveLog';
+import {
+  SettingsAsideCard,
+  SettingsAsideLayout,
+  SettingsSection,
+  SettingsStatusCard,
+  SettingsStatusText,
+  type SettingsStatusTone,
+} from '@/components/settings/settings-layout';
+import { CopyableValue } from './CopyableValue';
 
-// Colour the self-update banner by outcome via the semantic status tokens: success on a
-// completed update, danger on a real failure, warning while working / timed out / when the
-// updater is simply behind. The tokens carry their own dark-mode values (see globals.css).
-function selfUpdateBannerClass(phase: SelfUpdateState['phase']): string {
-  const base = 'max-w-xl space-y-2 rounded-md border p-3 text-sm';
-  switch (phase) {
-    case 'done':
-      return `${base} border-status-success-border bg-status-success-bg text-status-success`;
-    case 'failed':
-      return `${base} border-status-danger-border bg-status-danger-bg text-status-danger`;
-    default:
-      return `${base} border-status-warning-border bg-status-warning-bg text-status-warning`;
-  }
+/**
+ * How an upgrade phase reads as a badge.
+ *
+ * One place, because the same mapping was written out twice: once beside the current
+ * version and once on the status panel, which is two chances for them to disagree about
+ * what "rolled_back" looks like.
+ */
+function upgradePhaseVariant(phase: string): 'success' | 'destructive' | 'warning' | 'secondary' {
+  if (phase === 'healthy') return 'success';
+  if (phase === 'failed') return 'destructive';
+  if (phase === 'rolled_back') return 'warning';
+  return 'secondary';
 }
 
 /** Updates tab: upgrade to a newer release, and restore/downgrade to a recorded backup. */
@@ -167,10 +170,13 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           {/* Restore is green (the recovery action the admin wants), Delete is red.
               Restore is still guarded by type-to-confirm in its dialog, since a
               downgrade discards data. */}
+          {/* Not `success`: green says the action is a good outcome, and the comment above
+              says this one discards data and is guarded by type-to-confirm. Neutral beside
+              the red Delete, which is the actual destructive one. */}
           <Button
             type="button"
             size="sm"
-            variant="success"
+            variant="outline"
             aria-label={`Restore version ${row.original.version}`}
             disabled={disabled || downgradeBusy || upgradeInProgress}
             onClick={() =>
@@ -196,74 +202,145 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
     },
   ];
 
-  return (
-    <>
-      <div className="text-muted-foreground mb-4 max-w-2xl space-y-2 text-sm xl:max-w-4xl">
-        <p>
-          Upgrade AFCT to a newer published release, all from here, with no server login needed.
-          When you start an upgrade, AFCT backs up the database, downloads the new version, and
-          restarts. If the new version fails its health check it is rolled back to the current one
-          automatically, so a bad release won&apos;t leave the site down.
-        </p>
-        <p>
-          Some releases also improve the update system itself. Because the updater can&apos;t
-          replace its own container while it&apos;s running, those show a second step afterward, an{' '}
-          <span className="font-medium">Update the update service</span> button, so the next upgrade
-          uses the newest logic. Both steps run here.
-        </p>
-        <p>
-          Prefer the command line? You can still update from the server instead. In the directory
-          that holds <code className="font-mono">docker-compose.yml</code>, run{' '}
-          <code className="font-mono">sh install.sh update</code>. It does the same backup, swap,
-          and health check as the in-app upgrade above.
-        </p>
-      </div>
-
-      <div className="max-w-2xl space-y-5 xl:max-w-4xl">
-        <div className="space-y-2">
-          <h2 className="text-sm font-medium">Current version</h2>
-          {/* Same card as Update status below, so the two read as one pair rather than a
-              bare badge above a panel. The health badge repeats the phase deliberately:
-              this line answers "what am I running and is it well", which is the question
-              asked on arriving at the tab, while the panel below carries the detail and
-              the live progress of a run. */}
-          <div className="bg-muted flex w-full max-w-xl flex-wrap items-center gap-2 rounded-md border p-3 text-sm xl:max-w-3xl">
-            <Badge variant="secondary" className="w-fit font-mono">
-              {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
-            </Badge>
-            {upgradeInfo?.status?.phase && (
-              <Badge
-                variant={
-                  upgradeInfo.status.phase === 'healthy'
-                    ? 'success'
-                    : upgradeInfo.status.phase === 'failed'
-                      ? 'destructive'
-                      : upgradeInfo.status.phase === 'rolled_back'
-                        ? 'warning'
-                        : 'secondary'
-                }
-                className="w-fit"
+  /*
+   * Everything about the updater sidecar, in one card in the rail.
+   *
+   * It used to be three independent things in the main flow: a misconfiguration note, a
+   * self-update banner with five phases, and a large orange "not installed" block sitting
+   * where the upgrade control should be. They are all the same question ("can this machine
+   * perform an upgrade, and if not what do I run"), and stacked as separate banners they
+   * pushed the actual workflow down the page.
+   *
+   * The order below is the old render order made explicit: a self-update in flight wins,
+   * because the old banner's guard was `selfUpdate.phase !== 'idle'` and the misconfigured
+   * note's was `=== 'idle'`. Not-installed then outranks the rest, because there is no
+   * updater to be misconfigured or behind.
+   */
+  const updateService: {
+    tone: SettingsStatusTone;
+    badge: string;
+    badgeVariant: 'success' | 'warning' | 'danger' | 'neutral';
+    headline: string;
+    body: React.ReactNode;
+  } = (() => {
+    if (selfUpdate.phase === 'updating') {
+      return {
+        tone: 'warn' as const,
+        badge: 'Updating',
+        badgeVariant: 'warning' as const,
+        headline: 'The update service is restarting',
+        body: (
+          <SettingsStatusText>
+            Updating to <span className="font-mono">{selfUpdate.targetTag}</span>. It restarts as
+            part of this, so it may briefly show as unavailable. This can take a minute or two.
+          </SettingsStatusText>
+        ),
+      };
+    }
+    if (selfUpdate.phase === 'done') {
+      return {
+        tone: 'ok' as const,
+        badge: 'Updated',
+        badgeVariant: 'success' as const,
+        headline: 'The update service is up to date',
+        body: (
+          <>
+            <SettingsStatusText>
+              Now on <span className="font-mono">{selfUpdate.targetTag}</span>.
+            </SettingsStatusText>
+            <Button type="button" size="sm" variant="outline" onClick={dismissSelfUpdate}>
+              Dismiss
+            </Button>
+          </>
+        ),
+      };
+    }
+    if (selfUpdate.phase === 'failed') {
+      return {
+        tone: 'bad' as const,
+        badge: 'Update failed',
+        badgeVariant: 'danger' as const,
+        headline: 'The update service could not be updated',
+        body: (
+          <>
+            {selfUpdate.message ? (
+              <SettingsStatusText>{selfUpdate.message}</SettingsStatusText>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={disabled || selfUpdateBusy || !upgradeInfo}
+                onClick={() => upgradeInfo && startSelfUpdate(upgradeInfo.current)}
               >
-                {upgradePhaseLabel(upgradeInfo.status.phase)}
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        {/* Separate from the version check below, and deliberately above it: an updater
-            can be the CURRENT version and still be unable to upgrade, because a container
-            keeps the file paths it was created with. Updating it recreates the container,
-            which is the fix, so this offers the same button for a different reason. */}
-        {updaterMisconfigured && selfUpdate.phase === 'idle' && !upgradeInProgress && (
-          <div
-            role="note"
-            className="border-status-warning-border bg-status-warning-bg text-status-warning max-w-xl space-y-2 rounded-md border p-4 text-sm"
-          >
-            <p className="font-medium">
-              The update service needs restarting before it can upgrade.
-            </p>
-            <p>
-              It is running, but it can&apos;t find the{' '}
+                {selfUpdateBusy ? 'Updating…' : 'Try again'}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={dismissSelfUpdate}>
+                Dismiss
+              </Button>
+            </div>
+          </>
+        ),
+      };
+    }
+    if (selfUpdate.phase === 'timeout') {
+      return {
+        tone: 'warn' as const,
+        badge: 'Taking longer than expected',
+        badgeVariant: 'warning' as const,
+        headline: 'The update service has not come back yet',
+        body: (
+          <>
+            <SettingsStatusText>
+              Reload this page in a moment. If it is still behind, run{' '}
+              <code className="font-mono">sh install.sh update</code> on the server.
+            </SettingsStatusText>
+            <Button type="button" size="sm" variant="outline" onClick={dismissSelfUpdate}>
+              Dismiss
+            </Button>
+          </>
+        ),
+      };
+    }
+    if (!updaterAvailable) {
+      // A configuration state, not a failure: nothing is broken, a component is simply off.
+      return {
+        tone: 'warn' as const,
+        badge: 'Not installed',
+        badgeVariant: 'warning' as const,
+        headline: 'In-app upgrades are unavailable',
+        body: (
+          <>
+            <SettingsStatusText>
+              Upgrades and downgrades need the privileged updater component. It holds the Docker
+              socket, so it is off by default. Enable it on the server, in the directory that
+              contains <code className="font-mono">docker-compose.yml</code>:
+            </SettingsStatusText>
+            <CopyableValue
+              value="sh install.sh enable-updater"
+              copyName="updater installation command"
+            />
+            <SettingsStatusText>
+              Then reopen this tab. If your installer predates this command, run{' '}
+              <code className="font-mono">sh install.sh self-update</code> first.
+            </SettingsStatusText>
+          </>
+        ),
+      };
+    }
+    if (updaterMisconfigured && !upgradeInProgress) {
+      // The updater can be the CURRENT version and still unable to upgrade: a container
+      // keeps the file paths it was created with. Updating it recreates it, which is the fix.
+      return {
+        tone: 'warn' as const,
+        badge: 'Needs restart',
+        badgeVariant: 'warning' as const,
+        headline: 'The update service cannot upgrade yet',
+        body: (
+          <>
+            <SettingsStatusText>
+              It is running, but it cannot find the{' '}
               {!upgradeInfo?.updaterReadiness?.envFileOk ? 'settings file' : 'stack file'} it has to
               change:{' '}
               <span className="font-mono break-all">
@@ -273,128 +350,193 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               </span>
               . This happens when it has been running since before the file moved. Upgrades will
               fail until it is restarted on the current configuration.
-            </p>
+            </SettingsStatusText>
             <Button
               type="button"
               size="sm"
-              variant="secondary"
+              variant="outline"
               disabled={disabled || selfUpdateBusy || !upgradeInfo}
               onClick={() => upgradeInfo && startSelfUpdate(upgradeInfo.current)}
             >
               {selfUpdateBusy ? 'Restarting…' : 'Update the update service'}
             </Button>
-          </div>
-        )}
+          </>
+        ),
+      };
+    }
+    if (
+      !!upgradeInfo?.updaterVersion &&
+      upgradeInfo.updaterVersion !== upgradeInfo.current &&
+      !upgradeInProgress
+    ) {
+      return {
+        tone: 'warn' as const,
+        badge: 'Update available',
+        badgeVariant: 'warning' as const,
+        headline: 'The update service is behind the app',
+        body: (
+          <>
+            <SettingsStatusText>
+              On <span className="font-mono">{upgradeInfo.updaterVersion}</span>, behind{' '}
+              <span className="font-mono">{upgradeInfo.current}</span>. Update it so future upgrades
+              use the latest logic.
+            </SettingsStatusText>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={disabled || selfUpdateBusy || !upgradeInfo}
+              onClick={() => upgradeInfo && startSelfUpdate(upgradeInfo.current)}
+            >
+              {selfUpdateBusy ? 'Updating…' : 'Update the update service'}
+            </Button>
+          </>
+        ),
+      };
+    }
+    return {
+      tone: 'ok' as const,
+      badge: 'Ready',
+      badgeVariant: 'success' as const,
+      headline: 'The update service is ready',
+      body: (
+        <>
+          {upgradeInfo?.updaterVersion ? (
+            <div className="space-y-0.5">
+              <div className="text-muted-foreground text-xs">Version</div>
+              <div className="text-foreground font-mono text-sm break-all">
+                {upgradeInfo.updaterVersion}
+              </div>
+            </div>
+          ) : null}
+          <SettingsStatusText>It performs upgrades and rollbacks for AFCT.</SettingsStatusText>
+        </>
+      ),
+    };
+  })();
 
-        {/* The updater sidecar tracks the app version but is recreated on its own, so it
-            can lag after an app upgrade. Offer to bring it up to date from here. Once a
-            self-update starts, the outcome is tracked by watching the updater come back
-            on the new version (the updater restarts itself, so it can't report its own
-            success and a transient status would otherwise look like a failure). */}
-        {(selfUpdate.phase !== 'idle' ||
-          (!!upgradeInfo?.updaterVersion &&
-            upgradeInfo.updaterVersion !== upgradeInfo.current &&
-            !upgradeInProgress)) && (
-          <div
-            role={
-              selfUpdate.phase === 'updating' || selfUpdate.phase === 'done' ? 'status' : 'note'
-            }
-            className={selfUpdateBannerClass(selfUpdate.phase)}
-          >
-            {selfUpdate.phase === 'updating' ? (
-              <p>
-                Updating the update service to{' '}
-                <span className="font-mono">{selfUpdate.targetTag}</span>. It restarts as part of
-                this, so it may briefly show as unavailable; this is expected and can take a minute
-                or two.
-              </p>
-            ) : selfUpdate.phase === 'done' ? (
-              <div className="flex items-center justify-between gap-3">
-                <p>
-                  The update service is now on{' '}
-                  <span className="font-mono">{selfUpdate.targetTag}</span>.
-                </p>
-                <Button type="button" size="sm" variant="secondary" onClick={dismissSelfUpdate}>
-                  Dismiss
-                </Button>
+  return (
+    <>
+      <SettingsAsideLayout
+        // Main workflow first when stacked: this is a page you act on, not a page you read.
+        asidePlacement="after"
+        aside={
+          <>
+            <SettingsStatusCard
+              title="Update service"
+              tone={updateService.tone}
+              badge={<Badge variant={updateService.badgeVariant}>{updateService.badge}</Badge>}
+              headline={updateService.headline}
+            >
+              {updateService.body}
+            </SettingsStatusCard>
+
+            <SettingsAsideCard title="Command-line update">
+              <div className="space-y-3">
+                <SettingsStatusText>
+                  Run this from the directory that holds{' '}
+                  <code className="font-mono">docker-compose.yml</code>:
+                </SettingsStatusText>
+                <CopyableValue
+                  value="sh install.sh update"
+                  copyName="command-line update command"
+                  description="It does the same backup, version swap and health check as an in-app upgrade."
+                />
               </div>
-            ) : selfUpdate.phase === 'failed' ? (
-              <div className="space-y-2">
-                <p>
-                  The update service could not be updated
-                  {selfUpdate.message ? `: ${selfUpdate.message}` : '.'}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={disabled || selfUpdateBusy || !upgradeInfo}
-                    onClick={() => upgradeInfo && startSelfUpdate(upgradeInfo.current)}
-                  >
-                    {selfUpdateBusy ? 'Updating…' : 'Try again'}
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={dismissSelfUpdate}>
-                    Dismiss
-                  </Button>
-                </div>
-              </div>
-            ) : selfUpdate.phase === 'timeout' ? (
-              <div className="space-y-2">
-                <p>
-                  The update service is taking longer than expected to come back. Reload this page
-                  in a moment; if it&apos;s still behind, run{' '}
-                  <code className="font-mono">sh install.sh update</code> on the server.
-                </p>
-                <Button type="button" size="sm" variant="secondary" onClick={dismissSelfUpdate}>
-                  Dismiss
-                </Button>
-              </div>
-            ) : (
-              <>
-                <p>
-                  The update service is on{' '}
-                  <span className="font-mono">{upgradeInfo?.updaterVersion}</span>, behind the
-                  app&apos;s <span className="font-mono">{upgradeInfo?.current}</span>. Update it so
-                  future upgrades use the latest logic.
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  disabled={disabled || selfUpdateBusy || !upgradeInfo}
-                  onClick={() => upgradeInfo && startSelfUpdate(upgradeInfo.current)}
-                >
-                  {selfUpdateBusy ? 'Updating…' : 'Update the update service'}
-                </Button>
-              </>
+            </SettingsAsideCard>
+          </>
+        }
+      >
+        <SettingsSection title="Current version">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* The version is metadata, not a state: secondary, never a status colour. The
+                health badge beside it is what carries state. */}
+            <Badge variant="secondary" className="font-mono">
+              {upgradeLoading && !upgradeInfo ? 'Loading…' : (upgradeInfo?.current ?? 'unknown')}
+            </Badge>
+            {upgradeInfo?.status?.phase && (
+              <Badge variant={upgradePhaseVariant(upgradeInfo.status.phase)}>
+                {upgradePhaseLabel(upgradeInfo.status.phase)}
+              </Badge>
             )}
           </div>
-        )}
+        </SettingsSection>
 
-        {/* The self-update has its own banner above; hide the generic status card while
-            it runs so the updater's transient self-update phases don't show here too. */}
-        {upgradeInfo?.status?.phase && selfUpdate.phase === 'idle' && (
-          <div className="space-y-2" ref={upgradeStatusRef} tabIndex={-1}>
-            <h2 className="text-sm font-medium">Update status</h2>
-            {/* role="status": phase changes arrive via background polling,
-                so announce them to screen readers as they happen. */}
-            <div
-              role="status"
-              className="bg-muted w-full max-w-xl space-y-2 rounded-md border p-3 text-sm xl:max-w-3xl"
-            >
-              <Badge
-                variant={
-                  upgradeInfo.status.phase === 'healthy'
-                    ? 'success'
-                    : upgradeInfo.status.phase === 'failed'
-                      ? 'destructive'
-                      : upgradeInfo.status.phase === 'rolled_back'
-                        ? 'warning'
-                        : 'secondary'
-                }
-                className="w-fit"
+        <SettingsSection
+          title="Upgrade AFCT"
+          description="Install a newer published release. AFCT backs up the database first and rolls back automatically if the new release fails its health check."
+        >
+          {!updaterAvailable ? (
+            // Not a banner here: the rail card carries the state and the command. What this
+            // needs to say is only why there is no button.
+            <p className="text-muted-foreground text-sm">
+              In-app upgrades need the update service, which is not installed on this server. See
+              Update service for how to enable it.
+            </p>
+          ) : upgradeInfo?.manifestError ? (
+            <p className="text-muted-foreground text-sm">
+              The list of available versions could not be loaded. Check the server&apos;s network
+              access and reopen this tab to retry.
+            </p>
+          ) : upgradeableVersions.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {upgradeLoading
+                ? 'Loading available versions…'
+                : 'AFCT is on the latest available version.'}
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-muted-foreground text-sm">
+                {upgradeableVersions.length === 1
+                  ? 'A newer release is available.'
+                  : `${upgradeableVersions.length} newer releases are available.`}
+              </p>
+              <div className="max-w-md">
+                <SelectField
+                  label="Upgrade to"
+                  name="upgradeVersion"
+                  id="upgradeVersion"
+                  placeholder="Select a version"
+                  value={selectedVersion}
+                  onValueChange={setSelectedVersion}
+                  disabled={disabled || upgradeBusy || upgradeInProgress}
+                  options={upgradeableVersions.map((v) => ({
+                    value: v.tag,
+                    label: v.label && v.label !== v.tag ? `${v.label} (${v.tag})` : v.tag,
+                  }))}
+                />
+              </div>
+              {selectedVersionInfo?.notes && (
+                <p className="text-muted-foreground text-sm">{selectedVersionInfo.notes}</p>
+              )}
+              {selectedVersionInfo?.upgradeNote && (
+                <div
+                  role="note"
+                  className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border p-3 text-sm whitespace-pre-line"
+                >
+                  {selectedVersionInfo.upgradeNote}
+                </div>
+              )}
+              <Button
+                type="button"
+                onClick={() => setConfirmUpgradeOpen(true)}
+                disabled={disabled || upgradeBusy || upgradeInProgress || !selectedVersion}
               >
+                {upgradeBusy || upgradeInProgress ? 'Upgrading…' : 'Upgrade…'}
+              </Button>
+            </div>
+          )}
+        </SettingsSection>
+
+        {/* The self-update has its own card in the rail; hide this while one runs so the
+            updater's transient phases don't show as an app upgrade too. */}
+        {upgradeInfo?.status?.phase && selfUpdate.phase === 'idle' && (
+          <SettingsSection title="Update status" className="scroll-mt-6">
+            {/* role="status": phase changes arrive via background polling, so announce them
+                to screen readers as they happen. tabIndex so the upgrade dialog can return
+                focus here once the button that opened it is disabled. */}
+            <div role="status" className="space-y-2 text-sm" ref={upgradeStatusRef} tabIndex={-1}>
+              <Badge variant={upgradePhaseVariant(upgradeInfo.status.phase)} className="w-fit">
                 {upgradePhaseLabel(upgradeInfo.status.phase)}
               </Badge>
               {upgradeInfo.status.message && (
@@ -402,7 +544,8 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
               )}
               {/* The downgrade was refused because no safety backup could be confirmed.
                   Nothing was changed, so offer to proceed anyway (an explicit choice to
-                  discard the current state), behind its own type-to-confirm dialog. */}
+                  discard the current state), behind its own type-to-confirm dialog. It
+                  stays here, with the restore workflow it belongs to, not in the rail. */}
               {downgradeNeedsForce && (
                 <div className="flex flex-wrap items-center gap-2 border-t pt-2">
                   <Button
@@ -437,10 +580,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                   This can take a few minutes; the site may briefly restart.
                 </p>
               )}
-              {/* Once a run this session settles, show where things landed: the app
-                  version, the update service's version, and whether the updater is
-                  running. Gated on lastAction so a leftover "healthy" from a previous
-                  session doesn't render this on a fresh page load. */}
+              {/* Once a run this session settles, show where things landed. Gated on
+                  lastAction so a leftover "healthy" from a previous session doesn't render
+                  this on a fresh page load. */}
               {!upgradeInProgress && lastAction && (
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t pt-2 text-sm">
                   <dt className="text-muted-foreground">Dashboard</dt>
@@ -465,7 +607,7 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                   <dt className="text-muted-foreground">Update service health</dt>
                   <dd>
                     {updaterAvailable ? (
-                      <span className="text-green-700 dark:text-green-400">Running</span>
+                      <span className="text-status-success">Running</span>
                     ) : (
                       <span className="text-status-warning">Not running</span>
                     )}
@@ -473,80 +615,37 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
                 </dl>
               )}
             </div>
-          </div>
+          </SettingsSection>
         )}
 
-        {!updaterAvailable ? (
-          <div
-            role="note"
-            className="border-status-warning-border bg-status-warning-bg text-status-warning max-w-xl space-y-2 rounded-md border p-4 text-sm"
+        {/* Restore / downgrade: destructive, so kept visually separate and last. */}
+        {restorePoints.length > 0 && (
+          <SettingsSection
+            title="Restore points"
+            description="AFCT keeps the backup taken before each upgrade, so an earlier version can be restored if one goes wrong."
           >
-            <p className="font-medium">The update service isn’t installed.</p>
-            <p>
-              In-app upgrades and downgrades need the privileged updater component, which isn’t
-              running on this server. It holds the Docker socket, so it’s off by default.
+            <p className="text-muted-foreground text-sm">
+              Restoring a point puts back the database backup taken before that version was
+              replaced. It{' '}
+              <span className="text-destructive font-medium">
+                permanently discards everything created since that backup
+              </span>{' '}
+              (submissions, grades, and accounts). Use this only for recovery.
             </p>
-            <p>
-              To enable it, run this on the server, in the directory that contains{' '}
-              <code className="font-mono">docker-compose.yml</code>:
-            </p>
-            <pre className="bg-background/60 overflow-x-auto rounded border p-2 font-mono text-xs">
-              sh install.sh enable-updater
-            </pre>
-            <p>
-              Then reopen this tab. If your installer predates this command, run{' '}
-              <code className="font-mono">sh install.sh self-update</code> first.
-            </p>
-          </div>
-        ) : upgradeInfo?.manifestError ? (
-          <p className="text-muted-foreground text-sm">
-            The list of available versions could not be loaded. Check the server’s network access
-            and reopen this tab to retry.
-          </p>
-        ) : upgradeableVersions.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            {upgradeLoading
-              ? 'Loading available versions…'
-              : 'AFCT is on the latest available version.'}
-          </p>
-        ) : (
-          <div className="space-y-3">
-            <SelectField
-              label="Upgrade to"
-              name="upgradeVersion"
-              id="upgradeVersion"
-              placeholder="Select a version"
-              value={selectedVersion}
-              onValueChange={setSelectedVersion}
-              disabled={disabled || upgradeBusy || upgradeInProgress}
-              options={upgradeableVersions.map((v) => ({
-                value: v.tag,
-                label: v.label && v.label !== v.tag ? `${v.label} (${v.tag})` : v.tag,
-              }))}
-              triggerClassName="border-input"
+            <DataTable
+              columns={restoreColumns}
+              data={restorePoints}
+              storageKey="system-restore-points"
+              tableLabel="Restore points"
+              // Short, action-focused list: skip the search/filter/columns/export toolbar.
+              showToolbar={false}
+              defaultSorting={[{ id: 'backup', desc: true }]}
+              emptyTitle="No restore points"
+              emptyDescription="A restore point is recorded automatically before each upgrade."
             />
-            {selectedVersionInfo?.notes && (
-              <p className="text-muted-foreground text-sm">{selectedVersionInfo.notes}</p>
-            )}
-            {selectedVersionInfo?.upgradeNote && (
-              <div
-                role="note"
-                className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border p-3 text-sm whitespace-pre-line"
-              >
-                {selectedVersionInfo.upgradeNote}
-              </div>
-            )}
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setConfirmUpgradeOpen(true)}
-              disabled={disabled || upgradeBusy || upgradeInProgress || !selectedVersion}
-            >
-              {upgradeBusy || upgradeInProgress ? 'Upgrading…' : 'Upgrade…'}
-            </Button>
-          </div>
+          </SettingsSection>
         )}
-      </div>
+      </SettingsAsideLayout>
 
       <ConfirmDialog
         open={confirmUpgradeOpen}
@@ -580,31 +679,6 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
           }
         }}
       />
-
-      {/* Restore / downgrade: destructive, so kept visually separate. */}
-      {restorePoints.length > 0 && (
-        <div className="mt-8 max-w-2xl space-y-3 border-t pt-6 xl:max-w-4xl">
-          <h2 className="text-destructive text-sm font-semibold">Restore a previous version</h2>
-          <p className="text-muted-foreground text-sm">
-            Downgrading restores the database backup taken before that version was replaced. It{' '}
-            <span className="text-destructive font-medium">
-              permanently discards everything created since that backup
-            </span>{' '}
-            (submissions, grades, and accounts). Use this only for recovery.
-          </p>
-          <DataTable
-            columns={restoreColumns}
-            data={restorePoints}
-            storageKey="system-restore-points"
-            tableLabel="Restore points"
-            // Short, action-focused list: skip the search/filter/columns/export toolbar.
-            showToolbar={false}
-            defaultSorting={[{ id: 'backup', desc: true }]}
-            emptyTitle="No restore points"
-            emptyDescription="A restore point is recorded automatically before each upgrade."
-          />
-        </div>
-      )}
 
       <ConfirmDialog
         open={restoreTarget !== null}

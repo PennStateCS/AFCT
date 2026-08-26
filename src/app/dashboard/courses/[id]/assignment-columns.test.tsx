@@ -199,7 +199,7 @@ describe('useAssignmentColumns — Manage menu', () => {
     const row = { original: { id: 'a1', courseId: 'c1', title: 'HW 1' } };
     render(<>{(actions.cell as (ctx: unknown) => React.ReactNode)({ row })}</>);
 
-    await user.click(screen.getByRole('button', { name: /manage assignment hw 1/i }));
+    await user.click(screen.getByRole('button', { name: /actions for hw 1/i }));
 
     const base = '/dashboard/courses/c1/a1';
     expect(screen.getByRole('menuitem', { name: /view assignment/i })).toHaveAttribute('href', base);
@@ -231,7 +231,7 @@ describe('useAssignmentColumns — Manage menu', () => {
     };
     render(<>{(actions.cell as (ctx: unknown) => React.ReactNode)({ row })}</>);
 
-    await user.click(screen.getByRole('button', { name: /manage assignment hw 1/i }));
+    await user.click(screen.getByRole('button', { name: /actions for hw 1/i }));
     await user.click(screen.getByRole('menuitem', { name: /duplicate assignment/i }));
     expect(onDuplicate).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'a1', title: 'HW 1', isGroup: false, problemCount: 2 }),
@@ -250,7 +250,7 @@ describe('useAssignmentColumns — Manage menu', () => {
         })}
       </>,
     );
-    await user.click(screen.getByRole('button', { name: /manage assignment hw 1/i }));
+    await user.click(screen.getByRole('button', { name: /actions for hw 1/i }));
     expect(screen.queryByRole('menuitem', { name: /duplicate assignment/i })).not.toBeInTheDocument();
   });
 });

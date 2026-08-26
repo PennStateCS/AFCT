@@ -25,8 +25,26 @@ type ErrorPageShellProps = {
  */
 export function ErrorPageShell({ title, description, actions, digest }: ErrorPageShellProps) {
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-[#5F9EA0] via-[#6FAFB2] to-[#2F4A8A] px-4 py-12">
-      <Card className="border-border bg-card w-full max-w-xl border-2 border-solid shadow-[0_20px_60px_-20px_rgba(25,59,127,0.25)]">
+    /**
+     * The sign-in screen's surfaces, in the same order: a dark ground with a cobalt wash, and
+     * one light card on it. It used to be a teal gradient left over from the old auth pages,
+     * which is now the only place in the product that colour appeared.
+     *
+     * `auth-light` pins the card to the light palette, because next-themes puts `.dark` on
+     * <html> for every route and this card is a fixed light surface. `auth-form-surface` on the
+     * card itself makes its primary button the same cobalt as Sign In; the ground outside it
+     * keeps the deeper navy, which is exactly how the two halves of the login relate.
+     */
+    <main className="auth-light bg-sidebar relative flex min-h-dvh w-full items-center justify-center overflow-hidden px-4 py-12">
+      <div
+        aria-hidden="true"
+        className="to-primary/50 pointer-events-none absolute inset-0 bg-gradient-to-br from-transparent via-transparent"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(96,165,250,0.14),transparent_62%)]"
+      />
+      <Card className="auth-form-surface bg-card relative w-full max-w-xl rounded-2xl border shadow-md">
         <CardHeader className="space-y-3 pb-4 text-center">
           <CardTitle
             aria-level={1}

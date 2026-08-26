@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { ColumnDef, OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import {
-  ChevronDown,
+  CircleCheckBig,
+  EllipsisVertical,
   Download,
   ExternalLink,
   Eye,
@@ -16,7 +17,6 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SubmissionViewerDialog } from '@/components/dialogs/SubmissionViewerDialog';
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -49,6 +49,8 @@ import {
   type SubmissionsQuery,
 } from './submissions-data';
 import { useSubmissionFilters } from './use-submission-filters';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { cn } from '@/lib/utils';
 
 // A stable empty array, so `data ?? EMPTY_ROWS` keeps a constant identity between renders.
 const EMPTY_ROWS: SubmissionItem[] = [];
@@ -232,10 +234,7 @@ export default function SubmissionsClient() {
   };
 
   const anyFilterActive =
-    anyScopeActive ||
-    timing.length > 0 ||
-    statusFilter.length > 0 ||
-    searchInput.length > 0;
+    anyScopeActive || timing.length > 0 || statusFilter.length > 0 || searchInput.length > 0;
 
   const handleRerunSubmission = async (submission: SubmissionItem) => {
     await rerunSubmission({
@@ -292,7 +291,9 @@ export default function SubmissionsClient() {
         cell: ({ row }) => {
           const due = dueDateFor(row.original);
           return (
-            <StatusBadge chip={getTimingStatusChip(row.original as ProblemSubmission, !!due, due)} />
+            <StatusBadge
+              chip={getTimingStatusChip(row.original as ProblemSubmission, !!due, due)}
+            />
           );
         },
         meta: { priority: 2 },
@@ -408,7 +409,7 @@ export default function SubmissionsClient() {
               <button
                 type="button"
                 onClick={() => handleViewSubmission(submission)}
-                className="text-primary text-xs break-all hover:underline"
+                className={cn(TEXT_LINK_CLASS, 'text-xs break-all')}
                 title={`View ${name}`}
               >
                 {name}
@@ -504,7 +505,7 @@ export default function SubmissionsClient() {
           s.autograderEnabled
             ? getReviewStatusChip(s as ProblemSubmission).label
             : 'Not autograded',
-        cell: ({ row }) => (
+        cell: ({ row }) =>
           row.original.autograderEnabled ? (
             <StatusBadge chip={getReviewStatusChip(row.original as ProblemSubmission)} />
           ) : (
@@ -518,13 +519,14 @@ export default function SubmissionsClient() {
                 title: 'The autograder is switched off for this problem.',
               }}
             />
-          )
-        ),
+          ),
         meta: { priority: 1 },
       },
       {
         id: 'actions',
-        header: () => <span className="sr-only">Actions</span>,
+        // Visible now rather than sr-only: the trigger used to say "Manage" on its face,
+        // so the column named itself. A bare ellipsis does not.
+        header: 'Actions',
         enableSorting: false,
         meta: { align: 'right', priority: 1 },
         cell: ({ row }) => {
@@ -540,13 +542,14 @@ export default function SubmissionsClient() {
             <div className="flex justify-end">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
+                  {/* Every row carries one of these, so the label names the row: a dozen
+                      buttons all called "More" is what a screen reader would hear. */}
                   <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Manage submission by ${student}`}
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Actions for the submission by ${student}`}
                   >
-                    <ChevronDown />
-                    Manage
+                    <EllipsisVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -612,37 +615,50 @@ export default function SubmissionsClient() {
   );
 
   return (
-    <Card className="p-4">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <CardTitle role="heading" aria-level={1} className="text-2xl">
-              Submissions
-            </CardTitle>
-          </div>
-          {/* No bulk rerun here. It re-ran whatever the page's own selection held, which
-              stopped matching what the table showed once status filtering moved into the
-              table, so the button could not honestly describe what it was about to do.
-              Rerunning one submission lives in its row's Manage menu. */}
+    <div className="space-y-5">
+      <div className="space-y-1">
+        <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+          {/* Decorative: the heading beside it already says what this is. The icon the
+              sidebar already uses for this page, on the neutral surface the other admin
+              pages use. */}
+          <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <CircleCheckBig className="size-5" aria-hidden="true" />
+          </span>
+          <span>Submissions</span>
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          Review and manage submissions across courses, assignments, and problems.
+        </p>
+      </div>
+
+      {/* No bulk rerun here. It re-ran whatever the page's own selection held, which
+          stopped matching what the table showed once status filtering moved into the
+          table, so the button could not honestly describe what it was about to do.
+          Rerunning one submission lives in its row's Actions menu. */}
+      {/* A panel rather than three loose pickers, with Clear inside it: the button resets
+          these three and nothing else, and sitting above them it read as a page action. */}
+      <section
+        className="bg-muted/30 space-y-3 rounded-lg border p-4"
+        aria-labelledby="submission-filters"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="submission-filters" className="text-sm font-medium">
+            Filters
+          </h2>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={handleClearFilters}
+            disabled={!anyFilterActive}
+          >
+            Clear filters
+          </Button>
         </div>
 
         {/* No "Select All" any more. An empty picker now means every course, assignment and
             problem, so selecting all of them would have been the same view by a longer
             route, and it was the thing that made the page enumerate every id on load. */}
-        <div className="mt-3 flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={handleClearFilters}
-            disabled={!anyFilterActive}
-          >
-            Clear Filters
-          </Button>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
         {/* Stacked until there is genuinely room for three. Three equal tracks at the `sm`
             breakpoint left each filter narrower than its own label, so they now go side by
             side only from `lg`. Each track is `minmax(0,1fr)` so a long selection truncates
@@ -681,131 +697,131 @@ export default function SubmissionsClient() {
             disabled={loadingProblems || selectedAssignments.length === 0}
           />
         </div>
+      </section>
 
-        <DataTable
-          columns={columns}
-          data={submissions}
-          loading={loadingSubmissions}
-          loadingMessage="Loading submissions, please wait..."
-          // Suffixed each time the column set changes: a saved layout wins over these
-          // defaults, so a browser holding the old one would keep showing the recorded
-          // grade in place of the per-attempt one.
-          storageKey="autograder-columns-v3"
-          tableLabel="Submissions"
-          // The browser holds one page, so an export from here would silently write that
-          // page and call it the table. Dropped rather than left to mislead, matching the
-          // other server-paginated tables.
-          showExportButton={false}
-          // Due is off by default: the deadline matters far less than arrival order when
-          // you are working a queue, and the Timing column already flags late work.
-          // Recorded grade is off because it repeats the same number down every attempt
-          // by one student; the Grade column shows what each attempt itself earned. The
-          // Columns menu turns either back on, remembered per browser.
-          defaultColumnVisibility={{ due: false, grade: false }}
-          emptyIcon={FileCode2}
-          {...(anyFilterActive
-            ? {
-                // Distinguish "nothing has been submitted" from "your filters hide
-                // everything": the fix for the second is a filter change, not more work.
-                emptyTitle: 'No submissions match your filters',
-                emptyDescription: 'Try clearing a course, assignment, problem or status filter.',
-              }
-            : {
-                emptyTitle: 'No submissions yet',
-                emptyDescription: 'Work submitted for a problem will show up here.',
-              })}
-          actionButtons={
-            <DataTableFilterMenu
-              groups={[
-                {
-                  key: 'timing',
-                  label: 'Timing',
-                  options: [
-                    { label: 'On time', value: 'ontime' },
-                    { label: 'Late', value: 'late' },
-                  ],
-                  selected: timing,
-                  onChange: onFilter(setTiming),
-                },
-                {
-                  /*
-                   * One group, shown as two headings. Where a submission has got to
-                   * (Pending / Processing / Failed) and how it turned out (Correct /
-                   * Incorrect) are different questions, so they get their own lists. They
-                   * stay one group because a row has exactly one of these five values: as
-                   * two groups the server would AND them, and any cross-heading pick (say
-                   * Failed plus Correct) could only ever return nothing. Sharing the group
-                   * keeps that pick meaning "either".
-                   *
-                   * Timing IS its own group, because timing and result are independent and
-                   * should AND: Late plus Incorrect finds late wrong answers.
-                   */
-                  key: 'status',
-                  label: 'Status',
-                  sections: [
-                    {
-                      label: 'Status',
-                      options: [
-                        { label: 'Pending', value: 'pending' },
-                        { label: 'Processing', value: 'processing' },
-                        { label: 'Failed', value: 'failed' },
-                      ],
-                    },
-                    {
-                      label: 'Submission',
-                      options: [
-                        { label: 'Correct', value: 'correct' },
-                        { label: 'Incorrect', value: 'incorrect' },
-                      ],
-                    },
-                  ],
-                  selected: statusFilter,
-                  onChange: onFilter(setStatusFilter),
-                },
-              ]}
-            />
-          }
-          manualPagination
-          pageCount={pageCount}
-          rowCount={total}
-          pagination={{ pageIndex, pageSize }}
-          onPaginationChange={handlePaginationChange}
-          manualFiltering
-          globalFilter={searchInput}
-          onGlobalFilterChange={setSearchInput}
-          searchScopeOptions={SEARCH_FIELDS}
-          searchScope={searchField}
-          onSearchScopeChange={(v) => {
-            setSearchField(v);
-            setPageIndex(0);
-          }}
-          manualSorting
-          sorting={sorting}
-          onSortingChange={handleSortingChange}
-        />
-        <SubmissionViewerDialog
-          open={jffViewerOpen}
-          onOpenChange={(open) => {
-            setJffViewerOpen(open);
-            if (!open) {
-              setJffViewerSrc(null);
-              setJffViewerTitle(null);
-              setJffViewerCourseId(null);
-              setViewerProblemType(null);
+      <DataTable
+        columns={columns}
+        data={submissions}
+        loading={loadingSubmissions}
+        loadingMessage="Loading submissions, please wait..."
+        // Suffixed each time the column set changes: a saved layout wins over these
+        // defaults, so a browser holding the old one would keep showing the recorded
+        // grade in place of the per-attempt one.
+        storageKey="autograder-columns-v3"
+        tableLabel="Submissions"
+        // The browser holds one page, so an export from here would silently write that
+        // page and call it the table. Dropped rather than left to mislead, matching the
+        // other server-paginated tables.
+        showExportButton={false}
+        // Due is off by default: the deadline matters far less than arrival order when
+        // you are working a queue, and the Timing column already flags late work.
+        // Recorded grade is off because it repeats the same number down every attempt
+        // by one student; the Grade column shows what each attempt itself earned. The
+        // Columns menu turns either back on, remembered per browser.
+        defaultColumnVisibility={{ due: false, grade: false }}
+        emptyIcon={FileCode2}
+        {...(anyFilterActive
+          ? {
+              // Distinguish "nothing has been submitted" from "your filters hide
+              // everything": the fix for the second is a filter change, not more work.
+              emptyTitle: 'No submissions match your filters',
+              emptyDescription: 'Try clearing a course, assignment, problem or status filter.',
             }
-          }}
-          problemType={viewerProblemType}
-          src={jffViewerSrc ?? ''}
-          title={jffViewerTitle ?? 'Submission'}
-          epsSymbol={jffEpsSymbol}
-        />
+          : {
+              emptyTitle: 'No submissions yet',
+              emptyDescription: 'Work submitted for a problem will show up here.',
+            })}
+        actionButtons={
+          <DataTableFilterMenu
+            groups={[
+              {
+                key: 'timing',
+                label: 'Timing',
+                options: [
+                  { label: 'On time', value: 'ontime' },
+                  { label: 'Late', value: 'late' },
+                ],
+                selected: timing,
+                onChange: onFilter(setTiming),
+              },
+              {
+                /*
+                 * One group, shown as two headings. Where a submission has got to
+                 * (Pending / Processing / Failed) and how it turned out (Correct /
+                 * Incorrect) are different questions, so they get their own lists. They
+                 * stay one group because a row has exactly one of these five values: as
+                 * two groups the server would AND them, and any cross-heading pick (say
+                 * Failed plus Correct) could only ever return nothing. Sharing the group
+                 * keeps that pick meaning "either".
+                 *
+                 * Timing IS its own group, because timing and result are independent and
+                 * should AND: Late plus Incorrect finds late wrong answers.
+                 */
+                key: 'status',
+                label: 'Status',
+                sections: [
+                  {
+                    label: 'Status',
+                    options: [
+                      { label: 'Pending', value: 'pending' },
+                      { label: 'Processing', value: 'processing' },
+                      { label: 'Failed', value: 'failed' },
+                    ],
+                  },
+                  {
+                    label: 'Submission',
+                    options: [
+                      { label: 'Correct', value: 'correct' },
+                      { label: 'Incorrect', value: 'incorrect' },
+                    ],
+                  },
+                ],
+                selected: statusFilter,
+                onChange: onFilter(setStatusFilter),
+              },
+            ]}
+          />
+        }
+        manualPagination
+        pageCount={pageCount}
+        rowCount={total}
+        pagination={{ pageIndex, pageSize }}
+        onPaginationChange={handlePaginationChange}
+        manualFiltering
+        globalFilter={searchInput}
+        onGlobalFilterChange={setSearchInput}
+        searchScopeOptions={SEARCH_FIELDS}
+        searchScope={searchField}
+        onSearchScopeChange={(v) => {
+          setSearchField(v);
+          setPageIndex(0);
+        }}
+        manualSorting
+        sorting={sorting}
+        onSortingChange={handleSortingChange}
+      />
+      <SubmissionViewerDialog
+        open={jffViewerOpen}
+        onOpenChange={(open) => {
+          setJffViewerOpen(open);
+          if (!open) {
+            setJffViewerSrc(null);
+            setJffViewerTitle(null);
+            setJffViewerCourseId(null);
+            setViewerProblemType(null);
+          }
+        }}
+        problemType={viewerProblemType}
+        src={jffViewerSrc ?? ''}
+        title={jffViewerTitle ?? 'Submission'}
+        epsSymbol={jffEpsSymbol}
+      />
 
-        <FeedbackDialog
-          open={feedbackDialogOpen}
-          onOpenChange={setFeedbackDialogOpen}
-          feedbackText={activeFeedback}
-        />
-      </CardContent>
-    </Card>
+      <FeedbackDialog
+        open={feedbackDialogOpen}
+        onOpenChange={setFeedbackDialogOpen}
+        feedbackText={activeFeedback}
+      />
+    </div>
   );
 }

@@ -4,14 +4,15 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, Table } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { formatDateInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { apiPaths } from '@/lib/api-paths';
+import { Badge } from '@/components/ui/badge';
 
 type StudentGradesResponse = {
   assignments: Array<{
@@ -88,20 +89,19 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
   );
 
   return (
-    <Card>
-      <CardHeader className="pb-0">
-        <CardTitle className="flex items-center gap-2 text-2xl">
-          <Table className="h-5 w-5" />
-          Grades
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 px-3 py-3">
+    // No outer Card: this is the page's active panel, and wrapping it put a bounded thing
+    // inside a bounded thing. The rows keep their own borders; they are real objects.
+    <section className="space-y-6" aria-labelledby="student-grades-title">
+      <h2 id="student-grades-title" className="text-xl font-semibold">
+        Grades
+      </h2>
+      <div className="space-y-2">
         {loading ? (
           <LoadingSpinner label="Loading grades" fullScreen={false} className="min-h-32" />
         ) : error ? (
           <div role="alert" className="text-destructive text-sm">
-          {error}
-        </div>
+            {error}
+          </div>
         ) : assignments.length === 0 ? (
           <div className="text-muted-foreground text-sm">No graded assignments available yet.</div>
         ) : (
@@ -119,7 +119,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                         : current.filter((id) => id !== assignment.id),
                     )
                   }
-                  className="border-border/80 bg-card hover:border-primary hover:bg-primary/5 overflow-hidden rounded-xl border border-l-4 border-l-blue-600 shadow-sm transition hover:shadow-md"
+                  className="border-border border-l-primary bg-card hover:border-primary/50 hover:bg-primary/5 overflow-hidden rounded-lg border border-l-4 shadow-xs transition-colors"
                 >
                   <CardHeader className="p-0">
                     <div className="flex items-center justify-between gap-3 px-3 py-1">
@@ -143,7 +143,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                         </div>
                       </Link>
                       <div className="flex items-center gap-2 text-right">
-                        <p className="grid grid-cols-[4rem_minmax(4rem,auto)_4rem] items-center gap-2 text-xs tracking-[0.12em] uppercase">
+                        <p className="grid grid-cols-[4rem_minmax(4rem,auto)_4rem] items-center gap-2 text-xs tracking-widest uppercase">
                           <span className="text-foreground text-sm font-semibold">Grade</span>
                           <span className="text-foreground text-left text-sm font-semibold">
                             {(assignment.grade === null ? '-' : `${assignment.grade}`) +
@@ -194,7 +194,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                             <p className="text-foreground truncate text-sm font-medium">
                               Problem {index + 1}: {problem.title ?? 'Untitled'}
                             </p>
-                            <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
+                            <Badge variant="outline" className="text-muted-foreground">
                               {problem.status.toLowerCase() == 'processing'
                                 ? 'Evaluating'
                                 : problem.grade === null &&
@@ -204,28 +204,28 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
                                   : problem.grade === null
                                     ? 'Not graded'
                                     : 'Graded'}
-                            </span>
-                            <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
+                            </Badge>
+                            <Badge variant="outline" className="text-muted-foreground">
                               {problem.submissionCount ? problem.submissionCount : 0}/
                               {problem.maxSubmissions < 0 ? '∞' : problem.maxSubmissions}{' '}
                               Submissions
-                            </span>
+                            </Badge>
                             {problem.autograderEnabled && problem.submissionCount ? (
-                              <span className="border-border text-muted-foreground rounded-full border px-2 py-1 text-xs">
+                              <Badge variant="outline" className="text-muted-foreground">
                                 {'Latest Status: ' + problem.status}
-                              </span>
+                              </Badge>
                             ) : (
                               <span></span>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="border-border rounded-full border px-2 py-1 text-xs font-semibold text-foreground">
+                            <Badge variant="outline" className="font-semibold">
                               {problem.grade === null
                                 ? `-/${problem.maxPoints}`
                                 : `${problem.grade}/${problem.maxPoints}`}{' '}
                               pts
-                            </span>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            </Badge>
+                            <ChevronRight className="text-muted-foreground h-4 w-4" />
                           </div>
                         </button>
                       ))}
@@ -236,7 +236,7 @@ export function StudentGradesCard({ courseId }: { courseId: string }) {
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

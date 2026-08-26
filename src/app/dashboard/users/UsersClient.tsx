@@ -9,7 +9,7 @@ import { getUserColumns } from './user-columns';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 import dynamic from 'next/dynamic';
 // On demand: both carry the form stack and neither is open on arrival.
 const CreateUserDialog = dynamic(
@@ -165,27 +165,38 @@ export default function UsersClient() {
   };
 
   return (
-    <Card className="p-4">
-      <CardHeader className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle role="heading" aria-level={1} className="text-2xl">
-          User Accounts
-        </CardTitle>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setImportOpen(true)}>
-            <Users />
-            Import Users
-          </Button>
-          <Button onClick={() => setOpen(true)}>
-            <UserRoundPlus />
-            Create User
-          </Button>
+    // Same shape as the Courses page: a work page on the white surface, no outer card
+    // around a table that already has a border, and a real <h1> in place of the CardTitle
+    // that was carrying role="heading" aria-level={1}.
+    <WorkspaceSurface>
+      <section className="space-y-6" aria-labelledby="users-title">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1
+            id="users-title"
+            className="flex items-center gap-3 text-2xl font-semibold tracking-tight"
+          >
+            {/* Decorative: the heading beside it already says what this is. Same treatment
+                as the Courses page, in the icon the sidebar already uses for this page. */}
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+              <Users className="size-5" aria-hidden="true" />
+            </span>
+            <span>User Accounts</span>
+          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Users />
+              Import Users
+            </Button>
+            <Button onClick={() => setOpen(true)}>
+              <UserRoundPlus />
+              Create User
+            </Button>
+          </div>
         </div>
-      </CardHeader>
 
-      <CardContent>
         {isError ? (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-status-danger-border bg-status-danger-bg px-3 py-2">
-            <p role="alert" className="text-sm text-status-danger">
+          <div className="border-status-danger-border bg-status-danger-bg flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+            <p role="alert" className="text-status-danger text-sm">
               Failed to load users. Please try again.
             </p>
             <Button variant="outline" size="sm" onClick={refresh}>
@@ -194,89 +205,89 @@ export default function UsersClient() {
           </div>
         ) : null}
 
-        <DataTable
-          columns={columns}
-          data={users}
-          loading={isLoading}
-          tableLabel="Users table"
-          showExportButton={false}
-          emptyTitle="No user accounts"
-          emptyDescription="Create or import users to get started."
-          emptyIcon={Users}
-          loadingMessage="Loading user accounts, please wait..."
-          defaultColumnVisibility={{ isAdmin: false, lockStatus: false }}
-          actionButtons={
-            <DataTableFilterMenu
-              groups={[
-                {
-                  key: 'admin',
-                  label: 'Admin',
-                  options: [
-                    { label: 'Admin', value: 'true' },
-                    { label: 'Standard', value: 'false' },
-                  ],
-                  selected: admin,
-                  onChange: onFilter(setAdmin),
-                },
-                {
-                  key: 'status',
-                  label: 'Status',
-                  options: [
-                    { label: 'Active', value: 'active' },
-                    { label: 'Inactive', value: 'inactive' },
-                  ],
-                  selected: status,
-                  onChange: onFilter(setStatus),
-                },
-                {
-                  key: 'lock',
-                  label: 'Lock',
-                  options: [
-                    { label: 'Locked', value: 'locked' },
-                    { label: 'Not locked', value: 'unlocked' },
-                  ],
-                  selected: lock,
-                  onChange: onFilter(setLock),
-                },
-                {
-                  key: 'temp',
-                  label: 'Password Status',
-                  options: [
-                    { label: 'Temporary', value: 'true' },
-                    { label: 'Normal', value: 'false' },
-                  ],
-                  selected: temp,
-                  onChange: onFilter(setTemp),
-                },
-              ]}
-            />
-          }
-          manualPagination
-          pageCount={pageCount}
-          rowCount={total}
-          pagination={{ pageIndex, pageSize }}
-          onPaginationChange={handlePaginationChange}
-          manualFiltering
-          globalFilter={searchInput}
-          onGlobalFilterChange={setSearchInput}
-          searchScopeOptions={SEARCH_FIELDS}
-          searchScope={searchField}
-          onSearchScopeChange={(v) => {
-            setSearchField(v);
-            setPageIndex(0);
-          }}
-          manualSorting
-          sorting={sorting}
-          onSortingChange={handleSortingChange}
-        />
-      </CardContent>
+          <DataTable
+            columns={columns}
+            data={users}
+            loading={isLoading}
+            tableLabel="Users table"
+            showExportButton={false}
+            emptyTitle="No user accounts"
+            emptyDescription="Create or import users to get started."
+            emptyIcon={Users}
+            loadingMessage="Loading user accounts, please wait..."
+            defaultColumnVisibility={{ isAdmin: false, lockStatus: false }}
+            actionButtons={
+              <DataTableFilterMenu
+                groups={[
+                  {
+                    key: 'admin',
+                    label: 'Admin',
+                    options: [
+                      { label: 'Admin', value: 'true' },
+                      { label: 'Standard', value: 'false' },
+                    ],
+                    selected: admin,
+                    onChange: onFilter(setAdmin),
+                  },
+                  {
+                    key: 'status',
+                    label: 'Status',
+                    options: [
+                      { label: 'Active', value: 'active' },
+                      { label: 'Inactive', value: 'inactive' },
+                    ],
+                    selected: status,
+                    onChange: onFilter(setStatus),
+                  },
+                  {
+                    key: 'lock',
+                    label: 'Lock',
+                    options: [
+                      { label: 'Locked', value: 'locked' },
+                      { label: 'Not locked', value: 'unlocked' },
+                    ],
+                    selected: lock,
+                    onChange: onFilter(setLock),
+                  },
+                  {
+                    key: 'temp',
+                    label: 'Password Status',
+                    options: [
+                      { label: 'Temporary', value: 'true' },
+                      { label: 'Normal', value: 'false' },
+                    ],
+                    selected: temp,
+                    onChange: onFilter(setTemp),
+                  },
+                ]}
+              />
+            }
+            manualPagination
+            pageCount={pageCount}
+            rowCount={total}
+            pagination={{ pageIndex, pageSize }}
+            onPaginationChange={handlePaginationChange}
+            manualFiltering
+            globalFilter={searchInput}
+            onGlobalFilterChange={setSearchInput}
+            searchScopeOptions={SEARCH_FIELDS}
+            searchScope={searchField}
+            onSearchScopeChange={(v) => {
+              setSearchField(v);
+              setPageIndex(0);
+            }}
+            manualSorting
+            sorting={sorting}
+            onSortingChange={handleSortingChange}
+          />
 
-      {createMounted && (
-        <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={refresh} />
-      )}
-      {importMounted && (
-        <ImportUsersDialog open={importOpen} setOpen={setImportOpen} onSuccess={refresh} />
-      )}
-    </Card>
+        {createMounted && (
+          <CreateUserDialog open={open} setOpen={handleDialogClose} onSuccess={refresh} />
+        )}
+        {importMounted && (
+          <ImportUsersDialog open={importOpen} setOpen={setImportOpen} onSuccess={refresh} />
+        )}
+      </section>
+    </WorkspaceSurface>
   );
 }

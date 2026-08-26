@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import CalendarClient from './CalendarClient';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 import { auth } from '@/lib/auth';
 import {
   getAssignmentsForUserRange,
@@ -14,8 +15,13 @@ export const metadata: Metadata = {
 export default async function CalendarPage() {
   const session = await auth();
 
+  // A work page, so it sits on the white surface rather than the slate canvas.
   if (!session?.user?.id) {
-    return <CalendarClient initialAssignments={[]} initialMonth={new Date().toISOString()} />;
+    return (
+      <WorkspaceSurface>
+        <CalendarClient initialAssignments={[]} initialMonth={new Date().toISOString()} />
+      </WorkspaceSurface>
+    );
   }
 
   const now = new Date();
@@ -28,5 +34,9 @@ export default async function CalendarPage() {
     endDate: new Date(endIso),
   });
 
-  return <CalendarClient initialAssignments={initialAssignments} initialMonth={now.toISOString()} />;
+  return (
+    <WorkspaceSurface>
+      <CalendarClient initialAssignments={initialAssignments} initialMonth={now.toISOString()} />
+    </WorkspaceSurface>
+  );
 }

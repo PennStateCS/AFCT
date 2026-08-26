@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -181,6 +181,37 @@ describe('AssignmentSettingsCard', () => {
     expect(await screen.findByText('Assign to:')).toBeInTheDocument();
     expect(screen.getByLabelText('Due')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /date overrides \(0\)/i })).toBeInTheDocument();
+  });
+
+  /*
+   * Two panels of equal weight, not a titled one and a loose stack. Both are h3, under the
+   * "Assign To" h2 the tab renders; see PrivilegeAssignmentView.test.tsx for the shape the
+   * four form tabs share.
+   */
+  it('puts the audience and the overrides in panels of the same weight', async () => {
+    renderCard();
+
+    const audience = await screen.findByRole('region', { name: 'Audience and schedule' });
+    expect(within(audience).getByRole('heading', { level: 3 })).toHaveAccessibleName(
+      'Audience and schedule',
+    );
+    const overrides = screen.getByRole('region', { name: /Date overrides/ });
+    expect(within(overrides).getByRole('heading', { level: 3 })).toHaveAccessibleName(
+      /Date overrides/,
+    );
+  });
+
+  /*
+   * AssignToFields names itself with an sr-only heading, which is right in the create wizard
+   * where nothing else does. Here the panel around it already carries a title, so leaving it
+   * on nested a second region of nearly the same name inside the first.
+   */
+  it('does not nest a second region inside the audience panel', async () => {
+    renderCard();
+
+    const audience = await screen.findByRole('region', { name: 'Audience and schedule' });
+    expect(within(audience).queryByRole('region')).not.toBeInTheDocument();
+    expect(screen.queryByText('Assign to and due dates')).not.toBeInTheDocument();
   });
 
   it('saves the schedule (base PUT) and the audience (assignees PUT)', async () => {

@@ -7,7 +7,7 @@ import { queryKeys } from '@/lib/query-keys';
 import { DataTable } from '@/components/ui/data-table';
 import { Badge } from '@/components/ui/badge';
 import type { WorkItem, WorkersStatusResponse } from '@/lib/status/workers';
-import { Loading, Stat, Section, useStatusQuery } from '../status-ui';
+import { Loading, Stat, StatGrid, StatusSection, useStatusQuery } from '../status-ui';
 
 /** How long something has been running, in the shortest form that is still honest. */
 function elapsed(ms: number): string {
@@ -111,53 +111,70 @@ export default function WorkersTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Mounted for the life of the tab, so the message it is given is announced rather than
           arriving with the element that carries it. */}
       <span role="status" aria-live="polite" className="sr-only">
         {announcement}
       </span>
-      <Section title="Evaluator">
-        {/* Capped like every other status tab: full-width rows put each value an inch from
-            the right edge of the display, a long way from the label it belongs to. */}
-        <div className="max-w-xl space-y-2">
+
+      <StatusSection
+        title="Evaluator"
+        description="Whether submissions are being graded, and how much work is waiting."
+      >
+        {/* Four readings as two pairs, not one column, and not four separate cards: they are
+            one picture of the evaluator. Still capped, because `Stat` puts the value at the
+            far end of whatever it is given. */}
+        <StatGrid>
           <Stat label="Status" value={<Badge variant={health.variant}>{health.text}</Badge>} />
           <Stat label="Grading now" value={`${data.busy} of ${data.configured} slots`} />
           <Stat label="Waiting to be graded" value={data.queue.pending} />
           <Stat label="Failed in the last hour" value={data.queue.failedLastHour} />
-        </div>
+        </StatGrid>
 
+        {/* The three health explanations, each at the weight its state has earned. Only
+            `stalled` is actionable, so only `stalled` gets a coloured surface; `stuck`
+            usually clears itself, and `idle` is normal. The role="status" stays on the
+            element that carries the words either way. */}
         {data.health === 'stalled' ? (
-          <p role="status" className="text-destructive max-w-xl text-sm">
+          <div
+            role="status"
+            className="border-status-danger-border bg-status-danger-bg text-status-danger rounded-md border p-3 text-sm"
+          >
             {data.queue.pending} submission{data.queue.pending === 1 ? ' has' : 's have'} been
             waiting {elapsed(data.oldestPendingMs ?? 0)} with nothing grading. Check that the
             evaluator container is running.
-          </p>
+          </div>
         ) : null}
 
         {data.health === 'stuck' ? (
-          <p role="status" className="text-muted-foreground max-w-xl text-sm">
+          <div
+            role="status"
+            className="bg-muted/40 text-muted-foreground rounded-md border p-3 text-sm"
+          >
             Work below is past the evaluator timeout. The worker returns overdue submissions to the
             queue by itself, so this usually clears; the same submission appearing repeatedly points
             at one the evaluator cannot finish.
-          </p>
+          </div>
         ) : null}
 
         {data.health === 'idle' ? (
           // Said carefully. An empty queue proves there is nothing to do; it says nothing about
           // whether anything is there to do it, and the page must not imply otherwise.
-          <p className="text-muted-foreground max-w-xl text-sm">
+          <p className="text-muted-foreground text-sm">
             Nothing is queued, so there is nothing for the evaluator to pick up. A quiet queue does
             not confirm the evaluator is running: submit something to test it.
           </p>
         ) : null}
-      </Section>
+      </StatusSection>
 
-      <Section title="Being graded now">
-        <p className="text-muted-foreground max-w-3xl text-sm">
-          Slots are concurrent grading loops inside one evaluator container, not separate machines.
-          How many there are comes from the submission concurrency limit in System Settings.
-        </p>
+      {/* A card, like Evaluator above it. The table's own shell paints the card colour, so
+          inside a panel its border reads as a rule around the rows rather than as a second
+          card, which is how the Backups table sits in System Settings. */}
+      <StatusSection
+        title="Being graded now"
+        description="Slots are concurrent grading loops inside one evaluator container, not separate machines. How many there are comes from the submission concurrency limit in System Settings."
+      >
         <DataTable
           columns={columns}
           data={data.inFlight}
@@ -166,7 +183,7 @@ export default function WorkersTab({
           emptyTitle="Nothing is being graded"
           emptyDescription="Submissions appear here while the evaluator is working on them."
         />
-      </Section>
+      </StatusSection>
     </div>
   );
 }

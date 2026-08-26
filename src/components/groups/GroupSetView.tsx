@@ -549,7 +549,10 @@ export function GroupSetView({
           { label: 'Assigned', value: counts.assigned },
           { label: 'Unassigned', value: counts.unassigned },
         ].map((c) => (
-          <div key={c.label} className="rounded-md border p-3">
+          // bg-card, like every other card on this tab. These were transparent, which was
+          // invisible while the workspace was white and became a set of empty outlines once
+          // the dashboard moved to its own background.
+          <div key={c.label} className="bg-card rounded-md border p-3">
             <dt className="text-muted-foreground text-xs">{c.label}</dt>
             <dd className="text-2xl font-semibold">{c.value}</dd>
           </div>
@@ -622,7 +625,7 @@ export function GroupSetView({
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {/* Unassigned panel (also a drop target: dropping here removes from a group) */}
           <section className="lg:col-span-1" aria-label="Unassigned students">
-            <DropZone id={UNASSIGNED_ZONE} className="rounded-md border">
+            <DropZone id={UNASSIGNED_ZONE} className="bg-card rounded-md border">
               <div className="border-b p-3">
                 {/*
                   The count is the answer to the search below it, so it announces.
@@ -670,12 +673,14 @@ export function GroupSetView({
           {/* Group cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-2">
             {detail.groups.length === 0 && (
-              <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm sm:col-span-2">
+              // Same as the empty group-set panel: dashed to say it is empty, filled so it
+              // is still an object sitting beside the Unassigned card rather than a hole.
+              <div className="bg-card text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm sm:col-span-2">
                 This set has no groups yet. Use &quot;Add group&quot; to create one.
               </div>
             )}
             {detail.groups.map((g) => (
-              <DropZone key={g.id} id={g.id} className="flex flex-col rounded-md border">
+              <DropZone key={g.id} id={g.id} className="bg-card flex flex-col rounded-md border">
                 <div className="flex items-center justify-between gap-2 border-b p-3">
                   <p className="min-w-0 truncate text-sm font-medium">
                     {g.name} <span className="text-muted-foreground">({g.members.length})</span>

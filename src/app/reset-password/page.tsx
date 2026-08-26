@@ -60,8 +60,8 @@ function ResetPasswordForm() {
     return (
       <CardContent className="space-y-4">
         <p className="text-sm">
-          This reset link is incomplete. It may have been cut short by your email program. Ask for
-          a new one and open it directly.
+          This reset link is incomplete. It may have been cut short by your email program. Ask for a
+          new one and open it directly.
         </p>
         <Button asChild className="w-full">
           <Link href="/forgot-password">Request a new link</Link>
@@ -74,8 +74,8 @@ function ResetPasswordForm() {
     return (
       <CardContent className="space-y-4">
         <p role="status" className="text-sm">
-          Your password has been changed. You have been signed out everywhere else, so sign in
-          again with the new password.
+          Your password has been changed. You have been signed out everywhere else, so sign in again
+          with the new password.
         </p>
         <Button asChild className="w-full">
           <Link href="/login">Go to sign in</Link>
@@ -118,7 +118,10 @@ function ResetPasswordForm() {
         />
         <PasswordRulesHelper
           id={HELPER_ID}
-          rules={passwordRules.map((rule) => ({ label: rule.label, passed: rule.test(newPassword) }))}
+          rules={passwordRules.map((rule) => ({
+            label: rule.label,
+            passed: rule.test(newPassword),
+          }))}
         />
         {error ? (
           <p role="alert" className="text-destructive text-sm">
@@ -144,7 +147,7 @@ export default function ResetPasswordPage() {
   // <main> is a flex item and shrinks to its content width without it, which leaves the
   // card pinned to the left however it is centred inside.
   return (
-    <main className="relative flex min-h-screen w-full items-center justify-center px-4 py-12">
+    <main className="auth-light relative flex min-h-dvh w-full items-center justify-center px-4 py-12">
       <AuthPageBackground />
       <Card className="relative z-10 w-full max-w-md">
         <CardHeader>

@@ -25,6 +25,14 @@ Built with:
 - TypeScript 5.9
 - Docker + GHCR
 
+## Standards Conformance
+
+AFCT is certified by 1EdTech for **LTI Advantage Complete**, covering LTI 1.3, Deep Linking 2.0,
+Names and Role Provisioning Services 2.0, and Assignment and Grade Services 2.0. It connects to
+Canvas, D2L Brightspace, Blackboard, and any other LMS that supports LTI 1.3.
+
+<a href="https://site.imsglobal.org/certifications/pennsylvania-state-university/afct"><img src="https://site.imsglobal.org/sites/default/files/media/images/logo_ims/1edtech_trusted-apps-certified.svg" alt="1EdTech Certified" width="140" border="0"></a>
+
 ## Funding
 
 This project is supported in part by the National Science Foundation under Grant No. 2439326. Any opinions, findings, conclusions, or recommendations expressed are those of the authors and do not necessarily reflect the views of the NSF.
@@ -60,3 +68,4 @@ AFCT works with a Java evaluator that uses [JFLAP](https://www.jflap.org/) to pr
 | Andrew Sutton       | PSU         | [asutton24](https://github.com/asutton24)     |
 | Bruno Rodriguez     | PSU         | [MrBrunoRod](https://github.com/MrBrunoRod)   |
 | Jace Chernesky       | PSU         | [chernjac321](https://github.com/chernjac321) |
+| Josmar Amado        | PSU         | [Josmar-A](https://github.com/Josmar-A)       |

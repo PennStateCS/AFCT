@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma';
 import DashboardClient from './DashboardClient';
 import { DueDateModule } from '@/components/modules/DueDateModule';
 import { JoinCourseModule } from '@/components/modules/JoinCourseModule';
+import { WelcomePanel } from '@/components/dashboard/WelcomePanel';
+import { greetingFor } from '@/lib/greeting';
+import { DEFAULT_SYSTEM_TIMEZONE } from '@/lib/system-settings';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
 import { assignedToStudentWhere } from '@/lib/assignment-visibility';
@@ -25,7 +28,13 @@ export default async function DashboardPage({
 
   if (!session?.user) {
     return (
-      <div className="bg-destructive rounded p-4 text-lg text-white">
+      // A callout, not a saturated block. `bg-destructive` with white text is 2.89:1 in
+      // dark, because --destructive lightens there to work as TEXT; the status-danger
+      // triad is the pairing built for a filled message and is theme-aware.
+      <div
+        role="alert"
+        className="border-status-danger-border bg-status-danger-bg text-status-danger rounded border p-4 text-lg"
+      >
         You are not signed in.
       </div>
     );
@@ -33,6 +42,11 @@ export default async function DashboardPage({
 
   // Get user's id
   const { id } = session.user;
+
+  // Greeting name. Falls back to the first word of the display name, then to no name at
+  // all, so this never renders "Welcome back, undefined" or a dangling comma.
+  const firstName =
+    session.user.firstName?.trim() || session.user.name?.trim().split(/\s+/)[0] || '';
 
   // Get all courses for the user via roster entries
   const rosterEntries = await prisma.roster.findMany({
@@ -210,36 +224,77 @@ export default async function DashboardPage({
         a.overrides,
         id,
       );
-      return { id: a.id, title: a.title, courseId: a.courseId, course: a.course, dueDate: eff.dueDate };
+      return {
+        id: a.id,
+        title: a.title,
+        courseId: a.courseId,
+        course: a.course,
+        dueDate: eff.dueDate,
+      };
     })
     // Drop rows whose effective due has already passed (base was in range but the
     // override moved it into the past).
     .filter((a) => a.dueDate > now)
     .sort((x, y) => x.dueDate.getTime() - y.dueDate.getTime());
 
+  // Whose morning it is.
+  //
+  // Read from the database rather than from the session, which is the trap here: the session
+  // type declares `timezone`, but the JWT callback never puts one in it, so `session.user
+  // .timezone` is undefined for everybody and reads as "no preference" instead of failing. Two
+  // primary-key lookups in parallel, which is the one query this panel costs and the reason it
+  // can greet correctly: AFCT runs at five universities across four US timezones off a single
+  // installation, and the server's own clock belongs to none of them.
+  const [profile, settings] = await Promise.all([
+    prisma.user.findUnique({ where: { id }, select: { timezone: true } }),
+    prisma.systemSettings.findUnique({ where: { id: 1 }, select: { timezone: true } }),
+  ]);
+  const greeting = greetingFor(
+    new Date(),
+    profile?.timezone || settings?.timezone || DEFAULT_SYSTEM_TIMEZONE,
+  );
+
+  // Counted off the two arrays this page already built, so the summary costs no query.
+  const courseSummary =
+    currentCourses.length === 1 ? '1 current course' : `${currentCourses.length} current courses`;
+  const upcomingCount = assignments.length;
+  const assignmentSummary =
+    upcomingCount === 0
+      ? 'No upcoming assignments'
+      : upcomingCount === 1
+        ? '1 upcoming assignment'
+        : `${upcomingCount} upcoming assignments`;
+
   return (
-    <div className="flex h-full w-full flex-col pb-4 lg:flex-row">
-      <h1 className="sr-only">Dashboard</h1>
-      {/* Left (Big Column) */}
-      <div className="w-full lg:w-3/4">
+    // A fixed rail rather than a quarter of the viewport: at 25% the two modules kept
+    // growing on a wide monitor while the courses beside them stayed the same size.
+    // items-start keeps the rail from stretching to the left column's height.
+    <div className="grid w-full items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
+      <section className="min-w-0">
+        {/* Replaces the sr-only "Dashboard" h1, and sits inside the left column so the
+            rail starts level with it rather than below the whole greeting. The counts are
+            passed in already worded: they are counted off the two arrays this page has
+            just built, so the panel is presentation and costs no query. */}
+        <WelcomePanel
+          greeting={greeting}
+          firstName={firstName}
+          courseSummary={courseSummary}
+          assignmentSummary={assignmentSummary}
+        />
+
         {/* Renders nothing unless an LMS launch sent them here, which is most of the time. */}
         <LaunchNotice notice={lms} courseTitle={lmsCourseTitle} />
         <DashboardClient
           sessionUser={{ id, isAdmin: session.user.isAdmin ?? false }}
           courses={currentCourses}
-          title={'Current Courses'}
+          title={'Courses'}
         />
-      </div>
+      </section>
 
-      {/* Right (Skinny Column) */}
-      <div className="w-full pt-4 lg:w-1/4 lg:pt-0 lg:pl-4">
-        <div className="pb-4">
-          <JoinCourseModule />
-        </div>
-        <div>
-          <DueDateModule assignments={assignments} />
-        </div>
-      </div>
+      <aside className="space-y-4 self-start">
+        <JoinCourseModule />
+        <DueDateModule assignments={assignments} />
+      </aside>
     </div>
   );
 }

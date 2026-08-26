@@ -12,9 +12,17 @@ import { join } from 'node:path';
  */
 const css = readFileSync(join(__dirname, 'globals.css'), 'utf8');
 
-/** The declarations inside one top-level block, by selector. */
+/**
+ * The declarations inside one top-level block, by selector.
+ *
+ * A selector may share its block with others, which is how the light palette is written once
+ * and applied to both `:root` and the fixed-light auth surface. So this matches the selector at
+ * the head of a list rather than immediately before the brace, which is what it used to do and
+ * why adding that second selector broke it.
+ */
 function block(selector: string): string {
-  const start = css.indexOf(`${selector} {`);
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const start = css.search(new RegExp(`(^|\\n)${escaped}\\s*(,[^{]*)?\\{`));
   expect(start, `${selector} block not found in globals.css`).toBeGreaterThan(-1);
   return css.slice(start, css.indexOf('\n}', start));
 }

@@ -46,6 +46,7 @@ export function AssignToFields({
   courseId,
   active,
   hideOverridesHint = false,
+  labelled = true,
 }: {
   control: Control<FormValues>;
   errors: FieldErrors<FormValues>;
@@ -54,6 +55,15 @@ export function AssignToFields({
   /** Hide the "add date overrides on the assignment's page" hint (it's shown in the create
    * wizard, but is self-referential on the assignment page itself). */
   hideOverridesHint?: boolean;
+  /**
+   * Whether these fields name themselves.
+   *
+   * True in the create wizard, where nothing else does: the step is a bare column of fields
+   * and the sr-only heading is the only thing telling a screen reader what they are. False
+   * on the Assign To tab, where the panel around them is already a titled region and this
+   * would nest a second, near-identically named one inside it.
+   */
+  labelled?: boolean;
 }) {
   const { fields, replace } = useFieldArray({ control, name: 'overrides' });
   const { field: assignedToEveryoneField } = useController({ control, name: 'assignedToEveryone' });
@@ -135,10 +145,16 @@ export function AssignToFields({
   const audienceEmpty = !assignedToEveryone && fields.length === 0;
 
   return (
-    <div className="space-y-4" role="region" aria-labelledby={regionHeadingId}>
-      <h3 id={regionHeadingId} className="sr-only">
-        Assign to and due dates
-      </h3>
+    <div
+      className="space-y-4"
+      role={labelled ? 'region' : undefined}
+      aria-labelledby={labelled ? regionHeadingId : undefined}
+    >
+      {labelled ? (
+        <h3 id={regionHeadingId} className="sr-only">
+          Assign to and due dates
+        </h3>
+      ) : null}
 
       <AudienceSelect
         id={`${sectionIdPrefix}-audience-select`}
@@ -182,7 +198,6 @@ export function AssignToFields({
           <SwitchField
             label="Allow late submissions"
             name="allowLateSubmissions"
-            boxClassName="border-input"
             checked={!!field.value}
             onCheckedChange={(checked) => field.onChange(!!checked)}
             description="Accept work after the due date."

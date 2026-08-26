@@ -1,0 +1,16 @@
+<!--
+  The AFCT mark, reduced to what survives a browser tab.
+
+  The full mark (three states, three transitions, a hexagon) is a line drawing whose strokes
+  are 2.3 units in a 64-unit frame: at 16px that is about six tenths of a pixel, so every line
+  in it turns to grey mush. This keeps the two things that carry the identity, the hexagon and
+  the accepting double circle, and states them as filled shapes rather than strokes.
+
+  Solid cobalt with white knocked out of it, deliberately, so the same file reads on a light
+  tab strip and a dark one without needing a prefers-color-scheme branch.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <path d="M32 2 57.98 17 57.98 47 32 62 6.02 47 6.02 17Z" fill="#2563EB" />
+  <circle cx="32" cy="32" r="13" fill="none" stroke="#fff" stroke-width="4.5" />
+  <circle cx="32" cy="32" r="5" fill="#fff" />
+</svg>

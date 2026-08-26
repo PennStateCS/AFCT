@@ -10,12 +10,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { REGISTRATION_STATUS_BADGE } from '@/lib/badge-presets';
 import { showToast } from '@/lib/toast';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
   Trash2,
   BookOpen,
-  ChevronDown,
+  EllipsisVertical,
   Copy,
   Archive,
   ArchiveRestore,
@@ -33,6 +34,7 @@ import { formatRegistrationCode } from '@/lib/format-registration-code';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, mutateWithToast } from '@/lib/api/fetch-client';
 import { truncate } from '@/lib/truncate';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 
 /**
  * On demand, and rendered per row: the duplicate wizard carries the form stack, and a course
@@ -75,12 +77,6 @@ type CourseActionsCellProps = {
   timeZone: string;
 };
 
-const registrationBadgeTheme = {
-  upcoming: { variant: 'info' as const },
-  open: { variant: 'success' as const },
-  closed: { variant: 'neutral' as const },
-} as const;
-
 const normalizeDate = (value?: string | Date | null) => {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -97,7 +93,7 @@ const getRegistrationStatus = (
   if (!openAt || !closeAt) {
     return {
       label: 'Closed',
-      theme: registrationBadgeTheme.closed,
+      theme: { variant: REGISTRATION_STATUS_BADGE.closed },
     };
   }
 
@@ -105,20 +101,20 @@ const getRegistrationStatus = (
   if (now >= openAt.getTime() && now <= closeAt.getTime()) {
     return {
       label: 'Open',
-      theme: registrationBadgeTheme.open,
+      theme: { variant: REGISTRATION_STATUS_BADGE.open },
     };
   }
 
   if (now < openAt.getTime()) {
     return {
       label: 'Upcoming',
-      theme: registrationBadgeTheme.upcoming,
+      theme: { variant: REGISTRATION_STATUS_BADGE.upcoming },
     };
   }
 
   return {
     label: 'Closed',
-    theme: registrationBadgeTheme.closed,
+    theme: { variant: REGISTRATION_STATUS_BADGE.closed },
   };
 };
 
@@ -136,7 +132,7 @@ export const columns = (
       return (
         <Link
           href={`/dashboard/courses/${course.id}`}
-          className="text-primary hover:underline"
+          className={TEXT_LINK_CLASS}
           title={course.name}
           aria-label={course.name}
         >
@@ -182,7 +178,13 @@ export const columns = (
     accessorKey: 'regCode',
     meta: { priority: 2 },
     header: 'Registration Code',
-    cell: ({ row }) => <span>{formatRegistrationCode(row.getValue<string>('regCode'))}</span>,
+    cell: ({ row }) => (
+      // Mono: a registration code is something people read out and type in, so the
+      // characters want fixed widths.
+      <span className="font-mono text-sm">
+        {formatRegistrationCode(row.getValue<string>('regCode'))}
+      </span>
+    ),
   },
   {
     accessorKey: 'startDate',
@@ -228,7 +230,7 @@ export const columns = (
     cell: ({ row }) => {
       const names = row.original.lmsNames ?? [];
       if (names.length === 0) {
-        return <span className="text-muted-foreground italic">Not connected</span>;
+        return <span className="text-muted-foreground">Not connected</span>;
       }
       // Named rather than a tick: which LMS matters when an institution runs more than one,
       // and a word reads the same to everybody.
@@ -237,7 +239,9 @@ export const columns = (
   },
   {
     id: 'actions',
-    header: () => <span className="sr-only">Actions</span>,
+    // Visible now rather than sr-only: the trigger used to say "Manage" on its face, so
+    // the column named itself. A bare ellipsis does not.
+    header: 'Actions',
     enableSorting: false,
     meta: { priority: 1 },
     cell: ({ row }) => {
@@ -344,8 +348,10 @@ function CourseActionsCell({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary" aria-label={`Manage course ${course.name}`}>
-            <ChevronDown /> Manage
+          {/* Every row carries one of these, so the label names the course: a dozen
+              buttons all called "More" is what a screen reader would otherwise hear. */}
+          <Button variant="ghost" size="icon" aria-label={`Actions for ${course.name}`}>
+            <EllipsisVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

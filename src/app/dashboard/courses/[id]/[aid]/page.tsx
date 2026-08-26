@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import AssignmentClient from './AssignmentClient';
+import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
@@ -18,7 +19,11 @@ export default async function AssignmentPage({ params }: PageProps) {
   const { id: courseId, aid: assignmentId } = await params;
 
   if (!session?.user?.id) {
-    return <AssignmentClient initialAssignment={null} />;
+    return (
+      <WorkspaceSurface>
+        <AssignmentClient initialAssignment={null} />
+      </WorkspaceSurface>
+    );
   }
 
   let initialAssignment: AssignmentWithDetails | null = null;
@@ -108,11 +113,15 @@ export default async function AssignmentPage({ params }: PageProps) {
     initialAssignment = null;
   }
 
+  // A work page, so it sits on the white surface rather than the slate canvas, the same
+  // way a course does. Wraps both the staff and student views.
   return (
-    <AssignmentClient
-      initialAssignment={initialAssignment}
-      initialAssignments={initialAssignments}
-      isStaff={isStaff}
-    />
+    <WorkspaceSurface>
+      <AssignmentClient
+        initialAssignment={initialAssignment}
+        initialAssignments={initialAssignments}
+        isStaff={isStaff}
+      />
+    </WorkspaceSurface>
   );
 }

@@ -112,7 +112,13 @@ test.describe('accessibility: description editor (axe, contrast excluded)', () =
     await signIn(page, 'faculty2');
     await page.goto(`/dashboard/courses/${COURSE}/${ASSIGNMENT}?tab=description`);
     // Generous: under `next dev` a first hit on a route compiles it.
-    await expect(page.getByLabel('Title')).toBeVisible({ timeout: 60_000 });
+    // getByRole with an exact name, not getByLabel('Title'). The Details tab wraps its form in a
+    // region named "Title and description", and getByLabel matches on substring, so the bare
+    // label resolved to both that region and the input and every test in this file died on strict
+    // mode. The role plus an exact name picks the field and nothing else.
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toBeVisible({
+      timeout: 60_000,
+    });
   }
 
   test('the editor at rest', async ({ page }) => {
@@ -182,7 +188,7 @@ test.describe('accessibility: description editor (axe, contrast excluded)', () =
 
   test('the discard-changes confirm', async ({ page }) => {
     await openDetails(page);
-    await page.getByLabel('Title').fill('Renamed while auditing');
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Renamed while auditing');
     // Any in-app link triggers the guard's capture-phase interception.
     await page.getByRole('link', { name: 'Dashboard' }).first().click();
     await expect(page.getByRole('dialog', { name: 'Discard unsaved changes?' })).toBeVisible();
@@ -209,7 +215,7 @@ test.describe('accessibility: description editor (axe, contrast excluded)', () =
 
   test('the discard confirm opens on the safe choice, so Enter stays', async ({ page }) => {
     await openDetails(page);
-    await page.getByLabel('Title').fill('Renamed while auditing');
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Renamed while auditing');
     await page.getByRole('link', { name: 'Dashboard' }).first().click();
 
     const confirm = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
@@ -220,12 +226,14 @@ test.describe('accessibility: description editor (axe, contrast excluded)', () =
     await page.keyboard.press('Enter');
     await expect(confirm).toBeHidden();
     await expect(page).toHaveURL(new RegExp(`${ASSIGNMENT}`));
-    await expect(page.getByLabel('Title')).toHaveValue('Renamed while auditing');
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(
+      'Renamed while auditing',
+    );
   });
 
   test('Escape on the confirm keeps the page, and never discards', async ({ page }) => {
     await openDetails(page);
-    await page.getByLabel('Title').fill('Renamed while auditing');
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Renamed while auditing');
     await page.getByRole('link', { name: 'Dashboard' }).first().click();
 
     const confirm = page.getByRole('dialog', { name: 'Discard unsaved changes?' });
@@ -233,7 +241,9 @@ test.describe('accessibility: description editor (axe, contrast excluded)', () =
     await page.keyboard.press('Escape');
     await expect(confirm).toBeHidden();
     await expect(page).toHaveURL(new RegExp(`${ASSIGNMENT}`));
-    await expect(page.getByLabel('Title')).toHaveValue('Renamed while auditing');
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(
+      'Renamed while auditing',
+    );
   });
 
   test('Keep editing puts focus back inside the dialog it was protecting', async ({ page }) => {
@@ -360,12 +370,7 @@ test.describe('accessibility: the rest of the dashboard (axe, contrast excluded)
    * the dashboard, or a route that had quietly 404'd. "No violations" would then be true and
    * worthless. The level-1 heading is the first thing that only exists if the page rendered.
    */
-  async function scanRoute(
-    page: Page,
-    role: 'admin' | 'student',
-    path: string,
-    heading: string,
-  ) {
+  async function scanRoute(page: Page, role: 'admin' | 'student', path: string, heading: string) {
     await signIn(page, role);
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible({
@@ -380,7 +385,12 @@ test.describe('accessibility: the rest of the dashboard (axe, contrast excluded)
   });
 
   test('system status', async ({ page }) => {
-    const { violations } = await scanRoute(page, 'admin', '/dashboard/system-status', 'System Status');
+    const { violations } = await scanRoute(
+      page,
+      'admin',
+      '/dashboard/system-status',
+      'System Status',
+    );
     expect(violations, summarize(violations)).toEqual([]);
   });
 
@@ -395,7 +405,12 @@ test.describe('accessibility: the rest of the dashboard (axe, contrast excluded)
   });
 
   test('archived courses', async ({ page }) => {
-    const { violations } = await scanRoute(page, 'admin', '/dashboard/archived-courses', 'Archived Courses');
+    const { violations } = await scanRoute(
+      page,
+      'admin',
+      '/dashboard/archived-courses',
+      'Archived Courses',
+    );
     expect(violations, summarize(violations)).toEqual([]);
   });
 

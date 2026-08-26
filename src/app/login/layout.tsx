@@ -39,14 +39,15 @@ export default async function LoginLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <main
-      role="main"
-      aria-label="Login page"
-      className="bg-background text-foreground flex min-h-screen w-full items-center justify-center font-sans"
-    >
-      <section aria-label="Authentication panel" className="w-full px-4 py-6">
-        {children}
-      </section>
+    // Full bleed. The page below is a split screen whose dark half has to reach the edges of
+    // the window, so the shell contributes no gutter and no centring of its own; it used to
+    // add `px-4 py-6` and centre the card, which is exactly what a split layout cannot have.
+    // `min-h-dvh` rather than `min-h-screen`: on a phone `vh` includes the browser chrome, so
+    // the dark panel ran a toolbar's worth past the bottom of what you can see.
+    <main role="main" aria-label="Login page" className="min-h-dvh w-full font-sans">
+      {/* Unlabelled on purpose, so it is not announced as a third region: the brand panel and
+          the sign-in form inside it are the two that carry names. */}
+      <section className="w-full">{children}</section>
     </main>
   );
 }

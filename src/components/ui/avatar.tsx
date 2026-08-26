@@ -80,10 +80,10 @@ function AvatarFallback({
       data-slot="avatar-fallback"
       className={cn(
         // Initials for users with no photo. The fill lives here rather than at each call
-        // site so every avatar in the app keeps the same look and the same white-on-teal
-        // contrast (5.3:1, clearing WCAG AA); a bare `bg-muted` default was letting call
-        // sites paint white text on a near-white circle.
-        "bg-brand-teal-dark flex size-full items-center justify-center rounded-full text-white",
+        // site so every avatar keeps the same look and the same contrast (10.6:1 light,
+        // 5.2:1 dark); a bare `bg-muted` default was letting call sites paint white text
+        // on a near-white circle.
+        "bg-primary text-primary-foreground flex size-full items-center justify-center rounded-full",
         className
       )}
       {...props}

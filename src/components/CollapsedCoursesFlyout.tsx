@@ -23,7 +23,7 @@ export type FlyoutSection = {
 };
 
 const linkStyles =
-  'focus-visible:ring-sidebar-ring hover:bg-brand-teal block rounded-md border-l-2 border-transparent px-2 py-1.5 focus-visible:ring-2 focus-visible:outline-none';
+  'focus-visible:ring-sidebar-ring hover:bg-sidebar-accent block rounded-md border-l-2 border-transparent px-2 py-1.5 focus-visible:ring-2 focus-visible:outline-none';
 
 /** One course, listed by its code exactly as the expanded sidebar lists it. */
 function CourseLink({
@@ -49,7 +49,8 @@ function CourseLink({
           // The active course is marked three ways, since colour alone would leave it
           // indistinguishable to anyone who cannot see the highlight: a left bar, a
           // heavier code, and aria-current for screen readers.
-          active && 'border-sidebar-foreground bg-brand-teal font-semibold text-white',
+          active &&
+            'border-sidebar-foreground bg-sidebar-primary text-sidebar-primary-foreground font-semibold',
         )}
       >
         <span className="block truncate">{code}</span>
@@ -118,7 +119,7 @@ export default function CollapsedCoursesFlyout({
                 <SidebarMenuButton
                   aria-label="Courses"
                   isActive={anyCourseActive}
-                  className="text-sidebar-foreground hover:bg-brand-teal focus-visible:bg-brand-teal data-[active=true]:bg-brand-teal data-[state=open]:bg-brand-teal justify-center data-[active=true]:text-white data-[state=open]:text-white"
+                  className="text-sidebar-foreground focus-visible:bg-sidebar-accent data-[state=open]:bg-sidebar-primary data-[state=open]:text-sidebar-primary-foreground justify-center"
                 >
                   {/* The same book each course carried in the rail, so the button reads as those
                       courses gathered into one place. */}
@@ -131,7 +132,7 @@ export default function CollapsedCoursesFlyout({
             <TooltipContent
               side="right"
               hidden={open}
-              className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+              className="text-sidebar-foreground px-5 text-sm shadow [--tooltip-surface:var(--sidebar)]"
               sideOffset={10}
             >
               Courses
@@ -167,7 +168,7 @@ export default function CollapsedCoursesFlyout({
                     onClick={() => onToggleSection(section.bucket)}
                     aria-expanded={sectionOpen}
                     aria-controls={listId}
-                    className="text-sidebar-foreground/70 hover:bg-brand-teal focus-visible:ring-sidebar-ring flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
+                    className="text-sidebar-muted-foreground hover:bg-sidebar-accent focus-visible:ring-sidebar-ring flex w-full items-center gap-1 rounded-md px-2 py-1 text-xs font-medium focus-visible:ring-2 focus-visible:outline-none"
                   >
                     {section.label}
                     <ChevronDown

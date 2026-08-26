@@ -6,9 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import type { Assignment } from '@prisma/client';
 import { useQuery } from '@tanstack/react-query';
-import { Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { SettingsSection } from '@/components/settings/settings-layout';
 import { AssignToFields } from '@/components/assignments/AssignToFields';
 import { DateOverridesEditor } from '@/components/assignments/DateOverridesEditor';
 import { showToast } from '@/lib/toast';
@@ -85,6 +85,11 @@ type Props = {
  * selector + the default schedule) so create and edit look and behave the same, and adds a
  * per-student / per-group date-override editor. On save it PUTs the base schedule, PUTs the
  * audience (assignees), and diffs the date overrides (create / patch / delete).
+ *
+ * The tab's own heading belongs to the view, the way Details' does. The audience and the
+ * default schedule go in a settings panel; the overrides editor already brings a panel of its
+ * own (DueDateSection, which the create wizard shares), so it is left alone and only asked to
+ * match the radius rather than wrapped, which would be a card inside a card.
  */
 export function AssignmentSettingsCard({
   courseId,
@@ -291,16 +296,7 @@ export function AssignmentSettingsCard({
   };
 
   return (
-    <div className="space-y-4">
-      <h2 className="flex items-center gap-2 text-2xl font-semibold">
-        <Users className="h-6 w-6" />
-        Assign To
-      </h2>
-      <p className="text-muted-foreground max-w-3xl text-sm">
-        Choose who this assignment is for, set the default schedule, and add date overrides for
-        individual students or groups.
-      </p>
-
+    <div className="space-y-5">
       {assigneesQuery.isPending || overridesQuery.isPending ? (
         <p role="status" className="text-muted-foreground text-sm">
           Loading the assignment&apos;s audience…
@@ -323,25 +319,42 @@ export function AssignmentSettingsCard({
         </div>
       ) : (
         <form
-          className="max-w-5xl space-y-5"
+          className="space-y-5"
           onSubmit={(e) => {
             e.preventDefault();
             void handleSubmit(doSave)(e);
           }}
         >
-          <div className="max-w-3xl">
+          <SettingsSection
+            title="Audience and schedule"
+            description="Who this assignment is for, and the dates everyone gets unless an exception below says otherwise."
+            headingLevel={3}
+          >
             <AssignToFields
               control={control}
               errors={errors}
               courseId={courseId}
               active
               hideOverridesHint
+              // The panel above already names this group; a second region inside it would
+              // just be a near-duplicate landmark.
+              labelled={false}
             />
-          </div>
+          </SettingsSection>
 
-          <DateOverridesEditor control={control} courseId={courseId} active />
+          {/* Its own panel already, so it is not wrapped in a second one. rounded-lg rather
+              than its default xl only here: beside a settings panel the larger radius read as
+              a different kind of object. The create wizard keeps the original. */}
+          <DateOverridesEditor
+            control={control}
+            courseId={courseId}
+            active
+            className="rounded-lg"
+          />
 
-          <div className="flex max-w-3xl justify-end gap-2">
+          {/* Cancel is a real reset here, not the dead prop the course form carried: the
+              overrides editor can stage a lot of work that is easier to abandon than undo. */}
+          <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
             <Button
               type="button"
               variant="secondary"
