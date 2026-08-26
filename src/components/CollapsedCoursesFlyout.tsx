@@ -132,7 +132,7 @@ export default function CollapsedCoursesFlyout({
             <TooltipContent
               side="right"
               hidden={open}
-              className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+              className="text-sidebar-foreground px-5 text-sm shadow [--tooltip-surface:var(--sidebar)]"
               sideOffset={10}
             >
               Courses

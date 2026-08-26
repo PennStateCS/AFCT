@@ -65,8 +65,7 @@ import {
 } from 'lucide-react';
 import { getInitials } from '@/app/utils/initials';
 
-const menuButtonStyles =
-  'text-sidebar-foreground focus-visible:bg-sidebar-accent';
+const menuButtonStyles = 'text-sidebar-foreground focus-visible:bg-sidebar-accent';
 
 type Course = {
   id: string;
@@ -282,7 +281,7 @@ function SidebarNavItem({
           <TooltipContent
             side="right"
             hidden={!collapsed}
-            className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+            className="text-sidebar-foreground px-5 text-sm shadow [--tooltip-surface:var(--sidebar)]"
             sideOffset={10}
           >
             {label}
@@ -440,113 +439,114 @@ export default function DashboardSidebarMenu() {
         {/* Course sections: bucketed by date; an empty section is omitted.
             The query status is checked BEFORE the section list, not only when it is
             empty, so loading and failure never read as "you have no courses". */}
-        {coursesPending || coursesFailed || courseSections.length === 0
-          ? !collapsed && (
-              <SidebarGroup>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {/* Loading, failed and genuinely-empty are three different states;
+        {coursesPending || coursesFailed || courseSections.length === 0 ? (
+          !collapsed && (
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {/* Loading, failed and genuinely-empty are three different states;
                         showing "No courses" for all three both flashed on first load and
                         hid failures behind a plausible-looking answer. */}
-                    {coursesPending ? (
-                      <SidebarMenuItem>
-                        <div
-                          className="flex w-full flex-col gap-2 px-2 py-1.5"
-                          role="status"
-                          aria-label="Loading courses"
+                  {coursesPending ? (
+                    <SidebarMenuItem>
+                      <div
+                        className="flex w-full flex-col gap-2 px-2 py-1.5"
+                        role="status"
+                        aria-label="Loading courses"
+                      >
+                        {[0, 1, 2].map((i) => (
+                          <span
+                            key={i}
+                            aria-hidden="true"
+                            className="bg-sidebar-foreground/10 h-4 w-full animate-pulse rounded"
+                          />
+                        ))}
+                      </div>
+                    </SidebarMenuItem>
+                  ) : coursesFailed ? (
+                    <SidebarMenuItem>
+                      <div
+                        role="alert"
+                        className="flex w-full flex-col items-start gap-1 px-2 py-1.5"
+                      >
+                        <span className="text-sidebar-muted-foreground text-sm">
+                          Could not load courses.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void refetchCourses()}
+                          className="text-sidebar-foreground focus-visible:ring-ring rounded text-sm underline focus-visible:ring-2 focus-visible:outline-none"
                         >
-                          {[0, 1, 2].map((i) => (
-                            <span
-                              key={i}
-                              aria-hidden="true"
-                              className="bg-sidebar-foreground/10 h-4 w-full animate-pulse rounded"
-                            />
-                          ))}
-                        </div>
-                      </SidebarMenuItem>
-                    ) : coursesFailed ? (
-                      <SidebarMenuItem>
-                        <div
-                          role="alert"
-                          className="flex w-full flex-col items-start gap-1 px-2 py-1.5"
-                        >
-                          <span className="text-sidebar-muted-foreground text-sm">
-                            Could not load courses.
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => void refetchCourses()}
-                            className="text-sidebar-foreground focus-visible:ring-ring rounded text-sm underline focus-visible:ring-2 focus-visible:outline-none"
-                          >
-                            Retry
-                          </button>
-                        </div>
-                      </SidebarMenuItem>
-                    ) : (
-                      <SidebarMenuItem>
-                        {/* Plain text, not a button: aria-disabled on a generic div is
+                          Retry
+                        </button>
+                      </div>
+                    </SidebarMenuItem>
+                  ) : (
+                    <SidebarMenuItem>
+                      {/* Plain text, not a button: aria-disabled on a generic div is
                             invalid and this is not an interactive control. */}
-                        <div className="text-sidebar-muted-foreground flex w-full items-center gap-2 px-2 py-1.5 text-sm">
-                          <Book aria-hidden="true" className="h-4 w-4 shrink-0" />
-                          <span className="overflow-hidden text-ellipsis whitespace-nowrap">
-                            No courses
-                          </span>
-                        </div>
-                      </SidebarMenuItem>
-                    )}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )
-          : collapsed ? (
-              // In the icon rail the per-course items collapse into one Courses button:
-              // every course otherwise showed the same book icon, so they could only be
-              // told apart by hovering each in turn.
-              <SidebarGroup>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    <CollapsedCoursesFlyout
-                      sections={courseSections.map((section) => ({
-                        bucket: section.bucket,
-                        label: section.flyoutLabel,
-                        courses: section.courses,
-                      }))}
-                      activeCourseId={activeCourseId}
-                      pathname={pathname}
-                      // The expanded sidebar's own rule and its own stored state, so a
-                      // group is folded the same way in both views: open unless closed by
-                      // the user, and always open when it holds the course you are on.
-                      isSectionOpen={(bucket) => isOpen(bucket) || bucket === activeSectionBucket}
-                      onToggleSection={toggle}
-                    />
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            )
-          : courseSections.map((section) => (
-              <CollapsibleSidebarGroup
-                key={section.bucket}
-                sectionId={section.bucket}
-                label={section.label}
-                collapsed={collapsed}
-                open={isOpen(section.bucket) || section.bucket === activeSectionBucket}
-                onToggle={() => toggle(section.bucket)}
-              >
-                <SidebarMenu>
-                  {section.courses.map((course) => (
-                    <SidebarNavItem
-                      key={course.id}
-                      href={`/dashboard/courses/${course.id}`}
-                      label={course.code}
-                      ariaLabel={`${course.code}: ${course.name}`}
-                      icon={Book}
-                      active={pathname.startsWith(`/dashboard/courses/${course.id}`)}
-                      collapsed={collapsed}
-                    />
-                  ))}
+                      <div className="text-sidebar-muted-foreground flex w-full items-center gap-2 px-2 py-1.5 text-sm">
+                        <Book aria-hidden="true" className="h-4 w-4 shrink-0" />
+                        <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+                          No courses
+                        </span>
+                      </div>
+                    </SidebarMenuItem>
+                  )}
                 </SidebarMenu>
-              </CollapsibleSidebarGroup>
-            ))}
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )
+        ) : collapsed ? (
+          // In the icon rail the per-course items collapse into one Courses button:
+          // every course otherwise showed the same book icon, so they could only be
+          // told apart by hovering each in turn.
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <CollapsedCoursesFlyout
+                  sections={courseSections.map((section) => ({
+                    bucket: section.bucket,
+                    label: section.flyoutLabel,
+                    courses: section.courses,
+                  }))}
+                  activeCourseId={activeCourseId}
+                  pathname={pathname}
+                  // The expanded sidebar's own rule and its own stored state, so a
+                  // group is folded the same way in both views: open unless closed by
+                  // the user, and always open when it holds the course you are on.
+                  isSectionOpen={(bucket) => isOpen(bucket) || bucket === activeSectionBucket}
+                  onToggleSection={toggle}
+                />
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+          courseSections.map((section) => (
+            <CollapsibleSidebarGroup
+              key={section.bucket}
+              sectionId={section.bucket}
+              label={section.label}
+              collapsed={collapsed}
+              open={isOpen(section.bucket) || section.bucket === activeSectionBucket}
+              onToggle={() => toggle(section.bucket)}
+            >
+              <SidebarMenu>
+                {section.courses.map((course) => (
+                  <SidebarNavItem
+                    key={course.id}
+                    href={`/dashboard/courses/${course.id}`}
+                    label={course.code}
+                    ariaLabel={`${course.code}: ${course.name}`}
+                    icon={Book}
+                    active={pathname.startsWith(`/dashboard/courses/${course.id}`)}
+                    collapsed={collapsed}
+                  />
+                ))}
+              </SidebarMenu>
+            </CollapsibleSidebarGroup>
+          ))
+        )}
 
         {/* Calendar and the archived-courses list are each a single destination, so they
             are plain top-level links rather than collapsible sections wrapping one item.
@@ -590,7 +590,7 @@ export default function DashboardSidebarMenu() {
                   className={cn(
                     // Open uses the hover surface, not the cobalt primary: cobalt means
                     // "this is the page you are on", and an open menu is neither.
-                    'h-14 px-3 py-3 transition-colors hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent',
+                    'hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent h-14 px-3 py-3 transition-colors',
                     // In the icon rail the button is a 40px square. Drop the padding and
                     // center, so the 32px avatar sits in the middle of it rather than
                     // being pushed left by the padding that positions a 16px icon. The
@@ -667,9 +667,7 @@ export default function DashboardSidebarMenu() {
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate text-sm font-medium">{user.name}</span>
                       {user.email && (
-                        <span className="text-muted-foreground truncate text-xs">
-                          {user.email}
-                        </span>
+                        <span className="text-muted-foreground truncate text-xs">{user.email}</span>
                       )}
                     </span>
                   </span>
@@ -695,7 +693,6 @@ export default function DashboardSidebarMenu() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-
     </>
   );
 }

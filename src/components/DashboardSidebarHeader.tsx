@@ -120,7 +120,7 @@ export default function DashboardSidebarHeader() {
           <TooltipContent
             side="right"
             hidden={!collapsed}
-            className="bg-sidebar text-sidebar-foreground px-5 text-sm shadow"
+            className="text-sidebar-foreground px-5 text-sm shadow [--tooltip-surface:var(--sidebar)]"
             sideOffset={10}
           >
             AFCT Dashboard
