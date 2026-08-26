@@ -164,7 +164,9 @@ export function UpdatesTab({ disabled }: { disabled: boolean }) {
       id: 'actions',
       header: () => <span className="sr-only">Actions</span>,
       enableSorting: false,
-      meta: { align: 'right', priority: 1 },
+      // Restore and Delete are text buttons, so on a phone they keep the card's footer row
+      // rather than being folded into a 36px corner.
+      meta: { align: 'right', priority: 1, mobileActionPlacement: 'footer' },
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
           {/* Restore is green (the recovery action the admin wants), Delete is red.

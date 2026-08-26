@@ -11,12 +11,26 @@ import type { Row, Table as TanstackTable, Column as TanstackColumn } from '@tan
 import { flexRender } from '@tanstack/react-table';
 import { Inbox } from 'lucide-react';
 import { DataTableLoading, DataTableEmptyState } from '@/components/ui/data-table-status';
+import { cn } from '@/lib/utils';
 
 /**
- * Stacked card view for narrow screens: each row becomes a card of label/value
- * pairs (labels are the column headers, values the same cell renderers as the
- * table), with the actions column pinned to the card footer. Avoids the sideways
- * scroll a wide table forces on a phone.
+ * Stacked card view for narrow screens: each row becomes a card of label/value pairs
+ * (labels are the column headers, values the same cell renderers as the table). Avoids the
+ * sideways scroll a wide table forces on a phone.
+ *
+ * Where the row's actions go depends on what they are, which the column says through
+ * `meta.mobileActionPlacement`:
+ *
+ * - an overflow menu (the ordinary case) sits in the card's top-right corner, the way it
+ *   sits at the end of its row in the table. In a footer it read as an action belonging to
+ *   the list rather than to the record, which is what a lone ellipsis under a divider
+ *   looks like;
+ * - a larger group (text buttons, a Restore beside a Delete) keeps a footer row, because
+ *   36px of corner cannot hold it;
+ * - a row with no actions column gets neither, and no space reserved for one.
+ *
+ * The placement is all this component decides. The cell itself is still the column's own
+ * renderer, so what the menu contains and what it is called stay where they were.
  */
 export function DataTableCards<TData>({
   table,
@@ -64,9 +78,23 @@ export function DataTableCards<TData>({
         const bodyCells = cells.filter(
           (c) => c.column.id !== 'actions' && !c.column.columnDef.meta?.mobileHidden,
         );
+        // Corner unless the column asks for a footer: nearly every actions cell in AFCT is
+        // one icon-only overflow menu, and the exceptions know they are exceptions.
+        //
+        // Known limitation: a cell that renders nothing for a particular row (an action the
+        // row cannot offer) still reserves its corner, because the only way to know it came
+        // back empty would be to inspect what it rendered. An empty 44px inset on one line
+        // is a better trade than that.
+        const placement = actionsCell?.column.columnDef.meta?.mobileActionPlacement ?? 'corner';
+        const cornerAction = actionsCell && placement === 'corner';
+        const footerAction = actionsCell && placement === 'footer';
         return (
-          <li key={row.id} className="rounded-md border bg-[var(--table-background)] p-4">
-            <dl className="grid gap-2">
+          // `relative` for the corner action, and no `overflow-hidden`: the menu itself is
+          // portaled, but a clipped card would still cut the trigger's focus ring.
+          <li key={row.id} className="relative rounded-md border bg-[var(--table-background)] p-4">
+            {/* Only the first row is inset, so the corner action costs 44px of one line
+                rather than a permanent gutter down the right of every value. */}
+            <dl className={cn('grid gap-2', cornerAction && '[&>*:first-child]:pr-11')}>
               {bodyCells.map((cell) => (
                 // min-w-0: a grid item refuses to shrink below its content's min-content
                 // width by default, so one wide value (a nowrap cell, a long address)
@@ -91,8 +119,17 @@ export function DataTableCards<TData>({
                 </div>
               ))}
             </dl>
-            {actionsCell ? (
-              <div className="mt-3 flex justify-end border-t pt-3">
+            {/* Top-right, inset from the corner so the trigger's focus ring has somewhere to
+                land. `size="icon"` triggers are 36px, which is the touch target; the icon
+                inside them stays 16px. Aligned with the first field's line. */}
+            {cornerAction ? (
+              <div className="absolute top-2 right-2">
+                {flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
+              </div>
+            ) : null}
+
+            {footerAction ? (
+              <div className="mt-3 flex justify-end gap-2 border-t pt-3">
                 {flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
               </div>
             ) : null}

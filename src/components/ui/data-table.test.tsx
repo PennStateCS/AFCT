@@ -427,6 +427,111 @@ describe('DataTable', () => {
   });
 
   /*
+   * Where a row's actions land once the table becomes cards.
+   *
+   * The rule the card view implements: an icon-only overflow menu goes in the card's
+   * top-right corner, a larger group of controls keeps a footer row, and a table with no
+   * actions column gets neither. jsdom does no layout, so these pin the structure the rule
+   * produces (which slot the cell rendered into, and that it rendered once), not how it looks.
+   */
+  describe('actions on a stacked card', () => {
+    const stackedViewport = () => {
+      window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })) as unknown as typeof window.matchMedia;
+    };
+
+    const kebabColumns: ColumnDef<RowData>[] = [
+      ...columns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }) => <Button aria-label={`Actions for ${row.original.name}`}>⋮</Button>,
+      },
+    ];
+
+    const footerColumns: ColumnDef<RowData>[] = [
+      ...columns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        meta: { mobileActionPlacement: 'footer' },
+        cell: ({ row }) => <Button aria-label={`Delete ${row.original.name}`}>Delete</Button>,
+      },
+    ];
+
+    const cardFor = (name: string) => screen.getByText(name).closest('li') as HTMLElement;
+
+    it('puts an overflow menu in the corner, once, and outside the fields', async () => {
+      stackedViewport();
+      render(<DataTable columns={kebabColumns} data={[data[0]!]} />);
+
+      const trigger = await screen.findByRole('button', { name: 'Actions for Alice' });
+      // Once. It used to be possible to render the cell in the body and again in the footer.
+      expect(screen.getAllByRole('button', { name: 'Actions for Alice' })).toHaveLength(1);
+      // Not a field: it has no label, so it does not belong in the definition list.
+      expect(trigger.closest('dl')).toBeNull();
+      expect(trigger.closest('dd')).toBeNull();
+      expect(trigger.parentElement).toHaveClass('absolute');
+    });
+
+    it('drops the footer and its divider for an overflow menu', async () => {
+      stackedViewport();
+      render(<DataTable columns={kebabColumns} data={[data[0]!]} />);
+
+      await screen.findByRole('button', { name: 'Actions for Alice' });
+      // The lone ellipsis under a rule is exactly what this replaced.
+      expect(cardFor('Alice').querySelector('.border-t')).toBeNull();
+    });
+
+    it('keeps a footer row for an action group that says it needs one', async () => {
+      stackedViewport();
+      render(<DataTable columns={footerColumns} data={[data[0]!]} />);
+
+      const button = await screen.findByRole('button', { name: 'Delete Alice' });
+      expect(button.parentElement).toHaveClass('border-t');
+      expect(button.parentElement).not.toHaveClass('absolute');
+      expect(screen.getAllByRole('button', { name: 'Delete Alice' })).toHaveLength(1);
+    });
+
+    it('reserves nothing on a table with no actions at all', async () => {
+      stackedViewport();
+      render(<DataTable columns={columns} data={[data[0]!]} />);
+
+      await screen.findByText('Alice');
+      const card = cardFor('Alice');
+      expect(card.querySelector('.absolute')).toBeNull();
+      expect(card.querySelector('.border-t')).toBeNull();
+      // No inset kept for an action that is not there.
+      expect(card.querySelector('dl')?.className).not.toContain('pr-11');
+    });
+
+    it('still hides a mobileHidden column, and still keeps the card a labelled list', async () => {
+      stackedViewport();
+      const cols: ColumnDef<RowData>[] = [
+        ...kebabColumns.slice(0, 1),
+        { ...columns[1]!, meta: { priority: 2, mobileHidden: true } },
+        kebabColumns[2]!,
+      ];
+      render(<DataTable columns={cols} data={[data[0]!]} />);
+
+      await screen.findByText('Alice');
+      expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+      // Safari/VoiceOver drops list semantics from an unmarked list, hence the explicit role.
+      expect(screen.getByRole('list')).toBeInTheDocument();
+      expect(cardFor('Alice').tagName).toBe('LI');
+      expect(cardFor('Alice').querySelector('dt')?.textContent).toBe('Name');
+    });
+  });
+
+  /*
    * Server-driven ("manual") mode, used by the Users, System Logs and Autograder pages.
    * The table holds one page and the parent owns pagination, sorting and filtering, so the
    * things asserted here are the ones a client-side table would otherwise do for itself
