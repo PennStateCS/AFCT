@@ -577,6 +577,16 @@ export default function AssignmentDashboardPage({
           */}
           <div className="flex flex-wrap items-stretch justify-between gap-x-6 gap-y-4">
             <div className="flex min-w-0 basis-full flex-col gap-3 sm:min-w-96 sm:grow sm:basis-0">
+              {/*
+                Title row then metadata row, which is the course banner's shape rather than a
+                shape of its own, and that is the point. This used to be the icon beside a
+                COLUMN holding both the title and the metadata. Same pixels, different geometry:
+                the row was as tall as title plus gap plus metadata instead of as tall as the
+                icon, so the two banners centred content blocks of different heights inside the
+                same 118px and the text landed 4px and 8px out between the two pages. Matching
+                the structure is what makes the text land in the same place; matching the height
+                alone did not.
+              */}
               <div className="flex items-start gap-3 sm:gap-4">
                 {/* ClipboardList, not the BookOpen this used to carry. The course banner leads
                     with a Book, and at banner size an open book beside a closed one is not a
@@ -590,39 +600,44 @@ export default function AssignmentDashboardPage({
                   at 768px; this only breaks a word that genuinely cannot fit. Never truncated:
                   this is the one place the whole title belongs.
                 */}
-                <div className="flex min-w-0 flex-col gap-2">
-                  <h1
-                    id="assignment-page-title"
-                    className="min-w-0 text-2xl leading-tight font-semibold tracking-tight break-words"
-                  >
-                    {assignment.title}
-                  </h1>
-                  {/*
-                    Everything that DESCRIBES the assignment, on one wrapping row directly under
-                    the title, in the same muted-label / medium-value shape the course banner uses
-                    for Faculty and TAs. The split this row exists to make is passive against
-                    active: what the assignment is belongs here, and the column on the right is
-                    only the two things you operate. Type and the LMS link were both chips in
-                    that column, and four objects competing there made the right side the busiest
-                    part of a banner whose job is to name one assignment.
+                <h1
+                  id="assignment-page-title"
+                  className="min-w-0 text-2xl leading-tight font-semibold tracking-tight break-words"
+                >
+                  {assignment.title}
+                </h1>
+              </div>
+              {/*
+                Everything that DESCRIBES the assignment, on one wrapping row under the title, in
+                the same muted-label / medium-value shape the course banner uses for Faculty and
+                TAs. The split this row exists to make is passive against active: what the
+                assignment is belongs here, and the column on the right is only the two things you
+                operate. Type and the LMS link were both chips in that column, and four objects
+                competing there made the right side the busiest part of a banner whose job is to
+                name one assignment.
 
-                    gap-x-5 with gap-y-1: far enough apart to read as separate facts on one line,
-                    close enough to read as one row when a long course name wraps them onto two.
-                  */}
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-                    {/* The course is the context the assignment hangs from, and the only value
+                min-h-6 and the 4.5rem indent are both borrowed from the course banner's metadata
+                row rather than chosen here: 24px because that row is as tall as the copy buttons
+                in it, and 72px because that is the icon slot plus its gap. Matching them is what
+                puts this line at the same height on both pages.
+
+                gap-x-5 with gap-y-1: far enough apart to read as separate facts on one line,
+                close enough to read as one row when a long course name wraps them onto two.
+              */}
+              <div className="flex min-h-6 flex-wrap items-center gap-x-5 gap-y-1 text-sm sm:pl-[4.5rem]">
+                {/* The course is the context the assignment hangs from, and the only value
                         here that is a link. Written the way the course page's own title writes
                         it, so the two screens name it the same. */}
-                    <span className="max-w-full">
-                      <span className="text-course-banner-muted-foreground">Course: </span>
-                      <Link
-                        href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
-                        className={cn(IDENTITY_LINK, 'font-medium break-words')}
-                      >
-                        {courseLabel}
-                      </Link>
-                    </span>
-                    {/*
+                <span className="max-w-full">
+                  <span className="text-course-banner-muted-foreground">Course: </span>
+                  <Link
+                    href={`/dashboard/courses/${assignment.course?.id || assignment.courseId}`}
+                    className={cn(IDENTITY_LINK, 'font-medium break-words')}
+                  >
+                    {courseLabel}
+                  </Link>
+                </span>
+                {/*
                       Text, not a chip, and no Users glyph beside it. As a tinted badge this read
                       as a state worth acting on, which group work is not: it is a fact about the
                       assignment in the same class as which course owns it. "Individual" rather
@@ -633,19 +648,17 @@ export default function AssignmentDashboardPage({
                       The word is the whole signal now, which is a gain rather than a loss, since
                       the two hues it used to rely on were never readable by everyone anyway.
                     */}
-                    <span>
-                      <span className="text-course-banner-muted-foreground">Type: </span>
-                      <span className="font-medium">
-                        {assignment.groupSetId ? 'Group' : 'Individual'}
-                      </span>
-                    </span>
-                    {/* Only when an LMS opens it, which is why the badge renders nothing
+                <span>
+                  <span className="text-course-banner-muted-foreground">Type: </span>
+                  <span className="font-medium">
+                    {assignment.groupSetId ? 'Group' : 'Individual'}
+                  </span>
+                </span>
+                {/* Only when an LMS opens it, which is why the badge renders nothing
                         otherwise. Kept as the shared badge rather than restated as a
                         "LMS: Canvas" pair, because that component is how an LMS link is written
                         everywhere else in the app, including the course banner beside it. */}
-                    <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
-                  </div>
-                </div>
+                <LmsLinkBadge links={confirmedLmsLinks} className={IDENTITY_BADGE} />
               </div>
             </div>
 
