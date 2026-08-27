@@ -80,6 +80,11 @@ export const PATCH = withCourseAuth(
           userId: user.id,
           courseId: courseId,
           courseName: updated.name,
+          // The code as well as the name, and both because the course row can be deleted
+          // later: the relation stops resolving then, and metadata is all the entry has left
+          // to say which course was published. Already in hand from the update above, so this
+          // costs no extra query.
+          courseCode: updated.code,
           isPublished: isPublished,
         },
       });

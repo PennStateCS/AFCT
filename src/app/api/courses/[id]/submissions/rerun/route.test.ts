@@ -5,9 +5,12 @@ import { NextRequest } from 'next/server';
 // resetting it to PENDING and logging a rerun for each one.
 
 const prismaMock = vi.hoisted(() => ({
-  submission: { updateMany: vi.fn() },
+  // updateManyAndReturn: the ids come back from the statement that reset them, so the
+  // per-submission audit rows describe exactly what was re-queued.
+  submission: { updateManyAndReturn: vi.fn() },
   roster: { findFirst: vi.fn() },
   course: { findUnique: vi.fn() },
+  activityLog: { createMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -38,7 +41,7 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(401);
-    expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.submission.updateManyAndReturn).not.toHaveBeenCalled();
   });
 
   it('returns 403 when the user is not course staff', async () => {
@@ -47,24 +50,27 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(403);
-    expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.submission.updateManyAndReturn).not.toHaveBeenCalled();
   });
 
   it('requeues all submissions in one statement and returns the count', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
-    prismaMock.submission.updateMany.mockResolvedValue({ count: 2 });
+    prismaMock.submission.updateManyAndReturn.mockResolvedValue([
+      { id: 's1', assignmentId: 'a1', problemId: 'p1', studentId: 'stu1' },
+      { id: 's2', assignmentId: 'a1', problemId: 'p2', studentId: 'stu2' },
+    ]);
 
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ success: true, count: 2 });
 
-    // A single updateMany. Clearing the claim token is what fences a worker mid-evaluation;
+    // A single statement. Clearing the claim token is what fences a worker mid-evaluation;
     // resetting attempts only gives a fresh budget, and used to hand the same value back to a
     // stale worker on the next claim.
-    expect(prismaMock.submission.updateMany).toHaveBeenCalledTimes(1);
-    expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
+    expect(prismaMock.submission.updateManyAndReturn).toHaveBeenCalledTimes(1);
+    expect(prismaMock.submission.updateManyAndReturn).toHaveBeenCalledWith(
       expect.objectContaining({
         // Submissions already queued or being graded are left where they are: re-queuing one
         // that is running now produces a second run of the same work.
@@ -96,12 +102,12 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
     const res = await POST(makeRequest(), params());
 
     expect(res.status).toBe(409);
-    expect(prismaMock.submission.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.submission.updateManyAndReturn).not.toHaveBeenCalled();
   });
 
   it('returns 202 with a count of 0 when the course has no submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
-    prismaMock.submission.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.submission.updateManyAndReturn.mockResolvedValue([]);
 
     const res = await POST(makeRequest(), params());
 
@@ -112,7 +118,7 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
   it('returns 500 when the requeue fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
-    prismaMock.submission.updateMany.mockRejectedValue(new Error('update failed'));
+    prismaMock.submission.updateManyAndReturn.mockRejectedValue(new Error('update failed'));
 
     const res = await POST(makeRequest(), params());
 
@@ -123,7 +129,7 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
   it('returns 500 and logs unknown error when a non-Error is thrown', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'TA' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'TA' });
-    prismaMock.submission.updateMany.mockRejectedValueOnce('boom');
+    prismaMock.submission.updateManyAndReturn.mockRejectedValueOnce('boom');
 
     const res = await POST(makeRequest(), params());
 
@@ -132,5 +138,56 @@ describe('POST /api/courses/[id]/submissions/rerun', () => {
       (call) => call[2]?.action === 'COURSE_SUBMISSIONS_RERUN_ERROR',
     );
     expect(errorLog?.[2]?.metadata?.error).toBe('unknown error');
+  });
+});
+
+/**
+ * A course-wide rerun changes every grade it touches, and the worker's later
+ * SUBMISSION_AUTOGRADED entries look exactly like ordinary first gradings. The per-submission
+ * rows and the shared batch id are what connect a changed mark back to the person who ordered
+ * the sweep.
+ */
+describe('course rerun audit', () => {
+  it('writes a row per submission, tied to the summary by one batch id', async () => {
+    authMock.mockResolvedValue({ user: { id: 'staff', isAdmin: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    prismaMock.submission.updateManyAndReturn.mockResolvedValue([
+      { id: 's1', assignmentId: 'a1', problemId: 'p1', studentId: 'stu1' },
+      { id: 's2', assignmentId: 'a2', problemId: 'p2', studentId: 'stu2' },
+    ]);
+
+    const res = await POST(
+      new NextRequest('http://localhost/api/courses/c1/submissions/rerun', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'c1' }) },
+    );
+    expect(res.status).toBe(202);
+
+    const rows = prismaMock.activityLog.createMany.mock.calls[0]?.[0]?.data ?? [];
+    expect(rows).toHaveLength(2);
+    // The indexed column, not just metadata: a query for one submission's history is the
+    // reason these rows exist.
+    expect(rows.map((r: { submissionId: string }) => r.submissionId)).toEqual(['s1', 's2']);
+    expect(rows[0].action).toBe('SUBMISSION_RERUN');
+
+    const summary = activityLogMock.mock.calls.at(-1)?.[2];
+    expect(summary.action).toBe('COURSE_SUBMISSIONS_RERUN');
+    expect(summary.metadata.count).toBe(2);
+    // Both ends carry the same id, so the sweep reconstructs from either direction.
+    expect(summary.metadata.batchId).toBe(rows[0].metadata.batchId);
+  });
+
+  it('writes no per-submission rows when nothing was re-queued', async () => {
+    authMock.mockResolvedValue({ user: { id: 'staff', isAdmin: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    prismaMock.submission.updateManyAndReturn.mockResolvedValue([]);
+
+    await POST(
+      new NextRequest('http://localhost/api/courses/c1/submissions/rerun', { method: 'POST' }),
+      { params: Promise.resolve({ id: 'c1' }) },
+    );
+
+    expect(prismaMock.activityLog.createMany).not.toHaveBeenCalled();
   });
 });

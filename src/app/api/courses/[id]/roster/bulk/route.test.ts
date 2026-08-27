@@ -2,8 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const prismaMock = vi.hoisted(() => ({
-  roster: { findFirst: vi.fn(), createMany: vi.fn(), updateMany: vi.fn() },
+  // findMany: the handler reads who is already on the roster BEFORE inserting, so the
+  // per-student audit entries describe what actually changed rather than what was pasted.
+  roster: {
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
+    createMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
   course: { findUnique: vi.fn() },
+  activityLog: { createMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -23,6 +31,9 @@ beforeEach(() => {
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.roster.createMany.mockResolvedValue({ count: 0 });
   prismaMock.roster.updateMany.mockResolvedValue({ count: 0 });
+  // Nobody on the roster yet, so every pasted id counts as a new enrolment.
+  prismaMock.roster.findMany.mockResolvedValue([]);
+  prismaMock.activityLog.createMany.mockResolvedValue({ count: 0 });
 });
 
 describe('POST /api/courses/[id]/roster/bulk', () => {
@@ -208,5 +219,64 @@ describe('POST /api/courses/[id]/roster/bulk', () => {
         metadata: expect.objectContaining({ error: 'unknown error' }),
       }),
     );
+  });
+});
+
+/**
+ * The per-student entries have to describe what HAPPENED, not what was pasted.
+ *
+ * `createMany` with skipDuplicates returns a count and not which rows it wrote, so the only
+ * honest source is the roster as it stood before the insert. Logging the request's own list
+ * would mint enrolment events for people who were already enrolled, and these rows are study
+ * data as well as an audit trail.
+ */
+describe('bulk enrolment audit', () => {
+  it('writes one entry per student who actually joined, and none for those already there', async () => {
+    authMock.mockResolvedValue({ user: { id: 'staff', isAdmin: true } });
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 'already', status: 'ENROLLED', role: 'STUDENT' },
+      { userId: 'dropped', status: 'DROPPED', role: 'STUDENT' },
+    ]);
+    prismaMock.roster.createMany.mockResolvedValue({ count: 1 });
+    prismaMock.roster.updateMany.mockResolvedValue({ count: 1 });
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ userIds: ['fresh', 'already', 'dropped'] }),
+    });
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(200);
+    const rows = prismaMock.activityLog.createMany.mock.calls[0]?.[0]?.data ?? [];
+    const byUser = new Map(
+      rows.map((r: { action: string; metadata: { targetUserId: string } }) => [
+        r.metadata.targetUserId,
+        r.action,
+      ]),
+    );
+
+    expect(byUser.get('fresh')).toBe('ENROLL_USER');
+    expect(byUser.get('dropped')).toBe('REENROLL_IN_COURSE');
+    // The one who was already enrolled: nothing happened to them, so nothing is recorded.
+    expect(byUser.has('already')).toBe(false);
+  });
+
+  it('summarises what changed rather than what was asked for', async () => {
+    authMock.mockResolvedValue({ user: { id: 'staff', isAdmin: true } });
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 'already', status: 'ENROLLED', role: 'STUDENT' },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/courses/c1/roster/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ userIds: ['fresh', 'already'] }),
+    });
+    await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    const summary = activityLogMock.mock.calls.at(-1)?.[2];
+    expect(summary.action).toBe('BULK_ENROLL_USERS');
+    expect(summary.metadata.enrolledIds).toEqual(['fresh']);
+    expect(summary.metadata.requestedCount).toBe(2);
+    expect(summary.metadata.alreadyEnrolledCount).toBe(1);
   });
 });

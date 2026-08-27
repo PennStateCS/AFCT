@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getClientIp } from '@/lib/security/rate-limiter';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -53,6 +54,21 @@ export const POST = withCourseAuth(
       // Deliberately additive: we do NOT reset existing rows to STUDENT. That would let
       // any course staff (TAs included) silently demote a FACULTY/TA member, bypassing the
       // faculty-gated, last-faculty-guarded role-change route.
+      /**
+       * Who was already here, read BEFORE the insert.
+       *
+       * `createMany` with `skipDuplicates` returns a count, not which rows it wrote, and the
+       * request's own list is what was ASKED for rather than what happened: pasting a list
+       * that half-overlaps the roster would otherwise produce an enrolment entry for every
+       * name in it. Inventing an enrolment that never occurred is worse than logging nothing,
+       * here more than most places, because these rows are also study data.
+       */
+      const before = await prisma.roster.findMany({
+        where: { courseId, userId: { in: userIds } },
+        select: { userId: true, status: true, role: true },
+      });
+      const existing = new Map(before.map((row) => [row.userId, row]));
+
       await prisma.roster.createMany({
         data: userIds.map((userId) => ({ courseId, userId, role: 'STUDENT' as const })),
         skipDuplicates: true,
@@ -67,7 +83,44 @@ export const POST = withCourseAuth(
         data: { status: 'ENROLLED', droppedAt: null },
       });
 
-      // Log bulk enrollment action
+      /**
+       * One entry per student, then the summary, which is what the LMS roster sync already
+       * does for the same outcome. The per-student row is the one that answers "when was this
+       * student enrolled, and by whom", and a pasted list of 300 names left that answerable
+       * only by reading an array inside a single row.
+       *
+       * After the writes, never inside them: an audit failure must not roll back an enrolment
+       * that has already happened. `createMany` in one statement rather than a helper call per
+       * student, because the helper costs several queries each and a 300-name paste would make
+       * that felt.
+       */
+      const newlyEnrolled = userIds.filter((id) => !existing.has(id));
+      const reEnrolledIds = userIds.filter((id) => existing.get(id)?.status === 'DROPPED');
+      const ip = getClientIp(req);
+      const userAgent = req.headers.get('user-agent') ?? null;
+
+      const perStudent = [
+        ...newlyEnrolled.map((targetUserId) => ({ targetUserId, action: 'ENROLL_USER' })),
+        ...reEnrolledIds.map((targetUserId) => ({ targetUserId, action: 'REENROLL_IN_COURSE' })),
+      ];
+
+      if (perStudent.length > 0) {
+        await prisma.activityLog.createMany({
+          data: perStudent.map(({ targetUserId, action }) => ({
+            userId: user.id,
+            action,
+            severity: 'INFO' as const,
+            category: 'COURSE' as const,
+            courseId,
+            ipAddress: ip,
+            userAgent,
+            // `via` tells these apart from the same actions written by the LMS roster sync,
+            // which matters when the question is why a student appeared on a roster.
+            metadata: { targetUserId, via: 'bulk-enroll' },
+          })),
+        });
+      }
+
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'BULK_ENROLL_USERS',
@@ -76,9 +129,14 @@ export const POST = withCourseAuth(
         courseId,
         metadata: {
           courseId: courseId,
-          enrolledIds: userIds,
-          enrolledCount: userIds.length,
+          // What was requested, and what actually changed. They differ whenever a paste
+          // overlaps the roster, and both are worth keeping: the first is what the person did,
+          // the second is what the course did.
+          requestedCount: userIds.length,
+          enrolledIds: newlyEnrolled,
+          enrolledCount: newlyEnrolled.length,
           reEnrolledCount: reEnrolled.count,
+          alreadyEnrolledCount: userIds.length - newlyEnrolled.length - reEnrolledIds.length,
         },
       });
       return NextResponse.json({ success: true, enrolled: userIds.length }, { status: 200 });
