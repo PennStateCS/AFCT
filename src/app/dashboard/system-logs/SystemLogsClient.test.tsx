@@ -24,6 +24,7 @@ type LogRow = {
   userId: string | null;
   userFirstName: string | null;
   userLastName: string | null;
+  userEmail: string | null;
   action: string;
   category: string | null;
   severity: 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
@@ -94,8 +95,11 @@ vi.mock('@/components/ui/data-table', () => ({
 }));
 
 // Dialogs are irrelevant to fetch/render behavior; stub them out.
+// Rendered as a marker when open rather than always null: the point of the row action is that
+// it opens this, and a mock that swallows `open` cannot tell a working button from a dead one.
 vi.mock('@/components/dialogs/LogViewerDialog', () => ({
-  LogViewerDialog: () => null,
+  LogViewerDialog: ({ open }: { open?: boolean }) =>
+    open ? <div data-testid="log-viewer" /> : null,
 }));
 vi.mock('@/components/dialogs/DownloadLogsDialog', () => ({
   DownloadLogsDialog: () => null,
@@ -107,6 +111,7 @@ const makeRow = (over: Partial<LogRow> = {}): LogRow => ({
   userId: 'u1',
   userFirstName: 'Ada',
   userLastName: 'Lovelace',
+  userEmail: 'ada@example.com',
   action: 'USER_LOGIN',
   category: 'AUTH',
   severity: 'INFO',
@@ -152,6 +157,35 @@ describe('SystemLogsClient', () => {
     // One Name column, surname first: "Lovelace, Ada". Upper-cased in CSS, so the text node
     // itself stays in ordinary case and this asserts what a screen reader hears.
     expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument();
+    // The address under it, which is what tells two people of the same name apart.
+    expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+  });
+
+  /*
+   * The per-row action is an icon, so its accessible name is the only thing carrying it: the
+   * tooltip is not a name, and a page of buttons that all say the same thing is what a screen
+   * reader would otherwise read out. That is the part worth pinning, along with the old solid
+   * "Full Log" button being gone, since bringing it back is a one-line mistake.
+   */
+  it('opens the full log from a named icon action, not a row of solid buttons', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ rows: [makeRow({ action: 'USER_LOGIN' })], total: 1 }),
+    });
+
+    renderWithClient(<SystemLogsClient />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-rows').textContent).toBe('1');
+    });
+
+    expect(screen.queryByRole('button', { name: 'Full Log' })).not.toBeInTheDocument();
+
+    // Named after the row it belongs to, not just "View full log".
+    const action = screen.getByRole('button', { name: /^View full log for USER LOGIN at / });
+    fireEvent.click(action);
+
+    expect(screen.getByTestId('log-viewer')).toBeInTheDocument();
   });
 
   it('shows a loading state before the first fetch resolves', () => {

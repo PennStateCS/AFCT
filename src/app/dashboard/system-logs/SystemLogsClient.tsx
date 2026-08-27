@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { CategoryBadge } from '@/components/ui/category-badge';
 import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
-import { Logs, ScrollText } from 'lucide-react';
+import { FileText, Logs, ScrollText } from 'lucide-react';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import dynamic from 'next/dynamic';
 
@@ -31,6 +31,8 @@ import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
 import { describeActivity, formatActivityDetails } from '@/lib/activity-log-summary';
 import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 import { CompactDate } from '@/components/ui/CompactDate';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
@@ -44,6 +46,7 @@ type LogRow = {
   userDisplayName: string | null;
   userFirstName: string | null;
   userLastName: string | null;
+  userEmail: string | null;
   action: string;
   category: string | null;
   severity: Severity;
@@ -59,7 +62,9 @@ type LogRow = {
   } | null;
 };
 
-const DEFAULT_PAGE_SIZE = 10;
+// 20, not 10: the page is a scan for one entry among many, and ten rows on a laptop meant
+// paging through a morning's activity a handful of lines at a time.
+const DEFAULT_PAGE_SIZE = 20;
 
 const SEVERITIES: readonly Severity[] = LOG_SEVERITIES;
 const CATEGORIES = LOG_CATEGORIES;
@@ -246,8 +251,17 @@ export default function SystemLogsClient() {
         cell: ({ row }: { row: { original: LogRow } }) => {
           const last = row.original.userLastName?.trim();
           const first = row.original.userFirstName?.trim();
+          const email = row.original.userEmail?.trim();
           if (!last && !first) return '—';
-          return <span className="uppercase">{[last, first].filter(Boolean).join(', ')}</span>;
+          // Two lines, the same shape the Time column uses: the name to read, the address
+          // underneath in the muted size to tell two people of the same name apart. Not
+          // upper-cased, because an email address is a value somebody may copy.
+          return (
+            <div className="leading-tight">
+              <div className="uppercase">{[last, first].filter(Boolean).join(', ')}</div>
+              {email ? <div className="text-muted-foreground text-xs">{email}</div> : null}
+            </div>
+          );
         },
       },
       {
@@ -285,13 +299,44 @@ export default function SystemLogsClient() {
         },
       },
       {
-        id: 'viewer',
-        header: 'Logs',
-        meta: { priority: 1 },
+        // `actions`, not a name of its own: that id is what the shared mobile card view looks
+        // for to put a row's action in the card's corner. Named anything else it would have
+        // stayed a labelled field in the card's body, which is a one-off nobody asked for.
+        id: 'actions',
+        header: 'Details',
+        meta: { priority: 1, align: 'center' as const },
         enableSorting: false,
-        cell: ({ row }: { row: { original: LogRow } }) => (
-          <Button onClick={() => handleViewerOpen(row.original)}>Full Log</Button>
-        ),
+        // A ghost icon rather than the solid "Full Log" button this replaces. One per row, so a
+        // column of filled buttons ran down the right edge of the table with more weight than
+        // the log it was pointing at. Same click, same dialog; only the presentation changed.
+        cell: ({ row }: { row: { original: LogRow } }) => {
+          const when = row.original.timestamp
+            ? formatDateTimeInTimeZone(row.original.timestamp, timezone)
+            : null;
+          const what = (row.original.action || '').replace(/_/g, ' ');
+          // Every row carries one of these, so the name says WHICH log: a page of buttons all
+          // called "View full log" is what a screen reader would otherwise read out.
+          const label = when
+            ? `View full log for ${what} at ${when}`
+            : `View full log for ${what}`;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={label}
+                  onClick={() => handleViewerOpen(row.original)}
+                >
+                  <FileText className="size-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              {/* The tooltip repeats the action in short form; it is not the accessible name,
+                  which the button carries itself. */}
+              <TooltipContent>View full log</TooltipContent>
+            </Tooltip>
+          );
+        },
       },
     ],
     [handleViewerOpen, timezone],
