@@ -837,8 +837,8 @@ describe('the entries an administrator reads after the fact', () => {
 /**
  * The redesign's rule, tested as a rule rather than as a list of strings:
  *
- *     Action column  = the verb
- *     What happened  = the object, then what happened to it
+ *     Action column   = the verb
+ *     Subject column  = the object, then what happened to it
  *
  * The stored action never changes, so every case here reads a real stored value and asserts
  * only what is DISPLAYED from it.

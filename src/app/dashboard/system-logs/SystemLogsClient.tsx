@@ -36,6 +36,7 @@ import {
   SUMMARY_SEPARATOR,
 } from '@/lib/activity-log-summary';
 import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
+import { clientDescription } from '@/lib/user-agent';
 import { CompactDate } from '@/components/ui/CompactDate';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
@@ -264,7 +265,7 @@ export default function SystemLogsClient() {
         accessorKey: 'userLastName',
         header: 'User',
         meta: { priority: 2 },
-        // Upper-cased the way the Action and What happened columns are, and styled rather than
+        // Upper-cased the way the Action and Subject columns are, and styled rather than
         // transformed for the same reason: what a screen reader announces and what Copy JSON
         // carries stay in ordinary case.
         cell: ({ row }: { row: { original: LogRow } }) => {
@@ -290,15 +291,24 @@ export default function SystemLogsClient() {
         // The verb, from the shared formatter. The cell shows "Viewed"; sorting, search,
         // filters and exports still use the stored COURSE_GRADES_VIEWED. Metadata goes in too,
         // since a few verbs depend on which field an update touched.
-        cell: ({ row }: { row: { original: LogRow } }) =>
-          actionLabel(
-            row.original.action || '',
-            row.original.metadata as Record<string, unknown> | null,
-          ),
+        //
+        // Upper-cased in CSS rather than transformed, the same as the User and Subject
+        // columns, so what a screen reader announces and what Copy JSON carries stay in
+        // ordinary case.
+        cell: ({ row }: { row: { original: LogRow } }) => (
+          <span className="uppercase">
+            {actionLabel(
+              row.original.action || '',
+              row.original.metadata as Record<string, unknown> | null,
+            )}
+          </span>
+        ),
       },
       {
+        // The id is the column's own name and the header is what a reader sees; they differ
+        // here because the column was called "What happened" first.
         id: 'summary',
-        header: 'What happened',
+        header: 'Subject',
         meta: { priority: 2 },
         enableSorting: false,
         // Upper-cased in CSS rather than transformed, so what a screen reader announces and
@@ -333,10 +343,22 @@ export default function SystemLogsClient() {
         accessorKey: 'ipAddress',
         header: 'IP Address',
         meta: { priority: 4 },
-        cell: ({ getValue }: { getValue: () => unknown }) => {
-          const ip = getValue() as string | null;
+        // Two lines, the shape the Time and User columns use: the address, and under it the
+        // browser and platform the request came from. An address on its own rarely settles
+        // "was that really them"; the same address from a phone rather than the lab machine
+        // often does. The whole header is still in the full log entry.
+        cell: ({ row }: { row: { original: LogRow } }) => {
+          const raw = row.original.ipAddress;
           // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
-          return ip ? ip.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : '—';
+          const ip = raw ? raw.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : null;
+          const client = clientDescription(row.original.userAgent);
+          if (!ip && !client) return '—';
+          return (
+            <div className="leading-tight">
+              <div>{ip ?? '—'}</div>
+              {client ? <div className="text-muted-foreground text-xs">{client}</div> : null}
+            </div>
+          );
         },
       },
       {

@@ -156,9 +156,9 @@
   --color-badge-category-orange: var(--badge-category-orange);
   --color-badge-category-orange-bg: var(--badge-category-orange-bg);
   --color-badge-category-orange-border: var(--badge-category-orange-border);
-  --color-badge-category-rose: var(--badge-category-rose);
-  --color-badge-category-rose-bg: var(--badge-category-rose-bg);
-  --color-badge-category-rose-border: var(--badge-category-rose-border);
+  --color-badge-category-fuchsia: var(--badge-category-fuchsia);
+  --color-badge-category-fuchsia-bg: var(--badge-category-fuchsia-bg);
+  --color-badge-category-fuchsia-border: var(--badge-category-fuchsia-border);
   /* Semantic status/feedback family (foreground / soft -bg / -border) for inline status
      text, alert callouts, and toasts. Badges consume the same values via --badge-* above.
      Usage: text-status-warning, bg-status-warning-bg, border-status-warning-border. */
@@ -489,9 +489,9 @@
   --badge-category-orange: oklch(0.4698 0.143 37.304);
   --badge-category-orange-bg: oklch(0.9542 0.0372 75.164);
   --badge-category-orange-border: oklch(0.9015 0.0729 70.697);
-  --badge-category-rose: oklch(0.4546 0.1713 13.697);
-  --badge-category-rose-bg: oklch(0.9414 0.0298 12.58);
-  --badge-category-rose-border: oklch(0.8924 0.0559 10.001);
+  --badge-category-fuchsia: oklch(0.4546 0.19 322);
+  --badge-category-fuchsia-bg: oklch(0.9414 0.0298 322);
+  --badge-category-fuchsia-border: oklch(0.8924 0.0559 322);
 }
 
 /**
@@ -728,9 +728,9 @@
   --badge-category-orange: oklch(0.8366 0.1165 66.29);
   --badge-category-orange-bg: oklch(0.4084 0.1165 38.172 / 30%);
   --badge-category-orange-border: oklch(0.8366 0.1165 66.29 / 35%);
-  --badge-category-rose: oklch(0.8097 0.1061 11.638);
-  --badge-category-rose-bg: oklch(0.4103 0.1502 10.272 / 30%);
-  --badge-category-rose-border: oklch(0.8097 0.1061 11.638 / 35%);
+  --badge-category-fuchsia: oklch(0.8097 0.1061 322);
+  --badge-category-fuchsia-bg: oklch(0.4103 0.1502 322 / 30%);
+  --badge-category-fuchsia-border: oklch(0.8097 0.1061 322 / 35%);
 }
 
 /* A fourth theme, derived from LIGHT rather than being a third surface ladder.
@@ -890,9 +890,9 @@
   --badge-category-orange: var(--badge-neutral);
   --badge-category-orange-bg: var(--badge-neutral-bg);
   --badge-category-orange-border: var(--badge-neutral-border);
-  --badge-category-rose: var(--badge-neutral);
-  --badge-category-rose-bg: var(--badge-neutral-bg);
-  --badge-category-rose-border: var(--badge-neutral-border);
+  --badge-category-fuchsia: var(--badge-neutral);
+  --badge-category-fuchsia-bg: var(--badge-neutral-bg);
+  --badge-category-fuchsia-border: var(--badge-neutral-border);
 
   /* Data. The same six hues in the same order, darkened so each clears 4.5:1 as a graphical
      object: series 5 is still gold, series 6 still green. The sequential ramp keeps its

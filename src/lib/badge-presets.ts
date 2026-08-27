@@ -55,8 +55,13 @@ export const ROLE_LABEL = {
 } as const satisfies Record<keyof typeof ROLE_BADGE, string>;
 
 /**
- * Activity-log categories, in categorical hues. Green is Problem and rose is Grade: neither
+ * Activity-log categories, in categorical hues. Green is Problem and fuchsia is Grade: neither
  * reports a state, and both would be a mistake to read as one.
+ *
+ * Grade was rose until it sat next to the red ERROR and SECURITY badges in the System Logs
+ * table and read as one of them. Fuchsia is the only large empty arc left on the wheel that is
+ * not the brand teal, which Grade also used to be and which belongs to the product's own
+ * colour rather than to a category.
  */
 export const ACTIVITY_CATEGORY_BADGE = {
   SYSTEM: 'category-slate',
@@ -65,7 +70,7 @@ export const ACTIVITY_CATEGORY_BADGE = {
   ASSIGNMENT: 'category-violet',
   PROBLEM: 'category-green',
   SUBMISSION: 'category-orange',
-  GRADE: 'category-rose',
+  GRADE: 'category-fuchsia',
 } as const satisfies Record<string, BadgeVariant>;
 
 /**
@@ -73,7 +78,7 @@ export const ACTIVITY_CATEGORY_BADGE = {
  *
  * The pairing with the categories above is the whole point: a category says which part of the
  * system an entry is about, a severity says whether anybody needs to do something about it,
- * and the two have to be readable as different questions on the same row. So a rose GRADE
+ * and the two have to be readable as different questions on the same row. So a fuchsia GRADE
  * badge beside a neutral INFO badge is a routine grade entry, not an error.
  *
  * INFO is `neutral`, not `info`. Almost every entry a healthy system writes is INFO, so the

@@ -29,6 +29,7 @@ type LogRow = {
   category: string | null;
   severity: 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
   ipAddress?: string | null;
+  userAgent?: string | null;
 };
 
 // Lightweight DataTable mock: renders each row's rendered cells so we can assert
@@ -157,8 +158,9 @@ describe('SystemLogsClient', () => {
       expect(screen.getByTestId('table-rows').textContent).toBe('1');
     });
     // The Action cell shows the display verb. The stored USER_LOGIN is what the row is
-    // filtered, searched and exported by, and it is untouched.
-    expect(screen.getByText('Signed in')).toBeInTheDocument();
+    // filtered, searched and exported by, and it is untouched. Upper-cased in CSS, so the text
+    // node stays in ordinary case and Copy JSON carries the entry as stored.
+    expect(screen.getByText('Signed in')).toHaveClass('uppercase');
     // One Name column, surname first: "Lovelace, Ada". Upper-cased in CSS, so the text node
     // itself stays in ordinary case and this asserts what a screen reader hears.
     expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument();
@@ -222,6 +224,32 @@ describe('SystemLogsClient', () => {
     fireEvent.click(action);
 
     expect(screen.getByTestId('log-viewer')).toBeInTheDocument();
+  });
+
+  /*
+   * The address alone rarely answers "was that really them". The same address from a phone
+   * rather than the lab machine often does, so the browser and platform sit under it.
+   */
+  it('puts the browser and platform under the address', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [
+          makeRow({
+            ipAddress: '::ffff:1.2.3.4',
+            userAgent:
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0',
+          }),
+        ],
+        total: 1,
+      }),
+    });
+
+    renderWithClient(<SystemLogsClient />);
+
+    // The IPv4-mapped IPv6 prefix is still stripped.
+    expect(await screen.findByText('1.2.3.4')).toBeInTheDocument();
+    expect(screen.getByText('Edge on Windows')).toBeInTheDocument();
   });
 
   it('shows a loading state before the first fetch resolves', () => {
