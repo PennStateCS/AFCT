@@ -283,16 +283,19 @@ function SidebarPreview() {
 }
 
 /**
- * The dashboard header, shown next to the rail above because the two are one decision.
- * It sits one step off the page canvas rather than being a colour of its own, so the only
- * way to judge it is against the surface it caps: the strip below the band is there to
- * show exactly that. Non-interactive, like the rail; the hover state is labelled instead.
+ * The dashboard header, shown next to the rail above because the two are one decision: the
+ * band is the rail's grey one step lighter, and the pair is the application shell. The only
+ * way to judge it is against the surface it caps, so the strip below the band is the page
+ * canvas. Non-interactive, like the rail; the hover state is labelled instead.
+ *
+ * The band is a two-stop gradient, so this draws it the way the real header does rather
+ * than as a flat `bg-navbar`, which would show the dark end only.
  */
 function NavbarPreview() {
   return (
     <div className="flex flex-wrap items-start gap-4">
       <div className="border-navbar-border w-full max-w-md overflow-hidden rounded-lg border">
-        <div className="bg-navbar text-navbar-foreground border-navbar-border flex h-14 items-center gap-3 border-b px-3">
+        <div className="from-navbar to-navbar-end text-navbar-foreground border-navbar-border flex h-14 items-center gap-3 border-b bg-gradient-to-r px-3">
           <span className="text-navbar-foreground bg-navbar-accent flex size-8 items-center justify-center rounded-md">
             <PanelLeft className="size-4" aria-hidden="true" />
           </span>
@@ -310,7 +313,7 @@ function NavbarPreview() {
       </div>
       <ul className="text-muted-foreground min-w-56 flex-1 space-y-1 text-sm">
         <li>
-          Surface: <Cls>bg-navbar</Cls> <Cls>border-navbar-border</Cls>
+          Surface: <Cls>from-navbar</Cls> <Cls>to-navbar-end</Cls> <Cls>border-navbar-border</Cls>
         </li>
         <li>
           Current page: <Cls>text-navbar-foreground</Cls>

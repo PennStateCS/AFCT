@@ -140,7 +140,9 @@ describe('DesignTokens', () => {
 
   it('previews the dashboard header with its own token family', () => {
     const { container } = render(<DesignTokens />);
-    const header = container.querySelector('.bg-navbar') as HTMLElement;
+    // `from-navbar`, not `bg-navbar`: the band is a two-stop gradient, and the preview draws
+    // it the way the real header does.
+    const header = container.querySelector('.from-navbar') as HTMLElement;
     expect(header).not.toBeNull();
     // The point of the preview is the hierarchy, so both halves of it have to be there:
     // the current page in the full foreground, the trail behind it in the muted one.

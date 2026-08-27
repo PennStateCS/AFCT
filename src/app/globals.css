@@ -40,9 +40,9 @@
   --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  /* The dashboard header. Its own family rather than the sidebar's or the page's: it is
-     light chrome in two themes and dark in one, and nothing else in the app flips that
-     way. See the notes on --navbar in the :root block. */
+  /* The dashboard header. Its own family rather than the sidebar's or the page's: it is a
+     dark band in the light and dark themes and a light one in high contrast, and nothing
+     else in the app flips that way. See the notes on --navbar in the :root block. */
   --color-navbar: var(--navbar);
   /* The band's lighter end. It is a two-stop gradient, so both stops are tokens and each
      theme decides whether there is any difference between them at all. */
@@ -208,13 +208,11 @@
 :root,
 .auth-light {
   --radius: 0.65rem;
-  /* A shade under slate-50, which suits pages that are mostly canvas rather than one big
-     card. Cards and tables stay pure white and separate from this by 1.22:1 on fill alone,
-     so the card reads as a card before its border is involved; at the old #F8FAFC that was
-     1.046:1 and the border was the only thing marking the edge. This is currently the same
-     value as --navbar, so the header band has no fill of its own and reads as page; that is
-     deliberate for now and the band is the next thing to settle. */
-  --background: oklch(0.9319 0.0097 252.814); /* #E4E9EF, the navbar's own grey */
+  /* The workspace, and the lightest neutral in the shell. Cards and tables stay pure white
+     and separate from it by 1.20:1 on fill alone, so a card reads as a card before its
+     border is involved; at the old #F8FAFC that was 1.046:1 and the border was the only
+     thing marking an edge. The foreground reads 14.9:1 here and the muted text 6.3:1. */
+  --background: oklch(0.9385 0.008 253.855); /* #E7EBF0 */
   /* Slate-950, not pure black. One value for every normal-text token below, so the
      primary/muted split does the hierarchy rather than a mix of blacks. 17.9:1 on a white
      card, well past AA; the old pure black was 21:1 and read harsher for it. */
@@ -239,15 +237,22 @@
      (the keyboard-shortcut keys, the equation hover) came out darker than the toolbar, and
      every subtle panel in the app had to dilute it with an opacity fraction to look right.
      This is the conventional light-theme value, and --muted-foreground stays dark so text on
-     it keeps its contrast. */
-  --muted: oklch(0.967 0.001 286.375);
+     it keeps its contrast.
+
+     Slate rather than the zinc it used to be. It was the same lightness in a neutral hue,
+     which read as a faintly warm grey once the canvas around it became definitely slate.
+     Only the hue moved: the lightness is untouched, so every contrast ratio on this surface
+     is what it was (16.2:1 for the foreground, 6.9:1 for the muted text, within 0.01). */
+  --muted: oklch(0.967 0.008 253.855); /* #F0F4FA */
   /* Slate-600, up from a near-black 0.329 grey. At 12.3:1 against a 17.9:1 foreground the
      old value was barely secondary: descriptions, timestamps, emails and table helper text
      all read at roughly the weight of body copy. This is clearly quieter and still
      comfortable at text-2xs: 7.6:1 on the card, 7.2:1 on the canvas, 6.9:1 on muted.
      Slate rather than neutral grey, so it agrees with the rest of the palette. */
   --muted-foreground: oklch(0.4455 0.0374 257.2808); /* #475569 */
-  --accent: oklch(0.9128 0 0);
+  /* The hover surface, and the same story: it had no hue at all. Same lightness, same
+     13.8:1 and 5.9:1 on it, now in the palette's family. */
+  --accent: oklch(0.9128 0.008 253.855); /* #DFE3E7 */
   --accent-foreground: oklch(0.21 0.006 285.885);
   --destructive: oklch(0.577 0.245 27.325);
   /* Slate, and a shade down, because the canvas moved. Two things happened when the page
@@ -309,54 +314,45 @@
   /* Gray-700: the same family as the rail, so the divider reads as part of it. */
   --sidebar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
   --sidebar-ring: oklch(0.9842 0.0034 247.858);
-  /* The dashboard header. Its own family rather than the page tokens, because it is a
-     surface in its own right and has to work out which way up it is in three themes.
+  /* The dashboard header, and the second half of one dark application shell.
 
-     One step DOWN from the page canvas, not up:
-
-       sidebar   #111827   the dark rail
-       navbar    #EEF1F4   this band
-       canvas    #F8FAFC   the page
+       sidebar   #111827   the rail, the deepest layer
+       navbar    #1F2937   this band, one step lighter
+       canvas    #E7EBF0   the workspace
        card      #FFFFFF   what content sits on
 
-     Given the card colour it vanished into the page it is supposed to cap. Given a dark
-     one it merged with the rail into a single L-shaped block. A step below the canvas
-     leaves it recognisably its own band while still reading as chrome rather than
-     content. It is only 1.08:1 from the canvas, so --navbar-border does most of the
-     separating and is deliberately the strongest value in this family. */
-  /* EXPERIMENT: the band goes dark in light mode, joining the rail as chrome rather than
-     trying to be a shade of the page. It had been a step under the canvas, which worked only
-     while the canvas was near-white; now that the page is #E4E9EF there is no light grey left
-     that is both darker than the page and still a band.
+     It used to be a light grey a shade under the canvas, which made it a third thing
+     between a dark rail and a light page, and left the rail looking like the only piece of
+     chrome on the screen. The two now read as one shell: the same grey family, the rail
+     deepest, the band 1.21:1 above it so navigation and header are still told apart.
 
-     Two stops, dark at the rail end and lightening to the right. The step between them is
-     1.20:1, which is enough to see and not enough to look like a graphic. The right stop is
-     as light as it can go: at anything lighter the ancestor breadcrumbs (#94A3B8) fall under
-     4.5:1, and they are text.
+     Two stops, dark at the rail end and lightening across to the right. The step is 1.15:1,
+     enough to see and not enough to look like a graphic, and the right one is as light as it
+     can go: past that the ancestor breadcrumbs fall under 4.5:1, and they are text.
 
-     Note against this: a dark band was tried once before and merged with the dark rail into
-     one L-shaped block. The gradient is what answers that, since the two are only adjacent at
-     the far left. If it still reads as an L, `bg-gradient-to-r` on the header is one word from
-     putting the light end at the rail instead. */
-  --navbar: oklch(0.2795 0.0368 260.031); /* #1E293B, 1.21:1 against the rail */
-  --navbar-end: oklch(0.3302 0.0419 258.307); /* #28364B */
-  --navbar-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 14.0:1 left, 11.7:1 right */
-  /* Ancestor breadcrumbs and separators: present, and clearly behind the current page.
-     A fixed value rather than the foreground at some opacity, for the same reason the
-     rail uses one: an alpha blends with whatever is behind it, so its contrast would
-     move with the hover state underneath. 6.7:1. */
-  --navbar-muted-foreground: oklch(0.7107 0.0351 256.788); /* #94A3B8, 5.7:1 left, 4.8:1 right */
-  /* Hover surface for the two controls. Lighter than the gradient's lighter end, or the
-     theme toggle at the right of the band would have nothing to highlight against: 1.35:1
-     on that end, and the full foreground on it at 8.0:1. */
-  --navbar-accent: oklch(0.4214 0.0481 259.955); /* #3E4E68 */
+     Saturated blue is deliberately absent from all of this. It belongs to the branded
+     surfaces (see --course-banner) and to primary actions, and the shell staying neutral is
+     what lets a course banner read as identity rather than as more chrome. */
+  --navbar: oklch(0.2781 0.0296 256.848); /* #1F2937, 1.21:1 above the rail */
+  --navbar-end: oklch(0.3167 0.0278 252.882); /* #283340 */
+  --navbar-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 14.0:1 left, 12.3:1 right */
+  /* Ancestor breadcrumbs and separators: present, and clearly behind the current page. A
+     fixed value rather than the foreground at some opacity, for the same reason the rail
+     uses one: an alpha blends with whatever is behind it, so its contrast would move with
+     the hover state underneath. 5.7:1 on the left stop, 5.0:1 on the right. */
+  --navbar-muted-foreground: oklch(0.7107 0.0351 256.788); /* #94A3B8 */
+  /* Hover surface for the two controls: grey-700, which is also the rail's divider, so the
+     shell is one three-value ramp rather than two. 1.42:1 above the band and still 1.24:1
+     above its lighter end, so the theme toggle at the far right has something to lift off.
+     The full foreground on it is 9.9:1. */
+  --navbar-accent: oklch(0.3729 0.0306 259.733); /* #374151 */
   --navbar-accent-foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC */
-  /* Darker than the band rather than lighter, so the bottom edge reads as the band ending
-     rather than as a rule drawn under it. It matters far less than it used to: the band and
-     the page are now 12:1 apart and the boundary is the colour change itself. */
-  --navbar-border: oklch(0.2295 0.0338 260.031); /* #151E2C */
-  /* Cobalt is too dark to see on this band now; the same light blue the rail and the dark
-     theme use. 8.1:1. */
+  /* The same grey-700: 1.42:1 against the band above it and 8.6:1 against the canvas below,
+     so the join between shell and workspace is drawn by a dark rule rather than a bright
+     one. */
+  --navbar-border: oklch(0.3729 0.0306 259.733); /* #374151 */
+  /* Cobalt is too dark to see on this band; this is the light blue the rail and the dark
+     theme already use. 8.1:1 against the band. */
   --navbar-ring: oklch(0.8091 0.0956 251.813); /* #93C5FD */
   /* The course banner, and the reason it has a family of its own.
 
@@ -393,12 +389,17 @@
      deliberately weak; if the network is the first thing you notice, lower these. */
   --course-banner-node: oklch(0.6231 0.188 259.815); /* #3B82F6 */
   --course-banner-glow: oklch(0.8091 0.0956 251.813); /* #93C5FD */
-  /* Matched to --muted. A mid grey band competed with the header text; this reads as a
-     surface. Kept a solid colour, not a tint: the header row is sticky in several tables
-     and body rows would scroll through anything translucent. */
-  --table-header: oklch(0.967 0.001 286.375);
+  /* Matched to --muted, and slate for the same reason it is: a table sits on a white card
+     on a slate canvas, and a zinc header was the one part of that stack in a different
+     family. A mid grey band competed with the header text; this reads as a surface, 1.10:1
+     off the white body, which is a header without being a grey strip. Kept a solid colour,
+     not a tint: the header row is sticky in several tables and body rows would scroll
+     through anything translucent. */
+  --table-header: oklch(0.967 0.008 253.855); /* #F0F4FA */
   --table-header-foreground: oklch(0.2077 0.0398 265.755); /* 16.2:1 on the header surface */
-  --table-highlight: oklch(0.9431 0 0);
+  /* Row hover: 1.18:1 off the body, enough to track a row with a pointer and not enough to
+     be mistaken for a selection. Slate, like everything else in this stack. */
+  --table-highlight: oklch(0.9431 0.008 253.855); /* #E9EDF2 */
   --table-background: oklch(1 0 0);
   --node-color: oklch(0.9588 0.1093 102.632);
   --grid-color: oklch(0.9515 0.0046 258.325);
