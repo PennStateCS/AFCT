@@ -4,24 +4,52 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { readJson } from '@/lib/api/request';
 import { apiError } from '@/lib/api/http';
+import { logDenial, safeAuditLog } from '@/lib/api/activity';
 import { canManageCourse } from '@/lib/permissions';
 import { assignmentSyncState, queueChangedGrades } from '@/lib/lti/grade-sync';
 
-/** Whether the caller runs the course this assignment belongs to. */
-async function staffFor(assignmentId: string) {
+/**
+ * Whether the caller runs the course this assignment belongs to.
+ *
+ * Hand-rolled rather than `withAssignmentAuth`, and it has to stay that way: this path has no
+ * course segment, and that wrapper reads the course from a route param. What it borrows from
+ * the wrapper is the part that matters, which is that a refusal is RECORDED. It used to return
+ * a bare 403, so an attempt to reach another course's grade sync left nothing behind.
+ *
+ * Returns the current sync flag too, so a caller changing it has a `from` value to log without
+ * a second read.
+ */
+async function staffFor(assignmentId: string, req: Request) {
   const session = await auth();
   if (!session?.user?.id) return { ok: false as const, response: apiError(401, 'Not signed in') };
 
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
-    select: { courseId: true },
+    select: { courseId: true, ltiAutoSync: true },
   });
   if (!assignment) return { ok: false as const, response: apiError(404, 'Not found') };
 
   const allowed = await canManageCourse(session.user, assignment.courseId);
-  if (!allowed) return { ok: false as const, response: apiError(403, 'Forbidden') };
+  if (!allowed) {
+    return {
+      ok: false as const,
+      response: await logDenial(req, {
+        userId: session.user.id,
+        action: 'ASSIGNMENT_GRADE_SYNC_DENIED',
+        category: 'GRADE',
+        courseId: assignment.courseId,
+        assignmentId,
+        metadata: { reason: 'does not manage this course' },
+      }),
+    };
+  }
 
-  return { ok: true as const, courseId: assignment.courseId };
+  return {
+    ok: true as const,
+    courseId: assignment.courseId,
+    userId: session.user.id,
+    autoSync: assignment.ltiAutoSync,
+  };
 }
 
 /**
@@ -61,7 +89,7 @@ async function staffFor(assignmentId: string) {
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const gate = await staffFor(id);
+  const gate = await staffFor(id, request);
   if (!gate.ok) return gate.response;
 
   const userId = new URL(request.url).searchParams.get('userId')?.trim() || undefined;
@@ -93,18 +121,43 @@ const PatchSchema = z.object({ autoSync: z.boolean() });
  */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const gate = await staffFor(id);
+  const gate = await staffFor(id, request);
   if (!gate.ok) return gate.response;
 
   const body = await readJson(request, PatchSchema);
   if (!body.ok) return body.response;
 
+  const from = gate.autoSync;
+  const to = body.data.autoSync;
+
   await prisma.assignment.update({
     where: { id },
-    data: { ltiAutoSync: body.data.autoSync },
+    data: { ltiAutoSync: to },
   });
 
-  return NextResponse.json({ autoSync: body.data.autoSync });
+  /**
+   * This decides whether grades reach the LMS at all, and it wrote nothing at all before.
+   * A gradebook that stops matching the LMS is a support question that starts with "when did
+   * this get turned off, and by whom", and the answer was not recorded anywhere.
+   *
+   * A save that changed nothing logs nothing: the toggle sends its state rather than a
+   * difference, so without this a page refresh would look like an event.
+   */
+  if (from !== to) {
+    await safeAuditLog('ASSIGNMENT_GRADE_SYNC_UPDATED', request, {
+      userId: gate.userId,
+      action: 'ASSIGNMENT_GRADE_SYNC_UPDATED',
+      severity: 'INFO',
+      // Explicitly GRADE: the action name contains both "assignment" and "grade", and what
+      // this changes is whether grades leave AFCT.
+      category: 'GRADE',
+      courseId: gate.courseId,
+      assignmentId: id,
+      metadata: { changes: { autoSync: { from, to } } },
+    });
+  }
+
+  return NextResponse.json({ autoSync: to });
 }
 
 const PostSchema = z.object({ userId: z.string().trim().min(1).optional() });
@@ -144,7 +197,7 @@ const PostSchema = z.object({ userId: z.string().trim().min(1).optional() });
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const gate = await staffFor(id);
+  const gate = await staffFor(id, request);
   if (!gate.ok) return gate.response;
 
   // A body is optional here: sending everything is the older call and still sends none.
@@ -163,6 +216,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // Deliberate, so this is the one place a failed grade is tried again.
   const queued = await queueChangedGrades(id, { retryFailed: true, userId });
+
+  /**
+   * The person who asked. Every grade this queues writes its own LTI_SCORE_QUEUED entry, so
+   * the machine side was covered, but nothing said a human pressed the button, for which
+   * assignment, or that it was a retry sweep after an LMS outage.
+   *
+   * `targetUserId` when it was one student: sending a grade to the LMS puts an education
+   * record outside AFCT, and a disclosure about one person should name them.
+   */
+  await safeAuditLog('LTI_GRADES_PUSH_REQUESTED', request, {
+    userId: gate.userId,
+    action: 'LTI_GRADES_PUSH_REQUESTED',
+    severity: 'INFO',
+    category: 'GRADE',
+    courseId: gate.courseId,
+    assignmentId: id,
+    metadata: {
+      queued,
+      scope: userId ? 'student' : 'assignment',
+      ...(userId ? { targetUserId: userId } : {}),
+    },
+  });
 
   return NextResponse.json({ queued });
 }
