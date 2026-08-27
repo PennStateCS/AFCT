@@ -32,6 +32,7 @@ import { UserRoundPlus, Users } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import type { UserListItem } from '@/lib/users-list';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -175,11 +176,10 @@ export default function UsersClient() {
             id="users-title"
             className="flex items-center gap-3 text-2xl font-semibold tracking-tight"
           >
-            {/* Decorative: the heading beside it already says what this is. Same treatment
-                as the Courses page, in the icon the sidebar already uses for this page. */}
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-              <Users className="size-5" aria-hidden="true" />
-            </span>
+            {/* Decorative: the heading beside it already says what this is. The icon the
+                sidebar already uses for this page, in the title’s own ink, no tile
+                (see PAGE_HEADER_ICON_CLASS). */}
+            <Users className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
             <span>User Accounts</span>
           </h1>
           <div className="flex flex-wrap items-center gap-2">

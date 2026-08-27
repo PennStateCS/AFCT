@@ -7,7 +7,14 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        // shadow-xs, not the shadcn default shadow-sm. Every panel AFCT builds by hand (the
+        // settings boxes, the status sections, the rail cards, the course banner) already uses
+        // xs, so the shared Card was the one content surface floating higher than its
+        // neighbours, and it showed most beside a DataTable, whose shell carries no shadow at
+        // all. One level for ordinary work surfaces: white fill, a quiet border, and just
+        // enough shadow to seat it. Overlays keep theirs; dropdowns, popovers, dialogs and the
+        // sign-in card are md or lg and stay that way.
+        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-xs",
         className
       )}
       {...props}

@@ -28,6 +28,23 @@ declare module '@tanstack/react-table' {
     filterSections?: { label: string; options: { label: string; value: string }[] }[];
     /** Hide this column from the stacked mobile card view. */
     mobileHidden?: boolean;
+    /**
+     * Where this column's cell goes on a stacked mobile card. Only the `actions` column
+     * is read for it.
+     *
+     * `corner` (the default) is the ordinary case: one icon-only overflow menu, which
+     * belongs in the card's top-right where it reads as belonging to the record.
+     *
+     * `footer` is for an action cell that is more than that: two text buttons, a
+     * confirm-and-cancel pair, anything wider than an icon. Those cannot sit in a 36px
+     * corner without truncating, so they keep a divider and a row of their own under the
+     * card's fields.
+     *
+     * Declared rather than detected. Working out whether a rendered cell "is a dropdown"
+     * from its children or its icons breaks the first time a cell is wrapped in anything,
+     * and it breaks silently.
+     */
+    mobileActionPlacement?: 'corner' | 'footer';
     /** Keep this column's cell on one line. Cells wrap by default; set this for values
      *  that must not break (dates, counts, short codes, action buttons). */
     nowrap?: boolean;

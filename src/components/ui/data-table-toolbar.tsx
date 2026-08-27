@@ -22,8 +22,29 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
-/** The table's toolbar: scoped global search, a combined value-filter popover for the
- *  opted-in columns, caller action buttons, CSV export, and column visibility. */
+/**
+ * The table's toolbar: scoped global search, a combined value-filter popover for the
+ * opted-in columns, caller action buttons, CSV export, and column visibility.
+ *
+ * The rule these controls follow, and the one an added control should follow:
+ *
+ * - **Utilities are neutral.** Filters and Columns change how you are LOOKING at the data,
+ *   not the data, so both are `secondary` (the soft `--muted` fill) and neither competes
+ *   with the table. They are siblings and are meant to look it.
+ * - **Export is neutral too, and distinct.** It acts on the data rather than the view, so
+ *   it is `outline`: the card surface with a real edge. Not primary, and not green. Getting
+ *   a CSV is not a success state.
+ * - **Cobalt means state, or a real primary action.** The only tint in this family is the
+ *   Filters button when filters are active (see `DataTableFilterPopover`). A page's own
+ *   primary action ("Create Course") stays solid primary and stays OUT of the toolbar,
+ *   in the page or card header, so the strongest button on screen is the one that makes
+ *   something new.
+ * - **Semantic colours mean something.** Green, amber and red are for states and outcomes,
+ *   never for a generic table action.
+ *
+ * Everything here is a shared `Button` variant on purpose. A toolbar assembled out of local
+ * class strings is how six tables end up with six toolbars.
+ */
 export function DataTableToolbar<TData>({
   table,
   globalFilter,

@@ -96,7 +96,8 @@ export function abandonedFileColumns({
           </Button>
         );
       },
-      meta: { filterLabel: 'Action', align: 'right', nowrap: true },
+      // A text button, not an overflow menu, so it keeps the card's footer row on a phone.
+      meta: { filterLabel: 'Action', align: 'right', nowrap: true, mobileActionPlacement: 'footer' },
     },
   ];
 }

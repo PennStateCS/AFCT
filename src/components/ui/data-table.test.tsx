@@ -364,6 +364,76 @@ describe('DataTable', () => {
     expect(screen.queryByText('Bob')).not.toBeInTheDocument();
   });
 
+  /*
+   * The toolbar's visual hierarchy, asserted through the tokens that carry it rather than
+   * through whole class strings: neutral utilities, an outlined Export, and cobalt kept for
+   * the one state in the family (filters are on) and for a page's own primary action.
+   *
+   * Class names are a blunt instrument for this, but the alternative is a screenshot nobody
+   * runs. These pin the three distinctions that make the hierarchy readable, and nothing
+   * about padding or radius, so a restyle does not have to come here first.
+   */
+  describe('toolbar hierarchy', () => {
+    const facetColumns: ColumnDef<RowData>[] = [
+      { accessorKey: 'name', header: 'Name', meta: { priority: 1 } },
+      { accessorKey: 'role', header: 'Role', meta: { priority: 2, filterVariant: 'multiselect' } },
+    ];
+
+    it('keeps Filters and Columns neutral siblings while nothing is filtered', () => {
+      render(<DataTable columns={facetColumns} data={data} />);
+
+      const filters = screen.getByRole('button', { name: 'Filters' });
+      const cols = screen.getByRole('button', { name: 'Columns' });
+
+      expect(filters.className).toContain('bg-muted');
+      expect(cols.className).toContain('bg-muted');
+      // No cobalt at rest: a view control is not a state until it is doing something.
+      expect(filters.className).not.toContain('tab-active');
+      expect(cols.className).not.toContain('tab-active');
+    });
+
+    it('tints Filters, and counts them, once a filter is on', async () => {
+      const user = userEvent.setup();
+      render(<DataTable columns={facetColumns} data={data} />);
+
+      await user.click(screen.getByRole('button', { name: 'Filters' }));
+      await user.click(await screen.findByRole('checkbox', { name: /^admin/i }));
+
+      // The accessible name carries the state too, so it does not rest on the tint.
+      const active = screen.getByRole('button', { name: 'Filters, 1 active' });
+      expect(active.className).toContain('bg-tab-active-bg');
+      expect(active.className).toContain('text-tab-active');
+      expect(active).toHaveTextContent('1');
+      // Columns is not a state indicator and stays where it was.
+      expect(screen.getByRole('button', { name: 'Columns' }).className).not.toContain('tab-active');
+    });
+
+    it('keeps Export outlined: an action on the data, not a primary one', () => {
+      render(<DataTable columns={facetColumns} data={data} />);
+
+      const exportButton = screen.getByRole('button', { name: /export table data/i });
+      expect(exportButton.className).toContain('border-input');
+      expect(exportButton.className).toContain('bg-card');
+      // Not primary, and not a semantic colour: a CSV is not a success.
+      expect(exportButton.className).not.toContain('bg-primary');
+      expect(exportButton.className).not.toContain('status-success');
+    });
+
+    it('leaves a page action passed into the toolbar alone', () => {
+      render(
+        <DataTable
+          columns={facetColumns}
+          data={data}
+          actionButtons={<Button>Create Course</Button>}
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: 'Create Course' }).className).toContain(
+        'bg-primary',
+      );
+    });
+  });
+
   it('does not render a Filters button when no column opts in', () => {
     render(<DataTable columns={columns} data={data} />);
     expect(screen.queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
@@ -424,6 +494,111 @@ describe('DataTable', () => {
     // measured in a real browser at 390px, where the value ran 13px past the card's border
     // without it and sat inside on two lines with it.
     expect(value.closest('dd')).toHaveClass('[&_*]:whitespace-normal');
+  });
+
+  /*
+   * Where a row's actions land once the table becomes cards.
+   *
+   * The rule the card view implements: an icon-only overflow menu goes in the card's
+   * top-right corner, a larger group of controls keeps a footer row, and a table with no
+   * actions column gets neither. jsdom does no layout, so these pin the structure the rule
+   * produces (which slot the cell rendered into, and that it rendered once), not how it looks.
+   */
+  describe('actions on a stacked card', () => {
+    const stackedViewport = () => {
+      window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })) as unknown as typeof window.matchMedia;
+    };
+
+    const kebabColumns: ColumnDef<RowData>[] = [
+      ...columns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }) => <Button aria-label={`Actions for ${row.original.name}`}>⋮</Button>,
+      },
+    ];
+
+    const footerColumns: ColumnDef<RowData>[] = [
+      ...columns,
+      {
+        id: 'actions',
+        header: 'Actions',
+        meta: { mobileActionPlacement: 'footer' },
+        cell: ({ row }) => <Button aria-label={`Delete ${row.original.name}`}>Delete</Button>,
+      },
+    ];
+
+    const cardFor = (name: string) => screen.getByText(name).closest('li') as HTMLElement;
+
+    it('puts an overflow menu in the corner, once, and outside the fields', async () => {
+      stackedViewport();
+      render(<DataTable columns={kebabColumns} data={[data[0]!]} />);
+
+      const trigger = await screen.findByRole('button', { name: 'Actions for Alice' });
+      // Once. It used to be possible to render the cell in the body and again in the footer.
+      expect(screen.getAllByRole('button', { name: 'Actions for Alice' })).toHaveLength(1);
+      // Not a field: it has no label, so it does not belong in the definition list.
+      expect(trigger.closest('dl')).toBeNull();
+      expect(trigger.closest('dd')).toBeNull();
+      expect(trigger.parentElement).toHaveClass('absolute');
+    });
+
+    it('drops the footer and its divider for an overflow menu', async () => {
+      stackedViewport();
+      render(<DataTable columns={kebabColumns} data={[data[0]!]} />);
+
+      await screen.findByRole('button', { name: 'Actions for Alice' });
+      // The lone ellipsis under a rule is exactly what this replaced.
+      expect(cardFor('Alice').querySelector('.border-t')).toBeNull();
+    });
+
+    it('keeps a footer row for an action group that says it needs one', async () => {
+      stackedViewport();
+      render(<DataTable columns={footerColumns} data={[data[0]!]} />);
+
+      const button = await screen.findByRole('button', { name: 'Delete Alice' });
+      expect(button.parentElement).toHaveClass('border-t');
+      expect(button.parentElement).not.toHaveClass('absolute');
+      expect(screen.getAllByRole('button', { name: 'Delete Alice' })).toHaveLength(1);
+    });
+
+    it('reserves nothing on a table with no actions at all', async () => {
+      stackedViewport();
+      render(<DataTable columns={columns} data={[data[0]!]} />);
+
+      await screen.findByText('Alice');
+      const card = cardFor('Alice');
+      expect(card.querySelector('.absolute')).toBeNull();
+      expect(card.querySelector('.border-t')).toBeNull();
+      // No inset kept for an action that is not there.
+      expect(card.querySelector('dl')?.className).not.toContain('pr-11');
+    });
+
+    it('still hides a mobileHidden column, and still keeps the card a labelled list', async () => {
+      stackedViewport();
+      const cols: ColumnDef<RowData>[] = [
+        ...kebabColumns.slice(0, 1),
+        { ...columns[1]!, meta: { priority: 2, mobileHidden: true } },
+        kebabColumns[2]!,
+      ];
+      render(<DataTable columns={cols} data={[data[0]!]} />);
+
+      await screen.findByText('Alice');
+      expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+      // Safari/VoiceOver drops list semantics from an unmarked list, hence the explicit role.
+      expect(screen.getByRole('list')).toBeInTheDocument();
+      expect(cardFor('Alice').tagName).toBe('LI');
+      expect(cardFor('Alice').querySelector('dt')?.textContent).toBe('Name');
+    });
   });
 
   /*

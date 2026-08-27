@@ -255,7 +255,8 @@ export function getRateLimitColumns({
     },
     {
       id: 'actions',
-      meta: { priority: 1 },
+      // Clear is a text button, not an overflow menu, so it keeps the card's footer row.
+      meta: { priority: 1, mobileActionPlacement: 'footer' },
       header: '',
       enableSorting: false,
       enableHiding: false,

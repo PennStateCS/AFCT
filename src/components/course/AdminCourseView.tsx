@@ -183,12 +183,15 @@ export function AdminCourseView({
         value={tab}
         onValueChange={onTabChange}
         orientation={railNav ? 'vertical' : 'horizontal'}
-        // gap-4, not space-y-6. The Tabs primitive is `flex flex-col gap-2`, and a
-        // space-y-* on top of that does not replace the gap, it ADDS to it: tailwind-merge
-        // only reconciles classes that set the same property, and gap and margin are not
-        // the same property. So the panel sat 8px + 24px = 32px above the workspace while
-        // the navbar left only the layout's own 16px above it. One mechanism, one value.
-        className="gap-4"
+        // gap-6, and the number is not arbitrary: `dashboard/layout.tsx` puts py-6 above
+        // the banner, so this is what makes the air under it match the air over it. It was
+        // gap-4, set when that padding was 16px, and it has read as a squeeze ever since.
+        //
+        // A gap, not a space-y-*. The Tabs primitive is `flex flex-col gap-2`, and a space-y-*
+        // on top of that does not replace the gap, it ADDS to it: tailwind-merge only
+        // reconciles classes that set the same property, and gap and margin are not the same
+        // property. One mechanism, one value.
+        className="gap-6"
       >
         <CourseHeaderContent course={course} isStudent={false} />
 
@@ -282,11 +285,17 @@ export function AdminCourseView({
                   status card floating 440px away from its right edge, on a tab a professor
                   reaches straight from System Settings. */}
               <SettingsAsideLayout
-                aside={<CourseStatusCard course={course} onPublishToggle={onPublishToggle} />}
+                aside={
+                  <>
+                    <CourseStatusCard course={course} onPublishToggle={onPublishToggle} />
+                    {/* Under the status card, and renders nothing unless an LMS opens this
+                        course. Both are things the course IS rather than fields Save writes,
+                        which is what the rail is for. */}
+                    <CourseLmsSection courseId={course.id} />
+                  </>
+                }
               >
                 <CourseSettingsForm course={course} onSaved={onCourseSaved} />
-                {/* Renders nothing unless an LMS opens this course. */}
-                <CourseLmsSection courseId={course.id} />
               </SettingsAsideLayout>
             </div>
           </CourseTabPanel>

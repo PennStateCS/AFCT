@@ -134,7 +134,10 @@ const Navbar: React.FC = () => {
     // shrink-0 is load-bearing. This is a flex child of the column that also holds <main>,
     // and flex items shrink by default, so a tall page squeezed the header below its own
     // h-14: the bar was 56px on the dashboard and shorter on Submissions.
-    <header className="bg-navbar text-navbar-foreground border-navbar-border flex h-14 shrink-0 items-center justify-between border-b px-4">
+    // Two stops rather than a flat fill, dark at the rail end and a shade lighter across to
+    // the right. Both are tokens, so the high-contrast theme sets them equal and the band goes
+    // flat there without this file knowing about it. See --navbar in globals.css.
+    <header className="from-navbar to-navbar-end text-navbar-foreground border-navbar-border flex h-14 shrink-0 items-center justify-between border-b bg-gradient-to-r px-4">
       <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
         <EnhancedSidebarTrigger className={NAVBAR_CONTROL_CLASS} />
         {/* min-w-0 + flex-1: the trail gets whatever the header has left after the two

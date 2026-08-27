@@ -51,6 +51,7 @@ import {
 import { useSubmissionFilters } from './use-submission-filters';
 import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 // A stable empty array, so `data ?? EMPTY_ROWS` keeps a constant identity between renders.
 const EMPTY_ROWS: SubmissionItem[] = [];
@@ -621,9 +622,7 @@ export default function SubmissionsClient() {
           {/* Decorative: the heading beside it already says what this is. The icon the
               sidebar already uses for this page, on the neutral surface the other admin
               pages use. */}
-          <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-            <CircleCheckBig className="size-5" aria-hidden="true" />
-          </span>
+          <CircleCheckBig className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
           <span>Submissions</span>
         </h1>
         <p className="text-muted-foreground text-sm">
@@ -636,9 +635,13 @@ export default function SubmissionsClient() {
           table, so the button could not honestly describe what it was about to do.
           Rerunning one submission lives in its row's Actions menu. */}
       {/* A panel rather than three loose pickers, with Clear inside it: the button resets
-          these three and nothing else, and sitting above them it read as a page action. */}
+          these three and nothing else, and sitting above them it read as a page action.
+
+          bg-card, the same white the table below it sits on. It was bg-muted/30, a tinted
+          panel, which made it a third kind of surface between the canvas and the table on a
+          page that only has two. */}
       <section
-        className="bg-muted/30 space-y-3 rounded-lg border p-4"
+        className="bg-card space-y-3 rounded-lg border p-4"
         aria-labelledby="submission-filters"
       >
         <div className="flex items-center justify-between gap-3">

@@ -115,3 +115,74 @@ export function hostNotices(host: HostBlock): HostNotice[] {
 
   return notices;
 }
+
+/**
+ * The one-glance version of the notices above, for the card in the Server tab's rail.
+ *
+ * The card leads with a state before it leads with a paragraph, so something has to decide
+ * which state the notices add up to, and which of them to put first. That decision is here,
+ * beside the notices themselves, for the reason the rest of this file exists: the words are
+ * the feature, and they are easier to get right when they are testable.
+ *
+ * The lead is the first notice that needs doing something about, not simply the first one:
+ * a drifting clock and ordinary updates can be reported together, and it is the clock the
+ * card should open with. Its title becomes the headline and its detail sits directly under
+ * it, so nothing is written twice; `rest` is everything else, still most-urgent first.
+ */
+export type HostSummary = {
+  /** Which glyph and colour the card shows. One of `SettingsStatusTone`. */
+  tone: 'ok' | 'off' | 'info' | 'warn';
+  /** The state's name, on the badge. */
+  badgeLabel: string;
+  badgeVariant: 'success' | 'neutral' | 'info' | 'warning';
+  /** One line: what is true right now. */
+  headline: string;
+  /** The line under the headline: what to do about it, or why there is nothing to report. */
+  detail: string;
+  /** Anything else worth saying, after the lead. */
+  rest: HostNotice[];
+};
+
+export function hostSummary(host: HostBlock): HostSummary {
+  if (!host.available) {
+    return {
+      tone: 'off',
+      badgeLabel: 'Not available',
+      badgeVariant: 'neutral',
+      headline: 'AFCT cannot check this server',
+      detail: hostUnavailableMessage(host),
+      rest: [],
+    };
+  }
+
+  const notices = hostNotices(host);
+  const lead = notices.find((n) => n.tone === 'warn') ?? notices[0];
+  const rest = notices.filter((n) => n !== lead);
+
+  // hostNotices always returns at least the all-clear notice, so the fallbacks below are
+  // only there for a future where that stops being true.
+  const headline = lead?.title ?? 'Nothing needs doing on the server';
+  const detail = lead?.detail ?? 'No restart is pending and no updates are waiting.';
+
+  if (notices.some((n) => n.tone === 'warn')) {
+    return {
+      tone: 'warn',
+      badgeLabel: 'Needs attention',
+      badgeVariant: 'warning',
+      headline,
+      detail,
+      rest,
+    };
+  }
+  if (notices.some((n) => n.tone === 'info')) {
+    return {
+      tone: 'info',
+      badgeLabel: 'Updates waiting',
+      badgeVariant: 'info',
+      headline,
+      detail,
+      rest,
+    };
+  }
+  return { tone: 'ok', badgeLabel: 'All clear', badgeVariant: 'success', headline, detail, rest };
+}
