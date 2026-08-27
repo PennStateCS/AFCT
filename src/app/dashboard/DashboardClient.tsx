@@ -75,11 +75,14 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
     >
       <div className="flex items-center justify-between gap-4 px-4 py-3">
         <h2 id="courses-title" className="flex items-center gap-2.5 text-base font-semibold">
-          {/* EXPERIMENT: the icon without its tinted disc. Decorative: the heading beside it
-              already says what this is. Matches the treatment on the two rail cards, in a
-              third accent so the three headings are distinguishable at a glance. */}
+          {/* A bare glyph rather than an icon in a tinted disc: three coloured circles down
+              the page competed with the banner above them, which is where colour belongs.
+              20px, a size up from the body icons, because without a disc behind it a 16px
+              glyph reads as a bullet next to a 16px heading rather than as its mark.
+              Decorative: the heading beside it already says what this is. Matches the two
+              rail cards, in a third accent so the headings are told apart at a glance. */}
           <Book
-            className="size-4 shrink-0 text-emerald-700 dark:text-emerald-300"
+            className="size-5 shrink-0 text-emerald-700 dark:text-emerald-300"
             aria-hidden="true"
           />
           <span>{title}</span>
@@ -146,7 +149,11 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
                       )}
                     </span>
                   </span>
-                  <Badge variant={variant} className="shrink-0">
+                  {/* self-center rather than centring the row: the tile and the two lines of
+                      text stay top-aligned, which is what keeps them lined up when a long
+                      course name wraps. Only the badge, which is one line whatever happens,
+                      sits against the middle of the row. */}
+                  <Badge variant={variant} className="shrink-0 self-center">
                     {status}
                   </Badge>
                 </Link>

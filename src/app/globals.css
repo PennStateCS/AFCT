@@ -527,10 +527,10 @@
      surfaces climb an elevation ladder so layered states read apart:
      background < card < popover < muted/accent (hover) < secondary (selected).
      In light mode these are already distinct hues, so only the dark values ladder. */
-  /* EXPERIMENT: darker again, though there is very little room left here: slate-950 already
-     separates the card by 1.130:1 and the floor of the gamut only takes that to 1.176:1.
-     This is 1.147:1. If the cards need to stand out more in dark, the card is the token with
-     somewhere to go, not the page. */
+  /* As deep as this is worth taking: slate-950 already separated the card by 1.130:1 and the
+     floor of the gamut only reaches 1.176:1, so the page was never the lever here. This is
+     1.147:1, and the separation a dark card actually gets comes from --card being lifted
+     instead (see the note there). */
   --background: oklch(0.1094 0.0315 260.726); /* #01040F */
   --foreground: oklch(0.9842 0.0034 247.858); /* #F8FAFC, 19.3:1 on the background */
   /* Lifted one notch, so a card on the dark canvas separates by 1.222:1 on fill instead of

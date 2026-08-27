@@ -47,12 +47,15 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
       value={tab}
       onValueChange={onTabChange}
       orientation={railNav ? 'vertical' : 'horizontal'}
-      // gap-4, not space-y-6. The Tabs primitive is `flex flex-col gap-2`, and a
-      // space-y-* on top of that does not replace the gap, it ADDS to it: tailwind-merge
-      // only reconciles classes that set the same property, and gap and margin are not
-      // the same property. So the panel sat 8px + 24px = 32px above the workspace while
-      // the navbar left only the layout's own 16px above it. One mechanism, one value.
-      className="gap-4"
+      // gap-6, and the number is not arbitrary: `dashboard/layout.tsx` puts py-6 above
+      // the banner, so this is what makes the air under it match the air over it. It was
+      // gap-4, set when that padding was 16px, and it has read as a squeeze ever since.
+      //
+      // A gap, not a space-y-*. The Tabs primitive is `flex flex-col gap-2`, and a space-y-*
+      // on top of that does not replace the gap, it ADDS to it: tailwind-merge only
+      // reconciles classes that set the same property, and gap and margin are not the same
+      // property. One mechanism, one value.
+      className="gap-6"
     >
       <CourseHeaderContent course={course} isStudent />
 

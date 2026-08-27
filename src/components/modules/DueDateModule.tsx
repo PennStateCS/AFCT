@@ -94,10 +94,11 @@ export function DueDateModule({ assignments }: Props) {
           className="text-base font-semibold"
         >
           <span className="flex items-center gap-2.5">
-            {/* EXPERIMENT: the icon without its tinted disc. Decorative: the heading beside
-                it already says what this card is. */}
+            {/* A bare glyph rather than an icon in a tinted disc; see the Courses card for
+                why, and for why it is a size up from the body icons. Decorative: the heading
+                beside it already says what this card is. */}
             <CalendarClock
-              className="size-4 shrink-0 text-violet-700 dark:text-violet-300"
+              className="size-5 shrink-0 text-violet-700 dark:text-violet-300"
               aria-hidden="true"
             />
             <span>Deadlines</span>
