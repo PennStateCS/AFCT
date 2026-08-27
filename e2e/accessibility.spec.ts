@@ -618,3 +618,50 @@ test.describe('accessibility: newer dialogs (axe, contrast excluded)', () => {
     }
   });
 });
+
+/**
+ * The stacked card view, which is what a DataTable becomes below 640px.
+ *
+ * Every other scan in this file runs at the desktop viewport, so this whole rendering path has
+ * never been scanned: the cards, their label/value pairs, and the row action that sits in the
+ * card's corner are a different DOM from the table they replace. An earlier audit noticed the
+ * gap the hard way, finding an unlabelled list in `data-table-cards.tsx` that the desktop scans
+ * could not have seen.
+ *
+ * 390px is an iPhone-width viewport, comfortably under the 640px the view switches at.
+ */
+test.describe('accessibility: the stacked card view on a phone (axe, contrast excluded)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('system logs as cards', async ({ page }) => {
+    await signIn(page, 'admin');
+    await page.goto('/dashboard/system-logs');
+    await expect(page.getByRole('heading', { level: 1, name: 'System Logs' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // The card view, not the table: proof the scan below is looking at the right DOM.
+    await expect(page.getByRole('list', { name: 'System logs table' })).toBeVisible();
+    await expect(page.getByRole('table')).toHaveCount(0);
+
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the course list as cards', async ({ page }) => {
+    await signIn(page, 'admin');
+    await page.goto('/dashboard/courses');
+    await expect(page.getByRole('heading', { level: 1, name: 'Courses' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    await expect(page.getByRole('table')).toHaveCount(0);
+    // The corner action this view puts on each card, which the desktop table renders as an
+    // ordinary cell: a different element in a different place, and only reachable here.
+    await expect(page.getByRole('button', { name: /Actions for / }).first()).toBeVisible();
+
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+});
+
