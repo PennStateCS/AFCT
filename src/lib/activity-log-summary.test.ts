@@ -246,6 +246,53 @@ describe('files that were opened', () => {
   });
 });
 
+/**
+ * Which course, which assignment.
+ *
+ * These two entries live on the log's relation columns rather than in metadata, so a summary
+ * built from metadata alone could only ever say how many students were on the page. Both are
+ * reads of student data, and an access record that cannot say whose data was read is not
+ * doing its job.
+ */
+describe('entries that answer "which one"', () => {
+  const related = {
+    course: 'CMPEN 271, Introduction to Digital Systems',
+    assignment: 'Flip Flops',
+  };
+
+  it('names the course whose gradebook was opened', () => {
+    // The code, not the full "CMPEN 271, Introduction to Digital Systems", which is longer
+    // than the cell it has to share.
+    expect(describeActivity('COURSE_GRADES_VIEWED', { studentCount: 17 }, related)).toBe(
+      'for CMPEN 271, 17 students',
+    );
+  });
+
+  it('still says something when the count is missing or the course has gone', () => {
+    expect(describeActivity('COURSE_GRADES_VIEWED', {}, related)).toBe('for CMPEN 271');
+    expect(describeActivity('COURSE_GRADES_VIEWED', { studentCount: 17 }, null)).toBe(
+      '17 students',
+    );
+  });
+
+  it('names the assignment and its course for a similarity report', () => {
+    expect(describeActivity('ASSIGNMENT_SIMILARITY_VIEWED', { matchGroups: 3 }, related)).toBe(
+      'for Flip Flops in CMPEN 271, 3 match groups',
+    );
+  });
+
+  it('reads as one sentence once the detail view puts a verb in front', () => {
+    expect(
+      describeActivitySentence({
+        action: 'COURSE_GRADES_VIEWED',
+        metadata: { studentCount: 17 },
+        related,
+        userDisplayName: 'Ada Lovelace',
+      }),
+    ).toBe('Ada Lovelace viewed course grades for CMPEN 271, 17 students');
+  });
+});
+
 describe('the readable detail view', () => {
   const entry = {
     action: 'LTI_ROSTER_SYNCED',
@@ -373,9 +420,9 @@ describe('a refused request', () => {
     expect(describeActivity('SUBMISSION_UNAUTHORIZED', { reason: 'not signed in' })).toBe(
       'not signed in',
     );
-    expect(
-      describeActivity('GROUP_SET_MEMBERSHIP_CONFLICT', { reason: 'group set changed' }),
-    ).toBe('group set changed');
+    expect(describeActivity('GROUP_SET_MEMBERSHIP_CONFLICT', { reason: 'group set changed' })).toBe(
+      'group set changed',
+    );
   });
 });
 
@@ -415,9 +462,9 @@ describe('a sign-in', () => {
 /** A deep link is only interesting for which assignment it points at. */
 describe('a deep link returned to the LMS', () => {
   it('names the assignment', () => {
-    expect(
-      describeActivity('LTI_DEEP_LINK_RETURNED', { assignmentTitle: 'LMS sync demo' }),
-    ).toBe('linked to LMS sync demo');
+    expect(describeActivity('LTI_DEEP_LINK_RETURNED', { assignmentTitle: 'LMS sync demo' })).toBe(
+      'linked to LMS sync demo',
+    );
   });
 
   it('says nothing when the title was not recorded', () => {
@@ -541,9 +588,9 @@ describe('access to student records', () => {
   });
 
   it('says when an export was the whole gradebook', () => {
-    expect(
-      describeActivity('GRADES_EXPORTED', { studentCount: 34, wholeGradebook: true }),
-    ).toBe('34 students, whole gradebook');
+    expect(describeActivity('GRADES_EXPORTED', { studentCount: 34, wholeGradebook: true })).toBe(
+      '34 students, whole gradebook',
+    );
   });
 });
 
@@ -704,13 +751,12 @@ describe('the system itself', () => {
  * carries no change has no summary, and the column stays empty.
  */
 describe('what deliberately has no summary', () => {
-  it.each([
-    'VIEW_USERS',
-    'VIEW_ASSIGNMENT_PROBLEMS',
-    'SYSTEM_BACKUP_REQUESTED',
-  ])('%s says nothing, because there is nothing to add', (action) => {
-    expect(describeActivity(action, { userId: 'u-1' })).toBeNull();
-  });
+  it.each(['VIEW_USERS', 'VIEW_ASSIGNMENT_PROBLEMS', 'SYSTEM_BACKUP_REQUESTED'])(
+    '%s says nothing, because there is nothing to add',
+    (action) => {
+      expect(describeActivity(action, { userId: 'u-1' })).toBeNull();
+    },
+  );
 
   it('says nothing for an action it has never heard of', () => {
     expect(describeActivity('SOME_FUTURE_ACTION', { anything: 'at all' })).toBeNull();

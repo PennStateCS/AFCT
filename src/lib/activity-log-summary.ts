@@ -142,7 +142,42 @@ function courseNamed(meta: Metadata): string | null {
   return code ?? name;
 }
 
-export function describeActivity(action: string, metadata: Metadata): string | null {
+/** The records an entry points at, named rather than left as identifiers. */
+export type RelatedRecords = {
+  course?: string | null;
+  assignment?: string | null;
+  problem?: string | null;
+  submission?: string | null;
+};
+
+/**
+ * The course, said as short as it can be said.
+ *
+ * The API names a course "CMPEN 271, Introduction to Digital Systems", which is right for a
+ * labelled field and too long for a summary that has to share a table cell. The code alone is
+ * what somebody scanning a log recognises, so this takes the part before the comma. A course
+ * that has since been deleted is named by its id there, and the id is returned whole: a
+ * partial identifier would be worse than a long one.
+ */
+function courseTag(related?: RelatedRecords | null): string | null {
+  const course = related?.course?.trim();
+  if (!course) return null;
+  const [code] = course.split(',');
+  return code?.trim() || course;
+}
+
+export function describeActivity(
+  action: string,
+  metadata: Metadata,
+  /**
+   * What the entry points at, for the handful of actions whose answer is "which one".
+   *
+   * Optional, and read from the log's own relation columns rather than from metadata: an entry
+   * that views a course's grades records `courseId`, not the course's name, so without this
+   * the summary could only ever say how many students were on a page.
+   */
+  related?: RelatedRecords | null,
+): string | null {
   switch (action) {
     // Updates that record old and new. The change itself is the whole point of the entry.
     case 'UPDATE_COURSE':
@@ -338,7 +373,29 @@ export function describeActivity(action: string, metadata: Metadata): string | n
 
     case 'COURSE_GRADES_VIEWED': {
       const students = firstNum(metadata, 'studentCount', 'total');
-      return students > 0 ? plural(students, 'student') : null;
+      const where = courseTag(related);
+      // Which course, first: on a log full of grade entries "17 students" says nothing about
+      // whose gradebook was opened, and that is the question a disclosure record answers.
+      //
+      // "for X" rather than a bare name, so this still reads as one line when the detail view
+      // puts a verb in front of it: "viewed course grades for CMPEN 271, 17 students".
+      const size = students > 0 ? plural(students, 'student') : null;
+      if (!where) return size;
+      return size ? `for ${where}, ${size}` : `for ${where}`;
+    }
+
+    case 'ASSIGNMENT_SIMILARITY_VIEWED': {
+      const where = courseTag(related);
+      const what = related?.assignment?.trim() || null;
+      const groups = firstNum(metadata, 'matchGroups');
+      const place = what
+        ? `for ${what}${where ? ` in ${where}` : ''}`
+        : where
+          ? `for ${where}`
+          : null;
+      const matches = groups > 0 ? plural(groups, 'match group') : null;
+      if (!place) return matches;
+      return matches ? `${place}, ${matches}` : place;
     }
 
     case 'GRADES_EXPORTED': {
@@ -749,14 +806,6 @@ const render = (value: unknown): string => {
  * first, then who and where, then the rest. Identifiers stay, because support questions turn on
  * them, but they sit below the things that answer the question at a glance.
  */
-/** The records an entry points at, named rather than left as identifiers. */
-export type RelatedRecords = {
-  course?: string | null;
-  assignment?: string | null;
-  problem?: string | null;
-  submission?: string | null;
-};
-
 /**
  * The actions whose names do not turn into a readable verb on their own.
  *
@@ -875,9 +924,10 @@ export function describeActivitySentence(entry: {
   action: string;
   metadata?: Metadata;
   userDisplayName?: string | null;
+  related?: RelatedRecords | null;
 }): string | null {
   const phrase = actionPhrase(entry.action);
-  const detail = describeActivity(entry.action, entry.metadata);
+  const detail = describeActivity(entry.action, entry.metadata, entry.related);
   if (!phrase && !detail) return null;
 
   // A fragment that starts with a preposition continues the verb; anything else is a separate
@@ -914,6 +964,7 @@ export function formatActivityDetails(entry: {
     action: entry.action,
     metadata: meta,
     userDisplayName: entry.userDisplayName,
+    related: entry.related,
   });
 
   const head: DetailRow[] = [

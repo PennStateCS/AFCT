@@ -291,6 +291,7 @@ export default function SystemLogsClient() {
             {describeActivity(
               row.original.action,
               row.original.metadata as Record<string, unknown> | null,
+              row.original.related,
             ) ?? '—'}
           </span>
         ),
