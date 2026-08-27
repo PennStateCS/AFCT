@@ -20,6 +20,7 @@ import {
 } from '@/lib/calendar-shared';
 import { apiPaths } from '@/lib/api-paths';
 import { CalendarCourseFilter, type FilterCourse } from './CalendarCourseFilter';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 // Compact course shape from /api/me/courses?view=nav (student: published only;
 // faculty/TA: their courses even when unpublished; admin: all their enrolments).
@@ -502,9 +503,7 @@ export default function CalendarClient({
     <div className="space-y-6">
       <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
         {/* Decorative: the heading beside it already says what this is. */}
-        <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-          <CalendarDays className="size-5" aria-hidden="true" />
-        </span>
+        <CalendarDays className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
         <span>Calendar</span>
       </h1>
 

@@ -10,6 +10,7 @@ import { Archive, Library } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import type { CourseListItem } from '@/lib/courses-list';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 /** Cache key for the archived-courses list; distinct from the active list. */
 export const archivedCoursesQueryKey = ['courses', 'archived'] as const;
@@ -72,9 +73,7 @@ export default function ArchivedCoursesClient({
           {/* Decorative: the heading beside it already says what this is. Library, the icon
               the sidebar already uses for the archive, in the neutral muted surface: this
               is where courses go to rest, not a place to draw the eye. */}
-          <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-            <Library className="size-5" aria-hidden="true" />
-          </span>
+          <Library className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
           <span>Archived Courses</span>
         </h1>
 

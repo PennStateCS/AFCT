@@ -62,6 +62,7 @@ import { BackupsTab } from './BackupsTab';
 import { CaptchaTab } from './CaptchaTab';
 import { TlsTab } from './TlsTab';
 import { UpdatesTab } from './UpdatesTab';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 export default function SystemSettingsClient() {
   const queryClient = useQueryClient();
@@ -556,9 +557,7 @@ export default function SystemSettingsClient() {
         {/* Decorative: the heading beside it already says what this is. The icon the
             sidebar already uses for this page, on the neutral muted surface the other
             admin pages use. */}
-        <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-          <Settings className="size-5" aria-hidden="true" />
-        </span>
+        <Settings className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
         <span>System Settings</span>
       </h1>
 

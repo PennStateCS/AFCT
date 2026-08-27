@@ -193,6 +193,23 @@ describe('dashboard sidebar (real primitives)', () => {
     );
   });
 
+  /*
+   * The divider between the rail and the page.
+   *
+   * It is drawn by the container's own `border-r`, and the base layer applies `border-border`
+   * to every element, so leaving the colour unsaid does not leave it uncoloured: it takes the
+   * PAGE's border, which is a pale slate line down the edge of a charcoal rail. Nothing about
+   * that looks like a bug in the code, which is why it is worth a test rather than a comment.
+   */
+  it('draws its edge in the rail’s own border colour, not the page’s', () => {
+    const { container } = renderSidebar();
+    const rail = container.querySelector('[data-slot="sidebar-container"]');
+
+    expect(rail).not.toBeNull();
+    expect(rail).toHaveClass('border-sidebar-border');
+    expect(rail?.className).toContain('group-data-[side=left]:border-r');
+  });
+
   it('does not collapse the desktop state on mobile (the drawer shows full labels)', () => {
     // A regression guard: auto-collapsing to the icon rail on a narrow screen would
     // blank the mobile drawer's labels, since the menu renders icon-only when the

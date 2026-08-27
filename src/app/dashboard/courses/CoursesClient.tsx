@@ -24,6 +24,7 @@ import { Book, BookOpen, BookPlus } from 'lucide-react';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import type { CourseListItem } from '@/lib/courses-list';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 type CourseWithRoster = CourseListItem;
 
@@ -74,12 +75,12 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
       <section className="space-y-6" aria-labelledby="courses-title">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 id="courses-title" className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
-            {/* Decorative: the heading beside it already says what this is. Same emerald
-                Book as the dashboard's Courses module, so the two read as one place.
-                A step larger than the module's, to sit with a text-2xl page title. */}
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-              <Book className="size-5" aria-hidden="true" />
-            </span>
+            {/* Decorative: the heading beside it already says what this is. The same Book
+                the dashboard's Courses module uses, so the two read as one place, in the
+                title’s own ink with no tile behind it (see PAGE_HEADER_ICON_CLASS). It was
+                an emerald tile here and a violet one on User Accounts, which promised a
+                colour code the app does not have. */}
+            <Book className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
             <span>Courses</span>
           </h1>
           <Button onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}>

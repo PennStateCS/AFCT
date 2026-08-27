@@ -29,6 +29,7 @@ function useMountedOnce(open: boolean): boolean {
 import { apiPaths } from '@/lib/api-paths';
 import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
 import { describeActivity, formatActivityDetails } from '@/lib/activity-log-summary';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
@@ -301,9 +302,7 @@ export default function SystemLogsClient() {
             {/* Decorative: the heading beside it already says what this is. The icon the
                 sidebar already uses for this page, on the neutral muted surface the other
                 admin pages use. */}
-            <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-              <Logs className="size-5" aria-hidden="true" />
-            </span>
+            <Logs className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
             <span>System Logs</span>
           </h1>
           <Button onClick={() => setDownloadOpen(true)}>Download Logs</Button>

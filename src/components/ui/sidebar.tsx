@@ -257,7 +257,12 @@ function Sidebar({
           // Adjust the padding for floating and inset variants.
           variant === 'floating' || variant === 'inset'
             ? 'p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]'
-            : 'group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l',
+            : // border-sidebar-border, and it has to be said out loud. The base layer applies
+              // `border-border` to every element, so a bare `border-r` here silently took the
+              // PAGE's border colour: a pale line drawn down the edge of a charcoal rail, which
+              // is the one place in the app where that token is wrong. The rail has its own
+              // divider colour for exactly this reason, and it is dark in all three themes.
+              'border-sidebar-border group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l',
           className,
         )}
         {...props}

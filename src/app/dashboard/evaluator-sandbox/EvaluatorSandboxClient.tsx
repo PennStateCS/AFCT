@@ -26,6 +26,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { isTrialFinished, type EvaluatorTrialView } from '@/lib/evaluator-trial-view';
 import { cn } from '@/lib/utils';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 // The same four the problem dialog offers, so staff see one set of choices across the app.
 const PROBLEM_TYPES = [
@@ -173,11 +174,9 @@ export default function EvaluatorSandboxClient() {
       <div className="space-y-1">
         <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
           {/* Decorative: the heading beside it already says what this is. The icon the
-              sidebar uses for this route, on the neutral muted tile the other tool pages
-              use for theirs. */}
-          <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-            <FlaskConical className="size-5" aria-hidden="true" />
-          </span>
+              sidebar uses for this route, in the title’s own ink, no tile
+              (see PAGE_HEADER_ICON_CLASS). */}
+          <FlaskConical className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
           <span>Evaluator Sandbox</span>
         </h1>
         <p className="text-muted-foreground max-w-3xl text-sm">

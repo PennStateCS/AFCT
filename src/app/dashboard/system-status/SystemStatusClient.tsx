@@ -38,6 +38,7 @@ import SessionsTab from './tabs/SessionsTab';
 import FilesTab from './tabs/FilesTab';
 import RateLimitsTab from './tabs/RateLimitsTab';
 import WorkersTab from './tabs/WorkersTab';
+import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
 const TABS = [
   { value: 'server', label: 'Server', icon: Server },
@@ -169,11 +170,9 @@ export default function SystemStatusClient() {
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
             {/* Decorative: the heading beside it already says what this is. Activity, the
-                icon the sidebar uses for this route, in the neutral muted tile the other
-                system pages use. */}
-            <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-              <Activity className="size-5" aria-hidden="true" />
-            </span>
+                icon the sidebar uses for this route, in the title’s own ink and
+                no tile behind it (see PAGE_HEADER_ICON_CLASS). */}
+            <Activity className={PAGE_HEADER_ICON_CLASS} aria-hidden="true" />
             <span>System Status</span>
           </h1>
           <Badge variant={dbOk ? 'success' : 'danger'} title={summary?.db.message || ''}>
