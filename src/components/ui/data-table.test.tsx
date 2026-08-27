@@ -553,17 +553,17 @@ describe('DataTable', () => {
     });
 
     /**
-     * The corner overlaps the first field's line, so that line and only that line is inset.
-     * A gutter down the whole card would cost every value its width for the sake of one row,
-     * and no inset at all puts a long title under the menu.
+     * The corner action sets where content can safely end, so every value stops there, not
+     * just the one the menu sits beside. Insetting the first line alone left the card with a
+     * ragged right edge: one value stopping short of a border the rest ran up to.
      */
-    it('keeps the first field clear of the corner action', async () => {
+    it('gives every value the same right edge when there is a corner action', async () => {
       stackedViewport();
       render(<DataTable columns={kebabColumns} data={[data[0]!]} />);
 
       await screen.findByRole('button', { name: 'Actions for Alice' });
 
-      expect(cardFor('Alice').querySelector('dl')?.className).toContain('[&>*:first-child]:pr-11');
+      expect(cardFor('Alice').querySelector('dl')).toHaveClass('pr-8');
     });
 
     it('drops the footer and its divider for an overflow menu', async () => {
@@ -593,8 +593,8 @@ describe('DataTable', () => {
       const card = cardFor('Alice');
       expect(card.querySelector('.absolute')).toBeNull();
       expect(card.querySelector('.border-t')).toBeNull();
-      // No inset kept for an action that is not there.
-      expect(card.querySelector('dl')?.className).not.toContain('pr-11');
+      // No gutter kept for an action that is not there: the card keeps its full width.
+      expect(card.querySelector('dl')).not.toHaveClass('pr-8');
     });
 
     it('still hides a mobileHidden column, and still keeps the card a labelled list', async () => {

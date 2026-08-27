@@ -92,9 +92,13 @@ export function DataTableCards<TData>({
           // `relative` for the corner action, and no `overflow-hidden`: the menu itself is
           // portaled, but a clipped card would still cut the trigger's focus ring.
           <li key={row.id} className="relative rounded-md border bg-[var(--table-background)] p-4">
-            {/* Only the first row is inset, so the corner action costs 44px of one line
-                rather than a permanent gutter down the right of every value. */}
-            <dl className={cn('grid gap-2', cornerAction && '[&>*:first-child]:pr-11')}>
+            {/* One gutter down the whole column rather than an inset on the first line only.
+                The corner action sets where content can safely end, and a card whose first
+                value stopped 44px short while every value below it ran on to the border read
+                as a ragged edge. 32px clears the 36px trigger (which starts 44px in from the
+                card's edge, against the list's 16px padding) with room to spare, and costs
+                less width at 320px than the inset it replaces. */}
+            <dl className={cn('grid gap-2', cornerAction && 'pr-8')}>
               {bodyCells.map((cell) => (
                 // min-w-0: a grid item refuses to shrink below its content's min-content
                 // width by default, so one wide value (a nowrap cell, a long address)
