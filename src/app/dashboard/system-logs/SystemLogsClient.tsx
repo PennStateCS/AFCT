@@ -253,7 +253,7 @@ export default function SystemLogsClient() {
         // replaced: on a log you scan for a person, and a surname split from its given name
         // across two columns is two things to read for one answer.
         accessorKey: 'userLastName',
-        header: 'Name',
+        header: 'User',
         meta: { priority: 2 },
         // Upper-cased the way the Action and What happened columns are, and styled rather than
         // transformed for the same reason: what a screen reader announces and what Copy JSON
