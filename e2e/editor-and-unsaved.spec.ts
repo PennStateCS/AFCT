@@ -77,8 +77,23 @@ test.describe('description editor surface', () => {
 
   test('the editor grows when its grip is dragged', async ({ page }) => {
     await openDetails(page);
+
+    // Put the editor at the TOP of the viewport before measuring anything.
+    //
+    // The drag below starts at the box's bottom-right corner and pulls 140px further down, so
+    // it needs that much room under the grip. The viewport is 720px (Desktop Chrome) and the
+    // page above the editor is a navbar, a banner and a tab strip, so where the grip lands
+    // depends on the page's spacing rather than on the editor. It was about 8px above the fold
+    // and a spacing change moved it below: the mousedown then hit nothing, the box stayed at
+    // 288px, and the failure read as "resize is broken" rather than "the test could not reach
+    // the grip". Scrolling first makes the test about the editor again.
+    await editorBox(page).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+
     const before = await editorBox(page).boundingBox();
     expect(before).not.toBeNull();
+    // And the room the drag actually needs is now there.
+    const viewport = page.viewportSize()!;
+    expect(before!.y + before!.height + 140).toBeLessThan(viewport.height);
 
     // The browser-native resize grip lives in the bottom-right corner.
     const gripX = before!.x + before!.width - 6;
