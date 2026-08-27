@@ -149,7 +149,9 @@ describe('SystemLogsClient', () => {
     });
     // Action cell replaces underscores with spaces.
     expect(screen.getByText('USER LOGIN')).toBeInTheDocument();
-    expect(screen.getByText('Lovelace')).toBeInTheDocument();
+    // One Name column, surname first: "Lovelace, Ada". Upper-cased in CSS, so the text node
+    // itself stays in ordinary case and this asserts what a screen reader hears.
+    expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument();
   });
 
   it('shows a loading state before the first fetch resolves', () => {

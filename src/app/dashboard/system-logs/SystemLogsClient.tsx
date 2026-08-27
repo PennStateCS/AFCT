@@ -30,6 +30,8 @@ import { apiPaths } from '@/lib/api-paths';
 import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
 import { describeActivity, formatActivityDetails } from '@/lib/activity-log-summary';
 import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
+import { CompactDate } from '@/components/ui/CompactDate';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
@@ -83,6 +85,8 @@ const SEVERITY_VARIANT: Record<Severity, 'info' | 'warning' | 'danger' | 'destru
 };
 
 export default function SystemLogsClient() {
+  // The timezone every other table formats in, rather than the browser's.
+  const { timezone } = useEffectiveTimezone();
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -200,20 +204,20 @@ export default function SystemLogsClient() {
         accessorKey: 'timestamp',
         header: 'Time',
         meta: { priority: 1 },
-        cell: ({ getValue }: { getValue: () => unknown }) => {
-          const value = getValue();
-          return value
-            ? new Date(value as string).toLocaleString(undefined, {
-                dateStyle: 'medium',
-                timeStyle: 'short',
-              })
-            : '';
-        },
+        // The same two-line cell the Courses and User Accounts tables use: the date on top,
+        // the time muted underneath, so the column stays narrow instead of forcing one wide
+        // "MM/DD/YY HH:MM AM" line. It also moves this column onto the effective timezone,
+        // which is what the rest of the app formats in; it was reading the browser's.
+        cell: ({ getValue }: { getValue: () => unknown }) => (
+          <CompactDate value={getValue() as string | null} timeZone={timezone} />
+        ),
       },
       {
         accessorKey: 'severity',
         header: 'Severity',
-        meta: { priority: 2 },
+        // Centred: the cell is a badge rather than a value read against its neighbours, and a
+        // column of short chips ragged against the left edge reads as debris.
+        meta: { priority: 2, align: 'center' as const },
         cell: ({ getValue }: { getValue: () => unknown }) => {
           const s = ((getValue() as string) || 'INFO') as Severity;
           return <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'}>{s}</Badge>;
@@ -222,10 +226,29 @@ export default function SystemLogsClient() {
       {
         accessorKey: 'category',
         header: 'Category',
-        meta: { priority: 3 },
+        // Centred, like Severity beside it and for the same reason.
+        meta: { priority: 3, align: 'center' as const },
         cell: ({ getValue }: { getValue: () => unknown }) => (
           <CategoryBadge category={getValue() as string | null} />
         ),
+      },
+      {
+        // Keyed on the last name, which is both what the column sorts by (the server's sortBy
+        // allows `userLastName`) and what it leads with. One column rather than the two it
+        // replaced: on a log you scan for a person, and a surname split from its given name
+        // across two columns is two things to read for one answer.
+        accessorKey: 'userLastName',
+        header: 'Name',
+        meta: { priority: 2 },
+        // Upper-cased the way the Action and What happened columns are, and styled rather than
+        // transformed for the same reason: what a screen reader announces and what Copy JSON
+        // carries stay in ordinary case.
+        cell: ({ row }: { row: { original: LogRow } }) => {
+          const last = row.original.userLastName?.trim();
+          const first = row.original.userFirstName?.trim();
+          if (!last && !first) return '—';
+          return <span className="uppercase">{[last, first].filter(Boolean).join(', ')}</span>;
+        },
       },
       {
         accessorKey: 'action',
@@ -252,18 +275,6 @@ export default function SystemLogsClient() {
         ),
       },
       {
-        accessorKey: 'userLastName',
-        header: 'Last Name',
-        meta: { priority: 2 },
-        cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
-      },
-      {
-        accessorKey: 'userFirstName',
-        header: 'First Name',
-        meta: { priority: 3 },
-        cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
-      },
-      {
         accessorKey: 'ipAddress',
         header: 'IP Address',
         meta: { priority: 4 },
@@ -283,7 +294,7 @@ export default function SystemLogsClient() {
         ),
       },
     ],
-    [handleViewerOpen],
+    [handleViewerOpen, timezone],
   );
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -321,9 +332,6 @@ export default function SystemLogsClient() {
 
           <DataTable
             columns={columns}
-            // Off by default: it is a wide column and most rows have nothing to say. Somebody
-            // hunting a specific change turns it on, or opens Full Log.
-            defaultColumnVisibility={{ summary: false }}
             data={logs}
             loading={loading}
             tableLabel="System logs table"
