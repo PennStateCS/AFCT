@@ -202,6 +202,24 @@ const VERB_BY_PREFIX: Record<string, string> = {
 };
 
 /**
+ * An address as a reader should see it.
+ *
+ * Three cases the stored value does not handle on its own: the IPv4-mapped IPv6 prefix, which
+ * is noise in front of an ordinary address; loopback, which is a machine talking to itself;
+ * and `system`, the sentinel the submission worker and trial runner write because no request
+ * made those entries. Capitalised so it reads as a word rather than as something typed in.
+ *
+ * Presentation only. The stored value is what the details dialog and Copy JSON carry.
+ */
+export function displayIpAddress(value?: string | null): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  if (raw.toLowerCase() === 'system') return 'System';
+  if (raw === '::1' || raw === '127.0.0.1') return 'localhost';
+  return raw.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '');
+}
+
+/**
  * The action as a person reads it. Presentation only and one-way; nothing maps back. Several
  * actions sharing a verb is fine, since the object column says which is which.
  */

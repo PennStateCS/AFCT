@@ -34,6 +34,7 @@ vi.mock('@/components/ui/data-table', () => ({
     loadingMessage,
     rowCount,
     showExportButton,
+    defaultColumnVisibility,
     onPaginationChange,
     pagination,
   }: {
@@ -42,6 +43,7 @@ vi.mock('@/components/ui/data-table', () => ({
     loadingMessage?: string;
     rowCount?: number;
     showExportButton?: boolean;
+    defaultColumnVisibility?: Record<string, boolean>;
     onPaginationChange?: (u: { pageIndex: number; pageSize: number }) => void;
     pagination?: { pageIndex: number; pageSize: number };
   }) =>
@@ -52,6 +54,12 @@ vi.mock('@/components/ui/data-table', () => ({
         <div data-testid="table-rows">{data.length}</div>
         <div data-testid="row-count">{String(rowCount)}</div>
         <div data-testid="export-shown">{String(showExportButton !== false)}</div>
+        <div data-testid="hidden-columns">
+          {Object.entries(defaultColumnVisibility ?? {})
+            .filter(([, visible]) => !visible)
+            .map(([id]) => id)
+            .join(',')}
+        </div>
         <button
           type="button"
           onClick={() =>
@@ -126,9 +134,10 @@ describe('ActivityCard', () => {
 
     renderWithClient(<ActivityCard courseId="course-1" />);
 
+    // The table's own footer counts the whole log, not the one row on screen. The heading
+    // used to carry a badge with the same number, which said nothing the footer did not.
     await waitFor(() => expect(screen.getByTestId('row-count').textContent).toBe('1200'));
-    // The heading badge counts the whole log, not the one row on screen.
-    expect(screen.getByRole('heading', { name: /Activity/ })).toHaveTextContent('1200');
+    expect(screen.getByRole('heading', { name: /Activity/ })).not.toHaveTextContent('1200');
   });
 
   it('offers no CSV export, because the browser only holds one page', async () => {
@@ -200,6 +209,21 @@ describe('ActivityCard', () => {
     release?.();
   });
 
+  /**
+   * Nearly every entry on a course feed is INFO, and the category mostly repeats what Action
+   * and Subject already say. Both stay in the Columns menu for the times they matter.
+   */
+  it('starts with the Severity and Category columns hidden', async () => {
+    installFetch({ rows: [activity('a1', 'ENROLLED')], total: 1 });
+
+    renderWithClient(<ActivityCard courseId="course-1" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('hidden-columns').textContent).toContain('severity'),
+    );
+    expect(screen.getByTestId('hidden-columns').textContent).toContain('category');
+  });
+
   it('has no Load More button', async () => {
     installFetch({ rows: [activity('a1', 'FIRST')], total: 100 });
 
@@ -207,5 +231,26 @@ describe('ActivityCard', () => {
     await waitFor(() => expect(screen.getByText('FIRST')).toBeInTheDocument());
 
     expect(screen.queryByRole('button', { name: 'Load More' })).not.toBeInTheDocument();
+  });
+});
+
+describe('the refresh control', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  /**
+   * There is no refresh button. The query refetches on its own and the table's own controls
+   * (paging, sorting, filtering) each go back to the server, so the button was a third way to
+   * do what two others already did.
+   */
+  it('is gone', async () => {
+    installFetch({ rows: [activity('a1', 'ENROLLED')], total: 1 });
+
+    renderWithClient(<ActivityCard courseId="course-1" />);
+
+    await waitFor(() => expect(screen.getByText('ENROLLED')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /refresh/i })).toBeNull();
   });
 });

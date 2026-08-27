@@ -48,7 +48,7 @@ export const ACTIVITY_SORT_KEYS = [
   'timestamp',
   'action',
   'category',
+  'severity',
   'ipAddress',
-  'userFirstName',
   'userLastName',
 ] as const;

@@ -4,6 +4,7 @@ import {
   activityDetail,
   describeActivity,
   describeActivitySentence,
+  displayIpAddress,
   formatActivityDetails,
   objectPhrase,
 } from './activity-log-summary';
@@ -1109,5 +1110,34 @@ describe('the audit gaps that got their own entries', () => {
         { assignment: 'Homework 2' },
       ),
     ).toBe('Homework 2 · does not manage this course');
+  });
+});
+
+describe('the address a reader sees', () => {
+  it('names the sentinel the worker writes', () => {
+    // No request made those entries: the submission worker and trial runner record `system`.
+    // Capitalised so it reads as a word rather than as something somebody typed in.
+    expect(displayIpAddress('system')).toBe('System');
+  });
+
+  it('names loopback', () => {
+    expect(displayIpAddress('::1')).toBe('localhost');
+    expect(displayIpAddress('127.0.0.1')).toBe('localhost');
+  });
+
+  it('drops the IPv4-mapped IPv6 prefix', () => {
+    expect(displayIpAddress('::ffff:203.0.113.7')).toBe('203.0.113.7');
+    // Only in front of an IPv4 address; a real IPv6 address keeps every part of itself.
+    expect(displayIpAddress('::ffff:2001:db8::1')).toBe('::ffff:2001:db8::1');
+  });
+
+  it('passes an ordinary address through', () => {
+    expect(displayIpAddress('203.0.113.7')).toBe('203.0.113.7');
+  });
+
+  it('says nothing when nothing was recorded', () => {
+    expect(displayIpAddress(null)).toBeNull();
+    expect(displayIpAddress('  ')).toBeNull();
+    expect(displayIpAddress(undefined)).toBeNull();
   });
 });

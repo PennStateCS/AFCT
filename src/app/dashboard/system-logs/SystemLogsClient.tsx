@@ -31,6 +31,7 @@ import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
 import {
   actionLabel,
   describeActivity,
+  displayIpAddress,
   formatActivityDetails,
   summaryParts,
   SUMMARY_SEPARATOR,
@@ -348,9 +349,7 @@ export default function SystemLogsClient() {
         // "was that really them"; the same address from a phone rather than the lab machine
         // often does. The whole header is still in the full log entry.
         cell: ({ row }: { row: { original: LogRow } }) => {
-          const raw = row.original.ipAddress;
-          // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
-          const ip = raw ? raw.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : null;
+          const ip = displayIpAddress(row.original.ipAddress);
           const client = clientDescription(row.original.userAgent);
           if (!ip && !client) return '—';
           return (
@@ -392,7 +391,9 @@ export default function SystemLogsClient() {
                   aria-label={label}
                   onClick={() => handleViewerOpen(row.original)}
                 >
-                  <FileText className="size-4" aria-hidden="true" />
+                  {/* Bigger than the default 16px, which read as a speck in a wide row. The
+                      button stays size-9 either way, so the row height does not move. */}
+                  <FileText className="size-5" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               {/* The tooltip repeats the action in short form; it is not the accessible name,
