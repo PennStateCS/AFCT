@@ -68,6 +68,34 @@ export const ACTIVITY_CATEGORY_BADGE = {
   GRADE: 'category-rose',
 } as const satisfies Record<string, BadgeVariant>;
 
+/**
+ * Activity-log severity, which is a STATE and therefore stays semantic.
+ *
+ * The pairing with the categories above is the whole point: a category says which part of the
+ * system an entry is about, a severity says whether anybody needs to do something about it,
+ * and the two have to be readable as different questions on the same row. So a rose GRADE
+ * badge beside a neutral INFO badge is a routine grade entry, not an error.
+ *
+ * INFO is `neutral`, not `info`. Almost every entry a healthy system writes is INFO, so the
+ * blue it used to take drew a stripe down the page and spent the reader's attention on the
+ * rows that least needed it. Quiet by default; the eye is then free for the four or five rows
+ * that are not.
+ *
+ * ERROR and SECURITY are `danger` and `destructive`, which are genuinely different
+ * treatments rather than two names for red: danger is a soft fill with dark red text, the
+ * shape every other badge here has, and destructive is a solid red fill with white on it. One
+ * says something failed; the other says look at this now.
+ */
+export const ACTIVITY_SEVERITY_BADGE = {
+  INFO: 'neutral',
+  WARNING: 'warning',
+  ERROR: 'danger',
+  SECURITY: 'destructive',
+} as const satisfies Record<string, BadgeVariant>;
+
+/** A severity the log has invented since this map was written still has to render. */
+export const ACTIVITY_SEVERITY_FALLBACK: BadgeVariant = 'neutral';
+
 /** A category the log has invented since this map was written still has to render. */
 export const ACTIVITY_CATEGORY_FALLBACK: BadgeVariant = 'category-slate';
 

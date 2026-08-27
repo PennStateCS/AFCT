@@ -34,6 +34,7 @@ import { CompactDate } from '@/components/ui/CompactDate';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { ACTIVITY_SEVERITY_BADGE, ACTIVITY_SEVERITY_FALLBACK } from '@/lib/badge-presets';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
@@ -82,13 +83,6 @@ const SEARCH_FIELDS = [
 const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
 // Badge palette per severity level.
-const SEVERITY_VARIANT: Record<Severity, 'info' | 'warning' | 'danger' | 'destructive'> = {
-  INFO: 'info',
-  WARNING: 'warning',
-  ERROR: 'danger',
-  SECURITY: 'destructive',
-};
-
 export default function SystemLogsClient() {
   // The timezone every other table formats in, rather than the browser's.
   const { timezone } = useEffectiveTimezone();
@@ -232,7 +226,10 @@ export default function SystemLogsClient() {
         cell: ({ getValue }: { getValue: () => unknown }) => {
           const s = ((getValue() as string) || 'INFO') as Severity;
           return (
-            <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'} className="w-20">
+            <Badge
+              variant={ACTIVITY_SEVERITY_BADGE[s] ?? ACTIVITY_SEVERITY_FALLBACK}
+              className="w-20"
+            >
               {s}
             </Badge>
           );

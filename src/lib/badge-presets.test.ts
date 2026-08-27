@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ACTIVITY_CATEGORY_BADGE,
+  ACTIVITY_SEVERITY_BADGE,
+  ACTIVITY_SEVERITY_FALLBACK,
   COURSE_LIFECYCLE_BADGE,
   ENROLLMENT_STATUS_BADGE,
   REGISTRATION_STATUS_BADGE,
@@ -74,5 +76,46 @@ describe('enrolment standing', () => {
       expect(SEMANTIC).toContain(v);
     }
     expect(Object.values(ROLE_BADGE)).not.toContain(ENROLLMENT_STATUS_BADGE.ENROLLED);
+  });
+});
+
+/**
+ * Severity and category answer different questions on the same row: how urgent, and about
+ * what. The tests are that separation, plus the one value that carries the page's calm.
+ */
+describe('activity-log severity', () => {
+  it('keeps severity semantic, never categorical', () => {
+    for (const v of Object.values(ACTIVITY_SEVERITY_BADGE)) {
+      expect(SEMANTIC.concat('destructive')).toContain(v);
+      expect(isCategorical(v)).toBe(false);
+    }
+  });
+
+  /*
+   * The one that matters. Nearly every entry a healthy system writes is INFO, so an INFO badge
+   * with a colour of its own paints a stripe down the page and spends the reader's attention
+   * on the rows that need it least. It was `info` (blue) and that is what this guards against.
+   */
+  it('leaves routine entries quiet', () => {
+    expect(ACTIVITY_SEVERITY_BADGE.INFO).toBe('neutral');
+    expect(ACTIVITY_SEVERITY_FALLBACK).toBe('neutral');
+  });
+
+  it('escalates from there, and keeps error and security apart', () => {
+    expect(ACTIVITY_SEVERITY_BADGE.WARNING).toBe('warning');
+    expect(ACTIVITY_SEVERITY_BADGE.ERROR).toBe('danger');
+    // Not two names for red: `danger` is the soft fill every other badge here uses, and
+    // `destructive` is a solid red with white on it.
+    expect(ACTIVITY_SEVERITY_BADGE.SECURITY).toBe('destructive');
+    expect(ACTIVITY_SEVERITY_BADGE.SECURITY).not.toBe(ACTIVITY_SEVERITY_BADGE.ERROR);
+  });
+
+  it('does not let a category decide urgency', () => {
+    // A rose GRADE beside a neutral INFO is a routine grade entry, not an error. The maps
+    // share no values, which is what keeps the two columns readable as two questions.
+    const severities = new Set<string>(Object.values(ACTIVITY_SEVERITY_BADGE));
+    for (const v of Object.values(ACTIVITY_CATEGORY_BADGE)) {
+      expect(severities.has(v)).toBe(false);
+    }
   });
 });
