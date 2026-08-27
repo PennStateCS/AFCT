@@ -13,6 +13,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { PAGE_SIZE_OPTIONS, rowRangeLabel } from '@/components/ui/data-table-shared';
 
 /**
@@ -29,11 +30,13 @@ function PageButton({
   icon: Icon,
   onClick,
   unavailable,
+  className,
 }: {
   label: string;
   icon: LucideIcon;
   onClick: () => void;
   unavailable: boolean;
+  className?: string;
 }) {
   return (
     <Button
@@ -43,7 +46,7 @@ function PageButton({
         if (!unavailable) onClick();
       }}
       aria-disabled={unavailable || undefined}
-      className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+      className={cn('aria-disabled:pointer-events-none aria-disabled:opacity-50', className)}
       aria-label={label}
     >
       <Icon className="h-4 w-4" aria-hidden="true" />
@@ -125,6 +128,10 @@ export function PaginationControls<TData>({
             icon={ArrowLeftToLine}
             onClick={() => table.setPageIndex(0)}
             unavailable={!table.getCanPreviousPage()}
+            // Set apart from the arrows rather than sitting flush against them: a jump to the
+            // end is a different move from a step, and four identical buttons in a row read as
+            // one control.
+            className="mr-2"
           />
         ) : null}
         <PageButton
@@ -146,6 +153,7 @@ export function PaginationControls<TData>({
             icon={ArrowRightToLine}
             onClick={() => table.setPageIndex(pageCount - 1)}
             unavailable={!table.getCanNextPage()}
+            className="ml-2"
           />
         ) : null}
       </div>
