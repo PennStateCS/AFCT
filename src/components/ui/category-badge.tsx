@@ -12,7 +12,14 @@ import { ACTIVITY_CATEGORY_BADGE, ACTIVITY_CATEGORY_FALLBACK } from '@/lib/badge
  * included: it is data, not a heading, and rewriting it here would stop it matching what the
  * log actually stores.
  */
-export function CategoryBadge({ category }: { category?: string | null }) {
+export function CategoryBadge({
+  category,
+  className,
+}: {
+  category?: string | null;
+  /** Per-caller sizing, e.g. a fixed width so a column of these lines up. Nothing else. */
+  className?: string;
+}) {
   // No category set: render nothing. Categories are read straight from the log, and an unset
   // entry is blank rather than a placeholder.
   if (!category) return null;
@@ -21,7 +28,11 @@ export function CategoryBadge({ category }: { category?: string | null }) {
     ACTIVITY_CATEGORY_BADGE[category as keyof typeof ACTIVITY_CATEGORY_BADGE] ??
     ACTIVITY_CATEGORY_FALLBACK;
 
-  return <Badge variant={variant}>{category}</Badge>;
+  return (
+    <Badge variant={variant} className={className}>
+      {category}
+    </Badge>
+  );
 }
 
 export default CategoryBadge;

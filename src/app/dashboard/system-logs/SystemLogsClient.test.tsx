@@ -70,7 +70,11 @@ vi.mock('@/components/ui/data-table', () => ({
                 const key = col.id ?? col.accessorKey ?? '';
                 const getValue = () =>
                   col.accessorKey ? (row as Record<string, unknown>)[col.accessorKey] : undefined;
-                return <td key={key}>{col.cell ? col.cell({ getValue, row: { original: row } }) : null}</td>;
+                return (
+                  <td key={key}>
+                    {col.cell ? col.cell({ getValue, row: { original: row } }) : null}
+                  </td>
+                );
               })}
             </tr>
           ))}
@@ -159,6 +163,35 @@ describe('SystemLogsClient', () => {
     expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument();
     // The address under it, which is what tells two people of the same name apart.
     expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+  });
+
+  /*
+   * One width for every badge in the Severity and Category columns.
+   *
+   * The point is the column's edges lining up, so the width has to be on the badge itself and
+   * the label has to stay centred inside it. Badge is a centred flex box by default, and the
+   * failure mode is somebody "simplifying" the fixed width onto the cell instead, where the
+   * badge would go back to hugging its text.
+   */
+  it('gives the badges one width each, with the label still centred', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [makeRow({ severity: 'SECURITY', category: 'ASSIGNMENT' })],
+        total: 1,
+      }),
+    });
+
+    renderWithClient(<SystemLogsClient />);
+
+    const severity = await screen.findByText('SECURITY');
+    const category = await screen.findByText('ASSIGNMENT');
+
+    expect(severity).toHaveClass('w-20');
+    expect(category).toHaveClass('w-24');
+    // Badge's own centring, which the width would otherwise leave the text sitting left of.
+    expect(severity).toHaveClass('justify-center');
+    expect(category).toHaveClass('justify-center');
   });
 
   /*

@@ -220,21 +220,31 @@ export default function SystemLogsClient() {
       {
         accessorKey: 'severity',
         header: 'Severity',
-        // Centred: the cell is a badge rather than a value read against its neighbours, and a
-        // column of short chips ragged against the left edge reads as debris.
-        meta: { priority: 2, align: 'center' as const },
+        meta: { priority: 2 },
+        // One width for every badge in the column, so their left AND right edges line up and
+        // the column reads as a column rather than as chips of four different lengths. The
+        // width lives here rather than on Badge: it is a fact about this table, and a global
+        // fixed-width badge would wreck every other place one is used.
+        //
+        // 5rem, not the 4rem a glance at INFO/ERROR suggests: SECURITY is the longest value
+        // and needs about 78px with its padding, and Badge clips (overflow-hidden) rather than
+        // growing. The text stays centred because Badge is already a centred flex box.
         cell: ({ getValue }: { getValue: () => unknown }) => {
           const s = ((getValue() as string) || 'INFO') as Severity;
-          return <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'}>{s}</Badge>;
+          return (
+            <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'} className="w-20">
+              {s}
+            </Badge>
+          );
         },
       },
       {
         accessorKey: 'category',
         header: 'Category',
-        // Centred, like Severity beside it and for the same reason.
-        meta: { priority: 3, align: 'center' as const },
+        meta: { priority: 3 },
+        // 6rem: ASSIGNMENT and SUBMISSION are the longest at about 92px. See Severity above.
         cell: ({ getValue }: { getValue: () => unknown }) => (
-          <CategoryBadge category={getValue() as string | null} />
+          <CategoryBadge category={getValue() as string | null} className="w-24" />
         ),
       },
       {
