@@ -75,36 +75,50 @@ test.describe('description editor surface', () => {
     await expect(textbox(page)).toContainText('caret landed here');
   });
 
-  test('the editor grows when its grip is dragged', async ({ page }) => {
-    await openDetails(page);
+  /**
+   * A taller viewport than the file's default 720, and it is the test's own requirement rather
+   * than a preference: the drag grabs the grip at the box's bottom-right corner and pulls it
+   * 140px further down, so both ends of that have to be on screen.
+   *
+   * On a 720px viewport they were not. Everything above the editor is page chrome (navbar,
+   * banner, tab strip, title field), the editor is 288px on top of that, and the grip landed at
+   * y=725: five pixels under the fold. The mousedown hit nothing, the box stayed at 288, and the
+   * failure read as "resize is broken". It had been passing at y=717 with eight pixels to spare,
+   * so an ordinary spacing change on the assignment page was enough to tip it over, and would
+   * be again.
+   *
+   * Scrolling first is not enough on its own: the editor sits near the end of the document, so
+   * scrolling to the top of the page still leaves only ~114px under it. Height is what buys the
+   * room. Width stays 1280, because the toolbar-tier tests below depend on the editor's width.
+   */
+  test.describe('with room to drag', () => {
+    test.use({ viewport: { width: 1280, height: 1000 } });
 
-    // Put the editor at the TOP of the viewport before measuring anything.
-    //
-    // The drag below starts at the box's bottom-right corner and pulls 140px further down, so
-    // it needs that much room under the grip. The viewport is 720px (Desktop Chrome) and the
-    // page above the editor is a navbar, a banner and a tab strip, so where the grip lands
-    // depends on the page's spacing rather than on the editor. It was about 8px above the fold
-    // and a spacing change moved it below: the mousedown then hit nothing, the box stayed at
-    // 288px, and the failure read as "resize is broken" rather than "the test could not reach
-    // the grip". Scrolling first makes the test about the editor again.
-    await editorBox(page).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    test('the editor grows when its grip is dragged', async ({ page }) => {
+      await openDetails(page);
+      await editorBox(page).evaluate((el) => el.scrollIntoView({ block: 'start' }));
 
-    const before = await editorBox(page).boundingBox();
-    expect(before).not.toBeNull();
-    // And the room the drag actually needs is now there.
-    const viewport = page.viewportSize()!;
-    expect(before!.y + before!.height + 140).toBeLessThan(viewport.height);
+      const before = await editorBox(page).boundingBox();
+      expect(before).not.toBeNull();
 
-    // The browser-native resize grip lives in the bottom-right corner.
-    const gripX = before!.x + before!.width - 6;
-    const gripY = before!.y + before!.height - 6;
-    await page.mouse.move(gripX, gripY);
-    await page.mouse.down();
-    await page.mouse.move(gripX, gripY + 140, { steps: 8 });
-    await page.mouse.up();
+      // Fail on the reason rather than on the symptom if the page ever grows again.
+      const viewport = page.viewportSize()!;
+      expect(
+        before!.y + before!.height + 140,
+        'the grip and the end of the drag must both be on screen',
+      ).toBeLessThan(viewport.height);
 
-    const after = await editorBox(page).boundingBox();
-    expect(after!.height).toBeGreaterThan(before!.height + 80);
+      // The browser-native resize grip lives in the bottom-right corner.
+      const gripX = before!.x + before!.width - 6;
+      const gripY = before!.y + before!.height - 6;
+      await page.mouse.move(gripX, gripY);
+      await page.mouse.down();
+      await page.mouse.move(gripX, gripY + 140, { steps: 8 });
+      await page.mouse.up();
+
+      const after = await editorBox(page).boundingBox();
+      expect(after!.height).toBeGreaterThan(before!.height + 80);
+    });
   });
 
   /**
