@@ -10,6 +10,12 @@ const prismaMock = vi.hoisted(() => ({
   systemSettings: {
     findUnique: vi.fn(),
   },
+  // The view audit is throttled, so it looks for a recent entry before writing one. Without
+  // this the lookup throws, the helper swallows it, and the log silently never happens: the
+  // failure would look like "logging is broken" rather than "the mock is short a method".
+  activityLog: {
+    findFirst: vi.fn(),
+  },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());

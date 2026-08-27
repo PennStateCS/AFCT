@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logThrottledView } from '@/lib/api/activity';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
@@ -33,12 +34,13 @@ export const GET = withAdminAuth(
     try {
       const users = await getUsersList();
 
-      await createEnhancedActivityLog(prisma, req, {
+      // Bulk PII (every account's name and address), so it is recorded, and throttled for
+      // the same reason as the other sensitive reads: this list refetches on focus.
+      await logThrottledView(req, {
         userId: user.id,
         action: 'VIEW_USERS',
-        severity: 'INFO',
         category: 'USER',
-        metadata: {},
+        metadata: { accounts: users.length },
       });
 
       return NextResponse.json(users);

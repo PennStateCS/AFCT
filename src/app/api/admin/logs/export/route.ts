@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { safeAuditLog } from '@/lib/api/activity';
 import { DownloadLogsSchema } from '@/schemas/log';
 import { EXPORTABLE_LOG_FIELDS } from '@/lib/log-fields';
 import { withAdminAuth } from '@/lib/api/with-auth';
@@ -38,7 +39,7 @@ const MAX_EXPORT_ROWS = 100_000;
  *   500: { description: Export failed. }
  */
 export const POST = withAdminAuth(
-  async (req: Request) => {
+  async (req: Request, _ctx: unknown, { user }) => {
     let body: unknown;
     try {
       body = await req.json();
@@ -79,6 +80,28 @@ export const POST = withAdminAuth(
         orderBy: { timestamp: 'desc' },
         take: MAX_EXPORT_ROWS,
       });
+      /**
+       * Never throttled, unlike the view of the same data. An export is a copy of education
+       * records leaving AFCT for a spreadsheet on somebody's laptop, which is the shape of
+       * thing a disclosure record exists to capture, and every one of them is its own event.
+       *
+       * What was taken, not what it said: the row count, the window and the columns chosen.
+       * Copying the exported rows into the entry would duplicate the exposure it records.
+       */
+      await safeAuditLog('ADMIN_LOGS_EXPORTED', req, {
+        userId: user.id,
+        action: 'ADMIN_LOGS_EXPORTED',
+        severity: 'INFO',
+        category: 'SYSTEM',
+        metadata: {
+          rows: rows.length,
+          truncated: rows.length >= MAX_EXPORT_ROWS,
+          fields: validCols,
+          ...(beg ? { from: beg.toISOString() } : {}),
+          ...(end ? { to: end.toISOString() } : {}),
+        },
+      });
+
       return NextResponse.json(rows);
     } catch (error) {
       console.error('[LOGS_EXPORT_POST_ERROR]', error);

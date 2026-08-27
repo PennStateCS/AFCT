@@ -91,5 +91,10 @@ export const POST = withAdminAuth(
       return apiError(500, 'Failed to fetch submissions');
     }
   },
-  { deniedAction: 'ADMIN_SUBMISSIONS_ACCESS_DENIED' },
+  // Every course's submissions in one list, which is student work across the installation.
+  {
+    deniedAction: 'ADMIN_SUBMISSIONS_ACCESS_DENIED',
+    viewAction: 'ADMIN_SUBMISSIONS_VIEWED',
+    viewCategory: 'SUBMISSION',
+  },
 );

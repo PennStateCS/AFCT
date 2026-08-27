@@ -25,5 +25,7 @@ export const statusGet = (collect: (req: Request) => Promise<unknown>) =>
       const data = await collect(req);
       return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
     },
-    { deniedAction: 'ADMIN_STATUS_ACCESS_DENIED' },
+    // One entry for "an administrator was looking at System Status", not one per tab: see
+    // the note on viewAction. Its eight backing routes share the action deliberately.
+    { deniedAction: 'ADMIN_STATUS_ACCESS_DENIED', viewAction: 'ADMIN_STATUS_VIEWED' },
   );

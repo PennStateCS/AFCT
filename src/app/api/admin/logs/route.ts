@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logThrottledView } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { parsePageParams } from '@/lib/api/request';
 import { LOG_CATEGORIES, LOG_SEVERITIES, pickLogValues } from '@/lib/activity-log-values';
@@ -51,13 +52,17 @@ function displayName(u: {
  *   500: { description: Query failed. }
  */
 export const GET = withAdminAuth(
-  async (req: Request) => {
+  async (req: Request, _ctx: unknown, { user }) => {
     try {
       const url = new URL(req.url);
       const { page, pageSize, skip, take } = parsePageParams(url.searchParams, {
         defaultSize: DEFAULT_PAGE_SIZE,
         maxSize: MAX_PAGE_SIZE,
       });
+      // Hoisted: when a search resolves to particular people, the entry recording this read
+      // says so, and opens its own throttle window. Browsing the log and narrowing it to one
+      // student are different acts and the record has to be able to tell them apart.
+      const aboutUserIds: string[] = [];
       const q = (url.searchParams.get('q') ?? '').trim();
       // Optional search scope: restrict the text search to one field. Default: all.
       const FIELDS = ['all', 'action', 'category', 'name', 'email'] as const;
@@ -95,6 +100,7 @@ export const GET = withAdminAuth(
             select: { id: true },
           });
           const ids = matchingUsers.map((u) => u.id);
+          aboutUserIds.push(...ids);
           if (ids.length) clauses.push({ userId: { in: ids } });
         }
         // If a scoped search found nothing to match on (e.g. name scope, no such user),
@@ -226,6 +232,33 @@ export const GET = withAdminAuth(
             submission: log.submissionId ?? null,
           },
         };
+      });
+
+      /**
+       * Who watches the watchers (policy §4). Reading the audit trail is itself a sensitive
+       * read, and until now only a REFUSED read was recorded, so an administrator could page
+       * through every student's activity and leave nothing behind.
+       *
+       * Throttled, because this page polls every fifteen seconds with auto-refresh on and
+       * would otherwise fill the table with entries about reading the table. `viewKey` is what
+       * stops that window swallowing the read that matters most: a log narrowed to ONE person
+       * is a different act from browsing the log, so it opens a window of its own.
+       *
+       * Filters, not results. What was searched for is the disclosure-shaped fact; copying
+       * the rows themselves into an entry about reading them would double the exposure.
+       */
+      await logThrottledView(req, {
+        userId: user.id,
+        action: 'ADMIN_LOGS_VIEWED',
+        category: 'SYSTEM',
+        key: aboutUserIds.length > 0 ? `user:${aboutUserIds.slice(0, 5).sort().join(',')}` : null,
+        metadata: {
+          matched: total,
+          ...(q ? { search: q, searchField: field } : {}),
+          ...(severities.length ? { severities } : {}),
+          ...(categories.length ? { categories } : {}),
+          ...(aboutUserIds.length ? { aboutUserIds: aboutUserIds.slice(0, 20) } : {}),
+        },
       });
 
       return NextResponse.json({

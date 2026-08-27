@@ -202,7 +202,9 @@ export const GET = withAdminAuth(
       oidcTrustEmail: settings?.oidcTrustEmail ?? false,
     });
   },
-  { deniedAction: 'SYSTEM_SETTINGS_VIEW_DENIED' },
+  // Reading the settings shows how the installation is configured, including which
+  // credentials are stored (never their values). A sensitive read under policy §4.
+  { deniedAction: 'SYSTEM_SETTINGS_VIEW_DENIED', viewAction: 'SYSTEM_SETTINGS_VIEWED' },
 );
 
 /**
