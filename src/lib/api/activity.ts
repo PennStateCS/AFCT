@@ -105,6 +105,83 @@ export async function denyExistence(user: PermissionUser, courseId: string): Pro
 }
 
 /**
+ * Record a sensitive READ, at most once per user, action and course in a window.
+ *
+ * Reading someone else's grades, roster or the audit log itself is a disclosure and the
+ * policy says to record it (§4). Recording every request instead would not: these pages
+ * paginate, refetch on focus and in several cases poll every fifteen seconds, so an
+ * unthrottled view entry writes hundreds of identical rows a day. That floods the table
+ * a real access would then be lost in, and ActivityLog is research data as well as an
+ * audit trail, so "how often was a gradebook opened" would start counting background
+ * refetches.
+ *
+ * What the window records is therefore "this person had this open during this window",
+ * which is an honest access record and still well past what FERPA asks of an internal
+ * read by a school official.
+ *
+ * Two things it must NOT be used for. An export or download is a copy leaving the system,
+ * so it is logged every time. And a read narrowed to one person (a log filtered to one
+ * student) is the read the record exists for: pass a distinguishing `key` so it does not
+ * disappear into a window opened by a broader read.
+ *
+ * Failures are swallowed and printed. A missing view entry must not fail a read that has
+ * already been authorised, which is the same trade {@link safeAuditLog} makes.
+ */
+export async function logThrottledView(
+  req: Request,
+  data: {
+    userId: string;
+    action: string;
+    category: EnhancedActivityLogData['category'];
+    courseId?: string | null;
+    assignmentId?: string | null;
+    /**
+     * What makes this read different from another one in the same window, when something
+     * does. Stored in metadata and matched on, so "the log, filtered to one student" opens
+     * its own window rather than being swallowed by "the log".
+     */
+    key?: string | null;
+    windowMs?: number;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const windowMs = data.windowMs ?? VIEW_THROTTLE_MS;
+  try {
+    const recent = await prisma.activityLog.findFirst({
+      where: {
+        userId: data.userId,
+        action: data.action,
+        // Null is a real value to match on here: an admin surface has no course, and
+        // `courseId: undefined` would match any course's entry instead.
+        courseId: data.courseId ?? null,
+        timestamp: { gte: new Date(Date.now() - windowMs) },
+        ...(data.key ? { metadata: { path: ['viewKey'], equals: data.key } } : {}),
+      },
+      select: { id: true },
+    });
+    if (recent) return;
+
+    await createEnhancedActivityLog(prisma, req, {
+      userId: data.userId,
+      action: data.action,
+      severity: 'INFO',
+      category: data.category,
+      courseId: data.courseId ?? null,
+      assignmentId: data.assignmentId ?? null,
+      metadata: {
+        ...(data.metadata ?? {}),
+        ...(data.key ? { viewKey: data.key } : {}),
+      } as EnhancedActivityLogData['metadata'],
+    });
+  } catch (err) {
+    console.error(`[logThrottledView] ${data.action} failed:`, err);
+  }
+}
+
+/** Ten minutes, the window the gradebook and statistics views already used. */
+export const VIEW_THROTTLE_MS = 10 * 60 * 1000;
+
+/**
  * Record a staff/admin action that **affects a student** (grade override,
  * submit-on-behalf, password reset, un-enroll, account lifecycle). Enforces the audit
  * shape the logging policy requires: actor, action, target, course, and an optional
