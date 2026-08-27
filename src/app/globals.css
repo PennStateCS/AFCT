@@ -265,11 +265,16 @@
   --border: oklch(0.91 0.012 253); /* #DCE2E9 */
   /* The visible edge of a control, and it has to clear WCAG 1.4.11's 3:1 because a field
      filled with --card on a --card surface has nothing else marking where it is. The old
-     0.754 grey was 2.19:1 on the card. Computed to land near 3.5:1 rather than picking a
-     palette step: 3.64:1 on the card, 3.48:1 on the canvas, 3.30:1 on muted, which keeps
-     margin without making 80-odd outline buttons read as heavy. --border stays quieter on
-     purpose; structure is not a control. */
-  --input: oklch(0.6202 0.0288 259.0418); /* #7C8798 */
+     0.754 grey was 2.19:1 on the card. Computed rather than picked off a palette step:
+     4.01:1 on the card, 3.35:1 on the canvas, 3.63:1 on muted, which keeps margin without
+     making 80-odd outline buttons read as heavy. --border stays quieter on purpose;
+     structure is not a control.
+
+     One step darker than it was, because the canvas moved. At #F8FAFC this value sat at
+     3.48:1 against the page; the darker workspace took that to 3.04:1, which passes and
+     leaves nothing for the next adjustment to spend. A boundary that close to the floor is
+     one canvas tweak away from failing silently. */
+  --input: oklch(0.596 0.0264 256.156); /* #75808F */
   /* The focus indicator, which 1.4.11 also holds to 3:1. Two things had to move: the token
      was #2096F7, and controls render it through `ring-ring/70`, so what matters is the
      BLENDED colour, not this value. At the old token and the old /50 the rendered ring was
@@ -575,10 +580,14 @@
      step quieter now; a form control, which you have to be able to find and click, keeps
      the stronger one. Light mode already made this distinction. */
   --border: oklch(0.3431 0.0541 265.229); /* #2B3855, 1.436:1 on the card as before */
-  /* Slate-500. #334155 was 1.72:1 on the card, well under the 3:1 a control boundary
-     needs, and the fill inside is the card colour itself. 3.75:1 on the card, 4.24:1 on
-     the background, 3.07:1 on muted. */
-  --input: oklch(0.5544 0.0407 257.4166); /* #64748B */
+  /* Slate-500 was #334155, 1.72:1 on the card and well under the 3:1 a control boundary
+     needs, with the fill inside being the card colour itself.
+     
+     Lifted again when the surface ladder was: at #64748B this cleared the floor on every
+     dark surface except the one that had just moved, giving 2.71:1 on a muted panel where
+     it had been 3.07:1. A control on a hover/selected row is exactly where the edge has to
+     hold. Now 4.40:1 on the card, 5.37:1 on the canvas, 3.39:1 on muted. */
+  --input: oklch(0.6083 0.0417 257.005); /* #73849C */
   /* Light blue rather than the mid blue this was: at 0.488 the ring barely showed on a
      0.13 background. 9.8:1 or better on every dark surface. */
   --ring: oklch(0.8091 0.0956 251.813); /* #93C5FD */
