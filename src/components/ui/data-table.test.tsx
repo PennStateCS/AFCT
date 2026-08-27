@@ -549,7 +549,21 @@ describe('DataTable', () => {
       // Not a field: it has no label, so it does not belong in the definition list.
       expect(trigger.closest('dl')).toBeNull();
       expect(trigger.closest('dd')).toBeNull();
-      expect(trigger.parentElement).toHaveClass('absolute');
+      expect(trigger.parentElement).toHaveClass('absolute', 'top-2', 'right-2');
+    });
+
+    /**
+     * The corner overlaps the first field's line, so that line and only that line is inset.
+     * A gutter down the whole card would cost every value its width for the sake of one row,
+     * and no inset at all puts a long title under the menu.
+     */
+    it('keeps the first field clear of the corner action', async () => {
+      stackedViewport();
+      render(<DataTable columns={kebabColumns} data={[data[0]!]} />);
+
+      await screen.findByRole('button', { name: 'Actions for Alice' });
+
+      expect(cardFor('Alice').querySelector('dl')?.className).toContain('[&>*:first-child]:pr-11');
     });
 
     it('drops the footer and its divider for an overflow menu', async () => {
