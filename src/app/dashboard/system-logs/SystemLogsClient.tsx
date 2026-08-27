@@ -287,12 +287,9 @@ export default function SystemLogsClient() {
         accessorKey: 'action',
         header: 'Action',
         meta: { priority: 1 },
-        // The verb, from the shared formatter. The cell shows "Viewed"; the row still SORTS,
-        // searches, filters and exports on the stored COURSE_GRADES_VIEWED, which is the value
-        // the research record and every saved query are keyed on. Presentation only, and
-        // deliberately not a second mapping living in this file.
-        // Metadata as well as the action: a couple of verbs depend on which field a generic
-        // update touched (publishing an assignment goes through UPDATE_ASSIGNMENT).
+        // The verb, from the shared formatter. The cell shows "Viewed"; sorting, search,
+        // filters and exports still use the stored COURSE_GRADES_VIEWED. Metadata goes in too,
+        // since a few verbs depend on which field an update touched.
         cell: ({ row }: { row: { original: LogRow } }) =>
           actionLabel(
             row.original.action || '',

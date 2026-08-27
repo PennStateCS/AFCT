@@ -45,12 +45,9 @@ export const POST = withCourseAuth(
        * conditioned on the token, so it now matches nothing. `attempts` never did that job
        * properly, since resetting it let the next claim hand the same value back.
        */
-      /**
-       * `updateManyAndReturn`, so the ids come back from the same statement that changed them.
-       * Selecting first and updating afterwards would race: a submission arriving between the
-       * two would be re-queued without appearing in the audit, or appear in it without being
-       * touched, and this is a grade-affecting sweep.
-       */
+      // `updateManyAndReturn` so the ids come from the statement that changed them. Selecting
+      // first would race: a submission arriving between the two ends up re-queued but unlogged,
+      // or logged but untouched.
       const reset = await prisma.submission.updateManyAndReturn({
         where: { courseId, status: { notIn: ['PENDING', 'PROCESSING'] } },
         data: {
@@ -65,20 +62,14 @@ export const POST = withCourseAuth(
       const count = reset.length;
 
       /**
-       * One entry per submission, tied to the batch by a shared id, then the summary.
+       * One entry per submission, then the summary, joined by `batchId`. Every one of these
+       * gets re-graded, and the worker's SUBMISSION_AUTOGRADED entry looks like an ordinary
+       * first grading, so without this a changed mark has nothing linking it to whoever
+       * ordered the sweep.
        *
-       * The batch row alone said only how many were re-queued. Every one of these will be
-       * re-graded, so a student's mark can change without anything linking that change to the
-       * person who ordered the sweep: the worker's own SUBMISSION_AUTOGRADED entry looks
-       * identical to an ordinary first grading. `batchId` is what joins the two ends, from
-       * either direction.
-       *
-       * `submissionId` goes in the COLUMN, not only in metadata: it is indexed, and a query
-       * for one submission's history is the reason these rows exist.
-       *
-       * A plain createMany rather than the usual helper, which costs several queries per call
-       * and would turn a two-thousand-submission sweep into thousands of round trips. Chunked,
-       * because one statement with thousands of rows is its own problem.
+       * `submissionId` in the column, not just metadata: it is indexed, and per-submission
+       * history is the point. Chunked `createMany` rather than the helper, which costs several
+       * queries per call.
        */
       const batchId = randomUUID();
       const ip = getClientIp(req);
@@ -109,8 +100,7 @@ export const POST = withCourseAuth(
         severity: 'INFO',
         category: 'SUBMISSION',
         courseId,
-        // The same batchId the per-submission rows carry, so the sweep can be reconstructed
-        // from either end.
+        // The id the per-submission rows carry, so the sweep reads from either end.
         metadata: { userId: user.id, courseId, count, batchId },
       });
 

@@ -19,8 +19,8 @@ import {
  * duplicate that drifted: its icons carried `group-hover:text-accent`, and since the
  * Button's own hover paints `bg-accent`, that made the icon exactly the colour of the
  * surface behind it (1.00:1, both themes) so it vanished on hover. Fixed rather than left
- * as a trap for whoever copies it, but it should probably be deleted and the Navbar's
- * switcher extracted here instead if a second one is ever needed.
+ * as a trap for whoever copies it. If a second switcher is ever needed, extract the Navbar's
+ * rather than keeping this one.
  */
 export function ThemeToggler() {
   const { theme, setTheme } = useTheme();

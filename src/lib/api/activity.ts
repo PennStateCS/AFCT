@@ -105,27 +105,17 @@ export async function denyExistence(user: PermissionUser, courseId: string): Pro
 }
 
 /**
- * Record a sensitive READ, at most once per user, action and course in a window.
+ * Record a sensitive read once per user, action and course in a window (policy §4).
  *
- * Reading someone else's grades, roster or the audit log itself is a disclosure and the
- * policy says to record it (§4). Recording every request instead would not: these pages
- * paginate, refetch on focus and in several cases poll every fifteen seconds, so an
- * unthrottled view entry writes hundreds of identical rows a day. That floods the table
- * a real access would then be lost in, and ActivityLog is research data as well as an
- * audit trail, so "how often was a gradebook opened" would start counting background
- * refetches.
+ * These pages paginate, refetch on focus and some poll every fifteen seconds, so logging every
+ * request would write hundreds of identical rows a day and bury the access that matters. The
+ * window records "this person had this open then", which is an honest access record.
  *
- * What the window records is therefore "this person had this open during this window",
- * which is an honest access record and still well past what FERPA asks of an internal
- * read by a school official.
+ * Not for exports or downloads: a copy leaving the system is logged every time. For a read
+ * narrowed to one person, pass `key` so it opens its own window instead of disappearing into a
+ * broader one.
  *
- * Two things it must NOT be used for. An export or download is a copy leaving the system,
- * so it is logged every time. And a read narrowed to one person (a log filtered to one
- * student) is the read the record exists for: pass a distinguishing `key` so it does not
- * disappear into a window opened by a broader read.
- *
- * Failures are swallowed and printed. A missing view entry must not fail a read that has
- * already been authorised, which is the same trade {@link safeAuditLog} makes.
+ * Failures are swallowed and printed, as {@link safeAuditLog} does.
  */
 export async function logThrottledView(
   req: Request,
@@ -135,11 +125,7 @@ export async function logThrottledView(
     category: EnhancedActivityLogData['category'];
     courseId?: string | null;
     assignmentId?: string | null;
-    /**
-     * What makes this read different from another one in the same window, when something
-     * does. Stored in metadata and matched on, so "the log, filtered to one student" opens
-     * its own window rather than being swallowed by "the log".
-     */
+    /** What makes this read distinct, matched on and stored in metadata. */
     key?: string | null;
     windowMs?: number;
     metadata?: Record<string, unknown>;
@@ -151,8 +137,8 @@ export async function logThrottledView(
       where: {
         userId: data.userId,
         action: data.action,
-        // Null is a real value to match on here: an admin surface has no course, and
-        // `courseId: undefined` would match any course's entry instead.
+        // Null is a real value: an admin surface has no course, and `undefined` would match
+        // an entry for any course.
         courseId: data.courseId ?? null,
         timestamp: { gte: new Date(Date.now() - windowMs) },
         ...(data.key ? { metadata: { path: ['viewKey'], equals: data.key } } : {}),

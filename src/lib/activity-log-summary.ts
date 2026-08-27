@@ -32,23 +32,12 @@ function counts(meta: Metadata): string {
 }
 
 /**
- * The verb an action is DISPLAYED as. The stored value never changes.
+ * Display verbs. The stored action is untouched: it is the key search, filters, exports and the
+ * research record all use.
  *
- * `COURSE_GRADES_VIEWED` stays `COURSE_GRADES_VIEWED` in the database, in search, in filters
- * and in every export: it is the key the research record and every saved query are built on.
- * This is the word a person reads in the Action column, so the column can be a verb and the
- * column beside it can be the thing that verb happened to.
- *
- * Three layers, in order, because a mapping of 267 action names would be stale the day after
- * it was written:
- *
- *   1. {@link ACTION_VERB}, for the ones no rule gets right.
- *   2. a suffix rule, since most actions end in what happened (`..._DENIED`, `..._SYNCED`).
- *   3. a prefix rule, since the rest start with it (`CREATE_...`, `VIEW_...`).
- *
- * An action matching none of them keeps its own name, sentence-cased: `SOMETHING_NEW_HAPPENED`
- * reads as "Something new happened". A future action must never render blank, which is the one
- * hard requirement here.
+ * Exceptions first, then a suffix rule (most actions end in what happened), then a prefix rule.
+ * Anything unmatched falls back to its own name, sentence-cased, so a new action never renders
+ * blank.
  */
 const ACTION_VERB: Record<string, string> = {
   LOGIN_SUCCESS: 'Signed in',
@@ -127,18 +116,14 @@ const ACTION_VERB: Record<string, string> = {
 };
 
 /**
- * Verbs that depend on WHICH field a generic update touched.
+ * Verbs that depend on which field a generic update touched.
  *
- * Publishing an assignment is the event that makes work visible to students, and it goes
- * through the same PATCH as renaming one, so the stored action is `UPDATE_ASSIGNMENT` either
- * way. The stored value stays exactly that: it is a research key, and inventing
- * `ASSIGNMENT_PUBLISHED` for some saves and not others would make "how many assignment
- * updates happened" mean two different things depending on which fields moved together.
- * `LOGIN_SUCCESS` is handled the same way, keeping one stored key and reading the variant
- * out of metadata.
+ * Publishing goes through the same PATCH as renaming, so the stored action is
+ * `UPDATE_ASSIGNMENT` either way; adding a stored action for some saves and not others would
+ * make counts of it mean two things. Same trick as `LOGIN_SUCCESS` reading its provider.
  *
- * Only when publishing is the ONLY thing that changed. A save that moved the due date as well
- * is an update that happens to include it, and calling that "Published" would hide the date.
+ * Only when publishing was the only change: a save that also moved the due date is an update,
+ * and calling it "Published" would hide the date.
  */
 const DERIVED_VERB: Record<string, (metadata: Metadata) => string | null> = {
   UPDATE_ASSIGNMENT: (metadata) => {
@@ -217,11 +202,8 @@ const VERB_BY_PREFIX: Record<string, string> = {
 };
 
 /**
- * The action as a person reads it: a verb, not an identifier.
- *
- * Presentation only, and deliberately one-way. Nothing derives a stored action from this, so
- * two actions displaying the same verb ("Viewed") is fine and expected: what they were done to
- * is the other column's job.
+ * The action as a person reads it. Presentation only and one-way; nothing maps back. Several
+ * actions sharing a verb is fine, since the object column says which is which.
  */
 export function actionLabel(action: string, metadata?: Metadata): string {
   const derived = DERIVED_VERB[action]?.(metadata);
@@ -237,9 +219,8 @@ export function actionLabel(action: string, metadata?: Metadata): string {
   const prefix = VERB_BY_PREFIX[action.split('_')[0] ?? ''];
   if (prefix) return prefix;
 
-  // Some actions carry the verb in the middle, because what follows it is the reason:
-  // SUBMISSION_REJECTED_LATE_CUTOFF, SUBMISSION_FAILED_PERMANENTLY. The reason belongs in the
-  // other column, so only the verb is taken here.
+  // Verb in the middle, reason after it: SUBMISSION_REJECTED_LATE_CUTOFF. The reason belongs
+  // in the other column.
   for (const [word, verb] of [
     ['REJECTED', 'Rejected'],
     ['DENIED', 'Denied'],
@@ -250,8 +231,7 @@ export function actionLabel(action: string, metadata?: Metadata): string {
     if (action.includes(`_${word}_`)) return verb;
   }
 
-  // Nothing recognised it. Its own name, sentence-cased, so an action added tomorrow reads as
-  // words rather than disappearing.
+  // Unrecognised: its own name, sentence-cased, rather than blank.
   const words = action.replace(/_/g, ' ').toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -273,12 +253,8 @@ const VIA: Record<string, string> = {
 
 /** "due date 24 Aug to 1 Sep" — the change itself, which is what a reader is looking for. */
 /**
- * A field whose VALUE must never be printed, whatever a producer happened to record.
- *
- * The settings route already audits an allowlist that leaves every credential out, so nothing
- * reaching here today carries one. This is the second lock: the promise "the log never shows a
- * password" should hold in the formatter, not only in each producer that must remember it, and
- * the cost of being wrong once is a secret in a table that admins screenshot.
+ * Fields whose value is never printed. The settings route already allowlists non-secret fields;
+ * this is the second lock, so the guarantee does not depend on every future producer.
  */
 const SECRET_FIELD = /(password|secret|token|apiKey|privateKey|credential|clientSecret)/i;
 
@@ -295,8 +271,7 @@ function describeChanges(metadata: Metadata): string | null {
 
   return Object.entries(changes)
     .map(([field, change]) => {
-      // What happened to it, never what it is. "set" and "cleared" are the whole statement a
-      // reader needs, and the only one that is safe to make.
+      // What happened to it, never what it is.
       if (SECRET_FIELD.test(field)) {
         const cleared = change.to === null || change.to === undefined || change.to === '';
         return `${label(field)}: ${cleared ? 'cleared' : 'set'}`;
@@ -346,21 +321,11 @@ export type RelatedRecords = {
 };
 
 /**
- * The thing an action was done TO, which is what the "What happened" column is for.
+ * Naming the object an action was done to: "Homework 2 in CMPSC 464", not "for everyone".
  *
- * The Action column now carries the verb, so this column carries the object and the context
- * that makes it identifiable: "Homework 2 in CMPSC 464", not "for everyone". Before this the
- * column was supplemental (a count, a state, a reason) and the object was only reachable by
- * opening the entry, which meant a log of forty grade views was forty rows saying "17
- * students" with no way to tell which gradebook.
- *
- * Names come from the entry's RESOLVED relations first, because they are current: an
- * assignment renamed since the entry was written shows its name today. Metadata is the
- * fallback, and it is the only source that survives the record being deleted, which is why
- * the destructive actions record names as they go. An identifier is the last resort and is
- * better than nothing: "Assignment abc123" at least says which one.
- *
- * Nothing here queries anything. It reads what the API already returned.
+ * Resolved relations first (they show the current name), then metadata (the only source that
+ * survives a deletion, which is why destructive actions record names as they go), then the id.
+ * Pure formatting over what the API already returned; nothing here queries.
  */
 function courseNamed(meta: Metadata, related?: RelatedRecords | null): string | null {
   const resolved = related?.course?.trim();
@@ -374,12 +339,9 @@ function courseNamed(meta: Metadata, related?: RelatedRecords | null): string | 
 }
 
 /**
- * The course as CONTEXT ("in CMPSC 464"), where the full title is more than the line can take.
- *
- * The API names a course "CMPSC 464, Theory of Computation", which is right for a labelled
- * field and too long for a summary sharing a table cell, so this takes the part before the
- * comma. A course deleted since is named by its id there, and the id is returned whole: half
- * an identifier is worse than a long one.
+ * The course as context ("in CMPSC 464"): the code alone, since the API's
+ * "CMPSC 464, Theory of Computation" is more than a table cell can share. A deleted course is
+ * named by its id there, which is returned whole.
  */
 function courseTag(related?: RelatedRecords | null, meta?: Metadata): string | null {
   const course = related?.course?.trim() ?? courseNamed(meta ?? null, null);
@@ -389,9 +351,8 @@ function courseTag(related?: RelatedRecords | null, meta?: Metadata): string | n
 }
 
 /**
- * The actions whose metadata `title` is proven to be the ASSIGNMENT's, by the code that writes
- * them. Nothing else reads that key: a group set, a problem and a comment all record `title` or
- * `name` too, and a global guess would confidently name the wrong object.
+ * Actions whose metadata `title` is the assignment's, per the code that writes them. Group
+ * sets, problems and comments record `title` too, so this is never read globally.
  */
 const TITLE_IS_ASSIGNMENT = new Set([
   'DELETE_ASSIGNMENT',
@@ -429,11 +390,7 @@ function inside(what: string | null, where: string | null): string | null {
   return where ? `${what} in ${where}` : what;
 }
 
-/**
- * The object for actions whose phrasing is their own. Everything else is handled by the
- * general rule below, which is why this list is short: it holds the cases where the object is
- * not simply the record the entry points at ("Course grades for X", not "X").
- */
+/** Actions whose object is not simply the record they point at: "Course grades for X", not "X". */
 const OBJECT_BY_ACTION: Record<
   string,
   (meta: Metadata, related?: RelatedRecords | null) => string | null
@@ -520,9 +477,8 @@ const OBJECT_BY_ACTION: Record<
   CREATE_ASSIGNMENT_OVERRIDE: (m, r) => overrideObject(m, r),
   UPDATE_ASSIGNMENT_OVERRIDE: (m, r) => overrideObject(m, r),
   DELETE_ASSIGNMENT_OVERRIDE: (m, r) => overrideObject(m, r),
-  // The way in IS the object here: "Signed in | AFCT password". Absent on an old entry, which
-  // is left blank rather than guessed at: claiming a password sign-in that may have been an
-  // LMS launch would be a false audit statement.
+  // The way in is the object: "Signed in | AFCT password". Blank on an old entry rather than
+  // guessed; claiming a password sign-in that may have been an LMS launch would be false.
   LOGIN_SUCCESS: (m) => SIGN_IN_OBJECT[str(m, 'provider') ?? ''] ?? null,
   CLIENT_LOGIN: (m) => {
     const how = SIGN_IN_OBJECT[str(m, 'provider') ?? ''];
@@ -586,12 +542,8 @@ const SIGN_OUT_OBJECT: Record<string, string> = {
 };
 
 /**
- * The object an entry is about, for every action without its own phrasing above.
- *
- * The rule is "the most specific record this entry points at": a problem inside an assignment,
- * an assignment inside a course, or the course itself. That covers the whole create / update /
- * delete / view surface without a case per action, which is what keeps the file from becoming
- * a 267-line table nobody updates.
+ * The object an entry is about: the most specific record it points at, a problem in an
+ * assignment in a course. Covers create/update/delete/view without a case per action.
  */
 export function objectPhrase(
   action: string,
@@ -605,10 +557,9 @@ export function objectPhrase(
   const assignment = assignmentNamed(metadata, related, action);
   const course = courseTag(related, metadata);
 
-  // The action says which record it is about, and that outranks "the most specific one
-  // present". An entry for UPDATE_ASSIGNMENT can carry a problem relation as well, and
-  // reporting it as a problem update would name the wrong object. Only when the action names
-  // nothing (the submission family, most views) does specificity decide.
+  // The action outranks specificity: UPDATE_ASSIGNMENT can carry a problem relation too, and
+  // reporting that as a problem update names the wrong object. Only an action that names
+  // nothing falls through to the rule below.
   const subject = /PROBLEM/.test(action)
     ? 'problem'
     : /ASSIGNMENT/.test(action)
@@ -625,8 +576,7 @@ export function objectPhrase(
 
   // A group set names itself, and only where the action says it is one.
   if (/GROUP_SET/.test(action)) {
-    // `deletedName` is what a deletion records, and it is the only name that entry will ever
-    // have: the set is gone, so nothing can resolve it later.
+    // `deletedName` is all a deletion leaves; nothing can resolve the set afterwards.
     const set = firstStr(metadata, 'groupSetName', 'deletedName', 'name', 'title');
     const group = firstStr(metadata, 'groupName');
     if (group && set) return `${group} in ${set}`;
@@ -640,23 +590,14 @@ export function objectPhrase(
 }
 
 /**
- * What the entry is about, in the shape the table reads: the object, then what happened to it.
+ * The object, then what happened to it:
  *
  *     Course grades for CMPSC 464, Theory of Computation · 17 students
  *     Homework 2 in CMPSC 464 · Due date: Aug 27 to Sep 3
- *     DFA Problem in Homework 2 · one student, 8 to 10
  *
- * Two halves, from two places. {@link objectPhrase} names the thing, mostly from the entry's
- * resolved relations. {@link activityDetail} is the older half of this file: the count, the
- * state, the before-and-after, the reason a request was refused. Either can be missing and the
- * result is whatever is left.
- *
- * The separator is a middle dot rather than a dash, matching the dashboard's "fact · fact"
- * rows, and because the repository does not use em dashes.
- *
- * `related` is optional and everything works without it: a historical entry, a record since
- * deleted, or a caller that has not resolved anything all fall through to metadata and then to
- * identifiers. Nothing here queries; it is pure formatting over what the API already returned.
+ * {@link objectPhrase} names the thing, {@link activityDetail} says what happened; either can
+ * be missing. `related` is optional, so historical entries and deleted records fall through to
+ * metadata and then to ids.
  */
 export function describeActivity(
   action: string,
@@ -670,19 +611,11 @@ export function describeActivity(
 }
 
 /**
- * The second half: what happened to the object. A count, a state, a change, or the reason a
- * request was refused.
+ * What happened to the object: a count, a state, a change, or why a request was refused.
  *
- * This is the switch this module started as, and it is deliberately still a switch: each
- * action knows which of its metadata fields carry meaning, and a generic reader of "the first
- * number in the object" would say wrong things confidently.
- *
- * Metadata only, deliberately: naming the object is {@link objectPhrase}'s job and the two
- * halves should not both be reaching for the same relations.
- *
- * Exported for its own tests. The table calls {@link describeActivity}, which is this plus the
- * object it happened to; testing the two halves separately is what keeps a change to one from
- * rewriting the other's expectations.
+ * Still a switch because each action knows which of its metadata fields carry meaning; a
+ * generic "first number in the object" reader would be confidently wrong. Metadata only,
+ * since naming the object is {@link objectPhrase}'s job. Exported for its own tests.
  */
 export function activityDetail(action: string, metadata: Metadata): string | null {
   switch (action) {
@@ -1415,47 +1348,23 @@ const render = (value: unknown): string => {
 };
 
 /**
- * An activity-log entry as something a person can read.
- *
- * Replaces handing the raw row to a viewer as JSON. The order is deliberate: what happened
- * first, then who and where, then the rest. Identifiers stay, because support questions turn on
- * them, but they sit below the things that answer the question at a glance.
- */
-/**
- * The separator between the object and what happened to it.
- *
- * Exported because a screen reader should not read it. It is punctuation between two facts,
- * the way the dashboard's "2 courses · 5 assignments" row is, and those mark theirs
- * `aria-hidden`. A caller rendering the summary as text splits on this and hides the dot;
- * see `summaryParts`.
+ * Separator between the object and what happened to it. Exported because it is punctuation, not
+ * a word: callers split on it and mark the dot `aria-hidden`, as the dashboard does with its
+ * "2 courses · 5 assignments" row. See {@link summaryParts}.
  */
 export const SUMMARY_SEPARATOR = ' · ';
 
-/**
- * The summary split into the pieces a cell should render, so the dot between them can be
- * hidden from assistive tech while staying visible on screen.
- */
+/** The summary split so a cell can hide the separator from assistive tech. */
 export function summaryParts(summary: string | null): string[] {
   return summary ? summary.split(SUMMARY_SEPARATOR) : [];
 }
 
 /**
- * The entry as one line for the detail view: who, what they did, and what to.
+ * One line for the detail view: "Charles Xavier · Signed in · AFCT password". The same three
+ * parts the table shows, so landing here from a row does not mean learning new wording.
  *
- * The same three parts the table shows, in the same order and the same words, because the
- * detail view is where somebody lands after reading a row and it should not restate the row in
- * a different vocabulary. It reads as "Charles Xavier · Signed in · AFCT password".
- *
- * This used to build an English sentence, with a past-tense rule and an a/an rule, so that
- * "with an AFCT password" had a subject and a verb in front of it. That machinery is gone:
- * the Action column now supplies the verb and the summary now names the object, so composing
- * them is all that is left to do.
- *
- * The subject is the entry's own actor and never `metadata.userName`. Those are different
- * people whenever an action is done TO somebody: an admin changing a student's email records
- * the student there, and naming them as the actor would be a false statement in an audit
- * record. With no actor (a signed-out request, a scheduled job) the line simply starts with
- * the verb.
+ * The subject is the entry's actor, never `metadata.userName`: those differ whenever an action
+ * is done TO somebody, and naming the target as the actor would be false. No actor, no subject.
  */
 export function describeActivitySentence(entry: {
   action: string;
@@ -1468,6 +1377,12 @@ export function describeActivitySentence(entry: {
   return parts.filter(Boolean).join(SUMMARY_SEPARATOR) || null;
 }
 
+/**
+ * An activity-log entry as something a person can read, in place of the raw row as JSON.
+ *
+ * Ordered: what happened, then who and where, then the rest. Identifiers stay, since support
+ * questions turn on them, but below the parts that answer the question at a glance.
+ */
 export function formatActivityDetails(entry: {
   action: string;
   /** The actor, for the sentence at the top. See describeActivitySentence. */

@@ -150,17 +150,9 @@ export const POST = withCourseAuth(
         }
       }
 
-      /**
-       * Where each affected student was BEFORE this edit.
-       *
-       * A move is an upsert and the request carries only the destination, so without this the
-       * log could say a student was put into Group B and never which group they came out of.
-       * That is precisely the question the entry exists to answer, since group membership
-       * decides whose work a group grade lands on.
-       *
-       * One indexed query over the affected users only, and it is the same read the
-       * optimistic-concurrency check above already does when the client sends a basis.
-       */
+      // Where each affected student was before the edit. A move is an upsert and the request
+      // carries only the destination, so the group they came out of is only knowable now, and
+      // that is the half a group grade turns on. One indexed read over the affected users.
       const touched = [...new Set([...removes, ...assigns.map((op) => op.userId)])];
       const previous = new Map(
         (
@@ -187,17 +179,12 @@ export const POST = withCourseAuth(
       });
 
       /**
-       * One entry per student, then the summary.
+       * One entry per student, then the summary. The summary used to carry the moves itself,
+       * capped at 100 names, so a whole-course reshuffle dropped the very thing it promised to
+       * keep. These have no cap, carry the from-group, and are findable per student.
        *
-       * The summary used to carry the moves itself, capped at 100 names, which meant a
-       * whole-course reshuffle silently dropped exactly the information the comment beside it
-       * promised to keep. A row per student has no cap to lose, carries the group the student
-       * came FROM as well as the one they went to, and is what a query for "this student's
-       * group history" can actually find.
-       *
-       * Written after the transaction commits, in one statement: an audit failure must never
-       * roll back a membership change, and a per-student helper call would cost several
-       * queries each on an edit that can touch a few hundred people.
+       * After the commit and in one statement: a failed audit must not roll back a membership
+       * change, and the usual helper costs several queries per call.
        */
       const ip = getClientIp(req);
       const userAgent = req.headers.get('user-agent') ?? null;

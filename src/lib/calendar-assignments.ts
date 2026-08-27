@@ -7,6 +7,13 @@ export { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
 // one place (`@/lib/user-timezone`).
 export { resolveUserTimezone } from '@/lib/user-timezone';
 
+/**
+ * Every assignment that should appear on one person's calendar between two dates.
+ *
+ * Audience-aware: a student sees only what is assigned to them (directly, or through a group
+ * set), with per-student and per-group date overrides already applied, so the date returned is
+ * the one that binds them. Course staff see the whole course's assignments on their base dates.
+ */
 export async function getAssignmentsForUserRange(params: {
   userId: string;
   startDate: Date;

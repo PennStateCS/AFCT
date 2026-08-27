@@ -55,6 +55,14 @@ export type SignInOutcome =
    */
   | { ok: false; reason: SignInRefusal; userId?: string };
 
+/**
+ * Who an OIDC or LTI sign-in belongs to, and whether it may proceed.
+ *
+ * The one place that decides between matching an existing identity, adopting an account by
+ * verified email, creating one, and refusing. Every refusal is a named {@link SignInRefusal}
+ * rather than a boolean, because the caller has to tell the person what to do next, and the
+ * decision is audited here rather than by each caller.
+ */
 export async function resolveFederatedSignIn(opts: {
   claims: FederatedClaims;
   context: AuditContext;

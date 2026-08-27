@@ -59,9 +59,8 @@ export const GET = withAdminAuth(
         defaultSize: DEFAULT_PAGE_SIZE,
         maxSize: MAX_PAGE_SIZE,
       });
-      // Hoisted: when a search resolves to particular people, the entry recording this read
-      // says so, and opens its own throttle window. Browsing the log and narrowing it to one
-      // student are different acts and the record has to be able to tell them apart.
+      // Hoisted so the view audit below can say who the log was narrowed to. Browsing the log
+      // and narrowing it to one student are different acts.
       const aboutUserIds: string[] = [];
       const q = (url.searchParams.get('q') ?? '').trim();
       // Optional search scope: restrict the text search to one field. Default: all.
@@ -235,17 +234,14 @@ export const GET = withAdminAuth(
       });
 
       /**
-       * Who watches the watchers (policy §4). Reading the audit trail is itself a sensitive
-       * read, and until now only a REFUSED read was recorded, so an administrator could page
-       * through every student's activity and leave nothing behind.
+       * Who watches the watchers (policy §4). Only a refused read was recorded before, so an
+       * admin could page through every student's activity and leave nothing behind.
        *
-       * Throttled, because this page polls every fifteen seconds with auto-refresh on and
-       * would otherwise fill the table with entries about reading the table. `viewKey` is what
-       * stops that window swallowing the read that matters most: a log narrowed to ONE person
-       * is a different act from browsing the log, so it opens a window of its own.
+       * Throttled, since auto-refresh polls every fifteen seconds; `viewKey` keeps a read
+       * narrowed to one person out of the window a broader read opened.
        *
-       * Filters, not results. What was searched for is the disclosure-shaped fact; copying
-       * the rows themselves into an entry about reading them would double the exposure.
+       * Filters, not results: copying the rows into an entry about reading them would double
+       * the exposure.
        */
       await logThrottledView(req, {
         userId: user.id,

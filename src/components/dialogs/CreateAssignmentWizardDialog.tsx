@@ -115,7 +115,7 @@ export function CreateAssignmentWizardDialog({
       assignedToEveryone: true,
       allowLateSubmissions: false,
       lateCutoff: undefined,
-      // Assignments are created unpublished for now; staff publish them later.
+      // Created unpublished; staff publish from the assignment's own controls.
       isPublished: false,
       isGroup: false,
       courseId,
@@ -192,7 +192,7 @@ export function CreateAssignmentWizardDialog({
       // A group assignment is pinned to the set chosen in the Type step; individual is null.
       groupSetId: raw.isGroup ? (raw.groupSetId ?? undefined) : undefined,
       assignees,
-      // Always created unpublished for now; there is no publish step.
+      // Always unpublished: the wizard has no publish step.
       isPublished: false,
     };
 

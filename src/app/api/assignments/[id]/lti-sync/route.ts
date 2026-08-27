@@ -11,13 +11,11 @@ import { assignmentSyncState, queueChangedGrades } from '@/lib/lti/grade-sync';
 /**
  * Whether the caller runs the course this assignment belongs to.
  *
- * Hand-rolled rather than `withAssignmentAuth`, and it has to stay that way: this path has no
- * course segment, and that wrapper reads the course from a route param. What it borrows from
- * the wrapper is the part that matters, which is that a refusal is RECORDED. It used to return
- * a bare 403, so an attempt to reach another course's grade sync left nothing behind.
+ * Hand-rolled rather than `withAssignmentAuth` because this path has no course segment and that
+ * wrapper reads the course from a route param. It borrows the part that matters: a refusal is
+ * logged, where this used to return a bare 403.
  *
- * Returns the current sync flag too, so a caller changing it has a `from` value to log without
- * a second read.
+ * Returns the sync flag too, so a caller changing it has a `from` value without a second read.
  */
 async function staffFor(assignmentId: string, req: Request) {
   const session = await auth();
@@ -136,12 +134,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   });
 
   /**
-   * This decides whether grades reach the LMS at all, and it wrote nothing at all before.
-   * A gradebook that stops matching the LMS is a support question that starts with "when did
-   * this get turned off, and by whom", and the answer was not recorded anywhere.
+   * This decides whether grades reach the LMS, and wrote nothing before: "when did this get
+   * turned off, and by whom" had no answer.
    *
-   * A save that changed nothing logs nothing: the toggle sends its state rather than a
-   * difference, so without this a page refresh would look like an event.
+   * A save that changed nothing logs nothing, since the toggle sends its state rather than a
+   * difference and a refresh would otherwise look like an event.
    */
   if (from !== to) {
     await safeAuditLog('ASSIGNMENT_GRADE_SYNC_UPDATED', request, {
@@ -218,12 +215,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const queued = await queueChangedGrades(id, { retryFailed: true, userId });
 
   /**
-   * The person who asked. Every grade this queues writes its own LTI_SCORE_QUEUED entry, so
-   * the machine side was covered, but nothing said a human pressed the button, for which
-   * assignment, or that it was a retry sweep after an LMS outage.
+   * The person who asked. Each queued grade writes its own LTI_SCORE_QUEUED entry, but nothing
+   * said a human pressed the button or which assignment it was for.
    *
-   * `targetUserId` when it was one student: sending a grade to the LMS puts an education
-   * record outside AFCT, and a disclosure about one person should name them.
+   * `targetUserId` for a single student: sending a grade to the LMS puts an education record
+   * outside AFCT, and a disclosure about one person names them.
    */
   await safeAuditLog('LTI_GRADES_PUSH_REQUESTED', request, {
     userId: gate.userId,

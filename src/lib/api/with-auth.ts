@@ -44,20 +44,14 @@ export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
     deniedAction: string;
     deniedCategory?: ActivityCategory;
     /**
-     * Record the successful read too, throttled, for an administrative surface.
+     * Record the successful read too, throttled: status, settings and backups are sensitive
+     * reads (policy §4) and only a refused look was recorded before.
      *
-     * The policy calls these sensitive reads (§4): system status, settings, backups and the
-     * sessions list are all somebody looking at the running installation, and until this
-     * existed only a REFUSED look was recorded.
+     * One action per surface, not per backing route. The status page fetches eight endpoints
+     * every fifteen seconds, so a per-route key would write ~50 rows an hour per admin.
      *
-     * ONE action for a whole surface, not one per backing route. The status page fetches
-     * eight endpoints and refetches every fifteen seconds; a per-route key would write about
-     * fifty rows an hour per administrator with the page open, which is the fan-out the
-     * policy tells us to collapse into a single entry per user action.
-     *
-     * It fires before the handler runs, so it records the read as ATTEMPTED. That differs
-     * from the gradebook, which logs after the data is served; here the attempt is the
-     * disclosure-shaped fact and a 500 afterwards does not un-look at the page.
+     * Fires before the handler, so it records the read as attempted; a 500 afterwards does not
+     * un-look at the page.
      */
     viewAction?: string;
     viewCategory?: ActivityCategory;

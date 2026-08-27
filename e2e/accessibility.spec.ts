@@ -620,15 +620,9 @@ test.describe('accessibility: newer dialogs (axe, contrast excluded)', () => {
 });
 
 /**
- * The stacked card view, which is what a DataTable becomes below 640px.
- *
- * Every other scan in this file runs at the desktop viewport, so this whole rendering path has
- * never been scanned: the cards, their label/value pairs, and the row action that sits in the
- * card's corner are a different DOM from the table they replace. An earlier audit noticed the
- * gap the hard way, finding an unlabelled list in `data-table-cards.tsx` that the desktop scans
- * could not have seen.
- *
- * 390px is an iPhone-width viewport, comfortably under the 640px the view switches at.
+ * The stacked card view a DataTable becomes below 640px. Every other scan here runs at desktop
+ * width, so this DOM (cards, label/value pairs, the corner action) had never been scanned; an
+ * earlier audit found an unlabelled list in `data-table-cards.tsx` the hard way.
  */
 test.describe('accessibility: the stacked card view on a phone (axe, contrast excluded)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
