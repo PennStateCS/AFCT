@@ -44,10 +44,15 @@ const baseRow: Partial<ActivityLog> = {
 };
 
 describe('activity columns', () => {
-  it('title-cases the action for display', () => {
+  /*
+   * The verb, from the shared formatter, so this tab and System Logs say the same word for the
+   * same entry. It used to title-case the stored value here and upper-case it there, which is
+   * how "Grade Updated" and "GRADE UPDATED" ended up being the same event.
+   */
+  it('shows the shared display verb for the action', () => {
     renderCell('action', baseRow);
 
-    expect(screen.getByText('Grade Updated')).toBeInTheDocument();
+    expect(screen.getByText('Graded')).toBeInTheDocument();
   });
 
   it('falls back to Unknown / User when the actor was deleted', () => {

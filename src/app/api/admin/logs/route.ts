@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logThrottledView } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { parsePageParams } from '@/lib/api/request';
 import { LOG_CATEGORIES, LOG_SEVERITIES, pickLogValues } from '@/lib/activity-log-values';
@@ -51,13 +52,16 @@ function displayName(u: {
  *   500: { description: Query failed. }
  */
 export const GET = withAdminAuth(
-  async (req: Request) => {
+  async (req: Request, _ctx: unknown, { user }) => {
     try {
       const url = new URL(req.url);
       const { page, pageSize, skip, take } = parsePageParams(url.searchParams, {
         defaultSize: DEFAULT_PAGE_SIZE,
         maxSize: MAX_PAGE_SIZE,
       });
+      // Hoisted so the view audit below can say who the log was narrowed to. Browsing the log
+      // and narrowing it to one student are different acts.
+      const aboutUserIds: string[] = [];
       const q = (url.searchParams.get('q') ?? '').trim();
       // Optional search scope: restrict the text search to one field. Default: all.
       const FIELDS = ['all', 'action', 'category', 'name', 'email'] as const;
@@ -95,6 +99,7 @@ export const GET = withAdminAuth(
             select: { id: true },
           });
           const ids = matchingUsers.map((u) => u.id);
+          aboutUserIds.push(...ids);
           if (ids.length) clauses.push({ userId: { in: ids } });
         }
         // If a scoped search found nothing to match on (e.g. name scope, no such user),
@@ -202,6 +207,15 @@ export const GET = withAdminAuth(
           userFirstName: u?.firstName ?? null,
           userLastName: u?.lastName ?? null,
           /**
+           * The actor's email, shown under their name in the table.
+           *
+           * Two people share a name, and on a log that is not a hypothetical: the column exists
+           * so a reader can tell which account acted. It is the actor's own address from their
+           * account, not whatever `userEmail` an action happened to record in metadata, which is
+           * often the SUBJECT of the action rather than the person who did it.
+           */
+          userEmail: u?.email ?? null,
+          /**
            * What the entry is about: the name where there is one, the id where there is not.
            *
            * The relations are `SetNull` on delete, so an id can outlive what it pointed at.
@@ -217,6 +231,30 @@ export const GET = withAdminAuth(
             submission: log.submissionId ?? null,
           },
         };
+      });
+
+      /**
+       * Who watches the watchers (policy §4). Only a refused read was recorded before, so an
+       * admin could page through every student's activity and leave nothing behind.
+       *
+       * Throttled, since auto-refresh polls every fifteen seconds; `viewKey` keeps a read
+       * narrowed to one person out of the window a broader read opened.
+       *
+       * Filters, not results: copying the rows into an entry about reading them would double
+       * the exposure.
+       */
+      await logThrottledView(req, {
+        userId: user.id,
+        action: 'ADMIN_LOGS_VIEWED',
+        category: 'SYSTEM',
+        key: aboutUserIds.length > 0 ? `user:${aboutUserIds.slice(0, 5).sort().join(',')}` : null,
+        metadata: {
+          matched: total,
+          ...(q ? { search: q, searchField: field } : {}),
+          ...(severities.length ? { severities } : {}),
+          ...(categories.length ? { categories } : {}),
+          ...(aboutUserIds.length ? { aboutUserIds: aboutUserIds.slice(0, 20) } : {}),
+        },
       });
 
       return NextResponse.json({

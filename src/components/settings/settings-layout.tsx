@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
  *
  * rounded-lg with shadow-xs, matching the local nav rail beside it and `ui/card`: the
  * panels were rounded-md and flat, so the rail read as the more finished object of the two
- * even though the form is the page. Full-strength border, deliberately: a fainter one is
+ * even though the form is the page. Full-strength border: a fainter one is
  * the first thing to disappear in the high-contrast theme, where the boundary is the only
  * thing separating a panel from the page.
  */
@@ -196,7 +196,7 @@ export const SETTINGS_ASIDE_GRID =
  * public address there, which is reference rather than status, hence the neutral name.
  *
  * The form is the main column; the rail sits beside it on a wide screen and above it on a
- * narrow one. The rail goes FIRST in the DOM deliberately. Stacked, that is the order
+ * narrow one. The rail goes first in the DOM. Stacked, that is the order
  * you want (know the state, then edit it), and it means the visual and reading orders differ
  * only in the one place they must: on a wide screen the rail is placed into column two.
  * Keep the rail's copy short for the same reason, or a phone gets a paragraph before the form.
@@ -257,7 +257,7 @@ export function SettingsAsideLayout({
 /**
  * A tab with no rail, whose form should still line up with the tabs that have one.
  *
- * The same grid, with column two left empty. That is deliberately not "a max-width that
+ * The same grid, with column two left empty. That is not "a max-width that
  * happens to match": the aside tabs' form column is `workspace - rail - gap`, which is
  * 840px below 2xl and 808px above it, and no fixed `max-w-*` tracks both. Sharing the
  * template makes them equal by construction instead of by two numbers kept in step by hand.
@@ -329,7 +329,7 @@ export function SettingsAsideCard({
  * How a status reads, not what it means.
  *
  * The tab decides which one applies; this only says which glyph and which semantic colour
- * go with it. One family (Lucide's circles) on purpose: a shield here and a triangle there
+ * go with it. One family (Lucide's circles): a shield here and a triangle there
  * would make four tabs look like four systems.
  */
 const STATUS_TONES = {

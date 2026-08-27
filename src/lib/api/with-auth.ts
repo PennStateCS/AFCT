@@ -2,6 +2,7 @@ import type { NextResponse } from 'next/server';
 import type { Session } from 'next-auth';
 import type { CourseRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { logThrottledView } from './activity';
 import { auth } from '@/lib/auth';
 import {
   isAdmin,
@@ -39,7 +40,22 @@ export type AdminAuthContext = {
  */
 export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
   handler: (req: Request, ctx: Ctx, auth: AdminAuthContext) => Promise<R> | R,
-  opts: { deniedAction: string; deniedCategory?: ActivityCategory },
+  opts: {
+    deniedAction: string;
+    deniedCategory?: ActivityCategory;
+    /**
+     * Record the successful read too, throttled: status, settings and backups are sensitive
+     * reads (policy §4) and only a refused look was recorded before.
+     *
+     * One action per surface, not per backing route. The status page fetches eight endpoints
+     * every fifteen seconds, so a per-route key would write ~50 rows an hour per admin.
+     *
+     * Fires before the handler, so it records the read as attempted; a 500 afterwards does not
+     * un-look at the page.
+     */
+    viewAction?: string;
+    viewCategory?: ActivityCategory;
+  },
 ): (req: Request, ctx: Ctx) => Promise<R | NextResponse> {
   return async (req: Request, ctx: Ctx) => {
     const session = await auth();
@@ -59,6 +75,13 @@ export function withAdminAuth<Ctx = unknown, R extends Response = Response>(
         metadata: { reason: 'not an administrator', required: 'admin' },
       });
       return apiError(403, 'Forbidden');
+    }
+    if (opts.viewAction) {
+      await logThrottledView(req, {
+        userId: session.user.id,
+        action: opts.viewAction,
+        category: opts.viewCategory ?? 'SYSTEM',
+      });
     }
     return withServerTiming(req, () => handler(req, ctx, { session, user: session.user }));
   };

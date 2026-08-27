@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
+import { getClientIp } from '@/lib/security/rate-limiter';
+
+/** Rows per audit insert. Large enough that a sweep is a few statements, not thousands. */
+const AUDIT_CHUNK = 500;
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -40,7 +45,10 @@ export const POST = withCourseAuth(
        * conditioned on the token, so it now matches nothing. `attempts` never did that job
        * properly, since resetting it let the next claim hand the same value back.
        */
-      const { count } = await prisma.submission.updateMany({
+      // `updateManyAndReturn` so the ids come from the statement that changed them. Selecting
+      // first would race: a submission arriving between the two ends up re-queued but unlogged,
+      // or logged but untouched.
+      const reset = await prisma.submission.updateManyAndReturn({
         where: { courseId, status: { notIn: ['PENDING', 'PROCESSING'] } },
         data: {
           status: 'PENDING',
@@ -49,7 +57,41 @@ export const POST = withCourseAuth(
           attempts: 0,
           processingToken: null,
         },
+        select: { id: true, assignmentId: true, problemId: true, studentId: true },
       });
+      const count = reset.length;
+
+      /**
+       * One entry per submission, then the summary, joined by `batchId`. Every one of these
+       * gets re-graded, and the worker's SUBMISSION_AUTOGRADED entry looks like an ordinary
+       * first grading, so without this a changed mark has nothing linking it to whoever
+       * ordered the sweep.
+       *
+       * `submissionId` in the column, not just metadata: it is indexed, and per-submission
+       * history is the point. Chunked `createMany` rather than the helper, which costs several
+       * queries per call.
+       */
+      const batchId = randomUUID();
+      const ip = getClientIp(req);
+      const userAgent = req.headers.get('user-agent') ?? null;
+
+      for (let i = 0; i < reset.length; i += AUDIT_CHUNK) {
+        await prisma.activityLog.createMany({
+          data: reset.slice(i, i + AUDIT_CHUNK).map((row) => ({
+            userId: user.id,
+            action: 'SUBMISSION_RERUN',
+            severity: 'INFO' as const,
+            category: 'SUBMISSION' as const,
+            courseId,
+            assignmentId: row.assignmentId,
+            problemId: row.problemId,
+            submissionId: row.id,
+            ipAddress: ip,
+            userAgent,
+            metadata: { batchId, via: 'course-rerun', targetUserId: row.studentId },
+          })),
+        });
+      }
 
       // One batch-summary audit event for the whole-course rerun.
       await createEnhancedActivityLog(prisma, req, {
@@ -58,7 +100,8 @@ export const POST = withCourseAuth(
         severity: 'INFO',
         category: 'SUBMISSION',
         courseId,
-        metadata: { userId: user.id, courseId, count },
+        // The id the per-submission rows carry, so the sweep reads from either end.
+        metadata: { userId: user.id, courseId, count, batchId },
       });
 
       return NextResponse.json({ success: true, count }, { status: 202 });

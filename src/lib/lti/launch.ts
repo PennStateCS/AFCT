@@ -1,22 +1,14 @@
 /**
- * Validating an LTI launch.
+ * Validating an LTI launch: the security boundary of the integration. Who the person is, which
+ * course they land in and what role they get all come from a token that arrives in a browser
+ * redirect, so nothing here may trust a claim it has not checked.
  *
- * This is the security boundary of the whole integration. Everything downstream, who the person
- * is, which course they land in, what role they get, is taken from a token that arrives in a
- * browser redirect and is therefore entirely under the sender's control until it is verified.
- * Nothing in here may trust a claim it has not checked.
+ * One ordering subtlety: the token is decoded before it is verified, to learn which platform
+ * sent it and therefore which keyset to check against. That unverified read selects a key and
+ * nothing else; every claim that matters is re-checked against the registration afterwards.
  *
- * The order has one subtlety worth stating, because it looks wrong at a glance. The token has to
- * be read *before* it is verified, in order to learn which platform sent it and therefore which
- * keyset to verify against. That is safe, and it is what every LTI implementation does, but only
- * because the unverified read is used for nothing except selecting a key. Every claim that
- * matters is checked again after the signature is proved, against the registration, never
- * against the token's own assertions about itself.
- *
- * The negative cases are the point of this file, so they are named rather than collapsed into a
- * boolean: an administrator debugging a failed launch needs to know whether the LMS is
- * unregistered, the clock is out, or a launch is being replayed, and those call for three
- * different actions.
+ * Failures are named rather than collapsed into a boolean, because an unregistered LMS, a
+ * skewed clock and a replayed launch call for three different fixes.
  */
 
 import { decodeJwt, jwtVerify, createRemoteJWKSet, errors as joseErrors } from 'jose';
@@ -222,10 +214,10 @@ function claimString(value: unknown): string | null {
 /**
  * The strings in an array claim, or null if it is not one.
  *
- * All or nothing, deliberately. This used to filter out whatever was not a string, so
+ * All or nothing. This used to filter out whatever was not a string, so
  * `["ltiResourceLink", 123]` became `["ltiResourceLink"]` and a broken request was answered as
  * though it had been well formed. A platform that sends a list it did not mean should be told,
- * not quietly corrected: the whole point of reading these is to do what the platform asked, and
+ * not quietly corrected: these are read in order to do what the platform asked, and
  * a value AFCT had to repair is not what it asked.
  */
 function strictStringList(value: unknown): string[] | null {
@@ -398,7 +390,7 @@ export async function validateLaunch(opts: {
   });
 
   // No registration means nobody has told AFCT this LMS is allowed to launch into it. Refusing
-  // by default is the whole point of registration being mutual.
+  // by default is what makes registration mutual.
   if (!platform) {
     // The values are echoed back so an administrator can compare them against the registration
     // they typed. Getting one character wrong here is the most common setup failure, and
@@ -420,7 +412,7 @@ export async function validateLaunch(opts: {
        * jose checks these only when they are present, so a token with no `exp` would otherwise
        * verify and never expire.
        *
-       * `sub` is deliberately *not* here. It used to be, which made every message without one a
+       * `sub` is not here. It used to be, which made every message without one a
        * signature-level failure, and Deep Linking 2.0 does not require it. Whether a subject is
        * needed depends on the message and on what AFCT is going to do with it, so it is decided
        * further down rather than by the verifier.
@@ -590,7 +582,7 @@ export async function validateLaunch(opts: {
   if (!(await consumeLaunch(transaction.id))) return { ok: false, reason: 'replayed' };
 
   /**
-   * From here on the checks are AFCT's, not the protocol's, and they are kept apart on purpose.
+   * From here on the checks are AFCT's, not the protocol's, and they are kept apart.
    *
    * LTI allows a launch that identifies nobody: Core says a tool "must interpret the lack of a
    * `sub` claim as a launch request coming from an anonymous user", and a platform may withhold

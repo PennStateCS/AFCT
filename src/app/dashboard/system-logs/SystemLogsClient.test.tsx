@@ -24,6 +24,7 @@ type LogRow = {
   userId: string | null;
   userFirstName: string | null;
   userLastName: string | null;
+  userEmail: string | null;
   action: string;
   category: string | null;
   severity: 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
@@ -69,7 +70,11 @@ vi.mock('@/components/ui/data-table', () => ({
                 const key = col.id ?? col.accessorKey ?? '';
                 const getValue = () =>
                   col.accessorKey ? (row as Record<string, unknown>)[col.accessorKey] : undefined;
-                return <td key={key}>{col.cell ? col.cell({ getValue, row: { original: row } }) : null}</td>;
+                return (
+                  <td key={key}>
+                    {col.cell ? col.cell({ getValue, row: { original: row } }) : null}
+                  </td>
+                );
               })}
             </tr>
           ))}
@@ -94,8 +99,11 @@ vi.mock('@/components/ui/data-table', () => ({
 }));
 
 // Dialogs are irrelevant to fetch/render behavior; stub them out.
+// Rendered as a marker when open rather than always null: the point of the row action is that
+// it opens this, and a mock that swallows `open` cannot tell a working button from a dead one.
 vi.mock('@/components/dialogs/LogViewerDialog', () => ({
-  LogViewerDialog: () => null,
+  LogViewerDialog: ({ open }: { open?: boolean }) =>
+    open ? <div data-testid="log-viewer" /> : null,
 }));
 vi.mock('@/components/dialogs/DownloadLogsDialog', () => ({
   DownloadLogsDialog: () => null,
@@ -107,6 +115,7 @@ const makeRow = (over: Partial<LogRow> = {}): LogRow => ({
   userId: 'u1',
   userFirstName: 'Ada',
   userLastName: 'Lovelace',
+  userEmail: 'ada@example.com',
   action: 'USER_LOGIN',
   category: 'AUTH',
   severity: 'INFO',
@@ -147,9 +156,72 @@ describe('SystemLogsClient', () => {
     await waitFor(() => {
       expect(screen.getByTestId('table-rows').textContent).toBe('1');
     });
-    // Action cell replaces underscores with spaces.
-    expect(screen.getByText('USER LOGIN')).toBeInTheDocument();
-    expect(screen.getByText('Lovelace')).toBeInTheDocument();
+    // The Action cell shows the display verb. The stored USER_LOGIN is what the row is
+    // filtered, searched and exported by, and it is untouched.
+    expect(screen.getByText('Signed in')).toBeInTheDocument();
+    // One Name column, surname first: "Lovelace, Ada". Upper-cased in CSS, so the text node
+    // itself stays in ordinary case and this asserts what a screen reader hears.
+    expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument();
+    // The address under it, which is what tells two people of the same name apart.
+    expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+  });
+
+  /*
+   * One width for every badge in the Severity and Category columns.
+   *
+   * The point is the column's edges lining up, so the width has to be on the badge itself and
+   * the label has to stay centred inside it. Badge is a centred flex box by default, and the
+   * failure mode is somebody "simplifying" the fixed width onto the cell instead, where the
+   * badge would go back to hugging its text.
+   */
+  it('gives the badges one width each, with the label still centred', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [makeRow({ severity: 'SECURITY', category: 'ASSIGNMENT' })],
+        total: 1,
+      }),
+    });
+
+    renderWithClient(<SystemLogsClient />);
+
+    const severity = await screen.findByText('SECURITY');
+    const category = await screen.findByText('ASSIGNMENT');
+
+    // A minimum, not a fixed width: the column still lines up, and a label that would not
+    // fit grows the badge instead of being clipped inside its overflow-hidden.
+    expect(severity).toHaveClass('min-w-20');
+    expect(category).toHaveClass('min-w-24');
+    // Badge's own centring, which the width would otherwise leave the text sitting left of.
+    expect(severity).toHaveClass('justify-center');
+    expect(category).toHaveClass('justify-center');
+  });
+
+  /*
+   * The per-row action is an icon, so its accessible name is the only thing carrying it: the
+   * tooltip is not a name, and a page of buttons that all say the same thing is what a screen
+   * reader would otherwise read out. That is the part worth pinning, along with the old solid
+   * "Full Log" button being gone, since bringing it back is a one-line mistake.
+   */
+  it('opens the full log from a named icon action, not a row of solid buttons', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ rows: [makeRow({ action: 'USER_LOGIN' })], total: 1 }),
+    });
+
+    renderWithClient(<SystemLogsClient />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('table-rows').textContent).toBe('1');
+    });
+
+    expect(screen.queryByRole('button', { name: 'Full Log' })).not.toBeInTheDocument();
+
+    // Named after the row it belongs to, not just "View full log".
+    const action = screen.getByRole('button', { name: /^View full log for Signed in at / });
+    fireEvent.click(action);
+
+    expect(screen.getByTestId('log-viewer')).toBeInTheDocument();
   });
 
   it('shows a loading state before the first fetch resolves', () => {

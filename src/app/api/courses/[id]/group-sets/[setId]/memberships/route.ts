@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getClientIp } from '@/lib/security/rate-limiter';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
@@ -149,6 +150,19 @@ export const POST = withCourseAuth(
         }
       }
 
+      // Where each affected student was before the edit. A move is an upsert and the request
+      // carries only the destination, so the group they came out of is only knowable now, and
+      // that is the half a group grade turns on. One indexed read over the affected users.
+      const touched = [...new Set([...removes, ...assigns.map((op) => op.userId)])];
+      const previous = new Map(
+        (
+          await prisma.groupMembership.findMany({
+            where: { groupSetId: setId, userId: { in: touched } },
+            select: { userId: true, groupId: true },
+          })
+        ).map((row) => [row.userId, row.groupId]),
+      );
+
       await prisma.$transaction(async (tx) => {
         if (removes.length > 0) {
           await tx.groupMembership.deleteMany({
@@ -164,6 +178,47 @@ export const POST = withCourseAuth(
         }
       });
 
+      /**
+       * One entry per student, then the summary. The summary used to carry the moves itself,
+       * capped at 100 names, so a whole-course reshuffle dropped the very thing it promised to
+       * keep. These have no cap, carry the from-group, and are findable per student.
+       *
+       * After the commit and in one statement: a failed audit must not roll back a membership
+       * change, and the usual helper costs several queries per call.
+       */
+      const ip = getClientIp(req);
+      const userAgent = req.headers.get('user-agent') ?? null;
+      const perStudent = [
+        ...assigns.map((op) => ({
+          action: 'GROUP_MEMBERSHIP_ASSIGNED',
+          targetUserId: op.userId,
+          fromGroupId: previous.get(op.userId) ?? null,
+          toGroupId: op.groupId,
+        })),
+        ...removes.map((userId) => ({
+          action: 'GROUP_MEMBERSHIP_REMOVED',
+          targetUserId: userId,
+          fromGroupId: previous.get(userId) ?? null,
+          toGroupId: null,
+        })),
+      ];
+
+      if (perStudent.length > 0) {
+        await prisma.activityLog.createMany({
+          data: perStudent.map(({ action, targetUserId, fromGroupId, toGroupId }) => ({
+            userId: user.id,
+            action,
+            severity: 'INFO' as const,
+            // Explicit: neither name contains a word the category would be inferred from.
+            category: 'COURSE' as const,
+            courseId,
+            ipAddress: ip,
+            userAgent,
+            metadata: { targetUserId, groupSetId: setId, fromGroupId, toGroupId },
+          })),
+        });
+      }
+
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,
         action: 'UPDATE_GROUP_SET_MEMBERSHIPS',
@@ -173,11 +228,9 @@ export const POST = withCourseAuth(
         metadata: {
           courseId,
           groupSetId: setId,
-          // Who, not just how many. Group membership decides whose work a group grade lands
-          // on, so "why did this student get that mark" has to be answerable from the log.
-          // Capped: a whole-course reshuffle should not write an unbounded row.
-          assigned: assigns.slice(0, 100),
-          removed: removes.slice(0, 100),
+          // Counts only. Who moved, and out of which group, is now a row per student above,
+          // which is both uncapped and findable; keeping a truncated copy here as well would
+          // be a second version of the truth that disagrees with the first past 100 names.
           assignedCount: assigns.length,
           removedCount: removes.length,
         },

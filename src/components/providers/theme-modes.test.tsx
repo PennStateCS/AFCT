@@ -56,7 +56,7 @@ function Harness({ initial }: { initial?: string }) {
   return null;
 }
 
-// The exact props RootProviders uses. If those change, this test should be revisited.
+// The exact props RootProviders uses; this test pins them, so a change there fails here.
 const renderThemed = (initial?: string) =>
   render(
     <NextThemesProvider

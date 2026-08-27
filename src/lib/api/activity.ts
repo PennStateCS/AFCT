@@ -105,6 +105,69 @@ export async function denyExistence(user: PermissionUser, courseId: string): Pro
 }
 
 /**
+ * Record a sensitive read once per user, action and course in a window (policy §4).
+ *
+ * These pages paginate, refetch on focus and some poll every fifteen seconds, so logging every
+ * request would write hundreds of identical rows a day and bury the access that matters. The
+ * window records "this person had this open then", which is an honest access record.
+ *
+ * Not for exports or downloads: a copy leaving the system is logged every time. For a read
+ * narrowed to one person, pass `key` so it opens its own window instead of disappearing into a
+ * broader one.
+ *
+ * Failures are swallowed and printed, as {@link safeAuditLog} does.
+ */
+export async function logThrottledView(
+  req: Request,
+  data: {
+    userId: string;
+    action: string;
+    category: EnhancedActivityLogData['category'];
+    courseId?: string | null;
+    assignmentId?: string | null;
+    /** What makes this read distinct, matched on and stored in metadata. */
+    key?: string | null;
+    windowMs?: number;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const windowMs = data.windowMs ?? VIEW_THROTTLE_MS;
+  try {
+    const recent = await prisma.activityLog.findFirst({
+      where: {
+        userId: data.userId,
+        action: data.action,
+        // Null is a real value: an admin surface has no course, and `undefined` would match
+        // an entry for any course.
+        courseId: data.courseId ?? null,
+        timestamp: { gte: new Date(Date.now() - windowMs) },
+        ...(data.key ? { metadata: { path: ['viewKey'], equals: data.key } } : {}),
+      },
+      select: { id: true },
+    });
+    if (recent) return;
+
+    await createEnhancedActivityLog(prisma, req, {
+      userId: data.userId,
+      action: data.action,
+      severity: 'INFO',
+      category: data.category,
+      courseId: data.courseId ?? null,
+      assignmentId: data.assignmentId ?? null,
+      metadata: {
+        ...(data.metadata ?? {}),
+        ...(data.key ? { viewKey: data.key } : {}),
+      } as EnhancedActivityLogData['metadata'],
+    });
+  } catch (err) {
+    console.error(`[logThrottledView] ${data.action} failed:`, err);
+  }
+}
+
+/** Ten minutes, the window the gradebook and statistics views already used. */
+export const VIEW_THROTTLE_MS = 10 * 60 * 1000;
+
+/**
  * Record a staff/admin action that **affects a student** (grade override,
  * submit-on-behalf, password reset, un-enroll, account lifecycle). Enforces the audit
  * shape the logging policy requires: actor, action, target, course, and an optional

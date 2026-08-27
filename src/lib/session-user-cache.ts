@@ -1,34 +1,25 @@
 import { prisma } from '@/lib/prisma';
 
 /**
- * A very short-lived cache for the per-request "fresh user" lookup in the NextAuth
- * session callback.
+ * A very short-lived cache for the per-request "fresh user" lookup in the NextAuth session
+ * callback.
  *
- * WHY THIS EXISTS
- * `auth()` runs on essentially every authenticated API request, and its session callback
- * re-reads the user to catch three things a JWT cannot express on its own:
- *   - the account was deleted or disabled,
- *   - the password changed (a reset must kill existing sessions, not just future ones),
- *   - admin was revoked.
- * That correctness is worth keeping. But a single dashboard load fans out into several
- * parallel API calls, so the same user was being read once per call, every time.
+ * `auth()` runs on nearly every authenticated request, and its callback re-reads the user to
+ * catch three things a JWT cannot express: the account was deleted or disabled, the password
+ * changed (a reset must kill existing sessions), or admin was revoked. That is worth keeping,
+ * but one dashboard load fans out into several parallel calls, each repeating the read.
  *
- * WHY THE TTL IS SECONDS, NOT MINUTES
- * The obvious "just trust the JWT for 5-10 minutes" would give a deleted, disabled, or
- * de-admined account a multi-minute grace period, and would silently break the
- * password-reset revocation control. A few seconds collapses the fan-out (the common
- * case: N parallel requests -> 1 query) while keeping the worst-case revocation lag
- * small and bounded.
+ * The TTL is seconds rather than minutes because it is a revocation lag: trusting the JWT for
+ * five minutes would give a disabled account a five-minute grace period and quietly break
+ * password-reset revocation. Seconds collapse the fan-out to one query and keep the worst case
+ * small.
  *
- * ...AND WHY IT IS USUALLY IMMEDIATE ANYWAY
- * The TTL is only the backstop. Anything in this app that disables an account, resets a
- * password, or changes admin calls `invalidateSessionUser()`, so the next request
- * re-reads from the database straight away. Missing an invalidation site degrades to
- * "revoked within TTL_MS", never to "not revoked".
+ * Usually it is immediate anyway. Everything that disables an account, resets a password or
+ * changes admin calls `invalidateSessionUser()`, so the next request re-reads at once; missing
+ * one of those sites degrades to "revoked within the TTL", never to "not revoked".
  *
- * SCOPE: in-process, so it is coherent for the single-container deployment this ships
- * as. Behind multiple replicas each process keeps its own copy and the TTL becomes the
- * real bound; that is still seconds, but worth remembering before scaling out.
+ * In-process, so it is coherent for the single-container deployment this ships as. Behind
+ * several replicas each process keeps its own copy and the TTL becomes the real bound.
  */
 
 export const SESSION_USER_TTL_MS = 15_000;

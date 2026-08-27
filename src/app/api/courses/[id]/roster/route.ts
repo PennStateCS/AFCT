@@ -6,6 +6,7 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { apiError } from '@/lib/api/http';
 import { withCourseAuth } from '@/lib/api/with-auth';
+import { logThrottledView } from '@/lib/api/activity';
 import { readJson, parsePageParams } from '@/lib/api/request';
 import { getCourseRosterPage, type RosterSearchField } from '@/lib/course-roster-list';
 
@@ -25,9 +26,16 @@ const SEARCH_FIELDS: RosterSearchField[] = ['all', 'name', 'email'];
  * A staff surface, so dropped students are included and badged rather than hidden. Students
  * never reach this route; their course payload carries staff names only and no peer rows.
  *
- * Deliberately does not log the read. Staff reading their own course's roster is routine,
- * and paginating would turn one read into one log per page flipped through, which would
- * distort ActivityLog as research data. See docs/logging-policy.md section 3.
+ * The read IS recorded, throttled to once per staff member per course per window. A roster is
+ * every enrolled student's name and address, which policy §4 calls a sensitive read and says
+ * to log. This route used to skip it entirely, citing §3's rule against logging index reads;
+ * the two sections disagreed and §4 wins, because the thing being listed here is other
+ * people's identities rather than course content.
+ *
+ * The pagination objection §3 raised was real, and the throttle is the answer to it rather
+ * than silence: one entry says "this person had the roster open during this window", however
+ * many pages they flipped through, so the log neither floods nor pretends the read did not
+ * happen. Same pattern as the gradebook and the statistics view.
  * @openapi
  * summary: List a course's roster (paginated)
  * parameters:
@@ -95,6 +103,16 @@ export const GET = withCourseAuth(
         statuses,
         sortBy,
         sortDir,
+      });
+
+      await logThrottledView(req, {
+        userId: user.id,
+        action: 'COURSE_ROSTER_VIEWED',
+        category: 'COURSE',
+        courseId,
+        // The course's roster size, not the page's, for the reason the gradebook records the
+        // course's student count: paging must not quietly redefine what the number means.
+        metadata: { rosterSize: total },
       });
 
       return NextResponse.json({

@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { logThrottledView } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { parsePageParams } from '@/lib/api/request';
 import { getCourseGradeColumns, getCourseGradePage } from '@/lib/course-grades';
-
-// The grades tab refetches on focus and on an interval; only record a view once per
-// user / course / window so a background refetch doesn't flood the audit log.
-const GRADES_VIEW_THROTTLE_MS = 10 * 60 * 1000;
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
@@ -86,33 +81,17 @@ export const GET = withCourseAuth(
       });
 
       // Best-effort, throttled read audit — never block the response on it.
-      try {
-        const recent = await prisma.activityLog.findFirst({
-          where: {
-            userId: user.id,
-            courseId,
-            action: 'COURSE_GRADES_VIEWED',
-            timestamp: { gte: new Date(Date.now() - GRADES_VIEW_THROTTLE_MS) },
-          },
-          select: { id: true },
-        });
-        if (!recent) {
-          await createEnhancedActivityLog(prisma, req, {
-            userId: user.id,
-            action: 'COURSE_GRADES_VIEWED',
-            severity: 'INFO',
-            category: 'GRADE',
-            courseId,
-            // The COURSE's student count, not the page's. This used to be the size of the
-            // whole matrix, and paginating must not quietly redefine it as "rows on one
-            // page": the log is research data and its meaning has to stay stable across
-            // years. The throttle above already keeps paging from multiplying entries.
-            metadata: { studentCount: total },
-          });
-        }
-      } catch (logErr) {
-        console.error('Failed to log grades view:', logErr);
-      }
+      await logThrottledView(req, {
+        userId: user.id,
+        action: 'COURSE_GRADES_VIEWED',
+        category: 'GRADE',
+        courseId,
+        // The COURSE's student count, not the page's. This used to be the size of the whole
+        // matrix, and paginating must not quietly redefine it as "rows on one page": the log
+        // is research data and its meaning has to stay stable across years. The throttle
+        // keeps paging from multiplying entries.
+        metadata: { studentCount: total },
+      });
 
       return NextResponse.json({
         rows,

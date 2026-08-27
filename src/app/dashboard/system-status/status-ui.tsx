@@ -160,7 +160,7 @@ export function statusSectionId(title: string) {
 /**
  * One titled group of status information.
  *
- * The panel treatment, padding and internal rhythm are deliberately the same numbers
+ * The panel treatment, padding and internal rhythm are the same numbers
  * System Settings uses (see `SETTINGS_BOX_CLASS`): a professor moving between the two
  * admin pages should not have to learn a second visual language. Written out here rather
  * than imported across page directories, because these are two pages that agree today,
@@ -272,7 +272,7 @@ export const StatusInset = ({
 /**
  * Which direction is the good one for a given reading.
  *
- * There is no general answer, which is the whole point: CPU climbing is bad, a database
+ * There is no general answer: CPU climbing is bad, a database
  * that has stopped growing may be broken, and more sessions is neither. The badge used to
  * paint every rise green and every fall red, so a server running out of memory reported it
  * as a success. Callers say what the number means; `neutral` is the default because most
@@ -400,10 +400,9 @@ export const StatusAsideLayout = ({
       className,
     )}
   >
-    {/* The rail is first in the DOM on purpose: stacked on a narrower screen that is the
-        order you want, since it says whether the machine needs anything before the page
-        goes into detail about how hard it is working. Both columns are placed explicitly,
-        so on a wide screen it still sits on the right without anything reordering. */}
+    {/* The rail is first in the DOM: stacked on a narrow screen that is the order you want,
+        since it says whether the machine needs anything before the readings do. Both columns
+        are placed explicitly, so it still sits on the right on a wide one. */}
     <div className="space-y-5 min-[1600px]:sticky min-[1600px]:top-6 min-[1600px]:col-start-2 min-[1600px]:row-start-1">
       {aside}
     </div>

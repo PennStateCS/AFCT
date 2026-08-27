@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { logThrottledView } from '@/lib/api/activity';
 import { withCourseAuth } from '@/lib/api/with-auth';
-import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { getAssignmentStatistics } from '@/lib/assignment-statistics-service';
 
 // The tab refetches on focus/interval; record one view per user/assignment/window so a
 // background refetch doesn't flood the audit log (mirrors the grades matrix route).
-const STATS_VIEW_THROTTLE_MS = 10 * 60 * 1000;
 
 /**
  * Aggregate analytics for one assignment: score histogram, per-problem box plots, and
@@ -51,31 +49,16 @@ export const GET = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
-      // Best-effort, throttled read audit; never block the response on it.
-      try {
-        const recent = await prisma.activityLog.findFirst({
-          where: {
-            userId: user.id,
-            assignmentId,
-            action: 'ASSIGNMENT_STATISTICS_VIEWED',
-            timestamp: { gte: new Date(Date.now() - STATS_VIEW_THROTTLE_MS) },
-          },
-          select: { id: true },
-        });
-        if (!recent) {
-          await createEnhancedActivityLog(prisma, req, {
-            userId: user.id,
-            action: 'ASSIGNMENT_STATISTICS_VIEWED',
-            severity: 'INFO',
-            category: 'GRADE',
-            courseId,
-            assignmentId,
-            metadata: { unit: stats.unit, participantCount: stats.participantCount },
-          });
-        }
-      } catch (logErr) {
-        console.error('Failed to log statistics view:', logErr);
-      }
+      // A sensitive read, recorded once per window; see logThrottledView for why it is
+      // throttled rather than written per request.
+      await logThrottledView(req, {
+        userId: user.id,
+        action: 'ASSIGNMENT_STATISTICS_VIEWED',
+        category: 'GRADE',
+        courseId,
+        assignmentId,
+        metadata: { unit: stats.unit, participantCount: stats.participantCount },
+      });
 
       return NextResponse.json(stats);
     } catch (error) {
@@ -83,5 +66,9 @@ export const GET = withCourseAuth(
       return NextResponse.json({ error: 'Failed to fetch statistics' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'ASSIGNMENT_STATISTICS_ACCESS_DENIED', deniedCategory: 'GRADE' },
+  {
+    access: 'manage',
+    deniedAction: 'ASSIGNMENT_STATISTICS_ACCESS_DENIED',
+    deniedCategory: 'GRADE',
+  },
 );

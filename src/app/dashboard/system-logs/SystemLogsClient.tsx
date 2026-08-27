@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { CategoryBadge } from '@/components/ui/category-badge';
 import { WorkspaceSurface } from '@/components/WorkspaceSurface';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
-import { Logs, ScrollText } from 'lucide-react';
+import { FileText, Logs, ScrollText } from 'lucide-react';
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import dynamic from 'next/dynamic';
 
@@ -28,8 +28,19 @@ function useMountedOnce(open: boolean): boolean {
 }
 import { apiPaths } from '@/lib/api-paths';
 import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
-import { describeActivity, formatActivityDetails } from '@/lib/activity-log-summary';
+import {
+  actionLabel,
+  describeActivity,
+  formatActivityDetails,
+  summaryParts,
+  SUMMARY_SEPARATOR,
+} from '@/lib/activity-log-summary';
 import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
+import { CompactDate } from '@/components/ui/CompactDate';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
+import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { ACTIVITY_SEVERITY_BADGE, ACTIVITY_SEVERITY_FALLBACK } from '@/lib/badge-presets';
 
 type Severity = 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
 
@@ -42,6 +53,7 @@ type LogRow = {
   userDisplayName: string | null;
   userFirstName: string | null;
   userLastName: string | null;
+  userEmail: string | null;
   action: string;
   category: string | null;
   severity: Severity;
@@ -57,7 +69,9 @@ type LogRow = {
   } | null;
 };
 
-const DEFAULT_PAGE_SIZE = 10;
+// 20, not 10: the page is a scan for one entry among many, and ten rows on a laptop meant
+// paging through a morning's activity a handful of lines at a time.
+const DEFAULT_PAGE_SIZE = 20;
 
 const SEVERITIES: readonly Severity[] = LOG_SEVERITIES;
 const CATEGORIES = LOG_CATEGORIES;
@@ -75,14 +89,9 @@ const SEARCH_FIELDS = [
 const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 
 // Badge palette per severity level.
-const SEVERITY_VARIANT: Record<Severity, 'info' | 'warning' | 'danger' | 'destructive'> = {
-  INFO: 'info',
-  WARNING: 'warning',
-  ERROR: 'danger',
-  SECURITY: 'destructive',
-};
-
 export default function SystemLogsClient() {
+  // The timezone every other table formats in, rather than the browser's.
+  const { timezone } = useEffectiveTimezone();
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -200,68 +209,125 @@ export default function SystemLogsClient() {
         accessorKey: 'timestamp',
         header: 'Time',
         meta: { priority: 1 },
-        cell: ({ getValue }: { getValue: () => unknown }) => {
-          const value = getValue();
-          return value
-            ? new Date(value as string).toLocaleString(undefined, {
-                dateStyle: 'medium',
-                timeStyle: 'short',
-              })
-            : '';
-        },
+        // The same two-line cell the Courses and User Accounts tables use: the date on top,
+        // the time muted underneath, so the column stays narrow instead of forcing one wide
+        // "MM/DD/YY HH:MM AM" line. It also moves this column onto the effective timezone,
+        // which is what the rest of the app formats in; it was reading the browser's.
+        cell: ({ getValue }: { getValue: () => unknown }) => (
+          <CompactDate value={getValue() as string | null} timeZone={timezone} />
+        ),
       },
       {
         accessorKey: 'severity',
         header: 'Severity',
         meta: { priority: 2 },
+        // One width for every badge in the column, so their left AND right edges line up and
+        // the column reads as a column rather than as chips of four different lengths. The
+        // width lives here rather than on Badge: it is a fact about this table, and a global
+        // fixed-width badge would wreck every other place one is used.
+        //
+        // 5rem, not the 4rem a glance at INFO/ERROR suggests: SECURITY is the longest value
+        // and needs about 78px with its padding. The text stays centred because Badge is
+        // already a centred flex box.
+        //
+        // min-w, not w: the widths are rem so they already scale with the reader's text size,
+        // but Badge clips what overflows it, and a clipped label is a silent failure. A
+        // minimum aligns the column in every ordinary case and lets the badge grow in the one
+        // where the alternative was hiding half a word.
         cell: ({ getValue }: { getValue: () => unknown }) => {
           const s = ((getValue() as string) || 'INFO') as Severity;
-          return <Badge variant={SEVERITY_VARIANT[s] ?? 'neutral'}>{s}</Badge>;
+          return (
+            <Badge
+              variant={ACTIVITY_SEVERITY_BADGE[s] ?? ACTIVITY_SEVERITY_FALLBACK}
+              className="min-w-20"
+            >
+              {s}
+            </Badge>
+          );
         },
       },
       {
         accessorKey: 'category',
         header: 'Category',
         meta: { priority: 3 },
+        // 6rem: ASSIGNMENT and SUBMISSION are the longest at about 92px, and a minimum rather
+        // than a fixed width for the reason given on Severity above.
         cell: ({ getValue }: { getValue: () => unknown }) => (
-          <CategoryBadge category={getValue() as string | null} />
+          <CategoryBadge category={getValue() as string | null} className="min-w-24" />
         ),
+      },
+      {
+        // Keyed on the last name, which is both what the column sorts by (the server's sortBy
+        // allows `userLastName`) and what it leads with. One column rather than the two it
+        // replaced: on a log you scan for a person, and a surname split from its given name
+        // across two columns is two things to read for one answer.
+        accessorKey: 'userLastName',
+        header: 'User',
+        meta: { priority: 2 },
+        // Upper-cased the way the Action and What happened columns are, and styled rather than
+        // transformed for the same reason: what a screen reader announces and what Copy JSON
+        // carries stay in ordinary case.
+        cell: ({ row }: { row: { original: LogRow } }) => {
+          const last = row.original.userLastName?.trim();
+          const first = row.original.userFirstName?.trim();
+          const email = row.original.userEmail?.trim();
+          if (!last && !first) return '—';
+          // Two lines, the same shape the Time column uses: the name to read, the address
+          // underneath in the muted size to tell two people of the same name apart. Not
+          // upper-cased, because an email address is a value somebody may copy.
+          return (
+            <div className="leading-tight">
+              <div className="uppercase">{[last, first].filter(Boolean).join(', ')}</div>
+              {email ? <div className="text-muted-foreground text-xs">{email}</div> : null}
+            </div>
+          );
+        },
       },
       {
         accessorKey: 'action',
         header: 'Action',
         meta: { priority: 1 },
-        cell: ({ getValue }: { getValue: () => unknown }) =>
-          ((getValue() as string) || '').replace(/_/g, ' '),
+        // The verb, from the shared formatter. The cell shows "Viewed"; sorting, search,
+        // filters and exports still use the stored COURSE_GRADES_VIEWED. Metadata goes in too,
+        // since a few verbs depend on which field an update touched.
+        cell: ({ row }: { row: { original: LogRow } }) =>
+          actionLabel(
+            row.original.action || '',
+            row.original.metadata as Record<string, unknown> | null,
+          ),
       },
       {
         id: 'summary',
         header: 'What happened',
         meta: { priority: 2 },
         enableSorting: false,
-        // Upper-cased to sit beside the Action column, which is upper-case because the stored
-        // action is. Styled rather than transformed, so what a screen reader announces and what
-        // Copy JSON carries stay in ordinary case.
-        cell: ({ row }: { row: { original: LogRow } }) => (
-          <span className="uppercase">
-            {describeActivity(
+        // Upper-cased in CSS rather than transformed, so what a screen reader announces and
+        // what Copy JSON carries stay in ordinary case.
+        //
+        // The separator between the object and what happened to it is punctuation between two
+        // facts, so it is hidden from assistive tech the way the dashboard hides the dot in
+        // "2 courses · 5 assignments". Read aloud it is "middle dot" in the middle of a
+        // sentence; on screen it is what keeps the two halves apart.
+        cell: ({ row }: { row: { original: LogRow } }) => {
+          const parts = summaryParts(
+            describeActivity(
               row.original.action,
               row.original.metadata as Record<string, unknown> | null,
-            ) ?? '—'}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'userLastName',
-        header: 'Last Name',
-        meta: { priority: 2 },
-        cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
-      },
-      {
-        accessorKey: 'userFirstName',
-        header: 'First Name',
-        meta: { priority: 3 },
-        cell: ({ getValue }: { getValue: () => unknown }) => (getValue() as string) || '—',
+              row.original.related,
+            ),
+          );
+          if (parts.length === 0) return <span className="uppercase">—</span>;
+          return (
+            <span className="uppercase">
+              {parts.map((part, i) => (
+                <span key={i}>
+                  {i > 0 ? <span aria-hidden="true">{SUMMARY_SEPARATOR}</span> : null}
+                  {part}
+                </span>
+              ))}
+            </span>
+          );
+        },
       },
       {
         accessorKey: 'ipAddress',
@@ -274,16 +340,48 @@ export default function SystemLogsClient() {
         },
       },
       {
-        id: 'viewer',
-        header: 'Logs',
-        meta: { priority: 1 },
+        // `actions`, not a name of its own: that id is what the shared mobile card view looks
+        // for to put a row's action in the card's corner. Named anything else it would have
+        // stayed a labelled field in the card's body, which is a one-off nobody asked for.
+        id: 'actions',
+        header: 'Details',
+        meta: { priority: 1, align: 'center' as const },
         enableSorting: false,
-        cell: ({ row }: { row: { original: LogRow } }) => (
-          <Button onClick={() => handleViewerOpen(row.original)}>Full Log</Button>
-        ),
+        // A ghost icon rather than the solid "Full Log" button this replaces. One per row, so a
+        // column of filled buttons ran down the right edge of the table with more weight than
+        // the log it was pointing at. Same click, same dialog; only the presentation changed.
+        cell: ({ row }: { row: { original: LogRow } }) => {
+          const when = row.original.timestamp
+            ? formatDateTimeInTimeZone(row.original.timestamp, timezone)
+            : null;
+          const what = actionLabel(
+            row.original.action || '',
+            row.original.metadata as Record<string, unknown> | null,
+          );
+          // Every row carries one of these, so the name says WHICH log: a page of buttons all
+          // called "View full log" is what a screen reader would otherwise read out.
+          const label = when ? `View full log for ${what} at ${when}` : `View full log for ${what}`;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={label}
+                  onClick={() => handleViewerOpen(row.original)}
+                >
+                  <FileText className="size-4" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              {/* The tooltip repeats the action in short form; it is not the accessible name,
+                  which the button carries itself. */}
+              <TooltipContent>View full log</TooltipContent>
+            </Tooltip>
+          );
+        },
       },
     ],
-    [handleViewerOpen],
+    [handleViewerOpen, timezone],
   );
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
@@ -319,75 +417,72 @@ export default function SystemLogsClient() {
           </div>
         ) : null}
 
-          <DataTable
-            columns={columns}
-            // Off by default: it is a wide column and most rows have nothing to say. Somebody
-            // hunting a specific change turns it on, or opens Full Log.
-            defaultColumnVisibility={{ summary: false }}
-            data={logs}
-            loading={loading}
-            tableLabel="System logs table"
-            showExportButton={false}
-            emptyTitle="No log entries"
-            emptyDescription="No activity matches the current search and filters."
-            emptyIcon={ScrollText}
-            loadingMessage="Loading log entries, please wait..."
-            actionButtons={
-              <DataTableFilterMenu
-                groups={[
-                  {
-                    key: 'severity',
-                    label: 'Severity',
-                    options: SEVERITIES.map((s) => ({ label: s, value: s })),
-                    selected: severities,
-                    onChange: (v) => {
-                      setSeverities(v);
-                      setPageIndex(0);
-                    },
+        <DataTable
+          columns={columns}
+          data={logs}
+          loading={loading}
+          tableLabel="System logs table"
+          showExportButton={false}
+          emptyTitle="No log entries"
+          emptyDescription="No activity matches the current search and filters."
+          emptyIcon={ScrollText}
+          loadingMessage="Loading log entries, please wait..."
+          actionButtons={
+            <DataTableFilterMenu
+              groups={[
+                {
+                  key: 'severity',
+                  label: 'Severity',
+                  options: SEVERITIES.map((s) => ({ label: s, value: s })),
+                  selected: severities,
+                  onChange: (v) => {
+                    setSeverities(v);
+                    setPageIndex(0);
                   },
-                  {
-                    key: 'category',
-                    label: 'Category',
-                    options: CATEGORIES.map((c) => ({ label: titleCase(c), value: c })),
-                    selected: categories,
-                    onChange: (v) => {
-                      setCategories(v);
-                      setPageIndex(0);
-                    },
+                },
+                {
+                  key: 'category',
+                  label: 'Category',
+                  options: CATEGORIES.map((c) => ({ label: titleCase(c), value: c })),
+                  selected: categories,
+                  onChange: (v) => {
+                    setCategories(v);
+                    setPageIndex(0);
                   },
-                ]}
-              />
-            }
-            manualPagination
-            pageCount={pageCount}
-            rowCount={total}
-            pagination={{ pageIndex, pageSize }}
-            onPaginationChange={handlePaginationChange}
-            manualFiltering
-            globalFilter={searchInput}
-            onGlobalFilterChange={setSearchInput}
-            searchScopeOptions={SEARCH_FIELDS}
-            searchScope={searchField}
-            onSearchScopeChange={(v) => {
-              setSearchField(v);
-              setPageIndex(0);
-            }}
-            manualSorting
-            sorting={sorting}
-            onSortingChange={handleSortingChange}
-          />
+                },
+              ]}
+            />
+          }
+          manualPagination
+          pageCount={pageCount}
+          rowCount={total}
+          pagination={{ pageIndex, pageSize }}
+          onPaginationChange={handlePaginationChange}
+          manualFiltering
+          globalFilter={searchInput}
+          onGlobalFilterChange={setSearchInput}
+          searchScopeOptions={SEARCH_FIELDS}
+          searchScope={searchField}
+          onSearchScopeChange={(v) => {
+            setSearchField(v);
+            setPageIndex(0);
+          }}
+          manualSorting
+          sorting={sorting}
+          onSortingChange={handleSortingChange}
+        />
 
-          {/* Dialogs */}
-          <LogViewerDialog
-            data={selectedData}
-            json={selectedJson}
-            open={viewerOpen}
-            onOpenChange={setViewerOpen}
-            title={title}
-          />
-          {downloadMounted && (
-            <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
-          )}
+        {/* Dialogs */}
+        <LogViewerDialog
+          data={selectedData}
+          json={selectedJson}
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          title={title}
+        />
+        {downloadMounted && (
+          <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
+        )}
       </section>
     </WorkspaceSurface>
   );

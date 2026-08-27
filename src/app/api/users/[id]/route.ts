@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logStudentImpactAction } from '@/lib/api/activity';
 import { Prisma } from '@prisma/client';
 import { auth } from '@/lib/auth';
 import { writeFile } from 'fs/promises';
@@ -398,25 +399,25 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
             { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
           )
         : losesAdmin
-        ? await prisma.$transaction(
-            async (tx) => {
-              const otherActiveAdmins = await tx.user.count({
-                where: { isAdmin: true, inactive: false, NOT: { id: userId } },
-              });
-              if (otherActiveAdmins === 0) throw new LastAdminError();
-              return write(tx);
-            },
-            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-          )
-        : becomesInactive
-        ? await prisma.$transaction(
-            async (tx) => {
-              identitiesWhenDisabled = await tx.linkedIdentity.count({ where: { userId } });
-              return write(tx);
-            },
-            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-          )
-        : await write(prisma);
+          ? await prisma.$transaction(
+              async (tx) => {
+                const otherActiveAdmins = await tx.user.count({
+                  where: { isAdmin: true, inactive: false, NOT: { id: userId } },
+                });
+                if (otherActiveAdmins === 0) throw new LastAdminError();
+                return write(tx);
+              },
+              { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+            )
+          : becomesInactive
+            ? await prisma.$transaction(
+                async (tx) => {
+                  identitiesWhenDisabled = await tx.linkedIdentity.count({ where: { userId } });
+                  return write(tx);
+                },
+                { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+              )
+            : await write(prisma);
     } catch (updateError) {
       if (updateError instanceof LastAdminError) {
         await createEnhancedActivityLog(prisma, req, {
@@ -491,24 +492,60 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       if (from !== next) changes[field] = { from, to: next };
     }
 
-    await createEnhancedActivityLog(prisma, req, {
-      userId: actorId,
-      action: 'UPDATE_USER',
-      severity: 'INFO',
-      category: 'USER',
-      metadata: {
+    /**
+     * Granting or removing global admin gets its own entry, and does not also count as an
+     * ordinary field change.
+     *
+     * The policy names "toggle admin" among the staff actions that must each be logged with
+     * actor, action and target (§5), and folding it into UPDATE_USER made a privilege
+     * escalation look exactly like a corrected surname: unfilterable, and invisible to anyone
+     * scanning for it. `logStudentImpactAction` is used rather than a bare write because it
+     * refuses to record an actor without a target.
+     *
+     * Split out of `changes` rather than duplicated into a second entry: one user action is
+     * one event per field, so counting UPDATE_USER would otherwise double-count this save.
+     */
+    const adminChange = changes.isAdmin;
+    if (adminChange) {
+      delete changes.isAdmin;
+      await logStudentImpactAction(req, {
+        actorId,
+        action: adminChange.to === true ? 'USER_ADMIN_GRANTED' : 'USER_ADMIN_REVOKED',
         targetUserId: userId,
-        changedFields: Object.keys(changes),
-        changes,
-        avatarChanged: dataToUpdate.avatar !== undefined,
-        // Promotion removes automatically-attached sign-ins. Recorded because it takes a way
-        // into the account away, and somebody reading this later needs to know why it went.
-        ...(automaticLinksRemoved > 0 ? { automaticLinksRemoved } : {}),
-        // How many ways in the account still had when it was switched off, which is what
-        // somebody re-enabling it later is going to want to know.
-        ...(identitiesWhenDisabled !== null ? { identitiesWhenDisabled } : {}),
-      },
-    });
+        category: 'USER',
+        before: adminChange.from,
+        after: adminChange.to,
+        ...(automaticLinksRemoved > 0 ? { metadata: { automaticLinksRemoved } } : {}),
+      });
+    }
+
+    // Everything else about the account. Skipped entirely when the admin flag was the only
+    // thing that moved, so the save is one event rather than two.
+    const otherFields = Object.keys(changes);
+    const alsoChanged =
+      otherFields.length > 0 ||
+      dataToUpdate.avatar !== undefined ||
+      identitiesWhenDisabled !== null;
+
+    if (alsoChanged)
+      await createEnhancedActivityLog(prisma, req, {
+        userId: actorId,
+        action: 'UPDATE_USER',
+        severity: 'INFO',
+        category: 'USER',
+        metadata: {
+          targetUserId: userId,
+          changedFields: otherFields,
+          changes,
+          avatarChanged: dataToUpdate.avatar !== undefined,
+          // Promotion removes automatically-attached sign-ins. Recorded because it takes a way
+          // into the account away, and somebody reading this later needs to know why it went.
+          ...(automaticLinksRemoved > 0 ? { automaticLinksRemoved } : {}),
+          // How many ways in the account still had when it was switched off, which is what
+          // somebody re-enabling it later is going to want to know.
+          ...(identitiesWhenDisabled !== null ? { identitiesWhenDisabled } : {}),
+        },
+      });
 
     return NextResponse.json(updatedUser);
   } catch (error) {

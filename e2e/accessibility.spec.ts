@@ -618,3 +618,44 @@ test.describe('accessibility: newer dialogs (axe, contrast excluded)', () => {
     }
   });
 });
+
+/**
+ * The stacked card view a DataTable becomes below 640px. Every other scan here runs at desktop
+ * width, so this DOM (cards, label/value pairs, the corner action) had never been scanned; an
+ * earlier audit found an unlabelled list in `data-table-cards.tsx` the hard way.
+ */
+test.describe('accessibility: the stacked card view on a phone (axe, contrast excluded)', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('system logs as cards', async ({ page }) => {
+    await signIn(page, 'admin');
+    await page.goto('/dashboard/system-logs');
+    await expect(page.getByRole('heading', { level: 1, name: 'System Logs' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // The card view, not the table: proof the scan below is looking at the right DOM.
+    await expect(page.getByRole('list', { name: 'System logs table' })).toBeVisible();
+    await expect(page.getByRole('table')).toHaveCount(0);
+
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+
+  test('the course list as cards', async ({ page }) => {
+    await signIn(page, 'admin');
+    await page.goto('/dashboard/courses');
+    await expect(page.getByRole('heading', { level: 1, name: 'Courses' })).toBeVisible({
+      timeout: 60_000,
+    });
+
+    await expect(page.getByRole('table')).toHaveCount(0);
+    // The corner action this view puts on each card, which the desktop table renders as an
+    // ordinary cell: a different element in a different place, and only reachable here.
+    await expect(page.getByRole('button', { name: /Actions for / }).first()).toBeVisible();
+
+    const { violations } = await scan(page);
+    expect(violations, summarize(violations)).toEqual([]);
+  });
+});
+

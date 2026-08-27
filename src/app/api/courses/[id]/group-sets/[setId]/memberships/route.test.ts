@@ -7,6 +7,8 @@ const prismaMock = vi.hoisted(() => ({
   groupMembership: { findMany: vi.fn(), deleteMany: vi.fn(), upsert: vi.fn() },
   course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
+  // Per-student membership entries are written in one statement after the transaction.
+  activityLog: { createMany: vi.fn() },
   $transaction: vi.fn(),
 }));
 const authMock = vi.hoisted(() => vi.fn());
@@ -42,9 +44,19 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   serviceMock.findGroupSet.mockResolvedValue({ id: 'gs1', courseId: 'c1' });
-  serviceMock.loadGroupSetDetail.mockResolvedValue({ id: 'gs1', name: 'S', groups: [], eligibleStudents: [], basis: 'x' });
+  serviceMock.loadGroupSetDetail.mockResolvedValue({
+    id: 'gs1',
+    name: 'S',
+    groups: [],
+    eligibleStudents: [],
+    basis: 'x',
+  });
   serviceMock.activeStudentIds.mockResolvedValue(new Set(['u1', 'u2']));
   prismaMock.studentGroup.findMany.mockResolvedValue([{ id: 'g1' }, { id: 'g2' }]);
+  // Where each affected student was before the edit, which the per-student entries record as
+  // their from-group. Empty by default: nobody was in a group yet.
+  prismaMock.groupMembership.findMany.mockResolvedValue([]);
+  prismaMock.activityLog.createMany.mockResolvedValue({ count: 0 });
   txMock.groupMembership.deleteMany.mockReset();
   txMock.groupMembership.upsert.mockReset();
   prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(txMock));
@@ -116,5 +128,54 @@ describe('POST memberships', () => {
     serviceMock.assertGroupSetUnlocked.mockRejectedValue(new GroupSetLockedError());
     const res = await post({ operations: [{ userId: 'u1', groupId: 'g1' }] });
     expect(res.status).toBe(409);
+  });
+});
+
+/**
+ * A move has to record where the student came FROM.
+ *
+ * The request carries only the destination group, so the previous one has to be read before
+ * the upsert. Without it the log cannot answer "whose work did this group's grade land on
+ * before the reshuffle", which is the question the entry exists for.
+ */
+describe('membership audit', () => {
+  // An earlier test leaves this rejecting, and clearAllMocks resets calls but not
+  // implementations, so say what this block needs rather than inheriting a locked set.
+  beforeEach(() => {
+    serviceMock.assertGroupSetUnlocked.mockResolvedValue(undefined);
+  });
+
+  it('records the group a student moved out of, not just the one they went to', async () => {
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 'u1', groupId: 'g1' }]);
+
+    const res = await post({ operations: [{ userId: 'u1', groupId: 'g2' }] });
+    expect(res.status).toBe(200);
+
+    const rows = prismaMock.activityLog.createMany.mock.calls[0]?.[0]?.data ?? [];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].action).toBe('GROUP_MEMBERSHIP_ASSIGNED');
+    expect(rows[0].metadata).toMatchObject({
+      targetUserId: 'u1',
+      fromGroupId: 'g1',
+      toGroupId: 'g2',
+    });
+  });
+
+  it('writes one row per student rather than a capped list on the summary', async () => {
+    // More than the old 100-name cap: the point is that none of them go missing.
+    const many = Array.from({ length: 150 }, (_, i) => `u${i}`);
+    serviceMock.activeStudentIds.mockResolvedValue(new Set(many));
+    prismaMock.groupMembership.findMany.mockResolvedValue([]);
+
+    const res = await post({ operations: many.map((userId) => ({ userId, groupId: 'g1' })) });
+    expect(res.status).toBe(200);
+
+    const rows = prismaMock.activityLog.createMany.mock.calls[0]?.[0]?.data ?? [];
+    expect(rows).toHaveLength(150);
+
+    const summary = activityLogMock.mock.calls.at(-1)?.[2];
+    expect(summary.metadata.assignedCount).toBe(150);
+    // The truncated copy is gone: one version of the truth, in the rows above.
+    expect(summary.metadata.assigned).toBeUndefined();
   });
 });
