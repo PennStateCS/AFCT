@@ -137,9 +137,14 @@ export function rowRangeLabel(opts: {
     return opts.filteredFrom !== undefined ? 'No matching records' : 'No records';
   }
 
-  const last = opts.firstRow + opts.rowsOnPage - 1;
+  // Clamped to the total: a server table keeps the previous page's rows on screen while the
+  // next one loads, so between the click and the response the count on screen belongs to one
+  // page and the index to another. Unclamped, the last page reads "Showing 1,951-2,000 of
+  // 1,956" for that moment, and the footer's live region says it out loud.
+  const last = Math.min(opts.firstRow + opts.rowsOnPage - 1, opts.total);
   // "Showing 7 of 7" rather than "Showing 7-7 of 7", which reads as a typo.
-  const range = opts.firstRow === last ? `${count(opts.firstRow)}` : `${count(opts.firstRow)}-${count(last)}`;
+  const range =
+    opts.firstRow === last ? `${count(opts.firstRow)}` : `${count(opts.firstRow)}-${count(last)}`;
   const shown = `Showing ${range} of ${count(opts.total)} ${noun}`;
 
   return opts.filteredFrom !== undefined

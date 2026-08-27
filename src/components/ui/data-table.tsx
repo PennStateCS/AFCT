@@ -98,6 +98,15 @@ interface DataTableProps<TData, TValue> {
   // When a controlled value + handler is provided, the table hands that concern
   // (pagination / sorting / filtering) to the parent instead of computing it
   // over `data`. Existing callers pass none of these and keep client behavior.
+  /**
+   * Add First and Last page buttons either side of the arrows.
+   *
+   * Off everywhere by default: most tables here are a page or two long, where jumping to the
+   * end is a control nobody needs. It earns its place on a log, where the table is thousands
+   * of pages and both ends are real destinations. A server table has to state its `pageCount`
+   * for the pair to appear at all; see the note in PaginationControls.
+   */
+  showFirstLastPage?: boolean;
   manualPagination?: boolean;
   /** Total page count, required when manualPagination is on. */
   pageCount?: number;
@@ -142,6 +151,7 @@ export function DataTable<TData, TValue>({
   emptyAction,
   stickyHeader = false,
   bordered = false,
+  showFirstLastPage = false,
   manualPagination = false,
   pageCount,
   rowCount,
@@ -451,6 +461,7 @@ export function DataTable<TData, TValue>({
               table={table}
               rowCount={rowCount}
               manualPagination={manualPagination}
+              showFirstLastPage={showFirstLastPage}
             />
           </div>
         </div>
@@ -623,6 +634,7 @@ export function DataTable<TData, TValue>({
               manualPagination={manualPagination}
               loading={loading}
               colSpan={columns.length}
+              showFirstLastPage={showFirstLastPage}
             />
           </Table>
         </div>

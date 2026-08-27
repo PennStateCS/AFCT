@@ -71,9 +71,11 @@ type LogRow = {
   } | null;
 };
 
-// 20, not 10: the page is a scan for one entry among many, and ten rows on a laptop meant
-// paging through a morning's activity a handful of lines at a time.
-const DEFAULT_PAGE_SIZE = 20;
+// 50, matching the API's own default: the page is a scan for one entry among many, and a
+// short page meant reading a morning's activity a handful of lines at a time. Server mode
+// does not remember a reader's choice (the page-size memory is client-mode only), so this is
+// what every visit starts at.
+const DEFAULT_PAGE_SIZE = 50;
 
 const SEVERITIES: readonly Severity[] = LOG_SEVERITIES;
 const CATEGORIES = LOG_CATEGORIES;
@@ -493,6 +495,9 @@ export default function SystemLogsClient() {
           manualSorting
           sorting={sorting}
           onSortingChange={handleSortingChange}
+          // The one table long enough to need them: thousands of pages, and the newest and
+          // oldest entries are both places somebody actually wants to get to.
+          showFirstLastPage
         />
 
         {/* Dialogs */}

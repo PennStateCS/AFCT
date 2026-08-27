@@ -18,6 +18,17 @@ describe('responsiveClass', () => {
 });
 
 describe('rowRangeLabel', () => {
+  /**
+   * A server table keeps the previous page's rows on screen while the next page loads, so for
+   * that moment the count on screen belongs to one page and the index to another. Unclamped,
+   * the last page read "Showing 1,951-2,000 of 1,956" and the footer's live region said it.
+   */
+  it('never runs past the total while a page is still loading', () => {
+    expect(rowRangeLabel({ firstRow: 1951, rowsOnPage: 50, total: 1956 })).toBe(
+      'Showing 1,951-1,956 of 1,956 records',
+    );
+  });
+
   it('says which rows these are and how many there are', () => {
     expect(rowRangeLabel({ firstRow: 1, rowsOnPage: 10, total: 2206 })).toBe(
       'Showing 1-10 of 2,206 records',

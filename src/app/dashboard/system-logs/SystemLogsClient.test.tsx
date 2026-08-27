@@ -262,6 +262,23 @@ describe('SystemLogsClient', () => {
     expect(screen.getByTestId('table-rows').textContent).toBe('0');
   });
 
+  /**
+   * Fifty, not the twenty this page started with, and not the ten a table defaults to. The
+   * API's own default is 50 and this is a page you scan, so a short page meant reading a
+   * morning's activity a handful of lines at a time. Server mode never remembers a reader's
+   * own choice, so this is what every visit starts at.
+   */
+  it('asks for fifty entries a page', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ rows: [makeRow()], total: 500 }),
+    });
+
+    renderWithClient(<SystemLogsClient />);
+
+    await waitFor(() => expect(lastFetchUrl()).toContain('pageSize=50'));
+  });
+
   it('issues a fetch with the next page param when pagination changes', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
