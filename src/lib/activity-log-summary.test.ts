@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { describeActivity, formatActivityDetails } from './activity-log-summary';
+import {
+  describeActivity,
+  describeActivitySentence,
+  formatActivityDetails,
+} from './activity-log-summary';
 
 /**
  * Turning log metadata into a sentence.
@@ -203,6 +207,45 @@ describe('what it refuses to summarise', () => {
  * The detail view. It replaced handing the viewer the raw row as JSON, which answered "what
  * happened" only if you could read a metadata blob.
  */
+/**
+ * Which file, on every action that serves one.
+ *
+ * The submission ones were missing, so an entry recording a member of staff opening a
+ * student's work said "VIEW SUBMISSION FILE" and nothing else. That entry is a disclosure
+ * record under FERPA, and it has to say what was disclosed.
+ */
+describe('files that were opened', () => {
+  const meta = { fileName: 'a3f9c2-uuid.jff', originalFileName: 'flipflops.jff' };
+
+  it.each([
+    'VIEW_SUBMISSION_FILE',
+    'DOWNLOAD_SUBMISSION_FILE',
+    'VIEW_SOLUTION_FILE',
+    'DOWNLOAD_SOLUTION_FILE',
+    'VIEW_PROBLEM_FILE',
+  ])('names the file in %s', (action) => {
+    // The name the person who uploaded it chose, not the stored uuid.
+    expect(describeActivity(action, meta)).toBe('flipflops.jff');
+  });
+
+  it('falls back to the stored name when there is no original', () => {
+    expect(describeActivity('VIEW_SUBMISSION_FILE', { fileName: 'a3f9c2-uuid.jff' })).toBe(
+      'a3f9c2-uuid.jff',
+    );
+  });
+
+  it('reads as a sentence with a verb in it', () => {
+    // DOWNLOAD had no past tense, so a download said "Ada flipflops.jff".
+    expect(
+      describeActivitySentence({
+        action: 'DOWNLOAD_SUBMISSION_FILE',
+        metadata: meta,
+        userDisplayName: 'Ada Lovelace',
+      }),
+    ).toBe('Ada Lovelace downloaded a submission file, flipflops.jff');
+  });
+});
+
 describe('the readable detail view', () => {
   const entry = {
     action: 'LTI_ROSTER_SYNCED',

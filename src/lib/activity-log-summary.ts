@@ -361,7 +361,17 @@ export function describeActivity(action: string, metadata: Metadata): string | n
       return people > 0 ? plural(people, 'participant') : null;
     }
 
+    // Every file AFCT serves, and the answer is always the same one: which file. The name the
+    // person who uploaded it chose comes first, because the stored name is a uuid.
+    //
+    // Submission files were missing from this list, so the entry that records a member of
+    // staff opening a student's work said only VIEW SUBMISSION FILE. Under FERPA that entry is
+    // a disclosure record, and "somebody looked at a file" is not one.
     case 'VIEW_PROBLEM_FILE':
+    case 'VIEW_SOLUTION_FILE':
+    case 'DOWNLOAD_SOLUTION_FILE':
+    case 'VIEW_SUBMISSION_FILE':
+    case 'DOWNLOAD_SUBMISSION_FILE':
       return firstStr(metadata, 'originalFileName', 'fileName', 'file');
 
     // Grades and attempts, where the number is the entry.
@@ -777,6 +787,7 @@ const PAST_TENSE: Record<string, string> = {
   CLEAR: 'cleared',
   CREATE: 'created',
   DELETE: 'deleted',
+  DOWNLOAD: 'downloaded',
   DROP: 'dropped',
   DUPLICATE: 'duplicated',
   ENROLL: 'enrolled',
