@@ -75,21 +75,50 @@ test.describe('description editor surface', () => {
     await expect(textbox(page)).toContainText('caret landed here');
   });
 
-  test('the editor grows when its grip is dragged', async ({ page }) => {
-    await openDetails(page);
-    const before = await editorBox(page).boundingBox();
-    expect(before).not.toBeNull();
+  /**
+   * A taller viewport than the file's default 720, and it is the test's own requirement rather
+   * than a preference: the drag grabs the grip at the box's bottom-right corner and pulls it
+   * 140px further down, so both ends of that have to be on screen.
+   *
+   * On a 720px viewport they were not. Everything above the editor is page chrome (navbar,
+   * banner, tab strip, title field), the editor is 288px on top of that, and the grip landed at
+   * y=725: five pixels under the fold. The mousedown hit nothing, the box stayed at 288, and the
+   * failure read as "resize is broken". It had been passing at y=717 with eight pixels to spare,
+   * so an ordinary spacing change on the assignment page was enough to tip it over, and would
+   * be again.
+   *
+   * Scrolling first is not enough on its own: the editor sits near the end of the document, so
+   * scrolling to the top of the page still leaves only ~114px under it. Height is what buys the
+   * room. Width stays 1280, because the toolbar-tier tests below depend on the editor's width.
+   */
+  test.describe('with room to drag', () => {
+    test.use({ viewport: { width: 1280, height: 1000 } });
 
-    // The browser-native resize grip lives in the bottom-right corner.
-    const gripX = before!.x + before!.width - 6;
-    const gripY = before!.y + before!.height - 6;
-    await page.mouse.move(gripX, gripY);
-    await page.mouse.down();
-    await page.mouse.move(gripX, gripY + 140, { steps: 8 });
-    await page.mouse.up();
+    test('the editor grows when its grip is dragged', async ({ page }) => {
+      await openDetails(page);
+      await editorBox(page).evaluate((el) => el.scrollIntoView({ block: 'start' }));
 
-    const after = await editorBox(page).boundingBox();
-    expect(after!.height).toBeGreaterThan(before!.height + 80);
+      const before = await editorBox(page).boundingBox();
+      expect(before).not.toBeNull();
+
+      // Fail on the reason rather than on the symptom if the page ever grows again.
+      const viewport = page.viewportSize()!;
+      expect(
+        before!.y + before!.height + 140,
+        'the grip and the end of the drag must both be on screen',
+      ).toBeLessThan(viewport.height);
+
+      // The browser-native resize grip lives in the bottom-right corner.
+      const gripX = before!.x + before!.width - 6;
+      const gripY = before!.y + before!.height - 6;
+      await page.mouse.move(gripX, gripY);
+      await page.mouse.down();
+      await page.mouse.move(gripX, gripY + 140, { steps: 8 });
+      await page.mouse.up();
+
+      const after = await editorBox(page).boundingBox();
+      expect(after!.height).toBeGreaterThan(before!.height + 80);
+    });
   });
 
   /**
