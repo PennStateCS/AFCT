@@ -16,9 +16,9 @@ const ACTIVITY_ORDER_BY: Record<
   timestamp: (dir) => [{ timestamp: dir }],
   action: (dir) => [{ action: dir }],
   category: (dir) => [{ category: dir }],
+  severity: (dir) => [{ severity: dir }],
   ipAddress: (dir) => [{ ipAddress: dir }],
   userLastName: (dir) => [{ user: { lastName: dir } }],
-  userFirstName: (dir) => [{ user: { firstName: dir } }],
 };
 
 const SEARCH_FIELDS = ['all', 'action', 'category', 'user'] as const;
@@ -53,7 +53,7 @@ const SEARCH_FIELDS = ['all', 'action', 'category', 'user'] as const;
  *   - { name: category, in: query, description: "Repeatable", schema: { type: array, items: { type: string } } }
  *   - { name: assignmentId, in: query, description: "Repeatable", schema: { type: array, items: { type: string } } }
  *   - { name: problemId, in: query, description: "Repeatable", schema: { type: array, items: { type: string } } }
- *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, action, category, ipAddress, userLastName, userFirstName] } }
+ *   - { name: sortBy, in: query, schema: { type: string, enum: [timestamp, action, category, severity, ipAddress, userLastName] } }
  *   - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
  * responses:
  *   200:
@@ -204,9 +204,8 @@ export const GET = withCourseAuth(
       const where: Prisma.ActivityLogWhereInput = { AND: and };
 
       const sortDir: 'asc' | 'desc' = searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
-      const build = ACTIVITY_ORDER_BY[searchParams.get('sortBy') ?? ''] ?? (() => [
-        { timestamp: sortDir },
-      ]);
+      const build =
+        ACTIVITY_ORDER_BY[searchParams.get('sortBy') ?? ''] ?? (() => [{ timestamp: sortDir }]);
       // A stable tiebreaker keeps paging deterministic when two events share a timestamp.
       const orderBy: Prisma.ActivityLogOrderByWithRelationInput[] = [
         ...build(sortDir),

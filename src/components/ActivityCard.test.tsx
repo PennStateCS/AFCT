@@ -34,6 +34,7 @@ vi.mock('@/components/ui/data-table', () => ({
     loadingMessage,
     rowCount,
     showExportButton,
+    defaultColumnVisibility,
     onPaginationChange,
     pagination,
   }: {
@@ -42,6 +43,7 @@ vi.mock('@/components/ui/data-table', () => ({
     loadingMessage?: string;
     rowCount?: number;
     showExportButton?: boolean;
+    defaultColumnVisibility?: Record<string, boolean>;
     onPaginationChange?: (u: { pageIndex: number; pageSize: number }) => void;
     pagination?: { pageIndex: number; pageSize: number };
   }) =>
@@ -52,6 +54,12 @@ vi.mock('@/components/ui/data-table', () => ({
         <div data-testid="table-rows">{data.length}</div>
         <div data-testid="row-count">{String(rowCount)}</div>
         <div data-testid="export-shown">{String(showExportButton !== false)}</div>
+        <div data-testid="hidden-columns">
+          {Object.entries(defaultColumnVisibility ?? {})
+            .filter(([, visible]) => !visible)
+            .map(([id]) => id)
+            .join(',')}
+        </div>
         <button
           type="button"
           onClick={() =>
@@ -198,6 +206,20 @@ describe('ActivityCard', () => {
     expect(screen.queryByText('Loading activity, please wait...')).toBeNull();
 
     release?.();
+  });
+
+  /**
+   * Nearly every entry on a course feed is INFO, so the column is a wall of one word. It stays
+   * in the Columns menu for the times it matters.
+   */
+  it('starts with the Severity column hidden', async () => {
+    installFetch({ rows: [activity('a1', 'ENROLLED')], total: 1 });
+
+    renderWithClient(<ActivityCard courseId="course-1" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('hidden-columns').textContent).toContain('severity'),
+    );
   });
 
   it('has no Load More button', async () => {

@@ -392,7 +392,9 @@ export default function SystemLogsClient() {
                   aria-label={label}
                   onClick={() => handleViewerOpen(row.original)}
                 >
-                  <FileText className="size-4" aria-hidden="true" />
+                  {/* Bigger than the default 16px, which read as a speck in a wide row. The
+                      button stays size-9 either way, so the row height does not move. */}
+                  <FileText className="size-5" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               {/* The tooltip repeats the action in short form; it is not the accessible name,

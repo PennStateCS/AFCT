@@ -6466,7 +6466,7 @@ export interface operations {
                 assignmentId?: string[];
                 /** @description Repeatable */
                 problemId?: string[];
-                sortBy?: "timestamp" | "action" | "category" | "ipAddress" | "userLastName" | "userFirstName";
+                sortBy?: "timestamp" | "action" | "category" | "severity" | "ipAddress" | "userLastName";
                 sortDir?: "asc" | "desc";
             };
             header?: never;

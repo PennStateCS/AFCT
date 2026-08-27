@@ -15,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 
 import { GET } from './route';
+import { ACTIVITY_SORT_KEYS } from '@/lib/activity-log-values';
 
 const req = (query = '') => new NextRequest(`http://localhost/api/courses/c1/activity${query}`);
 const ctx = { params: Promise.resolve({ id: 'c1' }) };
@@ -241,6 +242,25 @@ describe('GET /api/courses/[id]/activity', () => {
         { action: 'asc' },
         { id: 'asc' },
       ]);
+    });
+
+    /**
+     * The other half of the guard in `activity-columns.test.tsx`: that one pins the table's
+     * sort controls to ACTIVITY_SORT_KEYS, this one pins the server to the same list. Without
+     * both, adding a column and forgetting the route's map gives a header that sorts nothing
+     * while still showing an indicator.
+     */
+    it('accepts every column the table offers a sort control for', async () => {
+      for (const key of ACTIVITY_SORT_KEYS) {
+        prismaMock.activityLog.findMany.mockClear();
+        await GET(req(`?sortBy=${key}&sortDir=asc`), ctx);
+
+        const orderBy = prismaMock.activityLog.findMany.mock.calls[0][0].orderBy;
+        // The field the key names, rather than "not the default": an unrecognised key falls
+        // back to `{ timestamp: sortDir }`, which for sortDir=asc is not the default either.
+        const field = key === 'userLastName' ? 'lastName' : key;
+        expect(JSON.stringify(orderBy[0])).toContain(field);
+      }
     });
 
     it('falls back to timestamp for a column that is not sortable', async () => {

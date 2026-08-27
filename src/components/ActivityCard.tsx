@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
 import {
+  actorName,
   getActivityColumns,
+  relatedRecords,
   type ActivityLog,
 } from '@/app/dashboard/courses/[id]/activity-columns';
+import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
+import { formatActivityDetails } from '@/lib/activity-log-summary';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { RefreshCw, Activity } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
@@ -23,7 +28,7 @@ const DEFAULT_PAGE_SIZE = 50;
 // Search scope (server-side): restrict the text search to one field.
 const SEARCH_FIELDS = [
   { value: 'all', label: 'All fields' },
-  { value: 'action', label: 'Activity' },
+  { value: 'action', label: 'Action' },
   { value: 'category', label: 'Category' },
   { value: 'user', label: 'Person' },
 ];
@@ -67,9 +72,46 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   // Newest first: an audit trail is read from the most recent event down.
   const [sorting, setSorting] = useState<SortingState>([{ id: 'timestamp', desc: true }]);
 
+  // The details dialog, opened from a row's Details button. The state lives here rather than
+  // in the cell: one dialog for the table, the way System Logs does it. The popover it
+  // replaces was per-row, and closed as soon as you clicked into it to select anything.
+  const [detailsText, setDetailsText] = useState('');
+  const [detailsJson, setDetailsJson] = useState('');
+  const [detailsTitle, setDetailsTitle] = useState('');
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const handleViewDetails = useCallback(
+    (activity: ActivityLog) => {
+      // Readable rather than the raw row: what happened, then who and where, then the rest.
+      setDetailsText(
+        formatActivityDetails({
+          action: activity.action,
+          userDisplayName: actorName(activity),
+          timestamp: activity.timestamp,
+          severity: activity.severity ?? null,
+          category: activity.category ?? null,
+          ipAddress: activity.ipAddress ?? null,
+          userAgent: activity.userAgent ?? null,
+          metadata: activity.metadata,
+          related: relatedRecords(activity),
+        }),
+      );
+      // The entry as it arrived, for the Copy JSON button: the rendered text above reads well
+      // but renames things, and a bug report or a disclosure record wants the real field names.
+      setDetailsJson(JSON.stringify(activity, null, 2));
+      // The table's timezone, not the browser's, so the dialog and the row it came from agree.
+      setDetailsTitle(formatDateTimeInTimeZone(activity.timestamp, timezone));
+      setDetailsOpen(true);
+    },
+    [timezone],
+  );
+
   // Memoize columns so a re-render doesn't recreate the array (and its cell
   // components), which would force DataTable and its rows to re-render.
-  const columns = useMemo(() => getActivityColumns(timezone), [timezone]);
+  const columns = useMemo(
+    () => getActivityColumns(timezone, handleViewDetails),
+    [timezone, handleViewDetails],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -190,7 +232,12 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
         tableLabel="Activity log table"
         // Its own entry: without a key it shared the default one with every other unnamed
         // table, so hiding a column here hid it on unrelated pages.
-        storageKey="course-activity-columns-v1"
+        // v2: the columns changed shape when this table took the System Logs layout, and the
+        // saved visibility map is keyed by column id.
+        storageKey="course-activity-columns-v2"
+        // Severity is off to start with: on a course feed nearly every entry is INFO, so the
+        // column is a wall of one word. It is in the Columns menu for the times it matters.
+        defaultColumnVisibility={{ severity: false }}
         // The browser holds one page, so an export from here would silently write that
         // page and call it the audit trail.
         showExportButton={false}
@@ -255,6 +302,13 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
         manualSorting
         sorting={sorting}
         onSortingChange={handleSortingChange}
+      />
+      <LogViewerDialog
+        data={detailsText}
+        json={detailsJson}
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        title={detailsTitle}
       />
     </div>
   );

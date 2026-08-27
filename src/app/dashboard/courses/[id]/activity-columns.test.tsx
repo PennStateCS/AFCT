@@ -6,7 +6,12 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { getActivityColumns, type ActivityLog } from './activity-columns';
+import {
+  actorName,
+  getActivityColumns,
+  relatedRecords,
+  type ActivityLog,
+} from './activity-columns';
 import { ACTIVITY_SORT_KEYS } from '@/lib/activity-log-values';
 
 /**
@@ -14,10 +19,12 @@ import { ACTIVITY_SORT_KEYS } from '@/lib/activity-log-values';
  * they read off a row and which of them offer sorting. `ActivityCard`'s own test stubs
  * `DataTable`, so nothing else exercises these renderers.
  */
-const columns = () => getActivityColumns('UTC') as ColumnDef<ActivityLog>[];
+const noop = () => {};
+const columns = (onViewDetails: (a: ActivityLog) => void = noop) =>
+  getActivityColumns('UTC', onViewDetails) as ColumnDef<ActivityLog>[];
 
-const columnById = (id: string) => {
-  const found = columns().find(
+const columnById = (id: string, onViewDetails?: (a: ActivityLog) => void) => {
+  const found = columns(onViewDetails).find(
     (c) => c.id === id || (c as { accessorKey?: string }).accessorKey === id,
   );
   if (!found) throw new Error(`No ${id} column`);
@@ -25,9 +32,22 @@ const columnById = (id: string) => {
 };
 
 /** Render one column's cell against a server-shaped row. */
-const renderCell = (id: string, row: Partial<ActivityLog>) => {
-  const Cell = columnById(id).cell as (ctx: unknown) => React.ReactElement;
-  return render(<>{Cell({ row: { original: row } })}</>);
+const renderCell = (
+  id: string,
+  row: Partial<ActivityLog>,
+  onViewDetails?: (a: ActivityLog) => void,
+) => {
+  const Cell = columnById(id, onViewDetails).cell as (ctx: unknown) => React.ReactElement;
+  // Both shapes a cell may read: the whole row, and the accessor's value for cells (like
+  // Time) that take `getValue`.
+  return render(
+    <>
+      {Cell({
+        row: { original: row },
+        getValue: () => (row as Record<string, unknown>)[id],
+      })}
+    </>,
+  );
 };
 
 const baseRow: Partial<ActivityLog> = {
@@ -55,17 +75,18 @@ describe('activity columns', () => {
     expect(screen.getByText('Graded')).toBeInTheDocument();
   });
 
-  it('falls back to Unknown / User when the actor was deleted', () => {
-    // userId is nullable and the relation is SetNull, so a row can outlive its author.
-    renderCell('user.firstName', { ...baseRow, user: undefined });
-    expect(screen.getByText('Unknown')).toBeInTheDocument();
+  /*
+   * Upper-cased in CSS rather than transformed, the same as System Logs. What a screen reader
+   * announces and what Copy JSON carries stay in ordinary case.
+   */
+  it('upper-cases the action for display only', () => {
+    renderCell('action', baseRow);
 
-    renderCell('user.lastName', { ...baseRow, user: undefined });
-    expect(screen.getByText('User')).toBeInTheDocument();
+    expect(screen.getByText('Graded')).toHaveClass('uppercase');
   });
 
   it('reads the assignment title from the relation', () => {
-    renderCell('assignment', {
+    renderCell('assignmentProblem', {
       ...baseRow,
       assignment: { id: 'a1', title: 'Homework 1' } as ActivityLog['assignment'],
     });
@@ -76,7 +97,7 @@ describe('activity columns', () => {
   it('falls back to a title recorded in metadata on older events', () => {
     // Older rows recorded only a title, not a relation id. Those still display, but they
     // are exactly the rows an assignment-id filter cannot match.
-    renderCell('assignment', {
+    renderCell('assignmentProblem', {
       ...baseRow,
       assignment: undefined,
       metadata: { assignmentTitle: 'Legacy Homework' },
@@ -93,12 +114,17 @@ describe('activity columns', () => {
       expect(sortableOf('category')).toBe(true);
     });
 
-    it('does not offer sorting on the derived Assignment and Problem columns', () => {
-      // Their displayed title comes from a relation with metadata fallbacks, so the server
-      // has no single column to order the whole log by. A sort control here would claim an
+    it('does not offer sorting on the derived Assignment / Problem column', () => {
+      // Its displayed titles come from relations with metadata fallbacks, so the server has
+      // no single column to order the whole log by. A sort control here would claim an
       // ordering it silently could not deliver.
-      expect(sortableOf('assignment')).toBe(false);
-      expect(sortableOf('problem')).toBe(false);
+      expect(sortableOf('assignmentProblem')).toBe(false);
+    });
+
+    it('does not offer sorting on the derived Subject column', () => {
+      // Same reason: the phrase is built in the browser out of the action, its metadata and
+      // whichever relations came back. There is nothing for the database to order by.
+      expect(columnById('summary').enableSorting).toBe(false);
     });
 
     it('offers sorting on exactly the columns the server can order by', () => {
@@ -139,85 +165,140 @@ describe('activity columns', () => {
       vi.useRealTimers();
     });
 
-    it('shows the actor initials when they have no avatar', () => {
-      const { container } = renderCell('avatar', baseRow);
-
-      expect(within(container).getByText('AL')).toBeInTheDocument();
-    });
-
-    it('names the avatar after the actor', () => {
-      const { container } = renderCell('avatar', baseRow);
-
-      // The image is only in the DOM once it loads, so assert on the fallback's presence
-      // and that the cell rendered for a row that has an avatar path.
-      expect(container.textContent).toContain('AL');
-    });
-
     it('renders the category badge', () => {
       const { container } = renderCell('category', baseRow);
 
       expect(within(container).getByText('GRADE')).toBeInTheDocument();
     });
 
-    it('prefers the problem relation, then metadata, then N/A', () => {
-      const viaRelation = renderCell('problem', {
-        ...baseRow,
-        problem: { id: 'p1', title: 'Even length' } as ActivityLog['problem'],
-      });
-      expect(within(viaRelation.container).getByText('Even length')).toBeInTheDocument();
+    it('renders the severity badge', () => {
+      const { container } = renderCell('severity', { ...baseRow, severity: 'SECURITY' });
 
-      const viaMetadata = renderCell('problem', {
-        ...baseRow,
-        metadata: { problemTitle: 'From metadata' },
-      });
-      expect(within(viaMetadata.container).getByText('From metadata')).toBeInTheDocument();
+      expect(within(container).getByText('SECURITY')).toBeInTheDocument();
+    });
 
-      const viaLegacyName = renderCell('problem', {
-        ...baseRow,
-        metadata: { problemName: 'Legacy key' },
-      });
-      expect(within(viaLegacyName.container).getByText('Legacy key')).toBeInTheDocument();
+    it('treats a row with no severity as INFO rather than blank', () => {
+      // The column has a default in the database, but an older row read through a narrower
+      // include can still arrive without one, and an empty cell in a severity column reads
+      // as "nothing to see" instead of "ordinary".
+      const { container } = renderCell('severity', { ...baseRow, severity: undefined });
 
-      const missing = renderCell('problem', baseRow);
-      expect(within(missing.container).getByText('N/A')).toBeInTheDocument();
+      expect(within(container).getByText('INFO')).toBeInTheDocument();
+    });
+
+    describe('the user cell', () => {
+      it('leads with the surname and shows the address underneath', () => {
+        const { container } = renderCell('userLastName', baseRow);
+
+        expect(within(container).getByText('Lovelace, Ada')).toBeInTheDocument();
+        expect(within(container).getByText('ada@x.edu')).toBeInTheDocument();
+      });
+
+      it('upper-cases the name but not the address', () => {
+        const { container } = renderCell('userLastName', baseRow);
+
+        expect(within(container).getByText('Lovelace, Ada')).toHaveClass('uppercase');
+        // An address is a value somebody may copy out of the table.
+        expect(within(container).getByText('ada@x.edu')).not.toHaveClass('uppercase');
+      });
+
+      it('falls back to the address when the account has no name', () => {
+        const { container } = renderCell('userLastName', {
+          ...baseRow,
+          user: {
+            id: 'u1',
+            email: 'ada@x.edu',
+            firstName: null,
+            lastName: null,
+          } as ActivityLog['user'],
+        });
+
+        expect(within(container).getByText('ada@x.edu')).toBeInTheDocument();
+      });
+
+      it('shows a dash when the actor is gone', () => {
+        // userId is nullable and the relation is SetNull, so a row can outlive its author.
+        const { container } = renderCell('userLastName', { ...baseRow, user: null });
+
+        expect(container.textContent).toBe('—');
+      });
+    });
+
+    describe('the assignment and problem cell', () => {
+      it('puts the assignment over the problem', () => {
+        const { container } = renderCell('assignmentProblem', {
+          ...baseRow,
+          assignment: { id: 'a1', title: 'Homework 1' } as ActivityLog['assignment'],
+          problem: { id: 'p1', title: 'Even length' } as ActivityLog['problem'],
+        });
+
+        expect(container.textContent).toBe('Homework 1Even length');
+      });
+
+      it('prefers the problem relation, then metadata', () => {
+        const viaMetadata = renderCell('assignmentProblem', {
+          ...baseRow,
+          metadata: { problemTitle: 'From metadata' },
+        });
+        expect(within(viaMetadata.container).getByText('From metadata')).toBeInTheDocument();
+
+        const viaLegacyName = renderCell('assignmentProblem', {
+          ...baseRow,
+          metadata: { problemName: 'Legacy key' },
+        });
+        expect(within(viaLegacyName.container).getByText('Legacy key')).toBeInTheDocument();
+      });
+
+      it('still shows the problem when the entry names no assignment', () => {
+        // A problem edited outside an assignment: the top line says so rather than the cell
+        // silently sliding the problem up into the assignment's place.
+        const { container } = renderCell('assignmentProblem', {
+          ...baseRow,
+          problem: { id: 'p1', title: 'Even length' } as ActivityLog['problem'],
+        });
+
+        expect(container.textContent).toBe('—Even length');
+      });
+
+      it('shows one dash when the entry is about neither', () => {
+        const { container } = renderCell('assignmentProblem', baseRow);
+
+        expect(container.textContent).toBe('—');
+      });
+    });
+
+    describe('the subject cell', () => {
+      it('says what the entry was about, in the words System Logs uses', () => {
+        const { container } = renderCell('summary', {
+          ...baseRow,
+          assignment: { id: 'a1', title: 'Homework 2' } as ActivityLog['assignment'],
+        });
+
+        expect(container.textContent).toContain('Homework 2');
+      });
+
+      it('shows a dash when the entry describes nothing in particular', () => {
+        const { container } = renderCell('summary', { ...baseRow, action: 'LOGIN_SUCCESS' });
+
+        expect(container.textContent).toBe('—');
+      });
     });
 
     describe('the time cell', () => {
-      // Relative time is computed against the clock, so pin it rather than letting the
-      // suite's wall time decide which branch runs.
-      const at = (iso: string) => {
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date('2026-03-01T12:00:00.000Z'));
-        return renderCell('timestamp', { ...baseRow, timestamp: iso });
-      };
+      it("puts the date over the time, in the table's timezone", () => {
+        const { container } = renderCell('timestamp', {
+          ...baseRow,
+          timestamp: '2026-03-01T07:05:00.000Z',
+        });
 
-      it('reads "Just now" under a minute', () => {
-        expect(
-          within(at('2026-03-01T11:59:30.000Z').container).getByText('Just now'),
-        ).toBeInTheDocument();
+        expect(container.textContent).toContain('03/01/26');
+        expect(container.textContent).toContain('07:05');
       });
 
-      it('counts minutes under an hour', () => {
-        expect(within(at('2026-03-01T11:30:00.000Z').container).getByText('30m ago')).toBeInTheDocument();
-      });
+      it('shows a dash rather than an invalid date', () => {
+        const { container } = renderCell('timestamp', { ...baseRow, timestamp: '' });
 
-      it('counts hours under a day', () => {
-        expect(within(at('2026-03-01T07:00:00.000Z').container).getByText('5h ago')).toBeInTheDocument();
-      });
-
-      it('counts days under a week', () => {
-        expect(within(at('2026-02-27T12:00:00.000Z').container).getByText('2d ago')).toBeInTheDocument();
-      });
-
-      it('counts weeks beyond that', () => {
-        expect(within(at('2026-02-08T12:00:00.000Z').container).getByText('3w ago')).toBeInTheDocument();
-      });
-
-      it('shows the absolute time alongside the relative one', () => {
-        // The absolute stamp is what an auditor reads; the relative one is a convenience.
-        const { container } = at('2026-03-01T07:00:00.000Z');
-        expect(container.textContent).toContain('5h ago');
-        expect(container.textContent).toMatch(/03\/01\/26 07:00/);
+        expect(container.textContent).toBe('\u2014');
       });
     });
 
@@ -236,6 +317,14 @@ describe('activity columns', () => {
         expect(within(container).getByText('localhost')).toBeInTheDocument();
       });
 
+      it('drops the IPv4-mapped IPv6 prefix', () => {
+        const { container } = renderCell('ipAddress', {
+          ...baseRow,
+          ipAddress: '::ffff:203.0.113.7',
+        });
+        expect(within(container).getByText('203.0.113.7')).toBeInTheDocument();
+      });
+
       it('falls back to the legacy metadata keys', () => {
         // Older rows recorded the address in metadata under several different names.
         for (const key of ['ipAddress', 'ip', 'clientIp', 'remoteAddress']) {
@@ -248,117 +337,111 @@ describe('activity columns', () => {
         }
       });
 
+      /*
+       * The second line: an address on its own rarely settles "was that really them", and the
+       * same address from a phone rather than the lab machine often does.
+       */
+      it('names the browser and platform under the address', () => {
+        const { container } = renderCell('ipAddress', {
+          ...baseRow,
+          ipAddress: '203.0.113.7',
+          userAgent:
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        });
+
+        expect(within(container).getByText('Chrome on Windows')).toBeInTheDocument();
+      });
+
+      it('says nothing about the client when the header was not recognised', () => {
+        const { container } = renderCell('ipAddress', {
+          ...baseRow,
+          ipAddress: '203.0.113.7',
+          userAgent: 'AFCT-Health-Check/1.0',
+        });
+
+        expect(container.textContent).toBe('203.0.113.7');
+      });
+
       it('shows a dash when no address was recorded', () => {
         const { container } = renderCell('ipAddress', { ...baseRow, ipAddress: undefined });
-        expect(within(container).getByText('-')).toBeInTheDocument();
+        expect(within(container).getByText('—')).toBeInTheDocument();
       });
     });
 
-    describe('the metadata cell', () => {
-      it('renders nothing when the row carries no detail at all', () => {
-        const { container } = renderCell('metadata', {
-          id: 'log-1',
-          action: 'X',
-          timestamp: baseRow.timestamp,
+    describe('the details button', () => {
+      it('names the entry it opens, not just itself', async () => {
+        // Every row carries one of these, so a page of buttons all called "View details" is
+        // what a screen reader would otherwise read out.
+        const onView = vi.fn();
+        const user = userEvent.setup();
+        renderCell('actions', baseRow, onView);
+
+        const button = screen.getByRole('button', {
+          name: /View full log for Graded at 03\/01\/26 12:00/,
         });
+        await user.click(button);
 
-        expect(container).toBeEmptyDOMElement();
+        expect(onView).toHaveBeenCalledWith(baseRow);
       });
+    });
+  });
 
-      it('is collapsed to a named toggle until opened', () => {
-        renderCell('metadata', { ...baseRow, metadata: { attempt: 2 } });
-
-        const toggle = screen.getByRole('button', { name: 'Show activity details' });
-        expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      });
-
-      it('opens to show the metadata, and renames the toggle', async () => {
-        const user = userEvent.setup();
-        renderCell('metadata', { ...baseRow, metadata: { attempt: 2 } });
-
-        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
-
-        expect(
-          screen.getByRole('button', { name: 'Hide activity details' }),
-        ).toHaveAttribute('aria-expanded', 'true');
-        // Rendered by the shared formatter now, which labels a field rather than printing the
-        // key: "Attempt  2" instead of "attempt: 2".
-        expect(screen.getByText(/Attempt\s+2/)).toBeInTheDocument();
-      });
-
-      it('summarises the related entities it was given', async () => {
-        const user = userEvent.setup();
-        renderCell('metadata', {
+  /**
+   * The mapping the Subject column and the details dialog both read. An older row can carry a
+   * foreign key without the relation being included, and an id is worse than a name but far
+   * better than silence: it still says the entry was about something.
+   */
+  describe('the records an entry points at', () => {
+    it('names them when the relations came back', () => {
+      expect(
+        relatedRecords({
           ...baseRow,
-          metadata: { attempt: 1 },
-          course: { id: 'c1', name: 'Theory', code: 'CS 401' } as ActivityLog['course'],
-          assignment: { id: 'a1', title: 'Homework 2' } as ActivityLog['assignment'],
-        });
-
-        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
-
-        expect(screen.getByText(/CS 401, Theory/)).toBeInTheDocument();
-        expect(screen.getByText(/Homework 2/)).toBeInTheDocument();
+          course: { id: 'c1', name: 'Theory', code: 'CS 401' },
+          assignment: { id: 'a1', title: 'Homework 2' },
+          problem: { id: 'p1', title: 'Even length' },
+          submission: {
+            id: 's1',
+            assignmentProblem: { assignment: { title: 'Homework 2' } },
+          },
+        } as ActivityLog),
+      ).toEqual({
+        course: 'CS 401, Theory',
+        assignment: 'Homework 2',
+        problem: 'Even length',
+        submission: 'Homework 2',
       });
+    });
 
-      /**
-       * An older row can carry the foreign key without the relation being included. The id is
-       * worse than a name and much better than nothing: it still says the entry was about
-       * something.
-       */
-      it('falls back to the recorded id when the record was not resolved', async () => {
-        const user = userEvent.setup();
-        renderCell('metadata', { ...baseRow, metadata: null, courseId: 'course-9' });
+    it('falls back to the recorded id when a record was not resolved', () => {
+      expect(
+        relatedRecords({ ...baseRow, courseId: 'course-9', problemId: 'problem-9' } as ActivityLog),
+      ).toMatchObject({ course: 'course-9', problem: 'problem-9', assignment: null });
+    });
 
-        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
-
-        expect(screen.getByText(/course-9/)).toBeInTheDocument();
-      });
-
-      // Preferred over the id whenever the relation came back.
-      it('prefers the name over the id', async () => {
-        const user = userEvent.setup();
-        renderCell('metadata', {
+    it('prefers the name over the id', () => {
+      expect(
+        relatedRecords({
           ...baseRow,
           courseId: 'course-9',
-          course: { id: 'course-9', name: 'Theory', code: 'CS 401' } as ActivityLog['course'],
-        });
+          course: { id: 'course-9', name: 'Theory', code: 'CS 401' },
+        } as ActivityLog).course,
+      ).toBe('CS 401, Theory');
+    });
+  });
 
-        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
+  describe('the actor for the details dialog', () => {
+    it('is their name where there is one', () => {
+      expect(actorName(baseRow as ActivityLog)).toBe('Ada Lovelace');
+    });
 
-        expect(screen.getByText(/CS 401, Theory/)).toBeInTheDocument();
-        expect(screen.queryByText(/course-9/)).not.toBeInTheDocument();
-      });
-
-      // The point is unchanged; only the shape is. The shared formatter reads a nested value
-      // out as words rather than as JSON, and neither prints [object Object].
-      it('reads nested values out rather than printing [object Object]', async () => {
-        const user = userEvent.setup();
-        renderCell('metadata', { ...baseRow, metadata: { change: { from: 1, to: 2 } } });
-
-        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
-
-        const panel = screen.getByText(/From: 1/);
-        expect(panel).toBeInTheDocument();
-        expect(panel.textContent).not.toContain('[object Object]');
-      });
-
-      it('does not repeat the address and client that have their own handling', async () => {
-        const user = userEvent.setup();
-        renderCell('metadata', {
+    it('falls back to the address, then to nobody', () => {
+      expect(
+        actorName({
           ...baseRow,
-          ipAddress: '203.0.113.7',
-          userAgent: 'x'.repeat(80),
-          metadata: { ipAddress: '203.0.113.7', userAgent: 'dupe', attempt: 1 },
-        });
-
-        await user.click(screen.getByRole('button', { name: 'Show activity details' }));
-
-        // Each appears once, in the block that handles it, not again among the metadata.
-        expect(screen.queryByText(/dupe/)).not.toBeInTheDocument();
-        expect(screen.getByText(/203\.0\.113\.7/)).toBeInTheDocument();
-        expect(screen.getByText(/Browser\s+x{80}/)).toBeInTheDocument();
-      });
+          user: { id: 'u1', email: 'ada@x.edu', firstName: null, lastName: null },
+        } as ActivityLog),
+      ).toBe('ada@x.edu');
+      expect(actorName({ ...baseRow, user: null } as ActivityLog)).toBeNull();
     });
   });
 });
