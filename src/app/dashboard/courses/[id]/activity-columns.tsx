@@ -1,6 +1,7 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CategoryBadge } from '@/components/ui/category-badge';
@@ -17,6 +18,7 @@ import { FileText } from 'lucide-react';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { clientDescription } from '@/lib/user-agent';
 import { CompactDate } from '@/components/ui/CompactDate';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 
 export interface ActivityUser {
   id: string;
@@ -153,6 +155,7 @@ const getIpAddress = (metadata: Record<string, unknown> | null, activity: Activi
  */
 export const getActivityColumns = (
   timeZone: string,
+  courseId: string,
   onViewDetails: (activity: ActivityLog) => void,
 ): ColumnDef<ActivityLog>[] => [
   {
@@ -219,7 +222,7 @@ export const getActivityColumns = (
       // upper-cased in CSS rather than transformed, so what a screen reader announces stays in
       // ordinary case; the address is not, because it is a value somebody may copy.
       return (
-        <div className="text-sm leading-tight">
+        <div className="text-sm leading-tight uppercase">
           <div className="uppercase">{[last, first].filter(Boolean).join(', ')}</div>
           {email ? <div className="text-muted-foreground text-xs">{email}</div> : null}
         </div>
@@ -289,10 +292,44 @@ export const getActivityColumns = (
       const assignment = assignmentTitle(activity);
       const problem = problemTitle(activity);
       if (!assignment && !problem) return <div className="text-sm">—</div>;
+      // Linked only where the entry recorded an id. An older row can carry a title in its
+      // metadata and nothing else, and a link that guesses at which record it meant is worse
+      // than plain text on an audit trail.
+      const assignmentId = activity.assignment?.id ?? activity.assignmentId;
+      const problemId = activity.problem?.id ?? activity.problemId;
+      // Upper-cased in CSS rather than transformed, like Action, Subject and the name in
+      // User: what a screen reader announces and what Copy JSON carries stay in ordinary
+      // case. Both lines, unlike User, because a title is read rather than copied.
       return (
-        <div className="text-sm leading-tight">
-          <div>{assignment || '—'}</div>
-          {problem ? <div className="text-muted-foreground text-xs">{problem}</div> : null}
+        <div className="text-sm leading-tight uppercase">
+          <div>
+            {assignment && assignmentId ? (
+              <Link
+                className={TEXT_LINK_CLASS}
+                href={`/dashboard/courses/${courseId}/${assignmentId}`}
+              >
+                {assignment}
+              </Link>
+            ) : (
+              assignment || '—'
+            )}
+          </div>
+          {problem ? (
+            <div className="text-muted-foreground text-xs">
+              {problemId ? (
+                // Problems have no page of their own: they live in the course's Problems tab
+                // and open from there, so this is as close as a link can get.
+                <Link
+                  className={TEXT_LINK_CLASS}
+                  href={`/dashboard/courses/${courseId}?tab=problems`}
+                >
+                  {problem}
+                </Link>
+              ) : (
+                problem
+              )}
+            </div>
+          ) : null}
         </div>
       );
     },
@@ -313,11 +350,11 @@ export const getActivityColumns = (
       // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
       const ip = address ? address.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : null;
       const client = clientDescription(activity.userAgent);
-      if (!ip && !client) return <div className="text-muted-foreground text-xs">—</div>;
+      if (!ip && !client) return '—';
       return (
-        <div className="text-muted-foreground text-xs leading-tight">
-          <div className="font-mono">{ip ?? '—'}</div>
-          {client ? <div>{client}</div> : null}
+        <div className="leading-tight">
+          <div>{ip ?? '—'}</div>
+          {client ? <div className="text-muted-foreground text-xs">{client}</div> : null}
         </div>
       );
     },

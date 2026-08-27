@@ -21,7 +21,7 @@ import { ACTIVITY_SORT_KEYS } from '@/lib/activity-log-values';
  */
 const noop = () => {};
 const columns = (onViewDetails: (a: ActivityLog) => void = noop) =>
-  getActivityColumns('UTC', onViewDetails) as ColumnDef<ActivityLog>[];
+  getActivityColumns('UTC', 'course-1', onViewDetails) as ColumnDef<ActivityLog>[];
 
 const columnById = (id: string, onViewDetails?: (a: ActivityLog) => void) => {
   const found = columns(onViewDetails).find(
@@ -235,6 +235,16 @@ describe('activity columns', () => {
         expect(container.textContent).toBe('Homework 1Even length');
       });
 
+      it('upper-cases the titles for display only', () => {
+        const { container } = renderCell('assignmentProblem', {
+          ...baseRow,
+          assignment: { id: 'a1', title: 'Homework 1' } as ActivityLog['assignment'],
+          problem: { id: 'p1', title: 'Even length' } as ActivityLog['problem'],
+        });
+
+        expect(container.firstElementChild).toHaveClass('uppercase');
+      });
+
       it('prefers the problem relation, then metadata', () => {
         const viaMetadata = renderCell('assignmentProblem', {
           ...baseRow,
@@ -258,6 +268,40 @@ describe('activity columns', () => {
         });
 
         expect(container.textContent).toBe('—Even length');
+      });
+
+      /**
+       * Linked only where the entry recorded an id. An older row can carry a title in its
+       * metadata and nothing else, and a link that guesses which record it meant is worse than
+       * plain text on an audit trail.
+       */
+      it('links each title to the record it names', () => {
+        const { container } = renderCell('assignmentProblem', {
+          ...baseRow,
+          assignment: { id: 'a1', title: 'Homework 1' } as ActivityLog['assignment'],
+          problem: { id: 'p1', title: 'Even length' } as ActivityLog['problem'],
+        });
+
+        expect(within(container).getByRole('link', { name: 'Homework 1' })).toHaveAttribute(
+          'href',
+          '/dashboard/courses/course-1/a1',
+        );
+        // Problems have no page of their own; the course's Problems tab is as close as a link
+        // can get.
+        expect(within(container).getByRole('link', { name: 'Even length' })).toHaveAttribute(
+          'href',
+          '/dashboard/courses/course-1?tab=problems',
+        );
+      });
+
+      it('leaves a title recorded only in metadata as plain text', () => {
+        const { container } = renderCell('assignmentProblem', {
+          ...baseRow,
+          metadata: { assignmentTitle: 'Legacy Homework', problemTitle: 'Legacy problem' },
+        });
+
+        expect(within(container).queryByRole('link')).toBeNull();
+        expect(container.textContent).toContain('Legacy Homework');
       });
 
       it('shows one dash when the entry is about neither', () => {
@@ -362,9 +406,9 @@ describe('activity columns', () => {
         expect(container.textContent).toBe('203.0.113.7');
       });
 
-      it('shows a dash when no address was recorded', () => {
+      it('shows a dash when neither an address nor a client was recorded', () => {
         const { container } = renderCell('ipAddress', { ...baseRow, ipAddress: undefined });
-        expect(within(container).getByText('—')).toBeInTheDocument();
+        expect(container.textContent).toBe('—');
       });
     });
 

@@ -3,8 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { OnChangeFn, PaginationState, SortingState } from '@tanstack/react-table';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableFilterMenu } from '@/components/ui/data-table-faceted-filter';
 import {
@@ -16,7 +14,7 @@ import {
 import { LogViewerDialog } from '@/components/dialogs/LogViewerDialog';
 import { formatActivityDetails } from '@/lib/activity-log-summary';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
-import { RefreshCw, Activity } from 'lucide-react';
+import { Activity } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
@@ -109,8 +107,8 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
   // Memoize columns so a re-render doesn't recreate the array (and its cell
   // components), which would force DataTable and its rows to re-render.
   const columns = useMemo(
-    () => getActivityColumns(timezone, handleViewDetails),
-    [timezone, handleViewDetails],
+    () => getActivityColumns(timezone, courseId, handleViewDetails),
+    [timezone, courseId, handleViewDetails],
   );
 
   useEffect(() => {
@@ -147,7 +145,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
     sortDir: sort?.desc === false ? 'asc' : 'desc',
   };
 
-  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.course.activityPage(courseId, params),
     queryFn: async () => {
       const res = await fetch(apiPaths.courseActivity(courseId, params), { cache: 'no-store' });
@@ -199,32 +197,12 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
     problemIds.length > 0 ||
     searchInput.length > 0;
 
-  const refresh = () => {
-    void refetch();
-  };
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-row items-center justify-between">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <Activity className="h-5 w-5" />
-          Activity
-          {total > 0 && (
-            <Badge variant="secondary" className="ml-2">
-              {total}
-            </Badge>
-          )}
-        </h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={refresh}
-          disabled={isFetching}
-          aria-label="Refresh activity"
-        >
-          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
+      <h2 className="flex items-center gap-2 text-xl font-semibold">
+        <Activity className="h-5 w-5" />
+        Activity
+      </h2>
       <DataTable
         columns={columns}
         data={rows}
@@ -235,9 +213,10 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
         // v2: the columns changed shape when this table took the System Logs layout, and the
         // saved visibility map is keyed by column id.
         storageKey="course-activity-columns-v2"
-        // Severity is off to start with: on a course feed nearly every entry is INFO, so the
-        // column is a wall of one word. It is in the Columns menu for the times it matters.
-        defaultColumnVisibility={{ severity: false }}
+        // Severity and Category are off to start with: on a course feed nearly every entry is
+        // INFO, and the category mostly repeats what the Action and Subject columns already
+        // say. Both are in the Columns menu for the times they matter.
+        defaultColumnVisibility={{ severity: false, category: false }}
         // The browser holds one page, so an export from here would silently write that
         // page and call it the audit trail.
         showExportButton={false}
