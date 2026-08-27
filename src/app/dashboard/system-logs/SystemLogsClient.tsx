@@ -28,7 +28,13 @@ function useMountedOnce(open: boolean): boolean {
 }
 import { apiPaths } from '@/lib/api-paths';
 import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
-import { actionLabel, describeActivity, formatActivityDetails } from '@/lib/activity-log-summary';
+import {
+  actionLabel,
+  describeActivity,
+  formatActivityDetails,
+  summaryParts,
+  SUMMARY_SEPARATOR,
+} from '@/lib/activity-log-summary';
 import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 import { CompactDate } from '@/components/ui/CompactDate';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -221,14 +227,19 @@ export default function SystemLogsClient() {
         // fixed-width badge would wreck every other place one is used.
         //
         // 5rem, not the 4rem a glance at INFO/ERROR suggests: SECURITY is the longest value
-        // and needs about 78px with its padding, and Badge clips (overflow-hidden) rather than
-        // growing. The text stays centred because Badge is already a centred flex box.
+        // and needs about 78px with its padding. The text stays centred because Badge is
+        // already a centred flex box.
+        //
+        // min-w, not w: the widths are rem so they already scale with the reader's text size,
+        // but Badge clips what overflows it, and a clipped label is a silent failure. A
+        // minimum aligns the column in every ordinary case and lets the badge grow in the one
+        // where the alternative was hiding half a word.
         cell: ({ getValue }: { getValue: () => unknown }) => {
           const s = ((getValue() as string) || 'INFO') as Severity;
           return (
             <Badge
               variant={ACTIVITY_SEVERITY_BADGE[s] ?? ACTIVITY_SEVERITY_FALLBACK}
-              className="w-20"
+              className="min-w-20"
             >
               {s}
             </Badge>
@@ -239,9 +250,10 @@ export default function SystemLogsClient() {
         accessorKey: 'category',
         header: 'Category',
         meta: { priority: 3 },
-        // 6rem: ASSIGNMENT and SUBMISSION are the longest at about 92px. See Severity above.
+        // 6rem: ASSIGNMENT and SUBMISSION are the longest at about 92px, and a minimum rather
+        // than a fixed width for the reason given on Severity above.
         cell: ({ getValue }: { getValue: () => unknown }) => (
-          <CategoryBadge category={getValue() as string | null} className="w-24" />
+          <CategoryBadge category={getValue() as string | null} className="min-w-24" />
         ),
       },
       {
@@ -292,18 +304,33 @@ export default function SystemLogsClient() {
         header: 'What happened',
         meta: { priority: 2 },
         enableSorting: false,
-        // Upper-cased to sit beside the Action column, which is upper-case because the stored
-        // action is. Styled rather than transformed, so what a screen reader announces and what
-        // Copy JSON carries stay in ordinary case.
-        cell: ({ row }: { row: { original: LogRow } }) => (
-          <span className="uppercase">
-            {describeActivity(
+        // Upper-cased in CSS rather than transformed, so what a screen reader announces and
+        // what Copy JSON carries stay in ordinary case.
+        //
+        // The separator between the object and what happened to it is punctuation between two
+        // facts, so it is hidden from assistive tech the way the dashboard hides the dot in
+        // "2 courses · 5 assignments". Read aloud it is "middle dot" in the middle of a
+        // sentence; on screen it is what keeps the two halves apart.
+        cell: ({ row }: { row: { original: LogRow } }) => {
+          const parts = summaryParts(
+            describeActivity(
               row.original.action,
               row.original.metadata as Record<string, unknown> | null,
               row.original.related,
-            ) ?? '—'}
-          </span>
-        ),
+            ),
+          );
+          if (parts.length === 0) return <span className="uppercase">—</span>;
+          return (
+            <span className="uppercase">
+              {parts.map((part, i) => (
+                <span key={i}>
+                  {i > 0 ? <span aria-hidden="true">{SUMMARY_SEPARATOR}</span> : null}
+                  {part}
+                </span>
+              ))}
+            </span>
+          );
+        },
       },
       {
         accessorKey: 'ipAddress',

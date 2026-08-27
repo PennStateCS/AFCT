@@ -188,8 +188,10 @@ describe('SystemLogsClient', () => {
     const severity = await screen.findByText('SECURITY');
     const category = await screen.findByText('ASSIGNMENT');
 
-    expect(severity).toHaveClass('w-20');
-    expect(category).toHaveClass('w-24');
+    // A minimum, not a fixed width: the column still lines up, and a label that would not
+    // fit grows the badge instead of being clipped inside its overflow-hidden.
+    expect(severity).toHaveClass('min-w-20');
+    expect(category).toHaveClass('min-w-24');
     // Badge's own centring, which the width would otherwise leave the text sitting left of.
     expect(severity).toHaveClass('justify-center');
     expect(category).toHaveClass('justify-center');

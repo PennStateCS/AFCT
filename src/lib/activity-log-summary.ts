@@ -666,7 +666,7 @@ export function describeActivity(
   const object = objectPhrase(action, metadata, related);
   const detail = activityDetail(action, metadata);
   if (!object) return detail;
-  return detail ? `${object} · ${detail}` : object;
+  return detail ? `${object}${SUMMARY_SEPARATOR}${detail}` : object;
 }
 
 /**
@@ -1422,6 +1422,24 @@ const render = (value: unknown): string => {
  * them, but they sit below the things that answer the question at a glance.
  */
 /**
+ * The separator between the object and what happened to it.
+ *
+ * Exported because a screen reader should not read it. It is punctuation between two facts,
+ * the way the dashboard's "2 courses · 5 assignments" row is, and those mark theirs
+ * `aria-hidden`. A caller rendering the summary as text splits on this and hides the dot;
+ * see `summaryParts`.
+ */
+export const SUMMARY_SEPARATOR = ' · ';
+
+/**
+ * The summary split into the pieces a cell should render, so the dot between them can be
+ * hidden from assistive tech while staying visible on screen.
+ */
+export function summaryParts(summary: string | null): string[] {
+  return summary ? summary.split(SUMMARY_SEPARATOR) : [];
+}
+
+/**
  * The entry as one line for the detail view: who, what they did, and what to.
  *
  * The same three parts the table shows, in the same order and the same words, because the
@@ -1447,7 +1465,7 @@ export function describeActivitySentence(entry: {
 }): string | null {
   const summary = describeActivity(entry.action, entry.metadata, entry.related);
   const parts = [entry.userDisplayName?.trim() || null, actionLabel(entry.action), summary];
-  return parts.filter(Boolean).join(' · ') || null;
+  return parts.filter(Boolean).join(SUMMARY_SEPARATOR) || null;
 }
 
 export function formatActivityDetails(entry: {
