@@ -3,7 +3,8 @@
 import React from 'react';
 import type { Table as TanstackTable } from '@tanstack/react-table';
 import { TableCell, TableRow, TableFooter } from '@/components/ui/table';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Select,
   SelectTrigger,
@@ -12,7 +13,46 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { PAGE_SIZE_OPTIONS, rowRangeLabel } from '@/components/ui/data-table-shared';
+
+/**
+ * One paging arrow.
+ *
+ * `aria-disabled` rather than the native `disabled`, because the button you just pressed is
+ * often the one that becomes unavailable: pressing Last disables Last. A natively disabled
+ * element cannot hold focus, so the browser drops it to the body and a keyboard reader ends up
+ * back at the top of the page after every jump. This keeps focus where they put it and makes
+ * the press do nothing instead.
+ */
+function PageButton({
+  label,
+  icon: Icon,
+  onClick,
+  unavailable,
+  className,
+}: {
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  unavailable: boolean;
+  className?: string;
+}) {
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        if (!unavailable) onClick();
+      }}
+      aria-disabled={unavailable || undefined}
+      className={cn('aria-disabled:pointer-events-none aria-disabled:opacity-50', className)}
+      aria-label={label}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+    </Button>
+  );
+}
 
 /** Prev/next paging, an optional total, and a page-size select. Presentation only,
  *  so it can render inside the desktop table footer or below the mobile cards. */
@@ -20,12 +60,27 @@ export function PaginationControls<TData>({
   table,
   rowCount,
   manualPagination,
+  showFirstLastPage = false,
 }: {
   table: TanstackTable<TData>;
   rowCount?: number;
   manualPagination: boolean;
+  /** Add First and Last buttons either side of the arrows. See DataTable's own prop. */
+  showFirstLastPage?: boolean;
 }) {
-  const pageLabel = `Page ${table.getState().pagination.pageIndex + 1} of ${Math.max(1, table.getPageCount())}`;
+  const pageCount = table.getPageCount();
+  const pageLabel = `Page ${table.getState().pagination.pageIndex + 1} of ${Math.max(1, pageCount)}`;
+
+  /**
+   * First and Last, but only when the table knows how many pages it has.
+   *
+   * A server table that has not stated a `pageCount` reports -1, and react-table then clamps
+   * a jump to anywhere between the first page and MAX_SAFE_INTEGER. A Last button there does
+   * not fail loudly, it quietly lands on page 1 while still calling itself Last, and a control
+   * that lies about where it goes is worse than no control. They come and go as a pair: half a
+   * cluster reads as something broken.
+   */
+  const edges = showFirstLastPage && pageCount >= 0;
 
   /**
    * Which rows these are, and how many there are altogether.
@@ -67,25 +122,40 @@ export function PaginationControls<TData>({
       </span>
 
       <div className="text-foreground flex items-center gap-1 font-normal">
-        <Button
-          variant="outline"
-          size="sm"
+        {edges ? (
+          <PageButton
+            label="First page"
+            icon={ArrowLeftToLine}
+            onClick={() => table.setPageIndex(0)}
+            unavailable={!table.getCanPreviousPage()}
+            // Set apart from the arrows rather than sitting flush against them: a jump to the
+            // end is a different move from a step, and four identical buttons in a row read as
+            // one control.
+            className="mr-2"
+          />
+        ) : null}
+        <PageButton
+          label="Previous page"
+          icon={ArrowLeft}
           onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-          aria-label="Previous page"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        </Button>
+          unavailable={!table.getCanPreviousPage()}
+        />
         <span className="px-2 whitespace-nowrap">{pageLabel}</span>
-        <Button
-          variant="outline"
-          size="sm"
+        <PageButton
+          label="Next page"
+          icon={ArrowRight}
           onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-          aria-label="Next page"
-        >
-          <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </Button>
+          unavailable={!table.getCanNextPage()}
+        />
+        {edges ? (
+          <PageButton
+            label="Last page"
+            icon={ArrowRightToLine}
+            onClick={() => table.setPageIndex(pageCount - 1)}
+            unavailable={!table.getCanNextPage()}
+            className="ml-2"
+          />
+        ) : null}
       </div>
 
       <div className="text-foreground flex items-center gap-3 font-normal">
@@ -119,12 +189,14 @@ export function DataTablePagination<TData>({
   manualPagination,
   loading,
   colSpan,
+  showFirstLastPage = false,
 }: {
   table: TanstackTable<TData>;
   rowCount?: number;
   manualPagination: boolean;
   loading: boolean;
   colSpan: number;
+  showFirstLastPage?: boolean;
 }) {
   return (
     <TableFooter>
@@ -136,7 +208,12 @@ export function DataTablePagination<TData>({
         }}
       >
         <TableCell colSpan={colSpan}>
-          <PaginationControls table={table} rowCount={rowCount} manualPagination={manualPagination} />
+          <PaginationControls
+            table={table}
+            rowCount={rowCount}
+            manualPagination={manualPagination}
+            showFirstLastPage={showFirstLastPage}
+          />
         </TableCell>
       </TableRow>
     </TableFooter>

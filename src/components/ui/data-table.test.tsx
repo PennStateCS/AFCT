@@ -549,7 +549,21 @@ describe('DataTable', () => {
       // Not a field: it has no label, so it does not belong in the definition list.
       expect(trigger.closest('dl')).toBeNull();
       expect(trigger.closest('dd')).toBeNull();
-      expect(trigger.parentElement).toHaveClass('absolute');
+      expect(trigger.parentElement).toHaveClass('absolute', 'top-2', 'right-2');
+    });
+
+    /**
+     * The corner overlaps the first field's line, so that line and only that line is inset.
+     * A gutter down the whole card would cost every value its width for the sake of one row,
+     * and no inset at all puts a long title under the menu.
+     */
+    it('keeps the first field clear of the corner action', async () => {
+      stackedViewport();
+      render(<DataTable columns={kebabColumns} data={[data[0]!]} />);
+
+      await screen.findByRole('button', { name: 'Actions for Alice' });
+
+      expect(cardFor('Alice').querySelector('dl')?.className).toContain('[&>*:first-child]:pr-11');
     });
 
     it('drops the footer and its divider for an overflow menu', async () => {
@@ -808,6 +822,136 @@ describe('DataTable', () => {
       expect(onGlobalFilterChange).toHaveBeenCalledWith('Alice');
       // Bob is still on screen: only the server can decide what matches.
       expect(screen.getByText('Bob')).toBeInTheDocument();
+    });
+  });
+
+  /*
+   * First and Last, which only the System Logs table asks for. Everything here is about the
+   * pair being honest: present only when the table knows where the end is, and leaving the
+   * reader's focus where they put it when the button they pressed becomes unavailable.
+   */
+  describe('first and last page buttons', () => {
+    // Enough rows for three pages at the default size, so the client-mode table can actually
+    // move and the buttons can reach their own limits.
+    const manyRows: RowData[] = Array.from({ length: 25 }, (_, i) => ({
+      id: String(i + 1),
+      name: `Row ${i + 1}`,
+      role: 'Student',
+    }));
+
+    const firstButton = () => screen.getByRole('button', { name: 'First page' });
+    const lastButton = () => screen.getByRole('button', { name: 'Last page' });
+
+    it('are not there unless a table asks for them', () => {
+      render(<DataTable columns={columns} data={manyRows} storageKey="page-jump-off" />);
+
+      expect(screen.queryByRole('button', { name: 'First page' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Last page' })).toBeNull();
+      // The arrows a table has always had are untouched.
+      expect(screen.getByRole('button', { name: 'Next page' })).toBeInTheDocument();
+    });
+
+    it('jump to either end', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={manyRows}
+          showFirstLastPage
+          storageKey="page-jump-ends"
+        />,
+      );
+
+      fireEvent.click(lastButton());
+      expect(screen.getAllByText(/Page 3 of 3/).length).toBeGreaterThan(0);
+      expect(screen.getByText('Row 21')).toBeInTheDocument();
+
+      fireEvent.click(firstButton());
+      expect(screen.getAllByText(/Page 1 of 3/).length).toBeGreaterThan(0);
+      expect(screen.getByText('Row 1')).toBeInTheDocument();
+    });
+
+    /**
+     * The reason these are `aria-disabled` and not `disabled`. Pressing Last is what makes
+     * Last unavailable, and a natively disabled element cannot hold focus, so the browser
+     * drops it to the body: a keyboard reader lands back at the top of the page after every
+     * jump. This is the whole point of the PageButton wrapper.
+     */
+    it("keep the reader's focus after the jump that disables them", () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={manyRows}
+          showFirstLastPage
+          storageKey="page-jump-focus"
+        />,
+      );
+
+      const last = lastButton();
+      last.focus();
+      fireEvent.click(last);
+
+      expect(lastButton()).toHaveAttribute('aria-disabled', 'true');
+      expect(lastButton()).not.toBeDisabled();
+      expect(document.activeElement).toBe(lastButton());
+    });
+
+    it('do nothing when there is nowhere further to go', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={manyRows}
+          showFirstLastPage
+          storageKey="page-jump-limits"
+        />,
+      );
+
+      expect(firstButton()).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(firstButton());
+
+      expect(screen.getAllByText(/Page 1 of 3/).length).toBeGreaterThan(0);
+    });
+
+    /**
+     * A server table that has not stated a pageCount reports -1, and react-table clamps a
+     * jump into that unknown range by landing on page 1. A Last button there would not fail
+     * loudly, it would quietly go to the beginning while still calling itself Last.
+     */
+    it('stay away when the table cannot say where the end is', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          showFirstLastPage
+          manualPagination
+          pagination={{ pageIndex: 0, pageSize: 10 }}
+          onPaginationChange={vi.fn()}
+        />,
+      );
+
+      expect(screen.queryByRole('button', { name: 'Last page' })).toBeNull();
+      // Both or neither: half a cluster reads as something broken.
+      expect(screen.queryByRole('button', { name: 'First page' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Next page' })).toBeInTheDocument();
+    });
+
+    it('tell a server table which page to go to', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={data}
+          showFirstLastPage
+          manualPagination
+          pageCount={40}
+          rowCount={2000}
+          pagination={{ pageIndex: 0, pageSize: 50 }}
+          onPaginationChange={onPaginationChange}
+        />,
+      );
+
+      fireEvent.click(lastButton());
+
+      expect(onPaginationChange).toHaveBeenCalledWith({ pageIndex: 39, pageSize: 50 });
     });
   });
 });
