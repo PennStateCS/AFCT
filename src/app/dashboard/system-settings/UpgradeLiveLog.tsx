@@ -55,16 +55,15 @@ export function UpgradeLiveLog({ active }: { active: boolean }) {
 
   if (!active || lines.length === 0) return null;
 
-  // Styled as a console: a title bar with the familiar window dots, then a dark,
-  // monospace log body. Deliberately dark in both themes, the way a terminal is.
+  // Styled as a console: a labelled title bar, then a dark, monospace log body.
+  // Deliberately dark in both themes, the way a terminal is.
+  //
+  // No traffic-light dots. They were borrowed window furniture from somebody else's operating
+  // system, and this is not a window: nothing here closes, minimises or zooms, so three dots
+  // that do nothing are decoration pretending to be controls. The label carries it.
   return (
     <div className="overflow-hidden rounded-md border border-zinc-700 bg-zinc-950 shadow-inner">
       <div className="flex items-center gap-2 border-b border-zinc-700 bg-zinc-900 px-3 py-1.5">
-        <span className="flex gap-1.5" aria-hidden="true">
-          <span className="size-2.5 rounded-full bg-red-500/80" />
-          <span className="size-2.5 rounded-full bg-yellow-500/80" />
-          <span className="size-2.5 rounded-full bg-green-500/80" />
-        </span>
         <span className="text-xs font-medium text-zinc-400">Live progress</span>
       </div>
       <div
