@@ -202,6 +202,15 @@ export const GET = withAdminAuth(
           userFirstName: u?.firstName ?? null,
           userLastName: u?.lastName ?? null,
           /**
+           * The actor's email, shown under their name in the table.
+           *
+           * Two people share a name, and on a log that is not a hypothetical: the column exists
+           * so a reader can tell which account acted. It is the actor's own address from their
+           * account, not whatever `userEmail` an action happened to record in metadata, which is
+           * often the SUBJECT of the action rather than the person who did it.
+           */
+          userEmail: u?.email ?? null,
+          /**
            * What the entry is about: the name where there is one, the id where there is not.
            *
            * The relations are `SetNull` on delete, so an id can outlive what it pointed at.

@@ -747,8 +747,147 @@ export type RelatedRecords = {
   submission?: string | null;
 };
 
+/**
+ * The actions whose names do not turn into a readable verb on their own.
+ *
+ * Kept small on purpose: everything the two rules below handle correctly is left to them, so
+ * this list is the exceptions rather than a second copy of the action vocabulary that would
+ * have to be kept in step with it.
+ */
+const ACTION_PHRASE: Record<string, string> = {
+  LOGIN_SUCCESS: 'signed in',
+  LOGIN_FAILED: 'could not sign in',
+  CLIENT_LOGIN: 'signed in from the desktop client',
+  // No LOGOUT here on purpose: its metadata fragment ("ended a password session") is already
+  // a whole predicate, so a verb in front of it would say the same thing twice.
+  USER_SIGNUP: 'created an account',
+  BULK_ENROLL_USERS: 'enrolled several people',
+  BULK_CREATE_USERS: 'created several accounts',
+  SUBMISSION_RERUN: 're-ran a submission',
+  COURSE_SUBMISSIONS_RERUN: 're-ran submissions',
+  SUBMISSION_STALE_DISCARDED: 'discarded a stale submission',
+  SYSTEM_UPDATE_ROLLED_BACK: 'rolled back a system update',
+  PROBLEM_INVALID_FILE_STRUCTURE: 'uploaded a problem file AFCT could not read',
+};
+
+/** Imperative first words, in the tense a log is read in: it already happened. */
+const PAST_TENSE: Record<string, string> = {
+  ADD: 'added',
+  CHANGE: 'changed',
+  CLEAR: 'cleared',
+  CREATE: 'created',
+  DELETE: 'deleted',
+  DROP: 'dropped',
+  DUPLICATE: 'duplicated',
+  ENROLL: 'enrolled',
+  GRANT: 'granted',
+  IMPORT: 'imported',
+  REENROLL: 're-enrolled',
+  REMOVE: 'removed',
+  RESET: 'reset',
+  REVOKE: 'revoked',
+  SET: 'set',
+  UNLOCK: 'unlocked',
+  UPDATE: 'updated',
+  VIEW: 'viewed',
+};
+
+/** Past-tense last words that do not end in -ed, so the rule below still recognises them. */
+const IRREGULAR_PAST = new Set(['SENT', 'RUN', 'BUILT', 'MADE', 'LEFT']);
+
+/**
+ * An action name said as something a person did: "signed in", "viewed student submission",
+ * "updated course".
+ *
+ * Two shapes cover nearly every action AFCT writes. Some are imperative-first
+ * (`UPDATE_COURSE`, `VIEW_PROBLEM_FILE`), and those take their verb from {@link PAST_TENSE};
+ * the rest are object-first with the verb at the end (`PROBLEM_GRADE_UPDATED`,
+ * `TEST_EMAIL_SENT`), and those get the verb moved to the front. Anything neither rule
+ * recognises falls back to the action with its underscores removed, which is what the dialog
+ * showed before this existed.
+ */
+function actionPhrase(action: string): string | null {
+  const known = ACTION_PHRASE[action];
+  if (known) return known;
+
+  const words = action.split('_').filter(Boolean);
+  if (words.length === 0) return null;
+
+  const first = PAST_TENSE[words[0] ?? ''];
+  if (first) {
+    const object = words
+      .slice(1)
+      .map((w) => w.toLowerCase())
+      .join(' ');
+    if (!object) return first;
+    // "created a course", not "created course". Only here, where the action names one thing
+    // being acted on; the object-first family below is a noun phrase that reads worse with an
+    // article in front of it ("viewed an assignment similarity").
+    //
+    // Three things take none: a plural, and an object that starts with a preposition
+    // (`DROP_FROM_COURSE` is "dropped from a course", never "dropped a from course").
+    // "an" goes by SOUND rather than by spelling, which is why `user` and `unit` are excluded:
+    // "an user" is the giveaway that a rule was written against letters.
+    const startsWithPreposition = /^(from|in|into|to|of|for|with|on|at|by)\b/.test(object);
+    const soundsLikeVowel = /^[aeiou]/.test(object) && !/^(us|uni|eu|one)/.test(object);
+    const article =
+      object.endsWith('s') || startsWithPreposition ? '' : soundsLikeVowel ? 'an ' : 'a ';
+    return `${first} ${article}${object}`;
+  }
+
+  const last = words[words.length - 1] ?? '';
+  if (last.endsWith('ED') || IRREGULAR_PAST.has(last)) {
+    return [last, ...words.slice(0, -1)].join(' ').toLowerCase();
+  }
+
+  // Neither shape. Null rather than the action name in lower case: the Action row says that
+  // already, and a "What happened" line that only echoes it is a heading over nothing.
+  return null;
+}
+
+/**
+ * The whole entry as one sentence, for the detail view: who did what, and the metadata that
+ * gives it meaning.
+ *
+ * The column version ({@link describeActivity}) is a FRAGMENT on purpose, because it sits in
+ * the table beside the action it continues: "LOGIN SUCCESS" then "with an AFCT password". On
+ * its own under a "What happened" heading that same fragment is a sentence with its subject
+ * and verb missing, which is what this fixes.
+ *
+ * The subject is the entry's own actor and never `metadata.userName`. Those are different
+ * people whenever an action is done TO somebody: an admin changing a student's email records
+ * the student there, and a sentence built from it would name the wrong person as having done
+ * it. With no actor (a signed-out request, a scheduled job) the sentence simply starts with
+ * the verb rather than inventing a subject.
+ */
+export function describeActivitySentence(entry: {
+  action: string;
+  metadata?: Metadata;
+  userDisplayName?: string | null;
+}): string | null {
+  const phrase = actionPhrase(entry.action);
+  const detail = describeActivity(entry.action, entry.metadata);
+  if (!phrase && !detail) return null;
+
+  // A fragment that starts with a preposition continues the verb; anything else is a separate
+  // fact and needs the comma, or "updated course, name Intro to Logic" runs together.
+  const joined = !phrase
+    ? detail!
+    : detail
+      ? /^(with|from|to|in|on|as|for|by|about|into|against)\b/i.test(detail)
+        ? `${phrase} ${detail}`
+        : `${phrase}, ${detail}`
+      : phrase;
+
+  const who = entry.userDisplayName?.trim();
+  if (!who) return joined.charAt(0).toUpperCase() + joined.slice(1);
+  return `${who} ${joined}`;
+}
+
 export function formatActivityDetails(entry: {
   action: string;
+  /** The actor, for the sentence at the top. See describeActivitySentence. */
+  userDisplayName?: string | null;
   timestamp?: string | Date | null;
   severity?: string | null;
   category?: string | null;
@@ -758,7 +897,13 @@ export function formatActivityDetails(entry: {
   related?: RelatedRecords | null;
 }): string {
   const meta = (entry.metadata ?? {}) as Record<string, unknown>;
-  const summary = describeActivity(entry.action, meta);
+  // A sentence rather than the column's fragment: under a heading of its own, "with an AFCT
+  // password" has no subject and no verb.
+  const summary = describeActivitySentence({
+    action: entry.action,
+    metadata: meta,
+    userDisplayName: entry.userDisplayName,
+  });
 
   const head: DetailRow[] = [
     { label: 'Action', value: entry.action.replace(/_/g, ' ') },

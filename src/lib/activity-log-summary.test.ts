@@ -219,8 +219,27 @@ describe('the readable detail view', () => {
     },
   };
 
-  it('leads with what happened', () => {
-    expect(formatActivityDetails(entry).startsWith('What happened\n6 added, 3 dropped')).toBe(true);
+  it('leads with what happened, as a sentence rather than the column fragment', () => {
+    // The table can afford a fragment because the action is in the column beside it. Here it
+    // is on its own under a heading, so it says who did what.
+    expect(
+      formatActivityDetails({ ...entry, userDisplayName: 'Ada Lovelace' }).startsWith(
+        'What happened\nAda Lovelace synced lti roster, 6 added, 3 dropped',
+      ),
+    ).toBe(true);
+  });
+
+  /*
+   * The actor is the entry's own user, never metadata.userName. Those differ whenever an
+   * action is done TO somebody: this fixture records Marybelle Ryan as the person the roster
+   * sync was about, and a sentence naming her as having done it would be a false statement in
+   * an audit record.
+   */
+  it('never builds the sentence from a name in the metadata', () => {
+    const text = formatActivityDetails(entry);
+
+    expect(text).toContain('What happened\nSynced lti roster');
+    expect(text).not.toContain('Marybelle Ryan synced');
   });
 
   it('names the person and the course', () => {
