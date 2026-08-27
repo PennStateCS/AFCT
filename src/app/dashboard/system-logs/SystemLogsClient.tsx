@@ -28,7 +28,7 @@ function useMountedOnce(open: boolean): boolean {
 }
 import { apiPaths } from '@/lib/api-paths';
 import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
-import { describeActivity, formatActivityDetails } from '@/lib/activity-log-summary';
+import { actionLabel, describeActivity, formatActivityDetails } from '@/lib/activity-log-summary';
 import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 import { CompactDate } from '@/components/ui/CompactDate';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -275,8 +275,17 @@ export default function SystemLogsClient() {
         accessorKey: 'action',
         header: 'Action',
         meta: { priority: 1 },
-        cell: ({ getValue }: { getValue: () => unknown }) =>
-          ((getValue() as string) || '').replace(/_/g, ' '),
+        // The verb, from the shared formatter. The cell shows "Viewed"; the row still SORTS,
+        // searches, filters and exports on the stored COURSE_GRADES_VIEWED, which is the value
+        // the research record and every saved query are keyed on. Presentation only, and
+        // deliberately not a second mapping living in this file.
+        // Metadata as well as the action: a couple of verbs depend on which field a generic
+        // update touched (publishing an assignment goes through UPDATE_ASSIGNMENT).
+        cell: ({ row }: { row: { original: LogRow } }) =>
+          actionLabel(
+            row.original.action || '',
+            row.original.metadata as Record<string, unknown> | null,
+          ),
       },
       {
         id: 'summary',
@@ -321,12 +330,13 @@ export default function SystemLogsClient() {
           const when = row.original.timestamp
             ? formatDateTimeInTimeZone(row.original.timestamp, timezone)
             : null;
-          const what = (row.original.action || '').replace(/_/g, ' ');
+          const what = actionLabel(
+            row.original.action || '',
+            row.original.metadata as Record<string, unknown> | null,
+          );
           // Every row carries one of these, so the name says WHICH log: a page of buttons all
           // called "View full log" is what a screen reader would otherwise read out.
-          const label = when
-            ? `View full log for ${what} at ${when}`
-            : `View full log for ${what}`;
+          const label = when ? `View full log for ${what} at ${when}` : `View full log for ${what}`;
           return (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -383,72 +393,72 @@ export default function SystemLogsClient() {
           </div>
         ) : null}
 
-          <DataTable
-            columns={columns}
-            data={logs}
-            loading={loading}
-            tableLabel="System logs table"
-            showExportButton={false}
-            emptyTitle="No log entries"
-            emptyDescription="No activity matches the current search and filters."
-            emptyIcon={ScrollText}
-            loadingMessage="Loading log entries, please wait..."
-            actionButtons={
-              <DataTableFilterMenu
-                groups={[
-                  {
-                    key: 'severity',
-                    label: 'Severity',
-                    options: SEVERITIES.map((s) => ({ label: s, value: s })),
-                    selected: severities,
-                    onChange: (v) => {
-                      setSeverities(v);
-                      setPageIndex(0);
-                    },
+        <DataTable
+          columns={columns}
+          data={logs}
+          loading={loading}
+          tableLabel="System logs table"
+          showExportButton={false}
+          emptyTitle="No log entries"
+          emptyDescription="No activity matches the current search and filters."
+          emptyIcon={ScrollText}
+          loadingMessage="Loading log entries, please wait..."
+          actionButtons={
+            <DataTableFilterMenu
+              groups={[
+                {
+                  key: 'severity',
+                  label: 'Severity',
+                  options: SEVERITIES.map((s) => ({ label: s, value: s })),
+                  selected: severities,
+                  onChange: (v) => {
+                    setSeverities(v);
+                    setPageIndex(0);
                   },
-                  {
-                    key: 'category',
-                    label: 'Category',
-                    options: CATEGORIES.map((c) => ({ label: titleCase(c), value: c })),
-                    selected: categories,
-                    onChange: (v) => {
-                      setCategories(v);
-                      setPageIndex(0);
-                    },
+                },
+                {
+                  key: 'category',
+                  label: 'Category',
+                  options: CATEGORIES.map((c) => ({ label: titleCase(c), value: c })),
+                  selected: categories,
+                  onChange: (v) => {
+                    setCategories(v);
+                    setPageIndex(0);
                   },
-                ]}
-              />
-            }
-            manualPagination
-            pageCount={pageCount}
-            rowCount={total}
-            pagination={{ pageIndex, pageSize }}
-            onPaginationChange={handlePaginationChange}
-            manualFiltering
-            globalFilter={searchInput}
-            onGlobalFilterChange={setSearchInput}
-            searchScopeOptions={SEARCH_FIELDS}
-            searchScope={searchField}
-            onSearchScopeChange={(v) => {
-              setSearchField(v);
-              setPageIndex(0);
-            }}
-            manualSorting
-            sorting={sorting}
-            onSortingChange={handleSortingChange}
-          />
+                },
+              ]}
+            />
+          }
+          manualPagination
+          pageCount={pageCount}
+          rowCount={total}
+          pagination={{ pageIndex, pageSize }}
+          onPaginationChange={handlePaginationChange}
+          manualFiltering
+          globalFilter={searchInput}
+          onGlobalFilterChange={setSearchInput}
+          searchScopeOptions={SEARCH_FIELDS}
+          searchScope={searchField}
+          onSearchScopeChange={(v) => {
+            setSearchField(v);
+            setPageIndex(0);
+          }}
+          manualSorting
+          sorting={sorting}
+          onSortingChange={handleSortingChange}
+        />
 
-          {/* Dialogs */}
-          <LogViewerDialog
-            data={selectedData}
-            json={selectedJson}
-            open={viewerOpen}
-            onOpenChange={setViewerOpen}
-            title={title}
-          />
-          {downloadMounted && (
-            <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
-          )}
+        {/* Dialogs */}
+        <LogViewerDialog
+          data={selectedData}
+          json={selectedJson}
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          title={title}
+        />
+        {downloadMounted && (
+          <DownloadLogsDialog open={downloadOpen} onOpenChange={setDownloadOpen} />
+        )}
       </section>
     </WorkspaceSurface>
   );

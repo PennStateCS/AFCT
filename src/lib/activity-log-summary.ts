@@ -32,44 +32,229 @@ function counts(meta: Metadata): string {
 }
 
 /**
- * The short name for a way in, for the Action column.
+ * The verb an action is DISPLAYED as. The stored value never changes.
  *
- * Kept out of the stored action on purpose. `LOGIN_SUCCESS` is what searches, filters and the
- * research record are keyed on, and splitting it into three values would divide every entry
- * written so far from every entry written after. The source is metadata; this is how it is
- * shown.
+ * `COURSE_GRADES_VIEWED` stays `COURSE_GRADES_VIEWED` in the database, in search, in filters
+ * and in every export: it is the key the research record and every saved query are built on.
+ * This is the word a person reads in the Action column, so the column can be a verb and the
+ * column beside it can be the thing that verb happened to.
+ *
+ * Three layers, in order, because a mapping of 267 action names would be stale the day after
+ * it was written:
+ *
+ *   1. {@link ACTION_VERB}, for the ones no rule gets right.
+ *   2. a suffix rule, since most actions end in what happened (`..._DENIED`, `..._SYNCED`).
+ *   3. a prefix rule, since the rest start with it (`CREATE_...`, `VIEW_...`).
+ *
+ * An action matching none of them keeps its own name, sentence-cased: `SOMETHING_NEW_HAPPENED`
+ * reads as "Something new happened". A future action must never render blank, which is the one
+ * hard requirement here.
  */
-const SIGN_IN_SOURCE: Record<string, string> = {
-  credentials: 'PASSWORD',
-  'lti-launch': 'LTI',
-  oidc: 'SSO',
+const ACTION_VERB: Record<string, string> = {
+  LOGIN_SUCCESS: 'Signed in',
+  LOGIN: 'Signed in',
+  USER_LOGIN: 'Signed in',
+  CLIENT_LOGIN: 'Signed in',
+  LOGOUT: 'Signed out',
+  CLIENT_LOGOUT: 'Signed out',
+  USER_SIGNUP: 'Created',
+  SUBMISSION_CREATED: 'Submitted',
+  SUBMISSION_AUTOGRADED: 'Graded',
+  SUBMISSION_AUTOGRADE_SKIPPED: 'Skipped',
+  SUBMISSION_RERUN: 'Re-ran',
+  COURSE_SUBMISSIONS_RERUN: 'Re-ran',
+  SUBMISSION_QUEUE_REAPED: 'Reclaimed',
+  SUBMISSION_LIMIT_REACHED: 'Rejected',
+  SUBMISSION_RATE_LIMITED: 'Rejected',
+  SUBMISSION_FILE_TOO_LARGE: 'Rejected',
+  SUBMISSION_NOT_ASSIGNED: 'Rejected',
+  SUBMISSION_UNPUBLISHED_ASSIGNMENT: 'Rejected',
+  SUBMISSION_INVALID_REQUEST: 'Rejected',
+  SUBMISSION_FORBIDDEN: 'Denied',
+  SUBMISSION_UNAUTHORIZED: 'Denied',
+  PROBLEM_INVALID_FILE_STRUCTURE: 'Rejected',
+  PROBLEM_GRADE_UPDATED: 'Graded',
+  GROUP_PROBLEM_GRADE_UPDATED: 'Graded',
+  PROBLEM_GRADE_CLEARED: 'Cleared',
+  GRADE_UPDATED: 'Graded',
+  GRADE_OVERRIDE: 'Overrode',
+  GRADE_HELD_MANUAL: 'Held',
+  GRADE_RELEASED_TO_AUTOGRADER: 'Released',
+  COURSE_UNARCHIVED: 'Restored',
+  COURSE_JOINED: 'Joined',
+  REENROLL_IN_COURSE: 'Re-enrolled',
+  DROP_FROM_COURSE: 'Dropped',
+  REMOVE_FROM_COURSE: 'Removed',
+  ENROLL_USER: 'Enrolled',
+  BULK_ENROLL_USERS: 'Enrolled',
+  BULK_CREATE_USERS: 'Created',
+  CHANGE_COURSE_ROLE: 'Changed',
+  CHANGE_ASSIGNMENT_TYPE: 'Changed',
+  CHANGE_PASSWORD: 'Changed',
+  SET_PASSWORD: 'Set',
+  RESET_PASSWORD: 'Reset',
+  RESET_STUDENT_PASSWORD: 'Reset',
+  UNLOCK_ACCOUNT: 'Unlocked',
+  CLEAR_RATE_LIMIT: 'Cleared',
+  GRANT_EXTRA_SUBMISSIONS: 'Granted',
+  REVOKE_EXTRA_SUBMISSIONS: 'Revoked',
+  SESSION_EXTENDED: 'Extended',
+  USER_IDENTITY_REASSIGNED: 'Reassigned',
+  SYSTEM_UPDATE_ROLLED_BACK: 'Rolled back',
+  SYSTEM_UPDATER_SELF_UPDATE_REQUESTED: 'Requested',
+  TLS_CERT_RESET: 'Reset',
+  ABANDONED_FILES_PURGED: 'Purged',
+  PASSWORD_RESET_COMPLETED: 'Reset',
+  PROFILE_UPDATED: 'Updated',
+  LTI_ROSTER_SYNCED: 'Synced',
+  LTI_SCORE_QUEUED: 'Queued',
+  LTI_SCORE_SENT: 'Sent',
+  LTI_GRADES_PUSH_REQUESTED: 'Sent',
+  ADMIN_LOGS_VIEWED: 'Viewed',
+  ADMIN_LOGS_EXPORTED: 'Exported',
+  ADMIN_STATUS_VIEWED: 'Viewed',
+  ADMIN_SUBMISSIONS_VIEWED: 'Viewed',
+  SYSTEM_SETTINGS_VIEWED: 'Viewed',
+  COURSE_ROSTER_VIEWED: 'Viewed',
+  USER_ADMIN_GRANTED: 'Granted',
+  USER_ADMIN_REVOKED: 'Revoked',
+  GROUP_MEMBERSHIP_ASSIGNED: 'Moved',
+  GROUP_MEMBERSHIP_REMOVED: 'Removed',
+  ASSIGNMENT_GRADE_SYNC_UPDATED: 'Updated',
+  LTI_DEEP_LINK_RETURNED: 'Linked',
+  LTI_DEEP_LINK_REMOVED: 'Unlinked',
+  SYSTEM_BACKUP_DOWNLOADED: 'Downloaded',
 };
 
 /**
- * "LOGIN SUCCESS: SSO" — the action as it is displayed, with the way in when there is one.
+ * Verbs that depend on WHICH field a generic update touched.
  *
- * Only sign-in and sign-out carry a provider, so everything else is returned unchanged.
+ * Publishing an assignment is the event that makes work visible to students, and it goes
+ * through the same PATCH as renaming one, so the stored action is `UPDATE_ASSIGNMENT` either
+ * way. The stored value stays exactly that: it is a research key, and inventing
+ * `ASSIGNMENT_PUBLISHED` for some saves and not others would make "how many assignment
+ * updates happened" mean two different things depending on which fields moved together.
+ * `LOGIN_SUCCESS` is handled the same way, keeping one stored key and reading the variant
+ * out of metadata.
+ *
+ * Only when publishing is the ONLY thing that changed. A save that moved the due date as well
+ * is an update that happens to include it, and calling that "Published" would hide the date.
  */
-export function actionLabel(action: string, metadata: Metadata): string {
-  const readable = action.replace(/_/g, ' ');
-  const provider = str(metadata, 'provider');
-  const source = provider ? SIGN_IN_SOURCE[provider] : null;
-  return source ? `${readable}: ${source}` : readable;
+const DERIVED_VERB: Record<string, (metadata: Metadata) => string | null> = {
+  UPDATE_ASSIGNMENT: (metadata) => {
+    const fields = Array.isArray(metadata?.changedFields)
+      ? (metadata.changedFields as string[])
+      : null;
+    if (!fields || fields.length !== 1 || fields[0] !== 'isPublished') return null;
+    const change = (metadata?.changes as Record<string, { to?: unknown }> | undefined)?.isPublished;
+    if (!change) return null;
+    return change.to === true ? 'Published' : change.to === false ? 'Unpublished' : null;
+  },
+};
+
+/** What an action ends with, which for most of them is the thing that happened. */
+const VERB_BY_SUFFIX: [RegExp, string][] = [
+  [/_ROLLED_BACK$/, 'Rolled back'],
+  [/_(DENIED|FORBIDDEN|UNAUTHORIZED)$/, 'Denied'],
+  [/_(REJECTED|CONFLICT)$/, 'Rejected'],
+  [/_(FAILED|ERROR)$/, 'Failed'],
+  [/_INVALID(_[A-Z_]+)?$/, 'Rejected'],
+  [/_VIEWED$/, 'Viewed'],
+  [/_CREATED$/, 'Created'],
+  [/_UPDATED$/, 'Updated'],
+  [/_DELETED$/, 'Deleted'],
+  [/_REMOVED$/, 'Removed'],
+  [/_PURGED$/, 'Purged'],
+  [/_PUBLISHED$/, 'Published'],
+  [/_UNPUBLISHED$/, 'Unpublished'],
+  [/_ARCHIVED$/, 'Archived'],
+  [/_UNARCHIVED$/, 'Restored'],
+  [/_DUPLICATED$/, 'Duplicated'],
+  [/_SYNCED$/, 'Synced'],
+  [/_LINKED$/, 'Linked'],
+  [/_UNLINKED$/, 'Unlinked'],
+  [/_REGISTERED$/, 'Registered'],
+  [/_ISSUED$/, 'Issued'],
+  [/_REVOKED$/, 'Revoked'],
+  [/_GRANTED$/, 'Granted'],
+  [/_SENT$/, 'Sent'],
+  [/_QUEUED$/, 'Queued'],
+  [/_RECEIVED$/, 'Received'],
+  [/_STORED$/, 'Stored'],
+  [/_SKIPPED$/, 'Skipped'],
+  [/_DISCARDED$/, 'Discarded'],
+  [/_EXPORTED$/, 'Exported'],
+  [/_IMPORTED$/, 'Imported'],
+  [/_REQUESTED$/, 'Requested'],
+  [/_COMPLETED$/, 'Completed'],
+  [/_STARTED$/, 'Started'],
+  [/_CONFIRMED$/, 'Confirmed'],
+  [/_REASSIGNED$/, 'Reassigned'],
+  [/_EXTENDED$/, 'Extended'],
+  [/_RESET$/, 'Reset'],
+];
+
+/** What an action starts with, for the ones written the other way round. */
+const VERB_BY_PREFIX: Record<string, string> = {
+  CREATE: 'Created',
+  UPDATE: 'Updated',
+  DELETE: 'Deleted',
+  VIEW: 'Viewed',
+  ADD: 'Added',
+  REMOVE: 'Removed',
+  CHANGE: 'Changed',
+  IMPORT: 'Imported',
+  DUPLICATE: 'Duplicated',
+  DOWNLOAD: 'Downloaded',
+  ENROLL: 'Enrolled',
+  GRANT: 'Granted',
+  REVOKE: 'Revoked',
+  RESET: 'Reset',
+  SET: 'Set',
+  UNLOCK: 'Unlocked',
+  CLEAR: 'Cleared',
+  DROP: 'Dropped',
+};
+
+/**
+ * The action as a person reads it: a verb, not an identifier.
+ *
+ * Presentation only, and deliberately one-way. Nothing derives a stored action from this, so
+ * two actions displaying the same verb ("Viewed") is fine and expected: what they were done to
+ * is the other column's job.
+ */
+export function actionLabel(action: string, metadata?: Metadata): string {
+  const derived = DERIVED_VERB[action]?.(metadata);
+  if (derived) return derived;
+
+  const known = ACTION_VERB[action];
+  if (known) return known;
+
+  for (const [pattern, verb] of VERB_BY_SUFFIX) {
+    if (pattern.test(action)) return verb;
+  }
+
+  const prefix = VERB_BY_PREFIX[action.split('_')[0] ?? ''];
+  if (prefix) return prefix;
+
+  // Some actions carry the verb in the middle, because what follows it is the reason:
+  // SUBMISSION_REJECTED_LATE_CUTOFF, SUBMISSION_FAILED_PERMANENTLY. The reason belongs in the
+  // other column, so only the verb is taken here.
+  for (const [word, verb] of [
+    ['REJECTED', 'Rejected'],
+    ['DENIED', 'Denied'],
+    ['FAILED', 'Failed'],
+    ['DISCARDED', 'Discarded'],
+    ['SKIPPED', 'Skipped'],
+  ] as const) {
+    if (action.includes(`_${word}_`)) return verb;
+  }
+
+  // Nothing recognised it. Its own name, sentence-cased, so an action added tomorrow reads as
+  // words rather than disappearing.
+  const words = action.replace(/_/g, ' ').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
-
-/** How somebody signed in, by the provider id NextAuth reports. */
-const SIGN_IN: Record<string, string> = {
-  credentials: 'with an AFCT password',
-  'lti-launch': 'from an LMS',
-  oidc: 'with institutional sign-in',
-};
-
-/** The same three ways in, said as the session that ended rather than the way it began. */
-const SIGN_OUT: Record<string, string> = {
-  credentials: 'ended a password session',
-  'lti-launch': 'ended a session that came from an LMS',
-  oidc: 'ended an institutional sign-in session',
-};
 
 /** Where a look at somebody's work came from, in words rather than the code's own labels. */
 const VIEW_SOURCE: Record<string, string> = {
@@ -87,6 +272,16 @@ const VIA: Record<string, string> = {
 };
 
 /** "due date 24 Aug to 1 Sep" — the change itself, which is what a reader is looking for. */
+/**
+ * A field whose VALUE must never be printed, whatever a producer happened to record.
+ *
+ * The settings route already audits an allowlist that leaves every credential out, so nothing
+ * reaching here today carries one. This is the second lock: the promise "the log never shows a
+ * password" should hold in the formatter, not only in each producer that must remember it, and
+ * the cost of being wrong once is a secret in a table that admins screenshot.
+ */
+const SECRET_FIELD = /(password|secret|token|apiKey|privateKey|credential|clientSecret)/i;
+
 function describeChanges(metadata: Metadata): string | null {
   const changes = metadata?.changes as Record<string, { from: unknown; to: unknown }> | undefined;
   if (!changes || Object.keys(changes).length === 0) return null;
@@ -99,7 +294,15 @@ function describeChanges(metadata: Metadata): string | null {
   };
 
   return Object.entries(changes)
-    .map(([field, change]) => `${label(field)}: ${shorten(change.from)} to ${shorten(change.to)}`)
+    .map(([field, change]) => {
+      // What happened to it, never what it is. "set" and "cleared" are the whole statement a
+      // reader needs, and the only one that is safe to make.
+      if (SECRET_FIELD.test(field)) {
+        const cleared = change.to === null || change.to === undefined || change.to === '';
+        return `${label(field)}: ${cleared ? 'cleared' : 'set'}`;
+      }
+      return `${label(field)}: ${shorten(change.from)} to ${shorten(change.to)}`;
+    })
     .join('; ');
 }
 
@@ -134,14 +337,6 @@ function firstNum(meta: Metadata, ...keys: string[]): number {
 /** `n thing` / `n things`, so a count reads as English rather than as `1 students`. */
 const plural = (n: number, word: string, plural = `${word}s`) => `${n} ${n === 1 ? word : plural}`;
 
-/** Course code and name, however the call site happened to spell them. */
-function courseNamed(meta: Metadata): string | null {
-  const code = firstStr(meta, 'courseCode', 'code', 'newCourseCode');
-  const name = firstStr(meta, 'courseName', 'name');
-  if (code && name) return `${code}, ${name}`;
-  return code ?? name;
-}
-
 /** The records an entry points at, named rather than left as identifiers. */
 export type RelatedRecords = {
   course?: string | null;
@@ -151,37 +346,351 @@ export type RelatedRecords = {
 };
 
 /**
- * The course, said as short as it can be said.
+ * The thing an action was done TO, which is what the "What happened" column is for.
  *
- * The API names a course "CMPEN 271, Introduction to Digital Systems", which is right for a
- * labelled field and too long for a summary that has to share a table cell. The code alone is
- * what somebody scanning a log recognises, so this takes the part before the comma. A course
- * that has since been deleted is named by its id there, and the id is returned whole: a
- * partial identifier would be worse than a long one.
+ * The Action column now carries the verb, so this column carries the object and the context
+ * that makes it identifiable: "Homework 2 in CMPSC 464", not "for everyone". Before this the
+ * column was supplemental (a count, a state, a reason) and the object was only reachable by
+ * opening the entry, which meant a log of forty grade views was forty rows saying "17
+ * students" with no way to tell which gradebook.
+ *
+ * Names come from the entry's RESOLVED relations first, because they are current: an
+ * assignment renamed since the entry was written shows its name today. Metadata is the
+ * fallback, and it is the only source that survives the record being deleted, which is why
+ * the destructive actions record names as they go. An identifier is the last resort and is
+ * better than nothing: "Assignment abc123" at least says which one.
+ *
+ * Nothing here queries anything. It reads what the API already returned.
  */
-function courseTag(related?: RelatedRecords | null): string | null {
-  const course = related?.course?.trim();
+function courseNamed(meta: Metadata, related?: RelatedRecords | null): string | null {
+  const resolved = related?.course?.trim();
+  if (resolved) return resolved;
+  // `newCourseCode` is what a duplication records; `name` alone is ambiguous enough that it
+  // is only read when a code sits beside it.
+  const code = firstStr(meta, 'courseCode', 'code', 'newCourseCode');
+  const name = firstStr(meta, 'courseName');
+  if (code && name) return `${code}, ${name}`;
+  return code ?? name ?? str(meta, 'courseId');
+}
+
+/**
+ * The course as CONTEXT ("in CMPSC 464"), where the full title is more than the line can take.
+ *
+ * The API names a course "CMPSC 464, Theory of Computation", which is right for a labelled
+ * field and too long for a summary sharing a table cell, so this takes the part before the
+ * comma. A course deleted since is named by its id there, and the id is returned whole: half
+ * an identifier is worse than a long one.
+ */
+function courseTag(related?: RelatedRecords | null, meta?: Metadata): string | null {
+  const course = related?.course?.trim() ?? courseNamed(meta ?? null, null);
   if (!course) return null;
   const [code] = course.split(',');
   return code?.trim() || course;
 }
 
+/**
+ * The actions whose metadata `title` is proven to be the ASSIGNMENT's, by the code that writes
+ * them. Nothing else reads that key: a group set, a problem and a comment all record `title` or
+ * `name` too, and a global guess would confidently name the wrong object.
+ */
+const TITLE_IS_ASSIGNMENT = new Set([
+  'DELETE_ASSIGNMENT',
+  'CREATE_ASSIGNMENT',
+  'DUPLICATE_ASSIGNMENT',
+  'IMPORT_ASSIGNMENT',
+  'LTI_DEEP_LINK_RETURNED',
+  'LTI_DEEP_LINK_REMOVED',
+]);
+
+function assignmentNamed(
+  meta: Metadata,
+  related?: RelatedRecords | null,
+  action?: string,
+): string | null {
+  return (
+    related?.assignment?.trim() ||
+    firstStr(meta, 'assignmentTitle', 'assignmentName') ||
+    (action && TITLE_IS_ASSIGNMENT.has(action) ? str(meta, 'title') : null) ||
+    str(meta, 'assignmentId')
+  );
+}
+
+function problemNamed(meta: Metadata, related?: RelatedRecords | null): string | null {
+  return (
+    related?.problem?.trim() ||
+    firstStr(meta, 'problemTitle', 'problemName') ||
+    str(meta, 'problemId')
+  );
+}
+
+/** "X in Y", skipping whichever half is missing. */
+function inside(what: string | null, where: string | null): string | null {
+  if (!what) return where;
+  return where ? `${what} in ${where}` : what;
+}
+
+/**
+ * The object for actions whose phrasing is their own. Everything else is handled by the
+ * general rule below, which is why this list is short: it holds the cases where the object is
+ * not simply the record the entry points at ("Course grades for X", not "X").
+ */
+const OBJECT_BY_ACTION: Record<
+  string,
+  (meta: Metadata, related?: RelatedRecords | null) => string | null
+> = {
+  COURSE_GRADES_VIEWED: (m, r) => {
+    const course = courseNamed(m, r);
+    return course ? `Course grades for ${course}` : 'Course grades';
+  },
+  GRADES_EXPORTED: (m, r) => {
+    const course = courseTag(r, m);
+    return course ? `Grades for ${course}` : 'Grades';
+  },
+  VIEW_ASSIGNMENT_SUBMISSIONS: (m, r) => {
+    const where = inside(assignmentNamed(m, r), courseTag(r, m));
+    return where ? `Submissions for ${where}` : 'Assignment submissions';
+  },
+  VIEW_STUDENT_PROBLEM_GRADES: (m, r) => {
+    const where = assignmentNamed(m, r);
+    return where ? `Problem grades for ${where}` : 'Problem grades';
+  },
+  VIEW_ASSIGNMENT_PROBLEMS: (m, r) => {
+    const where = assignmentNamed(m, r);
+    return where ? `Problems in ${where}` : 'Assignment problems';
+  },
+  ASSIGNMENT_STATISTICS_VIEWED: (m, r) => {
+    const where = inside(assignmentNamed(m, r), courseTag(r, m));
+    return where ? `Statistics for ${where}` : 'Assignment statistics';
+  },
+  ASSIGNMENT_SIMILARITY_VIEWED: (m, r) => {
+    const where = inside(assignmentNamed(m, r), courseTag(r, m));
+    return where ? `Similarity report for ${where}` : 'Similarity report';
+  },
+  VIEW_USERS: (m) => {
+    const accounts = firstNum(m, 'accounts');
+    return accounts > 0 ? `User list, ${plural(accounts, 'account')}` : 'User list';
+  },
+  ADMIN_LOGS_VIEWED: () => 'The activity log',
+  ADMIN_LOGS_EXPORTED: () => 'The activity log',
+  ADMIN_STATUS_VIEWED: () => 'System status',
+  ADMIN_SUBMISSIONS_VIEWED: () => 'Every course’s submissions',
+  SYSTEM_SETTINGS_VIEWED: () => 'System settings',
+  COURSE_ROSTER_VIEWED: (m, r) => {
+    const course = courseNamed(m, r);
+    return course ? `Roster for ${course}` : 'Course roster';
+  },
+  USER_ADMIN_GRANTED: (m) => accountNamed(m),
+  USER_ADMIN_REVOKED: (m) => accountNamed(m),
+  ASSIGNMENT_GRADE_SYNC_UPDATED: (m, r) => {
+    const where = assignmentNamed(m, r);
+    return where ? `LMS grade sync for ${where}` : 'LMS grade sync';
+  },
+  LTI_GRADES_PUSH_REQUESTED: (m, r) => {
+    const where = assignmentNamed(m, r);
+    return where ? `Grades for ${where} to the LMS` : 'Grades to the LMS';
+  },
+  LTI_ROSTER_SYNCED: (m, r) => {
+    const course = courseTag(r, m);
+    return course ? `Roster for ${course}` : 'Roster';
+  },
+  PROBLEM_GRADE_CLEARED: (m, r) => {
+    const where = inside(problemNamed(m, r), assignmentNamed(m, r));
+    return where ? `Grade for ${where}` : 'Problem grade';
+  },
+  CREATE_COMMENT: (m, r) => {
+    const where = inside(problemNamed(m, r), assignmentNamed(m, r));
+    return where ? `Feedback on ${where}` : 'Feedback';
+  },
+  DELETE_COMMENT: (m, r) => {
+    const where = inside(problemNamed(m, r), assignmentNamed(m, r));
+    return where ? `Feedback on ${where}` : 'Feedback';
+  },
+  CHANGE_COURSE_ROLE: (m, r) => {
+    const course = courseTag(r, m);
+    return course ? `Course role in ${course}` : 'Course role';
+  },
+  UPDATE_ASSIGNMENT_AUDIENCE: (m, r) => {
+    const where = assignmentNamed(m, r);
+    return where ? `${where} audience` : 'Assignment audience';
+  },
+  UPDATE_ASSIGNMENT_PROBLEM_SETTINGS: (m, r) => {
+    const where = inside(problemNamed(m, r), assignmentNamed(m, r));
+    return where ? `${where} settings` : 'Assignment problem settings';
+  },
+  CREATE_ASSIGNMENT_OVERRIDE: (m, r) => overrideObject(m, r),
+  UPDATE_ASSIGNMENT_OVERRIDE: (m, r) => overrideObject(m, r),
+  DELETE_ASSIGNMENT_OVERRIDE: (m, r) => overrideObject(m, r),
+  // The way in IS the object here: "Signed in | AFCT password". Absent on an old entry, which
+  // is left blank rather than guessed at: claiming a password sign-in that may have been an
+  // LMS launch would be a false audit statement.
+  LOGIN_SUCCESS: (m) => SIGN_IN_OBJECT[str(m, 'provider') ?? ''] ?? null,
+  CLIENT_LOGIN: (m) => {
+    const how = SIGN_IN_OBJECT[str(m, 'provider') ?? ''];
+    return how ? `Desktop client, ${how.toLowerCase()}` : 'Desktop client';
+  },
+  LOGOUT: (m) => SIGN_OUT_OBJECT[str(m, 'provider') ?? ''] ?? null,
+  CLIENT_LOGOUT: () => 'Desktop client session',
+  CREATE_USER: (m) => accountNamed(m),
+  UPDATE_USER: (m) => accountNamed(m),
+  DELETE_USER: (m) => accountNamed(m),
+  USER_SIGNUP: (m) => accountNamed(m),
+  RESET_PASSWORD: (m) => {
+    const who = firstStr(m, 'userEmail', 'email');
+    return who ? `Password for ${who}` : 'Password';
+  },
+  CHANGE_PASSWORD: () => 'Own password',
+  SET_PASSWORD: () => 'First password for the account',
+  UNLOCK_ACCOUNT: (m) => firstStr(m, 'userEmail', 'email') ?? 'Account',
+  CLEAR_RATE_LIMIT: (m) => {
+    const ip = firstStr(m, 'ip', 'ipAddress');
+    return ip ? `Login rate limit for ${ip}` : 'Login rate limit';
+  },
+  SYSTEM_SETTINGS_UPDATED: () => 'System settings',
+  SYSTEM_UPDATE_REQUESTED: () => 'System update',
+  SYSTEM_UPDATE_COMPLETED: () => 'System update',
+  SYSTEM_UPDATE_ROLLED_BACK: () => 'System update',
+  SYSTEM_UPDATE_FAILED: () => 'System update',
+  SYSTEM_DOWNGRADE_REQUESTED: () => 'System downgrade',
+  SYSTEM_BACKUP_REQUESTED: () => 'System backup',
+  SYSTEM_BACKUP_DOWNLOADED: () => 'System backup',
+  SYSTEM_RESTORE_POINT_DELETE_REQUESTED: () => 'Restore point',
+  TEST_EMAIL_SENT: () => 'Test email',
+  TLS_CERT_RESET: () => 'TLS certificate',
+  ABANDONED_FILE_DELETED: () => 'Abandoned file',
+  ABANDONED_FILES_PURGED: () => 'Abandoned files',
+};
+
+/** An assignment override names the assignment it belongs to, not itself. */
+function overrideObject(meta: Metadata, related?: RelatedRecords | null): string {
+  const where = assignmentNamed(meta, related);
+  return where ? `${where} due-date override` : 'Assignment due-date override';
+}
+
+/** An account, by the address that identifies it. Never by anything secret. */
+function accountNamed(meta: Metadata): string {
+  const who = firstStr(meta, 'userEmail', 'email', 'targetEmail');
+  return who ? `Account for ${who}` : 'Account';
+}
+
+/** The way in, as an object rather than as the fragment the old column used. */
+const SIGN_IN_OBJECT: Record<string, string> = {
+  credentials: 'AFCT password',
+  'lti-launch': 'LMS launch',
+  oidc: 'Institutional sign-in',
+};
+
+const SIGN_OUT_OBJECT: Record<string, string> = {
+  credentials: 'Password session',
+  'lti-launch': 'Session that came from an LMS',
+  oidc: 'Institutional sign-in session',
+};
+
+/**
+ * The object an entry is about, for every action without its own phrasing above.
+ *
+ * The rule is "the most specific record this entry points at": a problem inside an assignment,
+ * an assignment inside a course, or the course itself. That covers the whole create / update /
+ * delete / view surface without a case per action, which is what keeps the file from becoming
+ * a 267-line table nobody updates.
+ */
+export function objectPhrase(
+  action: string,
+  metadata: Metadata,
+  related?: RelatedRecords | null,
+): string | null {
+  const own = OBJECT_BY_ACTION[action];
+  if (own) return own(metadata, related);
+
+  const problem = problemNamed(metadata, related);
+  const assignment = assignmentNamed(metadata, related, action);
+  const course = courseTag(related, metadata);
+
+  // The action says which record it is about, and that outranks "the most specific one
+  // present". An entry for UPDATE_ASSIGNMENT can carry a problem relation as well, and
+  // reporting it as a problem update would name the wrong object. Only when the action names
+  // nothing (the submission family, most views) does specificity decide.
+  const subject = /PROBLEM/.test(action)
+    ? 'problem'
+    : /ASSIGNMENT/.test(action)
+      ? 'assignment'
+      : /COURSE|ROSTER|ENROLL/.test(action)
+        ? 'course'
+        : null;
+
+  if (subject === 'assignment' && assignment) return inside(assignment, course);
+  if (subject === 'course' && (course || related?.course)) return courseNamed(metadata, related);
+
+  if (problem) return inside(problem, assignment ?? course);
+  if (assignment) return inside(assignment, course);
+
+  // A group set names itself, and only where the action says it is one.
+  if (/GROUP_SET/.test(action)) {
+    // `deletedName` is what a deletion records, and it is the only name that entry will ever
+    // have: the set is gone, so nothing can resolve it later.
+    const set = firstStr(metadata, 'groupSetName', 'deletedName', 'name', 'title');
+    const group = firstStr(metadata, 'groupName');
+    if (group && set) return `${group} in ${set}`;
+    if (set) return set;
+  }
+
+  // The course as the object rather than as context, so a course event reads with its title.
+  if (/COURSE/.test(action)) return courseNamed(metadata, related);
+
+  return course;
+}
+
+/**
+ * What the entry is about, in the shape the table reads: the object, then what happened to it.
+ *
+ *     Course grades for CMPSC 464, Theory of Computation · 17 students
+ *     Homework 2 in CMPSC 464 · Due date: Aug 27 to Sep 3
+ *     DFA Problem in Homework 2 · one student, 8 to 10
+ *
+ * Two halves, from two places. {@link objectPhrase} names the thing, mostly from the entry's
+ * resolved relations. {@link activityDetail} is the older half of this file: the count, the
+ * state, the before-and-after, the reason a request was refused. Either can be missing and the
+ * result is whatever is left.
+ *
+ * The separator is a middle dot rather than a dash, matching the dashboard's "fact · fact"
+ * rows, and because the repository does not use em dashes.
+ *
+ * `related` is optional and everything works without it: a historical entry, a record since
+ * deleted, or a caller that has not resolved anything all fall through to metadata and then to
+ * identifiers. Nothing here queries; it is pure formatting over what the API already returned.
+ */
 export function describeActivity(
   action: string,
   metadata: Metadata,
-  /**
-   * What the entry points at, for the handful of actions whose answer is "which one".
-   *
-   * Optional, and read from the log's own relation columns rather than from metadata: an entry
-   * that views a course's grades records `courseId`, not the course's name, so without this
-   * the summary could only ever say how many students were on a page.
-   */
   related?: RelatedRecords | null,
 ): string | null {
+  const object = objectPhrase(action, metadata, related);
+  const detail = activityDetail(action, metadata);
+  if (!object) return detail;
+  return detail ? `${object} · ${detail}` : object;
+}
+
+/**
+ * The second half: what happened to the object. A count, a state, a change, or the reason a
+ * request was refused.
+ *
+ * This is the switch this module started as, and it is deliberately still a switch: each
+ * action knows which of its metadata fields carry meaning, and a generic reader of "the first
+ * number in the object" would say wrong things confidently.
+ *
+ * Metadata only, deliberately: naming the object is {@link objectPhrase}'s job and the two
+ * halves should not both be reaching for the same relations.
+ *
+ * Exported for its own tests. The table calls {@link describeActivity}, which is this plus the
+ * object it happened to; testing the two halves separately is what keeps a change to one from
+ * rewriting the other's expectations.
+ */
+export function activityDetail(action: string, metadata: Metadata): string | null {
   switch (action) {
     // Updates that record old and new. The change itself is the whole point of the entry.
     case 'UPDATE_COURSE':
     case 'UPDATE_ASSIGNMENT':
+    // Records its change the same way, so it reads "on to off" rather than just "updated".
+    case 'ASSIGNMENT_GRADE_SYNC_UPDATED':
       return describeChanges(metadata);
 
     case 'PROBLEM_GRADE_UPDATED': {
@@ -290,24 +799,17 @@ export function describeActivity(
       return parts ? `${parts}${created ? ', new account' : ''}` : null;
     }
 
+    // The way in is the OBJECT now ("Signed in | AFCT password"), so all that is left here is
+    // the one thing that qualifies it.
     case 'LOGIN_SUCCESS':
-    case 'CLIENT_LOGIN': {
-      // How somebody got in. The rows are otherwise identical, and "signed in from an LMS"
-      // against "signed in with a password" is the difference somebody is looking for.
-      const how = SIGN_IN[str(metadata, 'provider') ?? ''] ?? null;
-      const temporary = metadata?.temporaryPasswordLogin === true;
-      if (!how) return temporary ? 'with a temporary password' : null;
-      return temporary ? `${how}, temporary password` : how;
-    }
+    case 'CLIENT_LOGIN':
+      return metadata?.temporaryPasswordLogin === true ? 'temporary password' : null;
 
+    // Which session ended is the object; nothing qualifies it. A session started before the
+    // provider was recorded has no object either, and the verb alone still says what happened.
     case 'LOGOUT':
-    case 'CLIENT_LOGOUT': {
-      // Which session ended. The provider is carried on the token from sign-in, so it is there
-      // for a sign-out that followed an institutional or LMS sign-in as well as a password one.
-      // Sessions started before that was recorded have none, and still say that they ended.
-      const how = str(metadata, 'provider');
-      return (how ? SIGN_OUT[how] : null) ?? 'signed out';
-    }
+    case 'CLIENT_LOGOUT':
+      return null;
 
     case 'LTI_DEEP_LINK_RETURNED': {
       // Which assignment the LMS link now opens, which is the whole of what happened.
@@ -371,31 +873,15 @@ export function describeActivity(
       return count > 0 ? `${plural(count, 'problem grade')}, one student` : 'one student';
     }
 
+    // Which course this was is the object now, so all that is left here is the scale of it.
     case 'COURSE_GRADES_VIEWED': {
       const students = firstNum(metadata, 'studentCount', 'total');
-      const where = courseTag(related);
-      // Which course, first: on a log full of grade entries "17 students" says nothing about
-      // whose gradebook was opened, and that is the question a disclosure record answers.
-      //
-      // "for X" rather than a bare name, so this still reads as one line when the detail view
-      // puts a verb in front of it: "viewed course grades for CMPEN 271, 17 students".
-      const size = students > 0 ? plural(students, 'student') : null;
-      if (!where) return size;
-      return size ? `for ${where}, ${size}` : `for ${where}`;
+      return students > 0 ? plural(students, 'student') : null;
     }
 
     case 'ASSIGNMENT_SIMILARITY_VIEWED': {
-      const where = courseTag(related);
-      const what = related?.assignment?.trim() || null;
       const groups = firstNum(metadata, 'matchGroups');
-      const place = what
-        ? `for ${what}${where ? ` in ${where}` : ''}`
-        : where
-          ? `for ${where}`
-          : null;
-      const matches = groups > 0 ? plural(groups, 'match group') : null;
-      if (!place) return matches;
-      return matches ? `${place}, ${matches}` : place;
+      return groups > 0 ? plural(groups, 'match group') : null;
     }
 
     case 'GRADES_EXPORTED': {
@@ -572,8 +1058,9 @@ export function describeActivity(
       return str(metadata, 'label');
 
     // Courses and their contents.
+    // The object names the course; nothing else about a creation is worth a second phrase.
     case 'CREATE_COURSE':
-      return courseNamed(metadata);
+      return null;
 
     case 'DELETE_COURSE': {
       // What went with it. A deleted course takes assignments, problems and enrolments with it,
@@ -583,9 +1070,7 @@ export function describeActivity(
         [firstNum(metadata, 'problemCount'), 'problems'],
         [firstNum(metadata, 'studentCount'), 'students'],
       ]);
-      return (
-        [courseNamed(metadata), took ? `with ${took}` : null].filter(Boolean).join(', ') || null
-      );
+      return took;
     }
 
     case 'COURSE_DUPLICATED': {
@@ -598,26 +1083,28 @@ export function describeActivity(
     }
 
     case 'CREATE_ASSIGNMENT': {
-      if (metadata?.assignedToEveryone === true) return 'for everyone';
+      if (metadata?.assignedToEveryone === true) return 'assigned to everyone';
       const count = firstNum(metadata, 'assigneeCount');
-      return count > 0 ? `for ${plural(count, 'assignee')}` : null;
+      return count > 0 ? `assigned to ${plural(count, 'student')}` : null;
     }
 
+    /**
+     * The object names all of these now, and it names them better: it resolves the current
+     * title, falls back to what the deletion recorded, and adds the course or assignment they
+     * sat in. Returning the title here as well printed it twice.
+     */
     case 'DELETE_ASSIGNMENT':
     case 'REMOVE_ASSIGNMENT_PROBLEM':
     case 'DELETE_PROBLEM':
     case 'CREATE_PROBLEM':
-      return firstStr(metadata, 'problemTitle', 'title');
+      return null;
 
-    case 'UPDATE_PROBLEM': {
-      const title = firstStr(metadata, 'problemTitle', 'title');
-      const file = metadata?.fileUpdated === true ? 'file replaced' : null;
-      return [title, file].filter(Boolean).join(', ') || null;
-    }
+    case 'UPDATE_PROBLEM':
+      return metadata?.fileUpdated === true ? 'solution file replaced' : null;
 
     case 'DUPLICATE_PROBLEM':
     case 'IMPORT_PROBLEM':
-      return firstStr(metadata, 'title');
+      return null;
 
     case 'DUPLICATE_ASSIGNMENT':
     case 'IMPORT_ASSIGNMENT': {
@@ -664,12 +1151,11 @@ export function describeActivity(
       return [name, groups > 0 ? plural(groups, 'group') : null].filter(Boolean).join(', ') || null;
     }
 
+    // Named by the object, including the name a deletion recorded on its way out.
     case 'DELETE_GROUP_SET':
     case 'DELETE_GROUP_SET_GROUP':
-      return firstStr(metadata, 'deletedName', 'name');
-
     case 'CREATE_GROUP_SET_GROUP':
-      return str(metadata, 'name');
+      return null;
 
     case 'UPDATE_GROUP_SET_GROUP': {
       const from = str(metadata, 'previousName');
@@ -734,6 +1220,135 @@ export function describeActivity(
       if (from && to) return `${from} to ${to}`;
       return to ? `now on ${to}` : null;
     }
+
+    /**
+     * The submission pipeline, whose entries are the busiest thing in the log.
+     *
+     * The object (the problem, and the assignment it sits in) is supplied above, so each of
+     * these adds only what distinguishes it: the file, the state it ended in, or the reason it
+     * was refused. Written as one group because they share their metadata shape and reading
+     * them together is how anybody debugs a submission that did not arrive.
+     */
+    case 'SUBMISSION_CREATED': {
+      const file = firstStr(metadata, 'originalFileName', 'fileName');
+      const state = firstStr(metadata, 'status');
+      return [file, state?.toLowerCase()].filter(Boolean).join(', ') || null;
+    }
+
+    /**
+     * What the autograder decided. The mark and the verdict, because "10/10" and "correct" are
+     * not the same statement: a zero-point problem can be correct, and a partial mark on a
+     * problem graded by cases is neither.
+     */
+    case 'SUBMISSION_AUTOGRADED': {
+      const grade = metadata?.grade;
+      const outOf = firstNum(metadata, 'maxPoints', 'maxGrade');
+      const correct = metadata?.correct;
+      const mark =
+        grade === undefined || grade === null
+          ? null
+          : outOf > 0
+            ? `${String(grade)}/${outOf}`
+            : String(grade);
+      const verdict = correct === true ? 'correct' : correct === false ? 'incorrect' : null;
+      return [mark, verdict].filter(Boolean).join(', ') || null;
+    }
+
+    /**
+     * The reads that exist to record a disclosure. Each says how much was seen, and the log
+     * view says what it was narrowed to, because "the log, filtered to one student" is a
+     * different act from browsing it.
+     */
+    case 'ADMIN_LOGS_VIEWED': {
+      const matched = firstNum(metadata, 'matched');
+      const about = Array.isArray(metadata?.aboutUserIds)
+        ? (metadata.aboutUserIds as unknown[]).length
+        : 0;
+      const parts = [
+        about > 0 ? `narrowed to ${plural(about, 'account')}` : null,
+        str(metadata, 'search') ? `search "${str(metadata, 'search')}"` : null,
+        matched > 0 ? `${matched} matching` : null,
+      ].filter(Boolean);
+      return parts.join(', ') || null;
+    }
+
+    case 'ADMIN_LOGS_EXPORTED': {
+      const rows = firstNum(metadata, 'rows');
+      const fields = Array.isArray(metadata?.fields) ? (metadata.fields as unknown[]).length : 0;
+      return (
+        [
+          rows > 0 ? plural(rows, 'entry', 'entries') : null,
+          fields > 0 ? plural(fields, 'field') : null,
+          metadata?.truncated === true ? 'truncated at the export limit' : null,
+        ]
+          .filter(Boolean)
+          .join(', ') || null
+      );
+    }
+
+    case 'COURSE_ROSTER_VIEWED': {
+      const size = firstNum(metadata, 'rosterSize');
+      return size > 0 ? plural(size, 'person', 'people') : null;
+    }
+
+    case 'LTI_GRADES_PUSH_REQUESTED': {
+      const queued = firstNum(metadata, 'queued');
+      const scope = str(metadata, 'scope') === 'student' ? 'one student' : null;
+      return [scope, queued > 0 ? `${plural(queued, 'grade')} queued` : 'nothing to send']
+        .filter(Boolean)
+        .join(', ');
+    }
+
+    /**
+     * Where a student came from and where they went. A move without the group they left is
+     * the half that cannot answer whose work a group grade used to land on.
+     */
+    case 'GROUP_MEMBERSHIP_ASSIGNED':
+    case 'GROUP_MEMBERSHIP_REMOVED': {
+      const from = str(metadata, 'fromGroupId');
+      const to = str(metadata, 'toGroupId');
+      const move =
+        from && to ? `${from} to ${to}` : to ? `into ${to}` : from ? `out of ${from}` : null;
+      return ['one student', move].filter(Boolean).join(', ');
+    }
+
+    case 'SUBMISSION_FILE_RECEIVED':
+    case 'SUBMISSION_FILE_STORED':
+      return firstStr(metadata, 'originalFileName', 'fileName');
+
+    case 'SUBMISSION_LIMIT_REACHED': {
+      const limit = firstNum(metadata, 'limit', 'maxAttempts');
+      return limit > 0 ? `submission limit reached (${limit})` : 'submission limit reached';
+    }
+
+    case 'SUBMISSION_RATE_LIMITED':
+      return 'resubmitted too quickly';
+
+    case 'SUBMISSION_REJECTED_NOT_OPEN':
+      return 'the assignment is not open yet';
+
+    case 'SUBMISSION_REJECTED_LATE':
+      return 'late submissions are not allowed';
+
+    case 'SUBMISSION_REJECTED_LATE_CUTOFF':
+      return 'the late cutoff has passed';
+
+    case 'SUBMISSION_REJECTED_ARCHIVED':
+      return 'the course is archived';
+
+    case 'SUBMISSION_UNPUBLISHED_ASSIGNMENT':
+      return 'the assignment is unpublished';
+
+    case 'SUBMISSION_NOT_ASSIGNED':
+      return 'this work is not assigned to that student';
+
+    case 'SUBMISSION_FILE_TOO_LARGE': {
+      const file = firstStr(metadata, 'originalFileName', 'fileName');
+      return [file, 'over the upload limit'].filter(Boolean).join(', ');
+    }
+
+    case 'SUBMISSION_FAILED_PERMANENTLY':
+      return 'gave up after the maximum grading attempts';
 
     case 'SYSTEM_RESTORE_POINT_DELETE_REQUESTED':
       return firstStr(metadata, 'version', 'restorePoint');
@@ -807,118 +1422,22 @@ const render = (value: unknown): string => {
  * them, but they sit below the things that answer the question at a glance.
  */
 /**
- * The actions whose names do not turn into a readable verb on their own.
+ * The entry as one line for the detail view: who, what they did, and what to.
  *
- * Kept small on purpose: everything the two rules below handle correctly is left to them, so
- * this list is the exceptions rather than a second copy of the action vocabulary that would
- * have to be kept in step with it.
- */
-const ACTION_PHRASE: Record<string, string> = {
-  LOGIN_SUCCESS: 'signed in',
-  LOGIN_FAILED: 'could not sign in',
-  CLIENT_LOGIN: 'signed in from the desktop client',
-  // No LOGOUT here on purpose: its metadata fragment ("ended a password session") is already
-  // a whole predicate, so a verb in front of it would say the same thing twice.
-  USER_SIGNUP: 'created an account',
-  BULK_ENROLL_USERS: 'enrolled several people',
-  BULK_CREATE_USERS: 'created several accounts',
-  SUBMISSION_RERUN: 're-ran a submission',
-  COURSE_SUBMISSIONS_RERUN: 're-ran submissions',
-  SUBMISSION_STALE_DISCARDED: 'discarded a stale submission',
-  SYSTEM_UPDATE_ROLLED_BACK: 'rolled back a system update',
-  PROBLEM_INVALID_FILE_STRUCTURE: 'uploaded a problem file AFCT could not read',
-};
-
-/** Imperative first words, in the tense a log is read in: it already happened. */
-const PAST_TENSE: Record<string, string> = {
-  ADD: 'added',
-  CHANGE: 'changed',
-  CLEAR: 'cleared',
-  CREATE: 'created',
-  DELETE: 'deleted',
-  DOWNLOAD: 'downloaded',
-  DROP: 'dropped',
-  DUPLICATE: 'duplicated',
-  ENROLL: 'enrolled',
-  GRANT: 'granted',
-  IMPORT: 'imported',
-  REENROLL: 're-enrolled',
-  REMOVE: 'removed',
-  RESET: 'reset',
-  REVOKE: 'revoked',
-  SET: 'set',
-  UNLOCK: 'unlocked',
-  UPDATE: 'updated',
-  VIEW: 'viewed',
-};
-
-/** Past-tense last words that do not end in -ed, so the rule below still recognises them. */
-const IRREGULAR_PAST = new Set(['SENT', 'RUN', 'BUILT', 'MADE', 'LEFT']);
-
-/**
- * An action name said as something a person did: "signed in", "viewed student submission",
- * "updated course".
+ * The same three parts the table shows, in the same order and the same words, because the
+ * detail view is where somebody lands after reading a row and it should not restate the row in
+ * a different vocabulary. It reads as "Charles Xavier · Signed in · AFCT password".
  *
- * Two shapes cover nearly every action AFCT writes. Some are imperative-first
- * (`UPDATE_COURSE`, `VIEW_PROBLEM_FILE`), and those take their verb from {@link PAST_TENSE};
- * the rest are object-first with the verb at the end (`PROBLEM_GRADE_UPDATED`,
- * `TEST_EMAIL_SENT`), and those get the verb moved to the front. Anything neither rule
- * recognises falls back to the action with its underscores removed, which is what the dialog
- * showed before this existed.
- */
-function actionPhrase(action: string): string | null {
-  const known = ACTION_PHRASE[action];
-  if (known) return known;
-
-  const words = action.split('_').filter(Boolean);
-  if (words.length === 0) return null;
-
-  const first = PAST_TENSE[words[0] ?? ''];
-  if (first) {
-    const object = words
-      .slice(1)
-      .map((w) => w.toLowerCase())
-      .join(' ');
-    if (!object) return first;
-    // "created a course", not "created course". Only here, where the action names one thing
-    // being acted on; the object-first family below is a noun phrase that reads worse with an
-    // article in front of it ("viewed an assignment similarity").
-    //
-    // Three things take none: a plural, and an object that starts with a preposition
-    // (`DROP_FROM_COURSE` is "dropped from a course", never "dropped a from course").
-    // "an" goes by SOUND rather than by spelling, which is why `user` and `unit` are excluded:
-    // "an user" is the giveaway that a rule was written against letters.
-    const startsWithPreposition = /^(from|in|into|to|of|for|with|on|at|by)\b/.test(object);
-    const soundsLikeVowel = /^[aeiou]/.test(object) && !/^(us|uni|eu|one)/.test(object);
-    const article =
-      object.endsWith('s') || startsWithPreposition ? '' : soundsLikeVowel ? 'an ' : 'a ';
-    return `${first} ${article}${object}`;
-  }
-
-  const last = words[words.length - 1] ?? '';
-  if (last.endsWith('ED') || IRREGULAR_PAST.has(last)) {
-    return [last, ...words.slice(0, -1)].join(' ').toLowerCase();
-  }
-
-  // Neither shape. Null rather than the action name in lower case: the Action row says that
-  // already, and a "What happened" line that only echoes it is a heading over nothing.
-  return null;
-}
-
-/**
- * The whole entry as one sentence, for the detail view: who did what, and the metadata that
- * gives it meaning.
- *
- * The column version ({@link describeActivity}) is a FRAGMENT on purpose, because it sits in
- * the table beside the action it continues: "LOGIN SUCCESS" then "with an AFCT password". On
- * its own under a "What happened" heading that same fragment is a sentence with its subject
- * and verb missing, which is what this fixes.
+ * This used to build an English sentence, with a past-tense rule and an a/an rule, so that
+ * "with an AFCT password" had a subject and a verb in front of it. That machinery is gone:
+ * the Action column now supplies the verb and the summary now names the object, so composing
+ * them is all that is left to do.
  *
  * The subject is the entry's own actor and never `metadata.userName`. Those are different
  * people whenever an action is done TO somebody: an admin changing a student's email records
- * the student there, and a sentence built from it would name the wrong person as having done
- * it. With no actor (a signed-out request, a scheduled job) the sentence simply starts with
- * the verb rather than inventing a subject.
+ * the student there, and naming them as the actor would be a false statement in an audit
+ * record. With no actor (a signed-out request, a scheduled job) the line simply starts with
+ * the verb.
  */
 export function describeActivitySentence(entry: {
   action: string;
@@ -926,23 +1445,9 @@ export function describeActivitySentence(entry: {
   userDisplayName?: string | null;
   related?: RelatedRecords | null;
 }): string | null {
-  const phrase = actionPhrase(entry.action);
-  const detail = describeActivity(entry.action, entry.metadata, entry.related);
-  if (!phrase && !detail) return null;
-
-  // A fragment that starts with a preposition continues the verb; anything else is a separate
-  // fact and needs the comma, or "updated course, name Intro to Logic" runs together.
-  const joined = !phrase
-    ? detail!
-    : detail
-      ? /^(with|from|to|in|on|as|for|by|about|into|against)\b/i.test(detail)
-        ? `${phrase} ${detail}`
-        : `${phrase}, ${detail}`
-      : phrase;
-
-  const who = entry.userDisplayName?.trim();
-  if (!who) return joined.charAt(0).toUpperCase() + joined.slice(1);
-  return `${who} ${joined}`;
+  const summary = describeActivity(entry.action, entry.metadata, entry.related);
+  const parts = [entry.userDisplayName?.trim() || null, actionLabel(entry.action), summary];
+  return parts.filter(Boolean).join(' · ') || null;
 }
 
 export function formatActivityDetails(entry: {

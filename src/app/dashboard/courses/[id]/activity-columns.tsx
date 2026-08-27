@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { getInitials } from '@/app/utils/initials';
 import { CategoryBadge } from '@/components/ui/category-badge';
+import { actionLabel } from '@/lib/activity-log-summary';
 import { Clock, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
@@ -165,17 +166,6 @@ function MetadataCell({ activity }: { activity: ActivityLog }) {
   );
 }
 
-// Helper functions
-const formatAction = (action: string) => {
-  const formattedAction = action
-    .split('_')
-    .map((word: string) => word.charAt(0) + word.slice(1).toLowerCase())
-    .join(' ');
-
-  // Clean formatting without category prefix
-  return formattedAction;
-};
-
 const formatTimestamp = (timestamp: string) => {
   const date = new Date(timestamp);
   const now = new Date();
@@ -273,7 +263,14 @@ export const getActivityColumns = (timeZone: string): ColumnDef<ActivityLog>[] =
     cell: ({ row }) => {
       const activity = row.original;
 
-      return <div className="text-sm">{formatAction(activity.action)}</div>;
+      // The same verb System Logs shows, from the shared formatter. This had its own
+      // title-casing helper, so the two pages said "Course grades viewed" and "COURSE GRADES
+      // VIEWED" for the same entry; one vocabulary is the point of sharing it.
+      return (
+        <div className="text-sm">
+          {actionLabel(activity.action, activity.metadata as Record<string, unknown> | null)}
+        </div>
+      );
     },
   },
   {

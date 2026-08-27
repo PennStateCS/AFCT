@@ -156,8 +156,9 @@ describe('SystemLogsClient', () => {
     await waitFor(() => {
       expect(screen.getByTestId('table-rows').textContent).toBe('1');
     });
-    // Action cell replaces underscores with spaces.
-    expect(screen.getByText('USER LOGIN')).toBeInTheDocument();
+    // The Action cell shows the display verb. The stored USER_LOGIN is what the row is
+    // filtered, searched and exported by, and it is untouched.
+    expect(screen.getByText('Signed in')).toBeInTheDocument();
     // One Name column, surname first: "Lovelace, Ada". Upper-cased in CSS, so the text node
     // itself stays in ordinary case and this asserts what a screen reader hears.
     expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument();
@@ -215,7 +216,7 @@ describe('SystemLogsClient', () => {
     expect(screen.queryByRole('button', { name: 'Full Log' })).not.toBeInTheDocument();
 
     // Named after the row it belongs to, not just "View full log".
-    const action = screen.getByRole('button', { name: /^View full log for USER LOGIN at / });
+    const action = screen.getByRole('button', { name: /^View full log for Signed in at / });
     fireEvent.click(action);
 
     expect(screen.getByTestId('log-viewer')).toBeInTheDocument();
