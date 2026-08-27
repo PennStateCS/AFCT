@@ -356,6 +356,12 @@ describe('activity columns', () => {
         expect(within(container).getByText('203.0.113.7')).toBeInTheDocument();
       });
 
+      it('names the sentinel the submission worker writes', () => {
+        // Those entries were made by a background job, not by a request from anywhere.
+        const { container } = renderCell('ipAddress', { ...baseRow, ipAddress: 'system' });
+        expect(within(container).getByText('System')).toBeInTheDocument();
+      });
+
       it('renders the loopback address as localhost', () => {
         const { container } = renderCell('ipAddress', { ...baseRow, ipAddress: '::1' });
         expect(within(container).getByText('localhost')).toBeInTheDocument();

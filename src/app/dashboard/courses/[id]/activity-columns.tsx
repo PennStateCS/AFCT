@@ -10,6 +10,7 @@ import { ACTIVITY_SEVERITY_BADGE, ACTIVITY_SEVERITY_FALLBACK } from '@/lib/badge
 import {
   actionLabel,
   describeActivity,
+  displayIpAddress,
   summaryParts,
   SUMMARY_SEPARATOR,
   type RelatedRecords,
@@ -125,9 +126,7 @@ const problemTitle = (activity: ActivityLog): string =>
 
 const getIpAddress = (metadata: Record<string, unknown> | null, activity: ActivityLog) => {
   // Try the direct ipAddress field first (from enhanced schema)
-  if (activity.ipAddress) {
-    return activity.ipAddress === '::1' ? 'localhost' : activity.ipAddress;
-  }
+  if (activity.ipAddress) return displayIpAddress(activity.ipAddress);
 
   // Fallback to metadata for legacy entries
   if (!metadata) return null;
@@ -136,9 +135,7 @@ const getIpAddress = (metadata: Record<string, unknown> | null, activity: Activi
 
   for (const key of ipKeys) {
     const value = metadata[key];
-    if (typeof value === 'string' && value.trim()) {
-      return value === '::1' ? 'localhost' : value;
-    }
+    if (typeof value === 'string' && value.trim()) return displayIpAddress(value);
   }
 
   return null;
@@ -346,9 +343,7 @@ export const getActivityColumns = (
     // The whole header is still in the details dialog.
     cell: ({ row }) => {
       const activity = row.original;
-      const address = getIpAddress(activity.metadata, activity);
-      // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
-      const ip = address ? address.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : null;
+      const ip = getIpAddress(activity.metadata, activity);
       const client = clientDescription(activity.userAgent);
       if (!ip && !client) return '—';
       return (

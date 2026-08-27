@@ -31,6 +31,7 @@ import { LOG_CATEGORIES, LOG_SEVERITIES } from '@/lib/activity-log-values';
 import {
   actionLabel,
   describeActivity,
+  displayIpAddress,
   formatActivityDetails,
   summaryParts,
   SUMMARY_SEPARATOR,
@@ -348,9 +349,7 @@ export default function SystemLogsClient() {
         // "was that really them"; the same address from a phone rather than the lab machine
         // often does. The whole header is still in the full log entry.
         cell: ({ row }: { row: { original: LogRow } }) => {
-          const raw = row.original.ipAddress;
-          // Strip the IPv4-mapped IPv6 prefix for readability (e.g. ::ffff:1.2.3.4).
-          const ip = raw ? raw.replace(/^::ffff:(?=\d{1,3}(?:\.\d{1,3}){3}$)/i, '') : null;
+          const ip = displayIpAddress(row.original.ipAddress);
           const client = clientDescription(row.original.userAgent);
           if (!ip && !client) return '—';
           return (
