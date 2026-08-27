@@ -399,7 +399,7 @@ function BadgePreview() {
         <li>
           Categorical: <Cls>category-slate</Cls> <Cls>category-blue</Cls> <Cls>category-indigo</Cls>{' '}
           <Cls>category-violet</Cls> <Cls>category-green</Cls> <Cls>category-amber</Cls>{' '}
-          <Cls>category-orange</Cls> <Cls>category-rose</Cls>
+          <Cls>category-orange</Cls> <Cls>category-fuchsia</Cls>
         </li>
         <li>
           Metadata: <Cls>secondary</Cls> <Cls>outline</Cls>

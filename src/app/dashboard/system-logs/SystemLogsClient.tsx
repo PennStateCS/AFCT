@@ -290,11 +290,18 @@ export default function SystemLogsClient() {
         // The verb, from the shared formatter. The cell shows "Viewed"; sorting, search,
         // filters and exports still use the stored COURSE_GRADES_VIEWED. Metadata goes in too,
         // since a few verbs depend on which field an update touched.
-        cell: ({ row }: { row: { original: LogRow } }) =>
-          actionLabel(
-            row.original.action || '',
-            row.original.metadata as Record<string, unknown> | null,
-          ),
+        //
+        // Upper-cased in CSS rather than transformed, the same as the User and What happened
+        // columns, so what a screen reader announces and what Copy JSON carries stay in
+        // ordinary case.
+        cell: ({ row }: { row: { original: LogRow } }) => (
+          <span className="uppercase">
+            {actionLabel(
+              row.original.action || '',
+              row.original.metadata as Record<string, unknown> | null,
+            )}
+          </span>
+        ),
       },
       {
         id: 'summary',

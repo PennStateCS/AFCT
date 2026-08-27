@@ -157,8 +157,9 @@ describe('SystemLogsClient', () => {
       expect(screen.getByTestId('table-rows').textContent).toBe('1');
     });
     // The Action cell shows the display verb. The stored USER_LOGIN is what the row is
-    // filtered, searched and exported by, and it is untouched.
-    expect(screen.getByText('Signed in')).toBeInTheDocument();
+    // filtered, searched and exported by, and it is untouched. Upper-cased in CSS, so the text
+    // node stays in ordinary case and Copy JSON carries the entry as stored.
+    expect(screen.getByText('Signed in')).toHaveClass('uppercase');
     // One Name column, surname first: "Lovelace, Ada". Upper-cased in CSS, so the text node
     // itself stays in ordinary case and this asserts what a screen reader hears.
     expect(screen.getByText('Lovelace, Ada')).toBeInTheDocument();

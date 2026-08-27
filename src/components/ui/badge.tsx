@@ -38,7 +38,7 @@ const badgeVariants = cva(
          * Categorical hues. These name a colour, not a state.
          *
          * A `category-green` badge is green so that Problem can be told apart from Course at a
-         * glance; it does not mean success, and `category-rose` does not mean danger. The
+         * glance; it does not mean success, and `category-fuchsia` does not mean danger. The
          * label carries the meaning and the hue only separates neighbours. Keep them out of
          * anything that reports a state: that is what the five semantic variants above are
          * for, and mixing the two is how a red badge starts looking like a failure.
@@ -61,8 +61,8 @@ const badgeVariants = cva(
           'border-badge-category-amber-border bg-badge-category-amber-bg text-badge-category-amber',
         'category-orange':
           'border-badge-category-orange-border bg-badge-category-orange-bg text-badge-category-orange',
-        'category-rose':
-          'border-badge-category-rose-border bg-badge-category-rose-bg text-badge-category-rose',
+        'category-fuchsia':
+          'border-badge-category-fuchsia-border bg-badge-category-fuchsia-bg text-badge-category-fuchsia',
       },
     },
     defaultVariants: {

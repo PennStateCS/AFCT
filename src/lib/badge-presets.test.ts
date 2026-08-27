@@ -60,7 +60,7 @@ describe('roles and categories', () => {
     for (const v of Object.values(ACTIVITY_CATEGORY_BADGE)) {
       expect(isCategorical(v)).toBe(true);
     }
-    expect(ACTIVITY_CATEGORY_BADGE.GRADE).toBe('category-rose');
+    expect(ACTIVITY_CATEGORY_BADGE.GRADE).toBe('category-fuchsia');
   });
 
   it('gives no two categories the same hue, which is the only job the colour has', () => {

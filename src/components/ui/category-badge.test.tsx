@@ -15,7 +15,7 @@ describe('CategoryBadge', () => {
       ['ASSIGNMENT', 'violet'],
       ['PROBLEM', 'green'],
       ['SUBMISSION', 'orange'],
-      ['GRADE', 'rose'],
+      ['GRADE', 'fuchsia'],
     ] as const) {
       const { container, unmount } = render(<CategoryBadge category={category} />);
       expect(classOf(container)).toContain(`badge-category-${hue}`);
@@ -23,12 +23,16 @@ describe('CategoryBadge', () => {
     }
   });
 
-  /** Grade was the last teal in the product, and teal is no longer part of the palette. */
-  it('no longer draws Grade in teal', () => {
+  /**
+   * Grade has twice been the wrong colour: teal, which is the product's own, and then rose,
+   * which sat beside the red severity badges and read as one of them.
+   */
+  it('draws Grade in neither teal nor a red', () => {
     const { container } = render(<CategoryBadge category="GRADE" />);
 
     expect(classOf(container)).not.toContain('teal');
-    expect(classOf(container)).toContain('badge-category-rose');
+    expect(classOf(container)).not.toContain('rose');
+    expect(classOf(container)).toContain('badge-category-fuchsia');
   });
 
   it('falls back to a safe hue for a category invented since this map was written', () => {
