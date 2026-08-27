@@ -29,6 +29,7 @@ type LogRow = {
   category: string | null;
   severity: 'INFO' | 'WARNING' | 'ERROR' | 'SECURITY';
   ipAddress?: string | null;
+  userAgent?: string | null;
 };
 
 // Lightweight DataTable mock: renders each row's rendered cells so we can assert
@@ -223,6 +224,32 @@ describe('SystemLogsClient', () => {
     fireEvent.click(action);
 
     expect(screen.getByTestId('log-viewer')).toBeInTheDocument();
+  });
+
+  /*
+   * The address alone rarely answers "was that really them". The same address from a phone
+   * rather than the lab machine often does, so the browser and platform sit under it.
+   */
+  it('puts the browser and platform under the address', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        rows: [
+          makeRow({
+            ipAddress: '::ffff:1.2.3.4',
+            userAgent:
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0',
+          }),
+        ],
+        total: 1,
+      }),
+    });
+
+    renderWithClient(<SystemLogsClient />);
+
+    // The IPv4-mapped IPv6 prefix is still stripped.
+    expect(await screen.findByText('1.2.3.4')).toBeInTheDocument();
+    expect(screen.getByText('Edge on Windows')).toBeInTheDocument();
   });
 
   it('shows a loading state before the first fetch resolves', () => {
