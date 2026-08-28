@@ -55,6 +55,10 @@ Under the strength and the match type is the count that gives the match its mean
 
 **Read the count before anything else.** Identical work proves nothing on its own: a problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of thirty-eight is worth reading. Fourteen out of thirty-eight is what a correct answer looks like.
 
+**"The files are byte-for-byte identical."** When it appears, this is the plainest statement the page can make: the submitted files are the same, byte for byte, with nothing set aside. Every other line allows for something incidental, whether that is formatting, state names, or where the states were dragged to. This one allows for nothing. When it covers only part of a group it names a number instead ("2 of them submitted byte-for-byte identical files"). It still is not a conclusion: on a grammar or an expression a correct answer really is one line of text, which is why the line is never shown on a **Common answer** card.
+
+The line is absent for work submitted before AFCT started recording it, which reads as "not known" rather than "not identical". If a whole assignment is missing it, ask your administrator to run the fingerprint backfill.
+
 A **Structurally similar** card lists what the submissions actually share, and every line is something you can check against the files yourself:
 
 > - 9 of 10 pieces of local structure are the same, 4 of them uncommon in this class

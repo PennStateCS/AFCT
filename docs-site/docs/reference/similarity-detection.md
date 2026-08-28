@@ -14,11 +14,13 @@ The second rule follows from the first: **the system reports, the instructor dec
 
 | Check | Answers | Where it is computed |
 | --- | --- | --- |
-| Content hash | Is this the same file? | `submissionContentHash`, `lib/similarity/content-hash.ts` |
+| Content hash | Is this the same file, once formatting is set aside? | `submissionContentHash`, `lib/similarity/content-hash.ts` |
 | Shape hash | Is this the same work, drawn differently? | `submissionShapeHash`, same file |
 | Provenance features | Does this share uncommon structure? | `extractProvenanceFeatures`, `lib/similarity/provenance.ts` |
 
-All three are computed **when a file arrives**, in `lib/create-submission.ts`, which is the single choke point both the browser route and `/api/client/v1/submissions` pass through. None of them sits in the grading path: a failure to describe a file means it will not match anything, never that a submission fails.
+A fourth hash, `submissionByteHash`, is not a check: it finds nothing on its own. It is sha256 of the raw upload, and it exists so the tab can say two files are identical byte for byte, which is the only claim here that needs no qualifier. Identical bytes normalise to an identical content hash, so byte-equal work is already grouped by the first check; the byte hash only sharpens what can be said about a group that was found anyway. That is why it has no index and no query of its own.
+
+All three checks are computed **when a file arrives**, in `lib/create-submission.ts`, which is the single choke point both the browser route and `/api/client/v1/submissions` pass through. None of them sits in the grading path: a failure to describe a file means it will not match anything, never that a submission fails.
 
 The first two are also computed over a problem's reference solution when it is uploaded or replaced (`api/courses/[id]/problems/route.ts` and `[pid]/route.ts`), which is how a match can say it is simply the posted answer.
 
@@ -28,6 +30,7 @@ The first two are also computed over a problem's reference solution when it is u
 | --- | --- |
 | `Submission.contentHash` | sha256 of the normalised `<structure>` element |
 | `Submission.shapeHash` | sha256 of the machine with layout, names and ordering removed |
+| `Submission.byteHash` | sha256 of the upload exactly as it arrived, nothing normalised |
 | `Submission.provenanceFeatures` | A small versioned description; see below |
 | `Problem.answerContentHash`, `Problem.answerShapeHash` | The same two hashes over the reference solution |
 
@@ -49,7 +52,7 @@ Indexed on `(problemId, contentHash)` and `(problemId, shapeHash)`. Nothing stor
 
 ## Matching happens at read time
 
-`findSubmissionMatches` (`lib/similarity/matches.ts`) runs when staff open the tab, not during grading. It groups on the shape hash within a problem, records which submissions inside a group are byte-identical, then runs the provenance check over the pairs the first two left behind.
+`findSubmissionMatches` (`lib/similarity/matches.ts`) runs when staff open the tab, not during grading. It groups on the shape hash within a problem, records which submissions inside a group share their normalised contents (`identicalStudentCount`) and which are identical byte for byte (`byteIdenticalStudentCount`), then runs the provenance check over the pairs the first two left behind.
 
 Rules it applies, all of which have tests:
 
@@ -57,6 +60,7 @@ Rules it applies, all of which have tests:
 - **Group assignments.** A group whose submissions all belong to one student group is dropped: every member's submit writes its own row against the shared set, so a team matching itself is the group feature working.
 - **A student's own attempts are never paired with each other.**
 - **No repeats.** A pair already matched by content or shape is not reported again as a near match.
+- **A missing byte hash is not a match.** Rows stored before the column existed have none, and they are counted separately rather than bucketed together, so "byte-for-byte identical" is never said about files nobody hashed. `scripts/backfill-content-hashes.mjs` fills them in.
 
 ## The provenance check
 
