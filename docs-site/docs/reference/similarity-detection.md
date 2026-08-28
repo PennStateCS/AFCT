@@ -33,6 +33,7 @@ The first two are also computed over a problem's reference solution when it is u
 | `Submission.byteHash` | sha256 of the upload exactly as it arrived, nothing normalised |
 | `Submission.provenanceFeatures` | A small versioned description; see below |
 | `Problem.answerContentHash`, `Problem.answerShapeHash` | The same two hashes over the reference solution |
+| `Submission.evaluatedAt` | When grading finished, so "already marked correct" is a claim about the result and not about the attempt |
 
 Indexed on `(problemId, contentHash)` and `(problemId, shapeHash)`. Nothing stores a score, and nothing stores a verdict.
 
@@ -61,13 +62,15 @@ Rules it applies, all of which have tests:
 - **A student's own attempts are never paired with each other.**
 - **No repeats.** A pair already matched by content or shape is not reported again as a near match.
 - **A missing byte hash is not a match.** Rows stored before the column existed have none, and they are counted separately rather than bucketed together, so "byte-for-byte identical" is never said about files nobody hashed. `scripts/backfill-content-hashes.mjs` fills them in.
+- **Reuse after passing is measured from `evaluatedAt`, not `submittedAt`.** The claim is that a result already existed, so it is timed from when the result landed. An attempt with no recorded result time makes no claim; `scripts/backfill-evaluated-at.mjs` recovers it from the evaluation entries in the activity log. A near match never claims reuse at all: the two submissions are not copies of each other, so whatever passed is not what was submitted.
+- **A building block is not part of the machine that holds it.** A Turing machine's `<block>` carries an automaton of its own whose ids restart at zero, so `machineElements` (`lib/similarity/jff-elements.ts`) keeps those states and transitions out of the top-level counts, ids, geometry and shape hash. The blocks are described separately, by `blockFeatures` and by the `b:` lines in the shape hash, so two machines differing only inside a block still hash differently.
 
 ## The provenance check
 
 `findNearMatches` (`lib/similarity/near-matches.ts`) is a pure function over rows already loaded, so it is testable without a database.
 
 1. Count how many **students** hold each feature, once each however many times they submitted.
-2. Discard anything held by more than `FEATURE_COMMON_SHARE` of them (0.25), and anything only one student holds: it cannot be shared, so it is evidence about nobody, and being the rarest thing in the problem it would otherwise dominate the denominator in step 5 and penalise a submission for being distinctive.
+2. Discard anything held by `FEATURE_COMMON_SHARE` of them or more (0.25, the same inclusive boundary `isCommon` applies to a whole answer), and anything only one student holds: it cannot be shared, so it is evidence about nobody, and being the rarest thing in the problem it would otherwise dominate the denominator in step 5 and penalise a submission for being distinctive.
 3. Index the survivors; candidate pairs come only from sharing one, never from comparing everybody with everybody.
 4. Reject a pair whose sizes differ by more than `MAX_SIZE_DIFFERENCE_SHARE` (0.4). Two versions of one file differ by a state or two; machines of very different sizes are two machines however much skeleton they share.
 5. Score a pair by the summed rarity weight of its shared features, measured against the smaller of the two.
@@ -91,9 +94,10 @@ What seeded demo data already shows: with twenty students and machines of three 
 
 Everything the tab decides about *display* lives in `lib/similarity/evidence.ts`, as pure functions over what the API returns. Nothing there touches the detector.
 
-- `matchTypeOf` maps a group to one of `exact`, `same-machine`, `structural` or `common`. Commonality is checked first: past the threshold it is convergence whatever the files look like.
-- `STRENGTH_OF` maps that to the word shown on the card. It grades the artifact evidence, never the likelihood of misconduct, and `common` sits outside the scale rather than at the bottom of it.
+- `matchTypeOf` maps a group to one of `exact`, `same-machine`, `structural`, `reference` or `common`. Commonality is checked first: past the threshold it is convergence whatever the files look like. Work matching the problem's own posted solution is `reference`, because everyone handed that file has the same artifact and how alike the artifacts are measures the handout rather than the students.
+- `STRENGTH_OF` maps that to the word shown on the card. It grades the artifact evidence, never the likelihood of misconduct, and `reference` and `common` sit outside the scale rather than at the bottom of it. `isSetAside` is the pair of them: still shown, still openable, kept out of the review queue and out of the tab's badge count.
 - `clusterMatches` runs union-find over shared students, per problem, so four students who all share work are one card rather than six. Common groups are never folded into a cluster of findings. Relationships stay on the cluster and are rendered behind one control.
+- **A group of more than one relationship makes no claim about all of its students.** They were gathered by being connected to somebody, not by all sharing one thing, so the heading reads "3 of 38 students are connected by 2 similarity relationships" and the kinds are listed underneath. `matchesAnswerFile` on a cluster means every relationship in it is the posted solution; a partial one is stated as a count instead.
 - `compareClusters` orders the page: match type first, then reuse after passing, then size, then recency.
 
 The card and its parts are `SimilarityMatchCard`, `SimilarityEvidenceBadge`, `SimilarityInfoPopover`, `SimilarityTimeline` and `SimilarityFilters`. The popover copy is the feature's explanation of itself and is worth as much care as the code.

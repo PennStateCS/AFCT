@@ -43,7 +43,10 @@ Every card leads with how strong the file evidence is, as a word and an icon:
 | **Very strong** | Exact JFLAP artifact | Everyone in the group saved the same artifact, layout and all |
 | **Strong** | Same machine | The same machine, with different state names or positions |
 | **Possible** | Structurally similar | Not the same machine, but sharing structure the rest of the class does not |
-| **Expected** | Common answer | Enough of the class submitted this that it reads as the answer |
+| (none) | Instructor reference solution | The work is the solution you posted for the problem |
+| (none) | Common answer | Enough of the class submitted this that it reads as the answer |
+
+The last two carry no strength on purpose. Everybody holding the file you posted has the same artifact by definition, and enough of a class submitting the same right answer is what a right answer looks like, so neither is evidence about a student. Both are still shown, under **Set aside** at the foot of the page, and neither is counted on the tab's badge.
 
 The strength describes the files and nothing else. It is not a probability that anyone copied anything, and it is deliberately not a traffic light: a **Very strong** match on a two-state machine still needs your judgement, and a **Possible** one can matter a great deal alongside what you already know.
 
@@ -52,6 +55,8 @@ The **?** button on each card explains that card's match type in a sentence or t
 ### What is on a card
 
 Under the strength and the match type is the count that gives the match its meaning, for example "2 of 38 students submitted the same saved machine". On a problem with no drawing it reads the same way about the saved grammar. Beside the count are the size of the work and how far apart in time the closest two submissions were.
+
+A group holding more than one relationship says something more careful: "3 of 38 students are connected by 2 similarity relationships", with the kinds listed underneath. That is deliberate. Students are gathered into one group by being connected to somebody in it, not by all sharing the same thing, so where you and I sent the same file and you and a third student only share structure, the group cannot say all three of us submitted the same machine. Open the relationships to see who shares what.
 
 **Read the count before anything else.** Identical work proves nothing on its own: a problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of thirty-eight is worth reading. Fourteen out of thirty-eight is what a correct answer looks like.
 
@@ -78,11 +83,11 @@ The row of filters at the top narrows the page to one kind of match, each with i
 
 ### Statuses
 
-**Reused after passing.** The identical work had already been marked correct for another student when it was submitted again. That is the pattern a large course is most likely to miss: submit, watch the autograder award full marks, pass the file on. It appears as a badge beside the match type and is counted in the opening line, and it lifts a group above its equals rather than above stronger evidence. It remains a statement of what happened and in what order, not a conclusion.
+**Reused after passing.** The same work had already been **marked correct** for another student when it was submitted again, timed from when that result landed rather than from when the earlier student submitted. Those are different moments: grading takes as long as it takes, and only the first one supports the sentence. Work graded before AFCT began recording result times makes no such claim, and a **Structurally similar** card never makes it at all, because those two submissions are not copies of each other. That is the pattern a large course is most likely to miss: submit, watch the autograder award full marks, pass the file on. It appears as a badge beside the match type and is counted in the opening line, and it lifts a group above its equals rather than above stronger evidence. It remains a statement of what happened and in what order, not a conclusion.
 
-**Matches the instructor reference solution.** The work is the problem's own answer file. Anyone holding that file has this work by definition, so the match says nothing on its own.
+**Matches the instructor reference solution.** The work is the problem's own answer file. Anyone holding that file has this work by definition, so the match says nothing on its own, and a group that is entirely your posted solution is set aside rather than ranked as evidence. Where only part of a group is your solution, the card says how many of its relationships that covers instead of tagging everybody in it.
 
-**Common answer.** Work shared by at least a quarter of a problem's students is treated as the expected answer, collected at the bottom of the page under **Common answers**, and collapsed. Nothing in that section is drawn until you open it. Not hidden, only set aside: less useful, not more serious.
+**Common answer.** Work shared by at least a quarter of a problem's students is treated as the expected answer, collected at the bottom of the page under **Set aside** with the reference-solution groups, and collapsed. Nothing in that section is drawn until you open it. Not hidden, only set aside: less useful, not more serious.
 
 ### The common threshold
 
