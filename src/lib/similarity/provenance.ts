@@ -16,6 +16,7 @@
 
 import { DOMParser } from '@xmldom/xmldom';
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom';
+import { childrenNamed, machineElements } from './jff-elements';
 
 /** Bump when the meaning of any feature changes, so old rows can be told apart. */
 export const PROVENANCE_FEATURE_VERSION = 1;
@@ -91,15 +92,13 @@ const toState = (state: XmlElement): StateInfo => ({
   label: text(state, 'label'),
 });
 
-/** Direct children only: a Turing machine's blocks hold automata of their own. */
-function childrenNamed(parent: XmlElement, tag: string): XmlElement[] {
-  return Array.from(parent.childNodes ?? []).filter(
-    (node): node is XmlElement => (node as XmlElement).nodeName === tag,
-  );
-}
-
+/**
+ * The machine's own states. A building block's inner states are described separately by
+ * `blockFeatures`; counting them here would inflate the size, and their ids start again at
+ * zero, so they would also collide with the top-level ones and invent shared topology.
+ */
 function readStates(doc: XmlDocument): StateInfo[] {
-  return Array.from(doc.getElementsByTagName('state')).map(toState);
+  return machineElements(doc, 'state').map(toState);
 }
 
 const toTransition = (transition: XmlElement): TransitionInfo => {
@@ -122,8 +121,9 @@ const toTransition = (transition: XmlElement): TransitionInfo => {
   };
 };
 
+/** The machine's own transitions, on the same rule as the states above. */
 function readTransitions(doc: XmlDocument): TransitionInfo[] {
-  return Array.from(doc.getElementsByTagName('transition')).map(toTransition);
+  return machineElements(doc, 'transition').map(toTransition);
 }
 
 /**
