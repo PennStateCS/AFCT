@@ -1239,6 +1239,7 @@ erDiagram
   String studentGroupId FK "nullable"
   SubmissionStatus status
   DateTime submittedAt
+  DateTime evaluatedAt "nullable"
   Int attempts
   String processingToken "nullable"
 }
@@ -1441,6 +1442,16 @@ Properties as follows:
 - `studentGroupId`: The group the work counts for, on a group assignment.
 - `status`: Where the attempt is: waiting, being graded, finished or failed.
 - `submittedAt`: When the student sent the attempt.
+- `evaluatedAt`
+  > When grading finished and this attempt's result became readable, set in the same write
+  > that lands the result and cleared whenever the result is cleared for a rerun.
+  >
+  > `submittedAt` cannot answer this. The Similarity tab says a student submitted work that
+  > had ALREADY been marked correct for somebody else, and that is a claim about when the
+  > earlier result existed, not about when the earlier attempt was sent: an evaluation that
+  > takes four minutes would otherwise make anybody submitting in those four minutes look
+  > like they had seen the mark. Empty for a submission that has never reached a result, and
+  > for anything graded before this column existed, which reads as "not known".
 - `attempts`: How many times grading has been tried for this attempt.
 - `processingToken`
   > Who owns this row while it is being evaluated: a fresh random value on every claim,
@@ -1694,6 +1705,7 @@ erDiagram
   String studentGroupId FK "nullable"
   SubmissionStatus status
   DateTime submittedAt
+  DateTime evaluatedAt "nullable"
   Int attempts
   String processingToken "nullable"
 }

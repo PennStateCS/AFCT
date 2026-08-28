@@ -54,6 +54,8 @@ export const POST = withCourseAuth(
           status: 'PENDING',
           feedback: null,
           correct: null,
+          // The old result is gone, so the time it landed is gone with it.
+          evaluatedAt: null,
           attempts: 0,
           processingToken: null,
         },
