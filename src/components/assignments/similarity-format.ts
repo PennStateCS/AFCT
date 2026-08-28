@@ -72,6 +72,30 @@ export function sizeLabel(cluster: {
   return `${states} · ${cluster.transitionCount} transition${cluster.transitionCount === 1 ? '' : 's'}`;
 }
 
+/**
+ * The strongest thing the detector can say about two files, when it can say it: their bytes
+ * are the same. Null when it cannot.
+ *
+ * Every other check normalises something away first, so every other line needs a qualifier
+ * ("once formatting is set aside", "with cosmetic differences"). This one needs none, which
+ * is the whole reason it is worth a line of its own.
+ *
+ * Never said of a common answer. On a grammar or an expression the expected answer is
+ * routinely byte-identical across half the class, and putting the strongest wording on a card
+ * the page has already set aside is exactly the overclaim the commonality rule prevents. Also
+ * never said when the count is 1, which covers both "no two agree" and "these were submitted
+ * before the file was hashed": the page has no way to tell those apart, so it says nothing.
+ */
+export function byteIdenticalLine(cluster: MatchCluster): string | null {
+  if (cluster.type === 'common') return null;
+  const identical = cluster.byteIdenticalStudentCount;
+  if (identical < 2) return null;
+
+  return identical >= cluster.students.length
+    ? 'The files are byte-for-byte identical.'
+    : `${identical} of them submitted byte-for-byte identical files.`;
+}
+
 /** The one line under the heading of a cluster: who, how many, and of how many. */
 export function clusterHeadline(cluster: MatchCluster): string {
   const students = cluster.students.length;
@@ -99,7 +123,12 @@ export function clusterHeadline(cluster: MatchCluster): string {
 export function clusterDetails(cluster: MatchCluster): string[] {
   const lines: string[] = [];
 
+  const byteLine = byteIdenticalLine(cluster);
+
   if (cluster.type === 'exact') {
+    // Strongest first: if the bytes agree there is nothing to qualify, and the lines below
+    // are the weaker version of the same statement.
+    if (byteLine) lines.push(byteLine);
     // A grammar or an expression has no drawing to agree on, so saying the coordinates
     // match would be describing something that does not exist.
     lines.push(
@@ -119,7 +148,11 @@ export function clusterDetails(cluster: MatchCluster): string[] {
     const exact = cluster.relationships.filter(
       (group) => group.identicalStudentCount > 1 && group.kind === 'same-work',
     ).length;
-    if (exact > 0) {
+    // The byte line replaces the content-level one rather than joining it: two adjacent
+    // sentences saying nearly the same thing at different strictness is worse than either.
+    if (byteLine) {
+      lines.push(byteLine);
+    } else if (exact > 0) {
       lines.push(`Some of them submitted the identical saved artifact.`);
     }
   }
@@ -161,6 +194,12 @@ export function clusterFacts(cluster: MatchCluster): string[] {
 
   const size = sizeLabel(cluster);
   if (size) facts.push(size);
+
+  // The card only shows `clusterDetails` for a cluster holding one relationship, so without
+  // this the byte line would be missing from exactly the multi-student groups most worth
+  // reading. Stated without the full stop, like the other facts.
+  const byteLine = byteIdenticalLine(cluster);
+  if (byteLine) facts.push(byteLine.replace(/\.$/, ''));
 
   const gap = gapLabel(cluster.closestGapMs);
   if (gap) facts.push(`The closest two submissions were ${gap} apart`);

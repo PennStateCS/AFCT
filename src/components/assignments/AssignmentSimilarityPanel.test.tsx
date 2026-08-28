@@ -70,6 +70,7 @@ const group = (over: Record<string, unknown> = {}) => ({
   studentCount: 2,
   problemStudentCount: 84,
   identicalStudentCount: 2,
+  byteIdenticalStudentCount: 1,
   closestGapMs: 7 * 60 * 1000,
   reusedAfterPass: false,
   matchesAnswerFile: false,

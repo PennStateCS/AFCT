@@ -46,8 +46,10 @@ export type MatchSubmission = {
   fileName: string | null;
   originalFileName: string | null;
   /**
-   * Short handle for the exact file. Two submissions in a match sharing this are byte for
-   * byte the same; two that differ are the same machine drawn differently.
+   * Short handle for the file's normalised contents. Two submissions in a match sharing this
+   * are the same file once formatting is set aside; two that differ are the same machine
+   * drawn differently. Whether the raw bytes agree is a stricter question, answered for the
+   * group as a whole by `byteIdenticalStudentCount`.
    */
   contentKey: string;
   student: MatchStudent;
@@ -81,11 +83,24 @@ export type SubmissionMatchGroup = {
   /** How many different students have submitted this problem at all: the denominator. */
   problemStudentCount: number;
   /**
-   * The largest number of students in this match who submitted the byte-identical file.
-   * Equal to `studentCount` when the whole match is one file, and 1 when every student's
-   * file differs in some incidental way.
+   * The largest number of students in this match who submitted the same file once formatting
+   * is set aside. Equal to `studentCount` when the whole match is one file, and 1 when every
+   * student's file differs in some incidental way.
    */
   identicalStudentCount: number;
+  /**
+   * The largest number of students in this match whose files are identical byte for byte,
+   * nothing normalised away.
+   *
+   * The strictest thing the detector can say, and the only one that needs no qualifier: not
+   * "the same work", not "the same file once formatting is set aside", the same bytes. Always
+   * at most `identicalStudentCount`, because identical bytes normalise to identical contents.
+   *
+   * 1 when no two agree AND when nobody's file has been hashed yet, which is every submission
+   * stored before the column existed. The page has no way to tell those apart, so it says
+   * nothing rather than guessing; a backfill is what turns the old rows into an answer.
+   */
+  byteIdenticalStudentCount: number;
   /**
    * The shortest time between two different students submitting this same content, in
    * milliseconds. Context, not a verdict: six minutes apart reads differently from three
@@ -93,8 +108,8 @@ export type SubmissionMatchGroup = {
    */
   closestGapMs: number | null;
   /**
-   * A student submitted the byte-identical file AFTER another student's copy of it had
-   * already been marked correct.
+   * A student submitted the same file AFTER another student's copy of it had already been
+   * marked correct.
    *
    * This is the shape of the thing a large course is most likely to miss: submit, see the
    * autograder say full marks, pass the file on. It is still not a verdict, and the reader
@@ -203,6 +218,7 @@ export async function findSubmissionMatches(
       problemId: true,
       contentHash: true,
       shapeHash: true,
+      byteHash: true,
       assignmentId: true,
       submittedAt: true,
       correct: true,
@@ -228,6 +244,11 @@ export async function findSubmissionMatches(
   // Distinct students per exact file within a match, for the "and these two are the same
   // file" claim the group carries.
   const studentsPerContentInGroup = new Map<string, Map<string, Set<string>>>();
+  // The same, one step stricter: distinct students per raw file. Keyed only where a byte hash
+  // exists. A submission stored before the column did have a null one, and bucketing those
+  // together under a shared placeholder the way the content map does would report unhashed
+  // files as identical, which is precisely the overclaim this check exists to remove.
+  const studentsPerByteInGroup = new Map<string, Map<string, Set<string>>>();
 
   for (const submission of submissions) {
     const shapeKey = submission.shapeHash ?? `exact-${submission.contentHash}`;
@@ -253,6 +274,7 @@ export async function findSubmissionMatches(
         studentCount: students.size,
         problemStudentCount: studentsPerProblem.get(submission.problemId)?.size ?? 0,
         identicalStudentCount: 1,
+        byteIdenticalStudentCount: 1,
         closestGapMs: null,
         reusedAfterPass: false,
         matchesAnswerFile:
@@ -282,6 +304,14 @@ export async function findSubmissionMatches(
     sameFile.add(submission.studentId);
     perContent.set(submission.contentHash ?? '', sameFile);
     studentsPerContentInGroup.set(key, perContent);
+
+    if (submission.byteHash) {
+      const perByte = studentsPerByteInGroup.get(key) ?? new Map<string, Set<string>>();
+      const sameBytes = perByte.get(submission.byteHash) ?? new Set<string>();
+      sameBytes.add(submission.studentId);
+      perByte.set(submission.byteHash, sameBytes);
+      studentsPerByteInGroup.set(key, perByte);
+    }
 
     const owners = groupOwners.get(key) ?? new Set<string | null>();
     owners.add(submission.studentGroupId);
@@ -313,6 +343,10 @@ export async function findSubmissionMatches(
     group.identicalStudentCount = Math.max(
       1,
       ...[...(studentsPerContentInGroup.get(key)?.values() ?? [])].map((set) => set.size),
+    );
+    group.byteIdenticalStudentCount = Math.max(
+      1,
+      ...[...(studentsPerByteInGroup.get(key)?.values() ?? [])].map((set) => set.size),
     );
     reportable.push(group);
   }
@@ -386,12 +420,13 @@ type TimedSubmission = {
 };
 
 /**
- * Did somebody submit the byte-identical file after another student's copy had already been
- * marked correct?
+ * Did somebody submit the same file after another student's copy had already been marked
+ * correct?
  *
- * Byte-identical, not merely the same work: the claim is that this exact file had already
- * been shown to pass, which is only true of the file itself. Ordering alone, with no gap
- * limit: a file passed along a week later is the same act as one passed along in the corridor.
+ * Keyed on the contents rather than the raw bytes, and deliberately: the claim is that this
+ * work had already been shown to pass, which grading decides from the contents, and a file
+ * saved again by JFLAP is the same file for this purpose. Ordering alone, with no gap limit:
+ * a file passed along a week later is the same act as one passed along in the corridor.
  */
 function wasReusedAfterPassing(times: TimedSubmission[]): boolean {
   return times.some((later) =>
@@ -517,8 +552,12 @@ async function findNearMatchGroups(
         },
         studentCount: 2,
         problemStudentCount: studentsInProblem,
-        // Neither is the other's file; that is what makes this the third check.
+        // Neither is the other's file; that is what makes this the third check. The byte
+        // count is 1 for the same reason and can never be anything else: identical bytes
+        // normalise to identical contents, so byte-equal work is grouped by the first two
+        // checks and never reaches this one.
         identicalStudentCount: 1,
+        byteIdenticalStudentCount: 1,
         closestGapMs: Math.abs(
           near.a.submittedAt.getTime() - near.b.submittedAt.getTime(),
         ),

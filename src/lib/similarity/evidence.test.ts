@@ -38,6 +38,7 @@ const group = (over: Partial<SubmissionMatchGroup> = {}): SubmissionMatchGroup =
     transitionCount: 17,
     problem: { id: 'p1', title: 'Ends in 01', type: 'FA' },
     studentCount: 2,
+    byteIdenticalStudentCount: 1,
     problemStudentCount: 84,
     identicalStudentCount: 2,
     closestGapMs: 7 * 60 * 1000,

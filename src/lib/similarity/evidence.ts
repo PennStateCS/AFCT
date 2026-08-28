@@ -76,6 +76,12 @@ export type MatchCluster = {
   type: MatchType;
   strength: EvidenceStrength;
   counts: Record<Exclude<MatchType, 'common'>, number>;
+  /**
+   * The most students anywhere in this group whose files are identical byte for byte. 1 when
+   * no two are, and also 1 when nobody's file has been hashed yet, so the page says nothing
+   * rather than guessing.
+   */
+  byteIdenticalStudentCount: number;
   problemStudentCount: number;
   reusedAfterPass: boolean;
   matchesAnswerFile: boolean;
@@ -201,6 +207,9 @@ function buildCluster(
     type,
     strength: STRENGTH_OF[type],
     counts,
+    byteIdenticalStudentCount: Math.max(
+      ...ranked.map((group) => group.byteIdenticalStudentCount),
+    ),
     problemStudentCount: first.problemStudentCount,
     reusedAfterPass: ranked.some((group) => group.reusedAfterPass),
     matchesAnswerFile: ranked.some((group) => group.matchesAnswerFile),

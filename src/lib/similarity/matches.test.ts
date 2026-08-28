@@ -22,6 +22,8 @@ const submission = (over: Record<string, unknown>) => ({
   problemId: 'p1',
   contentHash: 'hash-a',
   shapeHash: 'shape-a',
+  // Null by default, which is what every submission stored before the column existed has.
+  byteHash: null,
   assignmentId: 'a1',
   submittedAt: new Date('2026-08-14T12:00:00Z'),
   correct: null,
@@ -300,7 +302,7 @@ describe('findSubmissionMatches', () => {
     expect(group?.submissions.map((s) => s.contentKey)).toEqual(['hash-a', 'hash-mov']);
   });
 
-  it('says how many of a match submitted the byte-identical file', async () => {
+  it('says how many of a match submitted the same file once formatting is set aside', async () => {
     prismaMock.submission.groupBy.mockResolvedValue([
       { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
       { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
@@ -316,6 +318,46 @@ describe('findSubmissionMatches', () => {
 
     expect(group?.studentCount).toBe(3);
     expect(group?.identicalStudentCount).toBe(2);
+  });
+
+  it('says how many of a match are identical byte for byte', async () => {
+    // All three saved the same work; two of them saved the same bytes. The third differs only
+    // in the ways the exact fingerprint is built to ignore, which is why the two counts differ.
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's3' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1'), byteHash: 'bytes-a' }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2'), byteHash: 'bytes-a' }),
+      submission({ id: 'sub-3', studentId: 's3', student: student('s3'), byteHash: 'bytes-b' }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.identicalStudentCount).toBe(3);
+    expect(group?.byteIdenticalStudentCount).toBe(2);
+    // Identical bytes are identical contents, so the strict count can never exceed the other.
+    expect(group?.byteIdenticalStudentCount).toBeLessThanOrEqual(group?.identicalStudentCount ?? 0);
+  });
+
+  it('claims nothing about bytes for submissions that were never hashed', async () => {
+    // Rows from before the column existed. Bucketing their missing hashes together would
+    // report them as the same file, which is the overclaim the check exists to remove.
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1') }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2') }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.identicalStudentCount).toBe(2);
+    expect(group?.byteIdenticalStudentCount).toBe(1);
   });
 
   it('still matches a regular expression, which has no shape to speak of', async () => {
