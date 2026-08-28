@@ -801,7 +801,7 @@ export interface paths {
         };
         /**
          * List an assignment's problems
-         * @description Lists an assignment's problems, tagged with whether the caller has solved each  (a correct submission) and their grade. All problems are visible. Course faculty  or a system admin (TAs excluded).
+         * @description Lists an assignment's problems, tagged with whether the caller has solved each  (a correct submission) and their grade. All problems are visible. Course staff  (faculty or TAs) or a system admin: the doc used to say TAs were excluded, but the  gate is `canManageCourse` with its default roles and always admitted them, which is  also the rule everywhere else (TAs share faculty's course-scoped reads).
          *
          *     **Auth:** required
          *
@@ -5559,8 +5559,17 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not signed in, or not course faculty / a system admin (TAs excluded). */
+            /** @description Not signed in. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
