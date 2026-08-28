@@ -58,13 +58,16 @@ export const GET = withAssignmentAuth<Ctx>(
           },
         ]),
       );
-      const groups = await findSubmissionMatches([...problems.keys()], problems);
+      // The badge asks for counts only. Same matching, same classification, same threshold;
+      // it just does not pay for the attempt numbers that only a rendered card shows.
+      const countOnly = new URL(req.url).searchParams.get('part') === 'count';
+      const groups = await findSubmissionMatches([...problems.keys()], problems, { countOnly });
 
       // `?part=count` answers the tab badge: how many matches there are, without who they
       // are. Deliberately not logged, because nothing about a student is disclosed by a
       // number, and the assignment page would otherwise write an access entry every time
       // anybody opened any tab.
-      if (new URL(req.url).searchParams.get('part') === 'count') {
+      if (countOnly) {
         // `notable` counts what the page counts: groups of related students, not pairs.
         // Nineteen pairs between six sets of students is six things to read, and a badge
         // saying nineteen next to a page saying six is a badge nobody trusts. The reader's

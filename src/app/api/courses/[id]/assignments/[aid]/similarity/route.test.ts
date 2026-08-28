@@ -17,6 +17,8 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { GET } from './route';
+import { clusterMatches, isSetAside } from '@/lib/similarity/evidence';
+import { COMMON_SHARE } from '@/lib/similarity/rarity';
 
 const req = () => new Request('http://localhost/api/courses/c1/assignments/a1/similarity');
 const ctx = () => ({ params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
@@ -151,6 +153,9 @@ describe('GET /api/courses/[id]/assignments/[aid]/similarity', () => {
         assignmentId: 'a1',
         submittedAt: new Date('2026-08-14T12:00:00Z'),
         correct: true,
+        // The mark existed before the second student submitted, which is what the reuse
+        // count is about.
+        evaluatedAt: new Date('2026-08-14T12:05:00Z'),
         fileName: 'stored.jff',
         originalFileName: 'answer.jff',
         studentId: 's1',
@@ -166,6 +171,7 @@ describe('GET /api/courses/[id]/assignments/[aid]/similarity', () => {
         assignmentId: 'a1',
         submittedAt: new Date('2026-08-14T12:30:00Z'),
         correct: true,
+        evaluatedAt: new Date('2026-08-14T12:35:00Z'),
         fileName: 'stored2.jff',
         originalFileName: 'mine.jff',
         studentId: 's2',
@@ -265,6 +271,48 @@ describe('GET /api/courses/[id]/assignments/[aid]/similarity', () => {
 
     expect(body.matches).toBe(2);
     expect(body.notable).toBe(1);
+
+    // And the badge agrees with the page it points at: the same relationships come back from
+    // the full request, and clustering them under the same default threshold gives the same
+    // one group. A count produced by a cheaper rule of its own could drift from this.
+    const groups = await (await call()).json();
+    expect(groups).toHaveLength(body.matches);
+    expect(clusterMatches(groups, COMMON_SHARE).filter((c) => !isSetAside(c.type))).toHaveLength(
+      body.notable,
+    );
+  });
+
+  it('sets aside a common answer in the badge count as well as on the page', async () => {
+    // Two of three students, which is past the default threshold: expected work, not a
+    // finding, and the badge must not advertise it.
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+      { problemId: 'p1', shapeHash: 'shape-b', contentHash: 'hash-b', studentId: 's3' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue(
+      ['s1', 's2'].map((studentId, index) => ({
+        id: `sub-${index}`,
+        problemId: 'p1',
+        contentHash: 'hash-a',
+        shapeHash: 'shape-a',
+        assignmentId: 'a1',
+        submittedAt: new Date(`2026-08-14T1${index}:00:00Z`),
+        correct: false,
+        evaluatedAt: null,
+        fileName: `stored-${index}.jff`,
+        originalFileName: 'mine.jff',
+        studentId,
+        studentGroupId: null,
+        student: student(studentId),
+        studentGroup: null,
+      })),
+    );
+
+    const body = await (await callCount()).json();
+
+    expect(body.matches).toBe(1);
+    expect(body.notable).toBe(0);
   });
 
   it('writes no access entry for a count, which discloses nobody', async () => {
