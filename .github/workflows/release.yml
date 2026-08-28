@@ -72,7 +72,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout (tagged commit)
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
         with:
           # The two commits CI makes to main (this one and the image pin) are pushed with
           # these persisted credentials. Once main requires pull requests, GITHUB_TOKEN is
@@ -89,13 +89,13 @@ jobs:
           fetch-depth: 0
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Login to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -105,7 +105,7 @@ jobs:
       # tag string the updater writes to AFCT_APP_TAG and the entry in versions.json.
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/pennstatecs/afct-dashboard
           tags: |
@@ -118,7 +118,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: docker/Dockerfile
@@ -131,7 +131,7 @@ jobs:
       # Sidecars, versioned in lockstep with the app so an upgrade moves the whole
       # stack. Each gets the same immutable :vX.Y.Z tag as the dashboard image.
       - name: Build and push nginx image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: docker/nginx
           push: true
@@ -140,7 +140,7 @@ jobs:
           tags: ghcr.io/pennstatecs/afct-nginx:${{ github.ref_name }}
 
       - name: Build and push backup image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: docker/backup
           push: true
@@ -149,7 +149,7 @@ jobs:
           tags: ghcr.io/pennstatecs/afct-backup:${{ github.ref_name }}
 
       - name: Build and push updater image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: docker/updater
           push: true
@@ -306,7 +306,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout (tagged commit)
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
       - name: Install shellcheck + jq
         run: sudo apt-get update && sudo apt-get install -y shellcheck jq
       - name: Build and verify the Linux deployment bundle
@@ -353,7 +353,7 @@ jobs:
           cp deploy/linux/install.sh out/install.sh
           echo "Linux bundle verified: $BASENAME"
       - name: Stage the verified Linux assets
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bundle-linux
           path: out/
@@ -368,7 +368,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout (tagged commit)
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
       - name: Install shellcheck + jq (Homebrew)
         run: brew install shellcheck jq
       - name: Build and verify the macOS deployment bundle
@@ -416,7 +416,7 @@ jobs:
           cp deploy/macos/install.sh out/install-macos.sh
           echo "macOS bundle verified: $BASENAME"
       - name: Stage the verified macOS assets
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bundle-macos
           path: out/
@@ -431,7 +431,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout (tagged commit)
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5
       - name: Build and verify the Windows deployment bundle
         shell: pwsh
         run: |
@@ -490,7 +490,7 @@ jobs:
           Copy-Item deploy/windows/install.ps1 out/install-windows.ps1
           Write-Host "Windows bundle verified: $basename"
       - name: Stage the verified Windows assets
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bundle-windows
           path: out/
@@ -506,7 +506,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Download all verified bundle assets
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           # Only the staged bundle artifacts, not the .dockerbuild build-record artifacts
           # that docker/build-push-action uploads to the run.
