@@ -185,6 +185,26 @@ describe('RichDescription: links', () => {
     expect(anchor.getAttribute('target')).toBeNull();
   });
 
+  /**
+   * `data:` is the payload the javascript: test does not cover: a stored
+   * `data:text/html,<script>...` href navigates to attacker HTML on click. The allowlist
+   * (https, mailto) refuses it on the read path even if a tampered API write stored it.
+   */
+  it('drops a data: href the same way', () => {
+    const container = renderDoc(
+      doc(
+        para(
+          text('click', [
+            { type: 'link', attrs: { href: 'data:text/html,<script>alert(1)</script>' } },
+          ]),
+        ),
+      ),
+    );
+    expect(container.querySelector('a')).toBeNull();
+    expect(container.innerHTML).not.toContain('data:');
+    expect(container.textContent).toContain('click');
+  });
+
   it('drops an unsafe href but keeps the text it wrapped', () => {
     const container = renderDoc(
       doc(para(text('click', [{ type: 'link', attrs: { href: 'javascript:alert(1)' } }]))),
