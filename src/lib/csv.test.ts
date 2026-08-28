@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escapeCsvCell } from './csv';
+import { escapeCsvCell, neutralizeCsvFormula, neutralizeCsvFormulasDeep } from './csv';
 
 describe('escapeCsvCell', () => {
   it('quotes plain text and doubles inner quotes', () => {
@@ -36,5 +36,50 @@ describe('escapeCsvCell', () => {
   it('renders null and undefined as an empty field', () => {
     expect(escapeCsvCell(null)).toBe('""');
     expect(escapeCsvCell(undefined)).toBe('""');
+  });
+});
+
+describe('neutralizeCsvFormula', () => {
+  it('prefixes a formula lead-in without adding quotes', () => {
+    // The quoting is the CSV library's job on this path; a second pair would corrupt it.
+    expect(neutralizeCsvFormula('=HYPERLINK("http://evil","x")')).toBe(
+      '\'=HYPERLINK("http://evil","x")',
+    );
+  });
+
+  it('leaves ordinary text and real numbers alone', () => {
+    expect(neutralizeCsvFormula('Ada Lovelace')).toBe('Ada Lovelace');
+    expect(neutralizeCsvFormula('-5')).toBe('-5');
+  });
+});
+
+describe('neutralizeCsvFormulasDeep', () => {
+  /**
+   * The shape the System Logs export hands to json2csv: rows whose strings a user can
+   * influence (their own name, their User-Agent header, metadata values). Every string
+   * at every depth must come back neutralized, and nothing else may change.
+   */
+  it('neutralizes strings at every depth and preserves the rest', () => {
+    expect(
+      neutralizeCsvFormulasDeep([
+        {
+          userFirstName: '=2+2',
+          userAgent: '@SUM(A1:A9)',
+          count: 3,
+          flag: true,
+          nothing: null,
+          metadata: { reason: '+cmd', list: ['-x', 'ok'] },
+        },
+      ]),
+    ).toEqual([
+      {
+        userFirstName: "'=2+2",
+        userAgent: "'@SUM(A1:A9)",
+        count: 3,
+        flag: true,
+        nothing: null,
+        metadata: { reason: "'+cmd", list: ["'-x", 'ok'] },
+      },
+    ]);
   });
 });

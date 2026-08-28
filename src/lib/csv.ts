@@ -17,12 +17,38 @@ const FORMULA_START = /^[=+\-@\t\r]/;
 const NUMERIC = /^-?\d+(\.\d+)?$/;
 
 /**
+ * The formula-neutralizing half on its own, for an exporter that quotes elsewhere
+ * (json2csv does its own quoting, so wrapping its input in a second pair breaks the file).
+ */
+export function neutralizeCsvFormula(text: string): string {
+  return FORMULA_START.test(text) && !NUMERIC.test(text) ? `'${text}` : text;
+}
+
+/**
+ * Walk a JSON-shaped value and neutralize every string in it, for handing a fetched
+ * payload to a CSV library that only quotes. Arrays and plain objects are rebuilt;
+ * everything else passes through untouched.
+ */
+export function neutralizeCsvFormulasDeep(value: unknown): unknown {
+  if (typeof value === 'string') return neutralizeCsvFormula(value);
+  if (Array.isArray(value)) return value.map(neutralizeCsvFormulasDeep);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
+        k,
+        neutralizeCsvFormulasDeep(v),
+      ]),
+    );
+  }
+  return value;
+}
+
+/**
  * Render one value as a quoted, formula-safe CSV cell.
  * Always returns a `"`-quoted field with inner quotes doubled, so embedded commas and
  * newlines are safe too.
  */
 export function escapeCsvCell(value: unknown): string {
-  let text = String(value ?? '');
-  if (FORMULA_START.test(text) && !NUMERIC.test(text)) text = `'${text}`;
+  const text = neutralizeCsvFormula(String(value ?? ''));
   return `"${text.replace(/"/g, '""')}"`;
 }

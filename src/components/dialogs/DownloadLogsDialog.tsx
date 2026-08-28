@@ -23,6 +23,7 @@ import { DownloadLogsSchema } from '@/schemas/log';
 import type { z } from 'zod';
 
 import { json2csv } from 'json-2-csv';
+import { neutralizeCsvFormulasDeep } from '@/lib/csv';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 
@@ -148,9 +149,13 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
     });
 
     if (res.ok) {
-      // Convert to CSV format
-      const data = await res.json();
-      const csvString = json2csv(data, { expandNestedObjects: true });
+      // Convert to CSV format. Log rows carry attacker-influenced strings (names, email
+      // addresses, the User-Agent header, metadata), and a cell beginning with = + - @
+      // executes as a formula when the export is opened in a spreadsheet. json2csv only
+      // quotes, so the values are neutralized first, the same rule every other exporter
+      // applies through escapeCsvCell.
+      const data = neutralizeCsvFormulasDeep(await res.json());
+      const csvString = json2csv(data as object[], { expandNestedObjects: true });
 
       // Prevent character corruption in Excel with BOM (\uFEFF)
       const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });

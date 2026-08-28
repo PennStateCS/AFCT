@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { resolveInsideDir } from '@/lib/safe-upload';
 import { Prisma } from '@prisma/client';
 import type { SubmissionStatus } from '@prisma/client';
 
@@ -801,7 +802,13 @@ async function runJavaEvaluator(
   }
 
   try {
-    const uploadedFilePath = path.join('/private', 'uploads', 'submissions', submission.fileName);
+    // resolveInsideDir even though the stored name was minted by safeStoredFilename:
+    // the same defense-in-depth the file routes and the trial runner apply to every
+    // name read back from storage.
+    const uploadedFilePath = resolveInsideDir(
+      path.join('/private', 'uploads', 'submissions'),
+      submission.fileName,
+    );
     if (!fs.existsSync(uploadedFilePath)) {
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
         error: 'Uploaded file not found.',
@@ -832,7 +839,10 @@ async function runJavaEvaluator(
       return fail('ERROR: No answer file configured for this problem.');
     }
 
-    const answerFilePath = path.join('/private', 'uploads', 'solutions', answerFileName);
+    const answerFilePath = resolveInsideDir(
+      path.join('/private', 'uploads', 'solutions'),
+      answerFileName,
+    );
     if (!fs.existsSync(answerFilePath)) {
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
         error: 'Answer file not found on server.',

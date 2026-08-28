@@ -112,7 +112,10 @@ export async function POST(req: Request) {
       if (decision.status === 'blocked') {
         return NextResponse.json(
           { error: 'Too many avatar changes. Please try again later.' },
-          { status: 429, headers: { 'Retry-After': formatRetryAfterSeconds(decision.retryAfterMs) } },
+          {
+            status: 429,
+            headers: { 'Retry-After': formatRetryAfterSeconds(decision.retryAfterMs) },
+          },
         );
       }
       const validated = await readAndValidateAvatar(avatar, uploadLimit);
@@ -131,7 +134,8 @@ export async function POST(req: Request) {
 
     // Write the validated bytes only now, through the traversal-safe resolver.
     if (avatarBuffer && avatarFileName) {
-      await writeFile(resolveInsideDir(uploadDir, avatarFileName), avatarBuffer);
+      // Explicitly non-executable, matching the other upload writes.
+      await writeFile(resolveInsideDir(uploadDir, avatarFileName), avatarBuffer, { mode: 0o644 });
     }
 
     let updatedUser;

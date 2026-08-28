@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DownloadLogsDialog } from './DownloadLogsDialog';
 
@@ -42,6 +43,12 @@ describe('DownloadLogsDialog', () => {
     vi.stubGlobal('fetch', vi.fn());
   });
 
+  // The formula test stubs the URL global; without this every later test would find
+  // no URL constructor at all.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('does not fetch fields while closed', () => {
     renderWithClient(<DownloadLogsDialog open={false} onOpenChange={() => {}} />);
 
@@ -79,6 +86,47 @@ describe('DownloadLogsDialog', () => {
     // The multiselect is present but has no items yet.
     expect(screen.getByTestId('fields')).toBeInTheDocument();
     expect(screen.queryByText('action')).not.toBeInTheDocument();
+  });
+
+  /**
+   * The export is opened in a spreadsheet, and a log row's strings are attacker-influenced
+   * (a user's own name, the User-Agent header, metadata). A cell that still begins with `=`
+   * in the file executes as a formula on the administrator's machine.
+   */
+  it('neutralizes formula lead-ins before the CSV leaves the browser', async () => {
+    let saved = '';
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn((blob: Blob) => {
+        // Capture synchronously via the Blob's text() promise; asserted after the click.
+        void blob.text().then((t) => {
+          saved = t;
+        });
+        return 'blob:mock';
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+    const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).endsWith('/fields')
+        ? { ok: true, json: async () => ['action'] }
+        : {
+            ok: true,
+            json: async () => [
+              { action: 'LOGIN_SUCCESS', userFirstName: '=HYPERLINK("http://evil","x")' },
+            ],
+          },
+    );
+
+    const user = userEvent.setup();
+    renderWithClient(<DownloadLogsDialog open onOpenChange={() => {}} />);
+    await waitFor(() => expect(screen.getByText('action')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Download Logs' }));
+
+    await waitFor(() => {
+      expect(saved).toContain("'=HYPERLINK");
+    });
+    expect(saved).not.toMatch(/(^|[,\n"])=HYPERLINK/);
   });
 
   it('toasts on a failed fields fetch', async () => {
