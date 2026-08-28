@@ -171,3 +171,25 @@ export function submissionShapeHash(content: Buffer | string): string | null {
     return null;
   }
 }
+
+/**
+ * sha256 of the file exactly as it arrived, with nothing normalised away.
+ *
+ * The other two fingerprints deliberately look past the incidental: formatting for one,
+ * layout and names for the other. That is what makes them useful, and it is also why
+ * neither can say "these are the same file" without a qualifier. This one can. Two
+ * submissions sharing it are the same bytes: same trailing newline, same line endings,
+ * same JFLAP comment header, same everything.
+ *
+ * It is never a way to FIND a match. Identical bytes normalise to an identical
+ * `contentHash`, so byte-equal work is already grouped by the checks above; this only
+ * sharpens what can be said about a group that exists. Null for an empty file, which has
+ * nothing to compare. Unlike the other two there is no trimming rule: a file that is only
+ * whitespace is still a file somebody sent.
+ */
+export function submissionByteHash(content: Buffer | string): string | null {
+  const buffer = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
+  if (buffer.length === 0) return null;
+
+  return createHash('sha256').update(buffer).digest('hex');
+}

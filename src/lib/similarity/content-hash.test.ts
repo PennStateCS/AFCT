@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { submissionContentHash, submissionShapeHash } from './content-hash';
+import { submissionByteHash, submissionContentHash, submissionShapeHash } from './content-hash';
 
 const fa = (opts: { x?: string; comment?: string; crlf?: boolean; trailing?: string } = {}) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>${opts.comment ?? ''}<structure>
@@ -111,5 +111,40 @@ describe('submissionShapeHash', () => {
   it('has nothing to say about a file with no structure to speak of', () => {
     expect(submissionShapeHash('(a|b)*abb')).toBeNull();
     expect(submissionShapeHash('<structure><type>re</type><expression>a*</expression></structure>')).toBeNull();
+  });
+});
+
+describe('submissionByteHash', () => {
+  it('is stable for the same bytes', () => {
+    expect(submissionByteHash(fa())).toBe(submissionByteHash(fa()));
+    expect(submissionByteHash(fa())).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('separates files the other fingerprints deliberately treat as one', () => {
+    // The case this exists for: same work, same normalised contents, different files. The
+    // exact fingerprint says these are the same; only this one can say they are not.
+    const plain = fa();
+    const windows = fa({ crlf: true });
+    const commented = fa({ comment: '<!--Created with JFLAP 7.1.-->' });
+
+    expect(submissionContentHash(windows)).toBe(submissionContentHash(plain));
+    expect(submissionContentHash(commented)).toBe(submissionContentHash(plain));
+    expect(submissionByteHash(windows)).not.toBe(submissionByteHash(plain));
+    expect(submissionByteHash(commented)).not.toBe(submissionByteHash(plain));
+  });
+
+  it('agrees whenever the bytes agree, which is what makes it safe to report', () => {
+    // Identical bytes must normalise identically, or the tab could say two files are the same
+    // file while grouping them apart. Buffer and string spellings of the same content too.
+    expect(submissionByteHash(Buffer.from(fa(), 'utf8'))).toBe(submissionByteHash(fa()));
+    expect(submissionContentHash(Buffer.from(fa(), 'utf8'))).toBe(submissionContentHash(fa()));
+  });
+
+  it('has nothing to say about an empty file', () => {
+    expect(submissionByteHash(Buffer.alloc(0))).toBeNull();
+    expect(submissionByteHash('')).toBeNull();
+    // Whitespace is still bytes somebody sent, unlike the normalising fingerprints.
+    expect(submissionByteHash('   ')).toMatch(/^[0-9a-f]{64}$/);
+    expect(submissionContentHash('   ')).toBeNull();
   });
 });

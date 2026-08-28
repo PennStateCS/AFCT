@@ -1228,6 +1228,7 @@ erDiagram
   String originalFileName "nullable"
   String contentHash "nullable"
   String shapeHash "nullable"
+  String byteHash "nullable"
   Json provenanceFeatures "nullable"
   DateTime createdAt
   DateTime updatedAt
@@ -1414,6 +1415,15 @@ Properties as follows:
   > same machine drawn differently, which is what a copied file looks like once somebody
   > has dragged the nodes about. Empty for a regular expression, which has no layout, and
   > for anything that could not be parsed.
+- `byteHash`
+  > sha256 of the file exactly as it arrived, with nothing normalised away. The two hashes
+  > above look past the incidental on purpose, which is why neither can say "this is the
+  > same file" without a qualifier; this one can. Never used to find a match: identical
+  > bytes normalise to an identical contentHash, so byte-equal work is already grouped, and
+  > this only sharpens what the Similarity tab can say about a group it already found.
+  >
+  > Empty for a submission with no file, and for everything submitted before this column
+  > existed, which reads as "not known" rather than "not identical".
 - `provenanceFeatures`
   > A small description of the submitted artifact in pieces: local structure, the state
   > identifiers JFLAP assigns behind the visible names, where states sit relative to each
@@ -1673,6 +1683,7 @@ erDiagram
   String originalFileName "nullable"
   String contentHash "nullable"
   String shapeHash "nullable"
+  String byteHash "nullable"
   Json provenanceFeatures "nullable"
   DateTime createdAt
   DateTime updatedAt
