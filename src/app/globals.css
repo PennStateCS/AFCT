@@ -495,7 +495,9 @@
 }
 
 /**
- * The two places the signed-out pages deliberately differ from the light palette above.
+ * The two places the signed-out pages deliberately differ from the light palette above,
+ * plus the two properties that carry the pinned palette to things variables alone cannot
+ * reach.
  *
  * Kept to a short list on purpose: everything else about the auth surface is the ordinary
  * light theme, and a second full palette would be a second thing to keep in step. High
@@ -508,6 +510,21 @@
      large empty pane, and at 1.05:1 against --background it had nothing to sit on. 1.23:1
      is small but it is a surface change rather than a rounding error. */
   --background: oklch(0.9288 0.0126 255.508); /* #E2E8F0 */
+
+  /* Re-declaring the variables above is not enough on its own, because the app's text colour
+     is applied once on <body> (`text-foreground` in the base layer) and inherited from there.
+     Body sits OUTSIDE this subtree, so it resolves --foreground against whatever theme is on
+     <html>: after someone picked dark mode and signed out, every heading, label and typed
+     value on the auth pages inherited the dark theme's near-white text onto a white card.
+     Applying the colour here re-anchors the inheritance to the pinned palette. */
+  color: var(--foreground);
+
+  /* Same gap, for the parts of a form control the page cannot paint. next-themes puts
+     `color-scheme: dark` on <html>, and the browser draws Chrome's autofill fill, the caret
+     and an input's own scrollbar from that, not from our variables: a saved password
+     autofilled a dark band across a white field. The `.high-contrast .auth-light` block
+     below already did this for high contrast; the plain case needs it just as much. */
+  color-scheme: light;
 }
 
 /**
