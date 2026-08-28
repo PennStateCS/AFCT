@@ -175,6 +175,7 @@ jobs:
               aquasec/trivy:0.58.1@sha256:ab70a02200597efa04748f210f793936eb647cbcdb0ea69cc30b226d6f5a22c7 image \
               --format sarif --output "/out/${img}.sarif" \
               --severity CRITICAL,HIGH --ignore-unfixed --scanners vuln \
+              --skip-files '**/afct-evaluator.jar' \
               "ghcr.io/pennstatecs/afct-${img}:${TAG}" || echo "scan failed for ${img}"
           done
 

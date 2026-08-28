@@ -134,6 +134,11 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: '0'
+          # The evaluator jar is a third-party build owned by the RIT team (see CLAUDE.md);
+          # we ship it, we do not patch it. Its bundled Java dependencies were filling this
+          # tab with findings nobody here can act on, which buries the ones we can. Raised
+          # with that team separately. Remove this line when the jar is rebuilt.
+          skip-files: '**/afct-evaluator.jar'
 
       # SARIF rather than a table in the log, so a finding on main lands in the Security tab
       # and stays visible until it is fixed or dismissed.

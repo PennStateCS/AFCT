@@ -18,7 +18,7 @@ describe('RoleBadge', () => {
   it('gives each role its own categorical hue', () => {
     for (const [role, expected] of Object.entries(ROLE_BADGE)) {
       const { container, unmount } = render(<RoleBadge userRole={role} />);
-      expect(variantOf(container)).toContain(`badge-${expected.replace('category-', 'category-')}`);
+      expect(variantOf(container)).toContain(`badge-${expected}`);
       unmount();
     }
   });
