@@ -101,6 +101,7 @@ async function notifyPasswordWasSet(userId: string): Promise<void> {
  *   403: { description: This site does not allow AFCT passwords on accounts that sign in elsewhere. }
  *   404: { description: User record not found. }
  *   409: { description: A password was set by somebody else while this request was in flight. }
+ *   429: { description: "Too many wrong current-password attempts; wait and retry (Retry-After header)." }
  *   500: { description: Server error. }
  */
 export async function POST(req: NextRequest) {

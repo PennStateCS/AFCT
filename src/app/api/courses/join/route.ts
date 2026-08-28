@@ -52,6 +52,7 @@ const JoinBody = z.object({
  *   401: { description: Not signed in. }
  *   403: { description: "Enrollment was dropped; re-enrollment is a staff action." }
  *   404: { description: "Course not found (also returned for unpublished/archived courses)." }
+ *   429: { description: "Too many join-code attempts; wait and retry (Retry-After header)." }
  *   500: { description: Server error. }
  */
 export async function POST(req: Request) {

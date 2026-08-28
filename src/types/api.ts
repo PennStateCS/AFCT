@@ -11935,6 +11935,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Too many join-code attempts; wait and retry (Retry-After header). */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Server error. */
             500: {
                 headers: {
@@ -13539,6 +13548,15 @@ export interface operations {
             };
             /** @description A password was set by somebody else while this request was in flight. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many wrong current-password attempts; wait and retry (Retry-After header). */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
