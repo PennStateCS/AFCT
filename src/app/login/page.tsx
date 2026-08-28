@@ -4,6 +4,7 @@ import { getHcaptchaSiteKey } from '@/lib/hcaptcha';
 import { isMailConfigured } from '@/lib/mailer';
 import { getOidcConfig } from '@/lib/oidc-provider';
 import { DEFAULT_OIDC_BUTTON_LABEL } from '@/schemas/identity';
+import { loadAuthAutomata } from '@/lib/auth-automata';
 import LoginForm from './LoginForm';
 
 /**
@@ -16,6 +17,9 @@ import LoginForm from './LoginForm';
  * here makes the first paint correct.
  *
  * Only the public subset is read: the hCaptcha SECRET is never touched on this path.
+ *
+ * The brand panel's decorative drawings are read here too, for the same reason and one more:
+ * they come off the filesystem, and everything below LoginForm is client code.
  */
 export default async function LoginPage() {
   let allowSignup = DEFAULT_ALLOW_SIGNUP;
@@ -47,8 +51,13 @@ export default async function LoginPage() {
     console.error('login page settings read failed:', error);
   }
 
+  // Cached after the first read and never able to throw, so this does not need the try/catch
+  // above and cannot delay the page.
+  const automata = await loadAuthAutomata();
+
   return (
     <LoginForm
+      automata={automata}
       allowSignup={allowSignup}
       hcaptchaSiteKey={hcaptchaSiteKey}
       mailConfigured={mailConfigured}
