@@ -31,6 +31,7 @@ const getQueueSettingsMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const existsSyncMock = vi.hoisted(() => vi.fn());
 const execSyncMock = vi.hoisted(() => vi.fn());
+const readFileSyncMock = vi.hoisted(() => vi.fn());
 const platformMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -44,7 +45,11 @@ vi.mock('./eval-config', () => ({
   getQueueSettings: getQueueSettingsMock,
 }));
 vi.mock('./activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
-vi.mock('fs', () => ({ default: { existsSync: existsSyncMock }, existsSync: existsSyncMock }));
+vi.mock('fs', () => ({
+  default: { existsSync: existsSyncMock, readFileSync: readFileSyncMock },
+  existsSync: existsSyncMock,
+  readFileSync: readFileSyncMock,
+}));
 vi.mock('child_process', () => ({ execSync: execSyncMock }));
 vi.mock('os', () => ({ default: { platform: platformMock }, platform: platformMock }));
 
@@ -137,12 +142,24 @@ describe('runJavaEvaluator — guard branches', () => {
 });
 
 describe('runJavaEvaluator — Windows local dev path', () => {
-  it('counts lines with PowerShell instead of running the JAR', async () => {
+  it('counts lines in-process instead of running the JAR', async () => {
     platformMock.mockReturnValue('win32');
-    execSyncMock.mockReturnValue('  7 \n');
+    readFileSyncMock.mockReturnValue('one\ntwo\nthree\nfour\nfive\nsix\nseven\n');
     const result = await runJavaEvaluator(makeSubmission(), CONFIG);
     expect(result).toMatchObject({ status: 'COMPLETED', feedback: 'File has 7 lines (Windows).' });
     expect(executeMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * This branch used to interpolate the file path into a PowerShell command string, the
+   * one shape of process call this codebase must never contain. The stand-in must not
+   * start a process at all, whatever the path holds.
+   */
+  it('starts no process, even for a hostile-looking path', async () => {
+    platformMock.mockReturnValue('win32');
+    readFileSyncMock.mockReturnValue('x\n');
+    await runJavaEvaluator(makeSubmission(), CONFIG);
+    expect(execSyncMock).not.toHaveBeenCalled();
   });
 });
 

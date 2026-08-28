@@ -5,7 +5,6 @@ import type { SubmissionStatus } from '@prisma/client';
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 import os from 'os';
 import { randomUUID } from 'crypto';
 
@@ -817,13 +816,15 @@ async function runJavaEvaluator(
     }
 
     // Windows local dev (no evaluator JAR): just report the line count as a stand-in.
+    // Counted in-process. This used to interpolate the path into a PowerShell command
+    // string, which is the one shape of process call this codebase must never contain:
+    // the stored names are minted UUIDs today, but a shell string is only ever one
+    // refactor away from carrying something a student typed.
     const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
     if (!isDocker && os.platform() === 'win32') {
-      const result = execSync(`powershell -Command "(Get-Content '${uploadedFilePath}').Count"`, {
-        encoding: 'utf-8',
-      });
+      const lines = countFileLines(uploadedFilePath);
       return {
-        feedback: `File has ${result.trim()} lines (Windows).`,
+        feedback: `File has ${lines} lines (Windows).`,
         correct: undefined,
         evaluationRaw: null,
         status: 'COMPLETED',
@@ -860,6 +861,14 @@ async function runJavaEvaluator(
     console.error(`[SubmissionWorker] Command error for submission ${submission.id}:`, cmdErr);
     return fail(feedback, false);
   }
+}
+
+/** Line count the way PowerShell's Get-Content counted: a trailing newline ends the
+ * last line rather than starting an empty one. Dev stand-in only. */
+function countFileLines(filePath: string): number {
+  const rows = fs.readFileSync(filePath, 'utf-8').split(/\r?\n/);
+  if (rows.length > 1 && rows[rows.length - 1] === '') rows.pop();
+  return rows.length;
 }
 
 /**
