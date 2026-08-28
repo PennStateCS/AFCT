@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 444 234"
+     fill="none"
+     color="#93c5fd"
+     stroke="currentColor"
+     stroke-width="2"
+     stroke-opacity="0.9">
+  <defs>
+    <marker id="afct-automaton-five-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+            markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="currentColor" stroke="none" />
+    </marker>
+  </defs>
+  <g transform="translate(222 117) scale(0.92) translate(-220 -118)">
+      <line x1="20" y1="141" x2="64" y2="141" marker-end="url(#afct-automaton-five-arrow)" />
+      <path d="M77.4 118.4C56.8 64.4 143.2 64.4 122.6 118.4" stroke-linecap="round" marker-end="url(#afct-automaton-five-arrow)" />
+      <text x="100" y="63.9" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">0</text>
+      <line x1="127.7" y1="157.0" x2="229.0" y2="157.0" stroke-linecap="round" marker-end="url(#afct-automaton-five-arrow)" />
+      <text x="178.4" y="172.0" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">1</text>
+      <line x1="232.0" y1="125.0" x2="130.7" y2="125.0" stroke-linecap="round" marker-end="url(#afct-automaton-five-arrow)" />
+      <text x="181.4" y="110.0" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">0</text>
+      <line x1="283.0" y1="141.0" x2="361.0" y2="141.0" stroke-linecap="round" marker-end="url(#afct-automaton-five-arrow)" />
+      <text x="322.0" y="124.0" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">1</text>
+      <path d="M372.2 121.2C354.2 67.2 429.8 67.2 411.8 121.2" stroke-linecap="round" marker-end="url(#afct-automaton-five-arrow)" />
+      <text x="392" y="66.7" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">0</text>
+      <circle cx="100" cy="141" r="32" />
+      <circle cx="100" cy="141" r="26" />
+      <text x="100" y="141" font-size="18" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">q0</text>
+      <circle cx="255" cy="141" r="28" />
+      <text x="255" y="141" font-size="18" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">q1</text>
+      <circle cx="392" cy="141" r="28" />
+      <text x="392" y="141" font-size="18" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">q2</text>
+  </g>
+</svg>

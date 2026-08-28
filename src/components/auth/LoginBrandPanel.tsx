@@ -2,6 +2,7 @@ import { BookOpen, Code2, Scale } from 'lucide-react';
 
 import { AuthBrandMark } from './AuthBrandMark';
 import { RotatingAuthAutomaton } from './RotatingAuthAutomaton';
+import type { AuthAutomaton } from '@/lib/auth-automata';
 import { cn } from '@/lib/utils';
 
 /** Quiet at rest, underlined on hover: four links should not read as four buttons. */
@@ -51,7 +52,14 @@ function GithubMark({ className }: { className?: string }) {
  * breakpoint entirely: a phone gets the compact brand header in `LoginForm` instead, because
  * half of this squeezed into a narrow column is neither the picture nor the form.
  */
-export function LoginBrandPanel({ className }: { className?: string }) {
+export function LoginBrandPanel({
+  automata,
+  className,
+}: {
+  /** Read from public/auth-automata on the server; see src/lib/auth-automata.ts. */
+  automata: AuthAutomaton[];
+  className?: string;
+}) {
   return (
     <section
       aria-label="About AFCT"
@@ -127,7 +135,10 @@ export function LoginBrandPanel({ className }: { className?: string }) {
           where the wave is already occupying the bottom of the frame. The diagram itself
           changes every few minutes; see RotatingAuthAutomaton. */}
       <div className="relative flex min-h-0 items-center justify-center">
-        <RotatingAuthAutomaton className="pointer-events-none aspect-[444/234] max-h-full w-[30rem] max-w-[96%] -translate-y-5 text-blue-300 opacity-[0.22] xl:w-[35rem] 2xl:w-[40rem]" />
+        <RotatingAuthAutomaton
+          automata={automata}
+          className="pointer-events-none aspect-[444/234] max-h-full w-[30rem] max-w-[96%] -translate-y-5 text-blue-300 opacity-[0.22] xl:w-[35rem] 2xl:w-[40rem]"
+        />
       </div>
 
       {/* A glass pill rather than bare text on the wave. The wave's lines run straight through

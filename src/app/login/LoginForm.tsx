@@ -21,6 +21,7 @@ import { safeCallbackUrl } from '@/lib/safe-callback';
 import { oidcRefusalMessage } from '@/lib/oidc-refusal-message';
 import { isValidEmail } from '@/lib/email';
 import { SignupFormSchema } from '@/schemas/auth';
+import type { AuthAutomaton } from '@/lib/auth-automata';
 
 type LoginField = 'email' | 'password';
 type SignupField = 'first' | 'last' | 'email' | 'password' | 'confirm';
@@ -46,6 +47,12 @@ type LoginFormProps = {
   mailConfigured?: boolean;
   /** Wording for the institutional sign-in button, or null when none is configured. */
   oidcButtonLabel?: string | null;
+  /**
+   * The brand panel's decorative drawings, read from public/auth-automata on the server.
+   * Passed down rather than read where they are drawn: this file is a Client Component, so
+   * everything below it is too, and the read touches the filesystem.
+   */
+  automata?: AuthAutomaton[];
 };
 
 /* ================================================= */
@@ -55,6 +62,7 @@ export default function LoginForm({
   hcaptchaSiteKey,
   mailConfigured = false,
   oidcButtonLabel = null,
+  automata = [],
 }: LoginFormProps) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
 
@@ -458,7 +466,10 @@ export default function LoginForm({
 
       {/* Below lg the picture goes entirely rather than shrinking: half a brand panel beside a
           narrow form is neither one thing nor the other. The compact header below stands in. */}
-      <LoginBrandPanel className="relative z-10 hidden lg:sticky lg:top-0 lg:grid" />
+      <LoginBrandPanel
+        automata={automata}
+        className="relative z-10 hidden lg:sticky lg:top-0 lg:grid"
+      />
 
       {/* The extra right padding is the only thing pulling the card off the centre of its
           column. On a wide display a dead-centred card leaves the middle of the screen emptier

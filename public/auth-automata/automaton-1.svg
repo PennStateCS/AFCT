@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 444 234"
+     fill="none"
+     color="#93c5fd"
+     stroke="currentColor"
+     stroke-width="2"
+     stroke-opacity="0.9">
+  <defs>
+    <marker id="afct-automaton-one-arrow" viewBox="0 0 10 10" refX="8" refY="5"
+            markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="currentColor" stroke="none" />
+    </marker>
+  </defs>
+  <g transform="translate(222 117) scale(0.92) translate(-221.5 -119)">
+      <line x1="23" y1="112" x2="71" y2="112" marker-end="url(#afct-automaton-one-arrow)" />
+      <path d="M83.2 92.2C65.2 38.2 140.8 38.2 122.8 92.2" stroke-linecap="round" marker-end="url(#afct-automaton-one-arrow)" />
+      <text x="103" y="37.7" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">a</text>
+      <line x1="130.7" y1="107.6" x2="353.4" y2="72.5" stroke-linecap="round" marker-end="url(#afct-automaton-one-arrow)" />
+      <text x="239.4" y="73.3" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">b</text>
+      <line x1="376.3" y1="96.8" x2="354.3" y2="153.1" stroke-linecap="round" marker-end="url(#afct-automaton-one-arrow)" />
+      <text x="381.1" y="131.2" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">a</text>
+      <line x1="316.1" y1="174.2" x2="132.8" y2="120.7" stroke-linecap="round" marker-end="url(#afct-automaton-one-arrow)" />
+      <text x="219.7" y="163.7" font-size="15" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">b</text>
+      <circle cx="103" cy="112" r="28" />
+      <text x="103" y="112" font-size="18" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">q0</text>
+      <circle cx="388" cy="67" r="32" />
+      <circle cx="388" cy="67" r="26" />
+      <text x="388" y="67" font-size="18" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">q1</text>
+      <circle cx="343" cy="182" r="28" />
+      <text x="343" y="182" font-size="18" fill="currentColor" stroke="none" text-anchor="middle" dominant-baseline="central">q2</text>
+  </g>
+</svg>
