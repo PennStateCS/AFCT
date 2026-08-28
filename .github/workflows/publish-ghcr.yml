@@ -134,12 +134,17 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: '0'
+          # The evaluator jar is a third-party build owned by the RIT team (see CLAUDE.md);
+          # we ship it, we do not patch it. Its bundled Java dependencies were filling this
+          # tab with findings nobody here can act on, which buries the ones we can. Raised
+          # with that team separately. Remove this line when the jar is rebuilt.
+          skip-files: '**/afct-evaluator.jar'
 
       # SARIF rather than a table in the log, so a finding on main lands in the Security tab
       # and stays visible until it is fixed or dismissed.
       - name: Upload the scan results
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@d6317709a54fd87078d323eeb0e48ec331c8e621 # v3
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: trivy.sarif
           category: trivy-dashboard

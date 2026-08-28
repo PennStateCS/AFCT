@@ -1,10 +1,10 @@
 import { prisma } from '@/lib/prisma';
+import { resolveInsideDir } from '@/lib/safe-upload';
 import { Prisma } from '@prisma/client';
 import type { SubmissionStatus } from '@prisma/client';
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 import os from 'os';
 import { randomUUID } from 'crypto';
 
@@ -801,7 +801,13 @@ async function runJavaEvaluator(
   }
 
   try {
-    const uploadedFilePath = path.join('/private', 'uploads', 'submissions', submission.fileName);
+    // resolveInsideDir even though the stored name was minted by safeStoredFilename:
+    // the same defense-in-depth the file routes and the trial runner apply to every
+    // name read back from storage.
+    const uploadedFilePath = resolveInsideDir(
+      path.join('/private', 'uploads', 'submissions'),
+      submission.fileName,
+    );
     if (!fs.existsSync(uploadedFilePath)) {
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
         error: 'Uploaded file not found.',
@@ -810,13 +816,15 @@ async function runJavaEvaluator(
     }
 
     // Windows local dev (no evaluator JAR): just report the line count as a stand-in.
+    // Counted in-process. This used to interpolate the path into a PowerShell command
+    // string, which is the one shape of process call this codebase must never contain:
+    // the stored names are minted UUIDs today, but a shell string is only ever one
+    // refactor away from carrying something a student typed.
     const isDocker = process.env.CFGANALYZER_BINARY !== undefined;
     if (!isDocker && os.platform() === 'win32') {
-      const result = execSync(`powershell -Command "(Get-Content '${uploadedFilePath}').Count"`, {
-        encoding: 'utf-8',
-      });
+      const lines = countFileLines(uploadedFilePath);
       return {
-        feedback: `File has ${result.trim()} lines (Windows).`,
+        feedback: `File has ${lines} lines (Windows).`,
         correct: undefined,
         evaluationRaw: null,
         status: 'COMPLETED',
@@ -832,7 +840,10 @@ async function runJavaEvaluator(
       return fail('ERROR: No answer file configured for this problem.');
     }
 
-    const answerFilePath = path.join('/private', 'uploads', 'solutions', answerFileName);
+    const answerFilePath = resolveInsideDir(
+      path.join('/private', 'uploads', 'solutions'),
+      answerFileName,
+    );
     if (!fs.existsSync(answerFilePath)) {
       await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
         error: 'Answer file not found on server.',
@@ -850,6 +861,14 @@ async function runJavaEvaluator(
     console.error(`[SubmissionWorker] Command error for submission ${submission.id}:`, cmdErr);
     return fail(feedback, false);
   }
+}
+
+/** Line count the way PowerShell's Get-Content counted: a trailing newline ends the
+ * last line rather than starting an empty one. Dev stand-in only. */
+function countFileLines(filePath: string): number {
+  const rows = fs.readFileSync(filePath, 'utf-8').split(/\r?\n/);
+  if (rows.length > 1 && rows[rows.length - 1] === '') rows.pop();
+  return rows.length;
 }
 
 /**

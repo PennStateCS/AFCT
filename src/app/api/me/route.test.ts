@@ -266,6 +266,8 @@ describe('POST /api/me', () => {
     expect(writeFileMock).toHaveBeenCalledWith(
       expect.stringMatching(/[/\\]user-1_[0-9a-f-]+$/),
       expect.anything(),
+      // Explicitly non-executable, like every other upload write.
+      { mode: 0o644 },
     );
   });
 

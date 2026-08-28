@@ -8,7 +8,7 @@
 # a rebuild always uses the exact same image. Bump these deliberately.
 
 # --- Stage 1: build ---
-FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS builder
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS builder
 WORKDIR /app
 
 ENV SKIP_PRISMA_GENERATE=1
@@ -31,7 +31,7 @@ RUN mkdir -p /app/bin /app/jars
 RUN npx prisma generate --generator client && npm run build
 
 # --- Stage 2: runtime ---
-FROM node:22-bookworm-slim@sha256:53ada149d435c38b14476cb57e4a7da73c15595aba79bd6971b547ceb6d018bf AS runtime
+FROM node:22-bookworm-slim@sha256:83f487e0a63425e5b4d146fb5e5be574bcbe1b7b843d3ebafdd95eaf7767a7e5 AS runtime
 WORKDIR /app
 
 # curl runs the healthcheck; postgres-client + netcat back the DB wait in the
@@ -48,7 +48,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Runs jars/afct-evaluator.jar when grading submissions.
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
-COPY --from=eclipse-temurin:21-jre@sha256:d2b9f8f12212cadcfdf889461531784e8fd097feade954d65b31ee7a71c473ec /opt/java/openjdk /opt/java/openjdk
+COPY --from=eclipse-temurin:21-jre@sha256:7a65df4b22d2de92d4e04056e884f3b9122d70b21e2847fd66084278bd0ce037 /opt/java/openjdk /opt/java/openjdk
 
 # npm's default cache path isn't writable by the node user.
 ENV NPM_CONFIG_CACHE=/tmp/.npm

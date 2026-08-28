@@ -11,6 +11,15 @@ on:
       - 'src/schemas/**'
       - 'scripts/generate-openapi.mjs'
       - '.github/workflows/docs.yml'
+  # Build-only on pull requests, so a broken Docusaurus build (a bad MDX file, a dead
+  # sidebar entry) surfaces before merge instead of failing the deploy on main. The app's
+  # own CI checks the generated spec/types, but nothing else compiles the site itself.
+  # The deploy job below never runs for these: it is gated to push/dispatch.
+  pull_request:
+    paths:
+      - 'docs-site/**'
+      - 'scripts/generate-openapi.mjs'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 # Least privilege by default. The Pages write + OIDC token scopes are granted only to
@@ -19,9 +28,10 @@ on:
 permissions:
   contents: read
 
-# One deploy at a time; newer pushes supersede queued ones.
+# One deploy at a time; newer pushes supersede queued ones. PR builds get their own
+# per-ref group so a PR check can never cancel (or be cancelled by) a real deploy.
 concurrency:
-  group: pages
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages' }}
   cancel-in-progress: true
 
 jobs:
@@ -71,11 +81,15 @@ jobs:
           cp docs-dist/openapi.json docs-site/build/api/
 
       - name: Upload Pages artifact
+        # A PR run is a build check, not a deploy; skip staging the artifact it will never use.
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: docs-site/build
 
   deploy:
+    # Never from a pull request: PRs get the build check above and nothing more.
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10

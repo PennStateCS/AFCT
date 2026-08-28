@@ -12,15 +12,31 @@ export function normalizeIp(ip: string): string {
 }
 
 /**
- * Extracts the client IP address from a header source (proxy headers first,
- * then dev/localhost fallbacks). Accepts a Headers-like object so it works
- * with both incoming requests and `next/headers` in event/action contexts.
+ * The client address, as the deployment's own nginx reports it.
+ *
+ * Why this may trust `X-Forwarded-For` at all: the app container's port is never
+ * published in the shipped composes, so the only way a request reaches this code is
+ * through the bundled nginx, and that nginx OVERWRITES the header with the TCP peer's
+ * address rather than appending to whatever the client sent (`proxy_set_header
+ * X-Forwarded-For $remote_addr` in docker/nginx/default.conf). The list therefore
+ * always holds exactly one entry and that entry is the connection's real source;
+ * reading the first entry is correct because of that overwrite, not as a general
+ * rule. `X-Real-IP` is set by the same nginx to the same value and is the fallback.
+ *
+ * Nothing else is consulted. This used to also try `CF-Connecting-IP` and
+ * `X-Client-IP`, which our nginx neither sets nor strips: they arrived from the
+ * client verbatim, so each was a spoofable path into the audit log for any caller
+ * that could reach a branch below the first. An install that really sits behind a CDN
+ * records the CDN edge's address, which is the honest reading of what nginx saw.
+ *
+ * If nginx itself sits behind an institution's own load balancer, every request
+ * records the balancer's address. Fixing that is an nginx `set_real_ip_from`
+ * decision for that install, made by whoever knows the balancer's address; guessing
+ * here by trusting deeper into the header would reopen the spoof.
  */
 export function getClientIpFromHeaders(headers: HeaderGetter): string {
-  // Try various headers that proxies might set
   const forwarded = headers.get('x-forwarded-for');
   if (forwarded) {
-    // x-forwarded-for can contain multiple IPs, first one is the original client
     const ip = forwarded.split(',')[0]?.trim();
     if (ip && ip !== '::1' && ip !== '127.0.0.1') {
       return normalizeIp(ip);
@@ -32,22 +48,9 @@ export function getClientIpFromHeaders(headers: HeaderGetter): string {
     return normalizeIp(realIp);
   }
 
-  // Cloudflare sets this header
-  const cfConnectingIp = headers.get('cf-connecting-ip');
-  if (cfConnectingIp) {
-    return normalizeIp(cfConnectingIp);
-  }
-
-  // AWS ALB sets this
-  const clientIp = headers.get('x-client-ip');
-  if (clientIp) {
-    return normalizeIp(clientIp);
-  }
-
-  // Check if we're in development mode
+  // Development also publishes the app port directly (3000), where no header can be
+  // trusted; a stable placeholder beats recording whatever the request claimed.
   if (process.env.NODE_ENV === 'development') {
-    // In development, try to get a more meaningful identifier
-    // We could use the User-Agent or session info for tracking instead
     return 'localhost-dev';
   }
 
@@ -67,48 +70,4 @@ export function getClientIpFromHeaders(headers: HeaderGetter): string {
  */
 export function getClientIp(req?: NextRequest | Request | null): string {
   return getClientIpFromHeaders(req?.headers ?? new Headers());
-}
-
-/**
- * Simple IP extraction for standard Request objects
- */
-export function getClientIpSimple(req: Request): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const ip = forwarded.split(',')[0]?.trim();
-    if (ip && ip !== '::1' && ip !== '127.0.0.1') {
-      return ip;
-    }
-  }
-
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp && realIp !== '::1' && realIp !== '127.0.0.1') {
-    return realIp;
-  }
-
-  if (process.env.NODE_ENV === 'development') {
-    return 'localhost-dev';
-  }
-
-  return forwarded === '::1' || realIp === '::1' ? 'localhost' : 'unknown';
-}
-
-/**
- * Get comprehensive request metadata for logging
- */
-export function getRequestMetadata(req: NextRequest) {
-  const ip = getClientIp(req);
-  const userAgent = req.headers.get('user-agent') || 'unknown';
-
-  // Additional metadata that might be useful
-  const referer = req.headers.get('referer');
-  const origin = req.headers.get('origin');
-
-  return {
-    ipAddress: ip,
-    userAgent,
-    referer,
-    origin,
-    timestamp: new Date().toISOString(),
-  };
 }

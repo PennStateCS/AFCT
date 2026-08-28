@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getClientIp, getClientIpSimple, getRequestMetadata, normalizeIp } from './ip-utils';
+import { getClientIp, normalizeIp } from './ip-utils';
 
 // Helper to create mock Request with headers
 function createMockRequest(headers: Record<string, string> = {}): Request {
@@ -79,28 +79,6 @@ describe('ip-utils', () => {
       expect(getClientIp(req)).toBe('198.51.100.100');
     });
 
-    it('should skip localhost in x-real-ip and use cf-connecting-ip', () => {
-      const req = createMockRequest({
-        'x-real-ip': '::1',
-        'cf-connecting-ip': '104.16.123.96',
-      });
-      expect(getClientIp(req)).toBe('104.16.123.96');
-    });
-
-    it('should use cf-connecting-ip (Cloudflare)', () => {
-      const req = createMockRequest({
-        'cf-connecting-ip': '104.16.123.96',
-      });
-      expect(getClientIp(req)).toBe('104.16.123.96');
-    });
-
-    it('should use x-client-ip (AWS ALB)', () => {
-      const req = createMockRequest({
-        'x-client-ip': '52.84.12.34',
-      });
-      expect(getClientIp(req)).toBe('52.84.12.34');
-    });
-
     it('should return "localhost-dev" in development mode with no valid IP', () => {
       vi.stubEnv('NODE_ENV', 'development');
       const req = createMockRequest({});
@@ -129,7 +107,7 @@ describe('ip-utils', () => {
       expect(getClientIp(req)).toBe('unknown');
     });
 
-    it('should prioritize x-forwarded-for over other headers', () => {
+    it('reads only what nginx set, never a client-supplied CDN header', () => {
       const req = createMockRequest({
         'x-forwarded-for': '203.0.113.1',
         'x-real-ip': '203.0.113.2',
@@ -139,133 +117,36 @@ describe('ip-utils', () => {
       expect(getClientIp(req)).toBe('203.0.113.1');
     });
 
+    /**
+     * These two arrive from the client verbatim: the bundled nginx neither sets nor strips
+     * them. Trusting either was a spoofable path into the audit log, so they are ignored
+     * even when nothing else identifies the caller.
+     */
+    it('ignores CF-Connecting-IP and X-Client-IP outright', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const req = createMockRequest({
+        'cf-connecting-ip': '203.0.113.3',
+        'x-client-ip': '203.0.113.4',
+      });
+      expect(getClientIp(req)).toBe('unknown');
+    });
+
+    it('ignores them even when the trusted headers are localhost', () => {
+      vi.stubEnv('NODE_ENV', 'production');
+      const req = createMockRequest({
+        'x-forwarded-for': '::1',
+        'x-real-ip': '::1',
+        'cf-connecting-ip': '203.0.113.3',
+      });
+      expect(getClientIp(req)).toBe('localhost');
+    });
+
     it('should handle empty x-forwarded-for value', () => {
       const req = createMockRequest({
         'x-forwarded-for': '',
         'x-real-ip': '198.51.100.50',
       });
       expect(getClientIp(req)).toBe('198.51.100.50');
-    });
-  });
-
-  describe('getClientIpSimple', () => {
-    it('should extract IP from x-forwarded-for header', () => {
-      const req = createMockRequest({
-        'x-forwarded-for': '203.0.113.195, 70.41.3.18',
-      });
-      expect(getClientIpSimple(req)).toBe('203.0.113.195');
-    });
-
-    it('should use x-real-ip as fallback', () => {
-      const req = createMockRequest({
-        'x-real-ip': '198.51.100.100',
-      });
-      expect(getClientIpSimple(req)).toBe('198.51.100.100');
-    });
-
-    it('should return "localhost-dev" in development mode', () => {
-      vi.stubEnv('NODE_ENV', 'development');
-      const req = createMockRequest({});
-      expect(getClientIpSimple(req)).toBe('localhost-dev');
-    });
-
-    it('should return "localhost" when forwarded is ::1', () => {
-      vi.stubEnv('NODE_ENV', 'production');
-      const req = createMockRequest({
-        'x-forwarded-for': '::1',
-      });
-      expect(getClientIpSimple(req)).toBe('localhost');
-    });
-
-    it('should return "localhost" when x-real-ip is ::1', () => {
-      vi.stubEnv('NODE_ENV', 'production');
-      const req = createMockRequest({
-        'x-real-ip': '::1',
-      });
-      expect(getClientIpSimple(req)).toBe('localhost');
-    });
-
-    it('should return "unknown" when no valid headers in production', () => {
-      vi.stubEnv('NODE_ENV', 'production');
-      const req = createMockRequest({});
-      expect(getClientIpSimple(req)).toBe('unknown');
-    });
-
-    it('should skip localhost IPs in x-forwarded-for', () => {
-      const req = createMockRequest({
-        'x-forwarded-for': '127.0.0.1',
-        'x-real-ip': '203.0.113.50',
-      });
-      expect(getClientIpSimple(req)).toBe('203.0.113.50');
-    });
-  });
-
-  describe('getRequestMetadata', () => {
-    it('should extract comprehensive metadata from request', () => {
-      const req = createMockRequest({
-        'x-forwarded-for': '203.0.113.195',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        referer: 'https://example.com/previous',
-        origin: 'https://example.com',
-      });
-
-      const metadata = getRequestMetadata(req as any);
-
-      expect(metadata).toEqual({
-        ipAddress: '203.0.113.195',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        referer: 'https://example.com/previous',
-        origin: 'https://example.com',
-        timestamp: '2026-02-08T12:00:00.000Z',
-      });
-    });
-
-    it('should handle missing optional headers', () => {
-      const req = createMockRequest({
-        'x-forwarded-for': '198.51.100.42',
-      });
-
-      const metadata = getRequestMetadata(req as any);
-
-      expect(metadata).toEqual({
-        ipAddress: '198.51.100.42',
-        userAgent: 'unknown',
-        referer: null,
-        origin: null,
-        timestamp: '2026-02-08T12:00:00.000Z',
-      });
-    });
-
-    it('should include current timestamp', () => {
-      const req = createMockRequest({
-        'x-real-ip': '104.16.50.100',
-      });
-
-      const metadata = getRequestMetadata(req as any);
-      expect(metadata.timestamp).toBe('2026-02-08T12:00:00.000Z');
-    });
-
-    it('should use getClientIp for IP extraction', () => {
-      const req = createMockRequest({
-        'cf-connecting-ip': '104.16.123.96',
-      });
-
-      const metadata = getRequestMetadata(req as any);
-      expect(metadata.ipAddress).toBe('104.16.123.96');
-    });
-
-    it('should handle all fields being null except IP', () => {
-      const req = createMockRequest({
-        'x-client-ip': '52.84.12.34',
-      });
-
-      const metadata = getRequestMetadata(req as any);
-
-      expect(metadata.ipAddress).toBe('52.84.12.34');
-      expect(metadata.userAgent).toBe('unknown');
-      expect(metadata.referer).toBeNull();
-      expect(metadata.origin).toBeNull();
-      expect(metadata.timestamp).toBeTruthy();
     });
   });
 });

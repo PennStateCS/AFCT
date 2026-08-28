@@ -2,7 +2,7 @@
 # version exactly) with backup.sh baked in. Publishing this (instead of
 # bind-mounting backup.sh) lets the deploy bundle be a single compose file
 # with no repo checkout. Kept on the same digest as the postgres service.
-FROM postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+FROM postgres:15-alpine@sha256:fe0737ba566a2c5b2a28f34433c0a423261900ec17b9bf7ad115e1aae7e57f1b
 
 # gnupg: symmetric AES-256 encryption of the backup archive.
 # tar:   GNU tar, for repeating -C so the dump and the upload volumes go into one
