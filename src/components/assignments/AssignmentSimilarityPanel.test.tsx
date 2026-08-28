@@ -224,8 +224,10 @@ describe('AssignmentSimilarityPanel', () => {
 
     const cards = await screen.findAllByRole('article');
     expect(cards).toHaveLength(1);
+    // Neutral, because a group is held together by shared students rather than by everyone
+    // sharing the same thing. What it is made of is spelled out underneath.
     expect(
-      screen.getByRole('heading', { name: '3 of 84 students submitted the same saved machine' }),
+      screen.getByRole('heading', { name: '3 of 84 students are connected by 3 similarity relationships' }),
     ).toBeInTheDocument();
     expect(screen.getByText(/3 exact jflap artifact relationships/i)).toBeInTheDocument();
   });
@@ -279,11 +281,13 @@ describe('AssignmentSimilarityPanel', () => {
     renderPanel();
 
     expect(
-      await screen.findByText('No matches worth reviewing. 1 common answer set aside.'),
+      await screen.findByText(
+        'No matches worth reviewing. 1 group set aside as a common answer or the posted solution.',
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByRole('article')).not.toBeInTheDocument();
 
-    const toggle = screen.getByRole('button', { name: /Show common answers/ });
+    const toggle = screen.getByRole('button', { name: /Show set-aside groups/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
     await person.click(toggle);
@@ -310,7 +314,7 @@ describe('AssignmentSimilarityPanel', () => {
   });
 
   it('never calls anybody suspicious, and shows no percentage of similarity', async () => {
-    getMock.mockResolvedValue([group({ reusedAfterPass: true, matchesAnswerFile: true })]);
+    getMock.mockResolvedValue([group({ reusedAfterPass: true })]);
 
     const { container } = renderPanel();
     await screen.findByRole('article');

@@ -6,13 +6,14 @@ import { MATCH_LABEL, type MatchType } from '@/lib/similarity/evidence';
 
 export type MatchFilter = MatchType | 'all';
 
-const ORDER: MatchFilter[] = ['all', 'exact', 'same-machine', 'structural', 'common'];
+const ORDER: MatchFilter[] = ['all', 'exact', 'same-machine', 'structural', 'reference', 'common'];
 
 const LABEL: Record<MatchFilter, string> = {
   all: 'All',
   exact: MATCH_LABEL.exact,
   'same-machine': MATCH_LABEL['same-machine'],
   structural: MATCH_LABEL.structural,
+  reference: MATCH_LABEL.reference,
   common: MATCH_LABEL.common,
 };
 

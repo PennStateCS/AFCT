@@ -21,12 +21,14 @@ const WHAT_THIS_MEANS: Record<MatchType, string> = {
     'These submissions are the same underlying machine, but cosmetic details differ, such as state names or where things sit in the drawing. That is what a shared file looks like after somebody edits it, and it is also what two people can produce independently when a problem has one natural answer. Read the comparison and the timing alongside it.',
   structural:
     'These submissions are neither the same file nor the same machine, but they share structure the rest of the class does not: the same local features, the same relationships between states, the same layout characteristics, or the same unusual quirks. This is weaker evidence than an exact or same-machine match and is worth reading in context rather than on its own.',
+  reference:
+    'This work is the reference solution posted for the problem. Everybody holding that file has the same artifact by definition, so how alike these submissions are says nothing about how each student arrived at it. It is kept for completeness and set aside so it does not crowd out the rest.',
   common:
     'Enough of the class submitted this same work that the similarity is most likely explained by everyone converging on the expected answer. It is kept for completeness and set aside so it does not crowd out the rest.',
 };
 
 const REUSE_EXPLANATION =
-  'At least one submission here arrived after another student had already received a correct result for the same work. That is useful context about timing. It does not by itself establish what happened.';
+  'At least one submission here arrived after another student\'s copy of the same work had already been marked correct, measured from when that result landed rather than when it was submitted. That is useful context about timing. It does not by itself establish what happened.';
 
 export function SimilarityInfoPopover({
   type,

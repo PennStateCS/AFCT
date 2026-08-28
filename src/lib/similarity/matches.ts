@@ -137,6 +137,16 @@ const studentSelect = {
 } as const;
 
 /**
+ * Options for a caller that wants the same matches, minus what only a rendered card needs.
+ *
+ * Deliberately not a second, cheaper matching rule: every group, every count and every
+ * classification is produced by the same code either way, because a badge that disagreed
+ * with the page it points at would be worse than no badge. The only thing `countOnly` drops
+ * is attempt numbering, which is two reads spent on a sentence nobody is going to see.
+ */
+export type FindMatchesOptions = { countOnly?: boolean };
+
+/**
  * Groups of submissions that share their exact content, for the problems given.
  *
  * Scoped by problem id, and a problem belongs to exactly one course, so this can never
@@ -157,6 +167,7 @@ export async function findSubmissionMatches(
       answerShapeHash?: string | null;
     }
   >,
+  options: FindMatchesOptions = {},
 ): Promise<SubmissionMatchGroup[]> {
   if (problemIds.length === 0) return [];
 
@@ -222,6 +233,7 @@ export async function findSubmissionMatches(
       assignmentId: true,
       submittedAt: true,
       correct: true,
+      evaluatedAt: true,
       fileName: true,
       originalFileName: true,
       studentId: true,
@@ -234,7 +246,7 @@ export async function findSubmissionMatches(
 
   // Which attempt each matched submission was for its student. One query over the students
   // and problems already in play, so it stays proportional to the matches, not the course.
-  const attemptNumbers = await numberAttempts(submissions);
+  const attemptNumbers = await numberAttempts(submissions, options);
 
   const groups = new Map<string, SubmissionMatchGroup>();
   // Which student group (if any) owns each submission in a match, and when each landed.
@@ -321,7 +333,10 @@ export async function findSubmissionMatches(
     times.push({
       studentId: submission.studentId,
       at: submission.submittedAt.getTime(),
-      correct: submission.correct,
+      passedAt:
+        submission.correct === true && submission.evaluatedAt
+          ? submission.evaluatedAt.getTime()
+          : null,
       contentHash: submission.contentHash ?? '',
     });
     submissionTimes.set(key, times);
@@ -352,7 +367,7 @@ export async function findSubmissionMatches(
   }
 
   // The third check, over everything the first two left behind.
-  reportable.push(...(await findNearMatchGroups(problemIds, problems, attemptNumbers)));
+  reportable.push(...(await findNearMatchGroups(problemIds, problems, attemptNumbers, options)));
 
   // Work that was reused after it had already passed comes first whatever its size: it is
   // the case a large course is most likely to miss. Then rarest first, so what needs reading
@@ -373,9 +388,13 @@ export async function findSubmissionMatches(
  */
 async function numberAttempts(
   matched: { id: string; problemId: string; studentId: string }[],
+  options: FindMatchesOptions = {},
 ): Promise<Map<string, number>> {
   const numbers = new Map<string, number>();
-  if (matched.length === 0) return numbers;
+  // Nothing decides anything by the attempt number: it is there so a card can say "their
+  // third attempt". A caller that only wants how many matches there are skips the two reads
+  // it costs, and every classification below is the same either way.
+  if (matched.length === 0 || options.countOnly) return numbers;
 
   const attempts = await prisma.submission.findMany({
     where: {
@@ -415,27 +434,39 @@ function sizeOf(features: unknown): { stateCount: number | null; transitionCount
 type TimedSubmission = {
   studentId: string;
   at: number;
-  correct: boolean | null;
+  /**
+   * When this attempt was marked correct, if it ever was. Null for anything not marked
+   * correct, and for a correct attempt graded before the result time was recorded, where
+   * "not known" is the only honest answer.
+   */
+  passedAt: number | null;
   contentHash: string;
 };
 
 /**
- * Did somebody submit the same file after another student's copy had already been marked
+ * Did somebody submit the same work after another student's copy had ALREADY been marked
  * correct?
+ *
+ * Measured against when the earlier result landed, not when the earlier attempt was sent.
+ * Those are different moments, and only the first one supports the sentence the page prints:
+ * an evaluation takes as long as it takes, so comparing submission times would say a student
+ * who submitted a minute after somebody else had "seen it pass" when the mark did not exist
+ * for another four minutes. Where the result time is not known, which is every attempt graded
+ * before it was recorded, this says nothing rather than assuming.
  *
  * Keyed on the contents rather than the raw bytes, and deliberately: the claim is that this
  * work had already been shown to pass, which grading decides from the contents, and a file
- * saved again by JFLAP is the same file for this purpose. Ordering alone, with no gap limit:
- * a file passed along a week later is the same act as one passed along in the corridor.
+ * saved again by JFLAP is the same work for this purpose. Ordering alone, with no gap limit:
+ * work passed along a week later is the same act as work passed along in the corridor.
  */
 function wasReusedAfterPassing(times: TimedSubmission[]): boolean {
   return times.some((later) =>
     times.some(
       (earlier) =>
-        earlier.correct === true &&
+        earlier.passedAt !== null &&
         earlier.studentId !== later.studentId &&
         earlier.contentHash === later.contentHash &&
-        earlier.at < later.at,
+        earlier.passedAt < later.at,
     ),
   );
 }
@@ -479,6 +510,7 @@ async function findNearMatchGroups(
     }
   >,
   attemptNumbers: Map<string, number>,
+  options: FindMatchesOptions = {},
 ): Promise<SubmissionMatchGroup[]> {
   const rows = await prisma.submission.findMany({
     where: { problemId: { in: problemIds }, provenanceFeatures: { not: Prisma.DbNull } },
@@ -504,7 +536,7 @@ async function findNearMatchGroups(
   // The exact checks only numbered the submissions they matched, and a near match usually
   // involves different ones, so number these too rather than showing a blank where the other
   // cards show "Submission 3".
-  const nearAttempts = await numberAttempts(rows);
+  const nearAttempts = await numberAttempts(rows, options);
 
   const groups: SubmissionMatchGroup[] = [];
 
@@ -561,14 +593,18 @@ async function findNearMatchGroups(
         closestGapMs: Math.abs(
           near.a.submittedAt.getTime() - near.b.submittedAt.getTime(),
         ),
-        reusedAfterPass: pair.some((row) =>
-          pair.some(
-            (other) =>
-              other.correct === true &&
-              other.studentId !== row.studentId &&
-              other.submittedAt < row.submittedAt,
-          ),
-        ),
+        /**
+         * Never claimed for a structural match, and not because the timing is unknown.
+         *
+         * The badge says work was reused after another student's copy had been marked
+         * correct. These two submissions are not copies of each other: that is the whole
+         * definition of this third check, which reports pairs that share uncommon structure
+         * WITHOUT being the same work. Whatever passed for the earlier student is not what
+         * the later one submitted, so the sentence would be describing something that did
+         * not happen. The chronology on the card still shows both times and both results,
+         * which is the part the data actually supports.
+         */
+        reusedAfterPass: false,
         matchesAnswerFile: false,
         ...sizeOf(pair[0]?.provenanceFeatures),
         submissions: pair

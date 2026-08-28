@@ -15,8 +15,13 @@ import { isCommon } from '@/lib/similarity/rarity';
  * more than the same machine, which says more than shared structure. Students do
  * independently reach the same correct answer; they do not independently save it with every
  * state in the same place.
+ *
+ * The last two are not places on that scale. `reference` is work that IS the solution the
+ * instructor posted, and `common` is work enough of the class submitted to be the expected
+ * answer. Both are explanations of a match rather than evidence about one, which is why they
+ * carry no strength and sort to the bottom.
  */
-export type MatchType = 'exact' | 'same-machine' | 'structural' | 'common';
+export type MatchType = 'exact' | 'same-machine' | 'structural' | 'reference' | 'common';
 
 /** How strong the artifact evidence is. Never how likely misconduct is. */
 export type EvidenceStrength = 'very-strong' | 'strong' | 'possible' | 'none';
@@ -25,6 +30,7 @@ export const MATCH_LABEL: Record<MatchType, string> = {
   exact: 'Exact JFLAP artifact',
   'same-machine': 'Same machine',
   structural: 'Structurally similar',
+  reference: 'Instructor reference solution',
   common: 'Common answer',
 };
 
@@ -39,10 +45,20 @@ export const STRENGTH_OF: Record<MatchType, EvidenceStrength> = {
   exact: 'very-strong',
   'same-machine': 'strong',
   structural: 'possible',
-  // Common answers are outside the scale rather than at the bottom of it: they are what a
-  // correct answer looks like, not weak evidence of anything.
+  // These two are outside the scale rather than at the bottom of it: they are what a correct
+  // answer looks like, not weak evidence of anything. Everybody handed the reference solution
+  // has the same artifact by definition, so "very strong" would be measuring the handout.
+  reference: 'none',
   common: 'none',
 };
+
+/**
+ * Groups the page explains rather than asks about: the expected answer, and the answer the
+ * instructor supplied. Still shown, still openable, kept out of the review queue.
+ */
+export function isSetAside(type: MatchType): boolean {
+  return type === 'common' || type === 'reference';
+}
 
 /**
  * Which kind a match is.
@@ -54,6 +70,10 @@ export const STRENGTH_OF: Record<MatchType, EvidenceStrength> = {
  */
 export function matchTypeOf(group: SubmissionMatchGroup, commonShare: number): MatchType {
   if (isCommon(group, commonShare)) return 'common';
+  // The instructor posted this work. Everyone holding that file has it, so how alike the
+  // artifacts are says nothing about how they got there, and calling it very strong evidence
+  // would be reporting the handout back to the person who wrote it.
+  if (group.matchesAnswerFile) return 'reference';
   if (group.kind === 'near') return 'structural';
   return group.identicalStudentCount >= group.studentCount ? 'exact' : 'same-machine';
 }
@@ -84,7 +104,17 @@ export type MatchCluster = {
   byteIdenticalStudentCount: number;
   problemStudentCount: number;
   reusedAfterPass: boolean;
+  /**
+   * EVERY relationship in this group is work that matches the problem's own posted solution.
+   *
+   * Deliberately all of them rather than any of them: in a group held together by a shared
+   * student, one pair being the reference solution explains that pair and says nothing about
+   * the rest, and stamping the whole group with it would excuse matches nobody checked.
+   * `answerFileRelationships` carries the partial case.
+   */
   matchesAnswerFile: boolean;
+  /** How many of the relationships in this group are the posted solution. */
+  answerFileRelationships: number;
   /** The shortest interval between two different students anywhere in the group. */
   closestGapMs: number | null;
   earliest: MatchSubmission | null;
@@ -96,7 +126,8 @@ const TYPE_RANK: Record<MatchType, number> = {
   exact: 0,
   'same-machine': 1,
   structural: 2,
-  common: 3,
+  reference: 3,
+  common: 4,
 };
 
 /** One entry per student, earliest submission first. */
@@ -187,7 +218,12 @@ function buildCluster(
   const first = ranked[0] as SubmissionMatchGroup;
   const type = matchTypeOf(first, commonShare);
 
-  const counts = { exact: 0, 'same-machine': 0, structural: 0 } as MatchCluster['counts'];
+  const counts = {
+    exact: 0,
+    'same-machine': 0,
+    structural: 0,
+    reference: 0,
+  } as MatchCluster['counts'];
   for (const group of ranked) {
     const groupType = matchTypeOf(group, commonShare);
     if (groupType !== 'common') counts[groupType] += 1;
@@ -212,7 +248,8 @@ function buildCluster(
     ),
     problemStudentCount: first.problemStudentCount,
     reusedAfterPass: ranked.some((group) => group.reusedAfterPass),
-    matchesAnswerFile: ranked.some((group) => group.matchesAnswerFile),
+    matchesAnswerFile: ranked.every((group) => group.matchesAnswerFile),
+    answerFileRelationships: ranked.filter((group) => group.matchesAnswerFile).length,
     closestGapMs: gaps.length > 0 ? Math.min(...gaps) : null,
     earliest: students[0] ?? null,
     stateCount: sized?.stateCount ?? null,
@@ -238,13 +275,15 @@ function compareClusters(a: MatchCluster, b: MatchCluster): number {
 
 /** The page's opening lines: what is here, and whether any of it is the strongest kind. */
 export function summarise(clusters: MatchCluster[]): string[] {
-  const worthReviewing = clusters.filter((cluster) => cluster.type !== 'common');
-  const common = clusters.length - worthReviewing.length;
+  const worthReviewing = clusters.filter((cluster) => !isSetAside(cluster.type));
+  const setAside = clusters.length - worthReviewing.length;
+  // Said the same way in both branches: what was set aside, and how many.
+  const asideLine = `${setAside} group${setAside === 1 ? '' : 's'} set aside as a common answer or the posted solution.`;
 
   if (worthReviewing.length === 0) {
-    return common === 0
+    return setAside === 0
       ? ['No two students submitted related work.']
-      : [`No matches worth reviewing. ${common} common answer${common === 1 ? '' : 's'} set aside.`];
+      : [`No matches worth reviewing. ${asideLine}`];
   }
 
   const problems = new Set(worthReviewing.map((cluster) => cluster.problem.id)).size;
@@ -252,6 +291,8 @@ export function summarise(clusters: MatchCluster[]): string[] {
     `${worthReviewing.length} match group${worthReviewing.length === 1 ? '' : 's'} worth reviewing across ` +
       `${problems} problem${problems === 1 ? '' : 's'}.`,
   ];
+
+  if (setAside > 0) lines.push(asideLine);
 
   const exact = worthReviewing.filter((cluster) => cluster.type === 'exact').length;
   if (exact > 0) {
@@ -281,10 +322,14 @@ export function summarise(clusters: MatchCluster[]): string[] {
 
 /** How many clusters each filter would show, for the filter row's counts. */
 export function countByType(clusters: MatchCluster[]): Record<MatchType | 'all', number> {
-  const counts = { all: 0, exact: 0, 'same-machine': 0, structural: 0, common: 0 } as Record<
-    MatchType | 'all',
-    number
-  >;
+  const counts = {
+    all: 0,
+    exact: 0,
+    'same-machine': 0,
+    structural: 0,
+    reference: 0,
+    common: 0,
+  } as Record<MatchType | 'all', number>;
   for (const cluster of clusters) {
     counts.all += 1;
     counts[cluster.type] += 1;

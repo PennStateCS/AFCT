@@ -16,6 +16,7 @@ import { SimilarityFilters, type MatchFilter } from '@/components/assignments/Si
 import {
   clusterMatches,
   countByType,
+  isSetAside,
   summarise,
   type MatchCluster,
 } from '@/lib/similarity/evidence';
@@ -101,16 +102,20 @@ export function AssignmentSimilarityPanel() {
 
   const clusters = useMemo(() => clusterMatches(data ?? [], commonShare), [data, commonShare]);
 
-  const worthReviewing = clusters.filter((cluster) => cluster.type !== 'common');
-  const common = clusters.filter((cluster) => cluster.type === 'common');
+  // Set aside rather than reviewed: what the class as a whole answered, and what the
+  // instructor handed out. Both explain a match instead of raising one.
+  const worthReviewing = clusters.filter((cluster) => !isSetAside(cluster.type));
+  const setAside = clusters.filter((cluster) => isSetAside(cluster.type));
   const summary = summarise(clusters);
   const counts = countByType(clusters);
 
   // Grouped under their problem, with the strongest evidence first inside each, and the
   // problem holding the strongest first on the page.
   const sections = useMemo(() => {
+    // The set-aside kinds have their own section below, so choosing one of those filters
+    // leaves the review list as it was rather than emptying the page.
     const shown =
-      filter === 'all' || filter === 'common'
+      filter === 'all' || isSetAside(filter as MatchCluster['type'])
         ? worthReviewing
         : worthReviewing.filter((cluster) => cluster.type === filter);
 
@@ -244,17 +249,18 @@ export function AssignmentSimilarityPanel() {
         </section>
       ))}
 
-      {common.length > 0 ? (
+      {setAside.length > 0 ? (
         <Collapsible open={showCommon} onOpenChange={setShowCommon} className="max-w-3xl space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
             <div>
               <h3 className="flex items-center gap-2 text-lg font-semibold">
                 <Users className="size-5" aria-hidden="true" />
-                Common answers ({common.length})
+                Set aside ({setAside.length})
               </h3>
               <p className="text-muted-foreground text-sm">
-                Set aside because at least {Math.round(commonShare * 100)}% of a problem&apos;s
-                students submitted them.
+                Work at least {Math.round(commonShare * 100)}% of a problem&apos;s students
+                submitted, and work that is the solution the instructor posted. Both explain a
+                match rather than raising one.
               </p>
             </div>
             <CollapsibleTrigger asChild>
@@ -264,14 +270,14 @@ export function AssignmentSimilarityPanel() {
                     showCommon ? 'rotate-180 transition-transform' : 'transition-transform'
                   }
                 />
-                {showCommon ? 'Hide' : 'Show'} common answers
+                {showCommon ? 'Hide' : 'Show'} set-aside groups
               </Button>
             </CollapsibleTrigger>
           </div>
 
           {/* Nothing renders until it is asked for: some of these hold thirty students. */}
           <CollapsibleContent className="space-y-3">
-            {common.map((cluster) => (
+            {setAside.map((cluster) => (
               <SimilarityMatchCard
                 key={cluster.id}
                 cluster={cluster}

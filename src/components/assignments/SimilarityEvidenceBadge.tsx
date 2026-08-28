@@ -1,6 +1,6 @@
 'use client';
 
-import { Fingerprint, GitBranch, ScanSearch, Users, History } from 'lucide-react';
+import { Fingerprint, GitBranch, ScanSearch, Users, BookCheck, History } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { MATCH_LABEL, STRENGTH_LABEL, STRENGTH_OF, type MatchType } from '@/lib/similarity/evidence';
@@ -19,6 +19,7 @@ export const MATCH_ICON: Record<MatchType, LucideIcon> = {
   exact: Fingerprint,
   'same-machine': GitBranch,
   structural: ScanSearch,
+  reference: BookCheck,
   common: Users,
 };
 
@@ -27,6 +28,7 @@ const BADGE_VARIANT: Record<MatchType, 'danger' | 'warning' | 'info' | 'neutral'
   exact: 'danger',
   'same-machine': 'warning',
   structural: 'info',
+  reference: 'neutral',
   common: 'neutral',
 };
 
@@ -35,6 +37,7 @@ export const ACCENT_BORDER: Record<MatchType, string> = {
   exact: 'border-l-4 border-l-badge-danger-border',
   'same-machine': 'border-l-4 border-l-badge-warning-border',
   structural: 'border-l-4 border-l-badge-info-border',
+  reference: 'border-l-4 border-l-badge-neutral-border',
   common: 'border-l-4 border-l-badge-neutral-border',
 };
 
@@ -45,8 +48,10 @@ export function SimilarityEvidenceBadge({ type }: { type: MatchType }) {
   return (
     <Badge variant={BADGE_VARIANT[type]} className="gap-1.5">
       <Icon className="size-3.5" aria-hidden="true" />
-      {type === 'common' ? (
-        MATCH_LABEL.common
+      {/* A kind that carries no strength says only what it is. Writing "Expected" in front
+          of it would put a word from the evidence scale on a card that is not on it. */}
+      {strength === 'none' ? (
+        MATCH_LABEL[type]
       ) : (
         <>
           <span className="font-semibold uppercase">{STRENGTH_LABEL[strength]}</span>

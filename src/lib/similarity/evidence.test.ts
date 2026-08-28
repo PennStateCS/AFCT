@@ -67,6 +67,29 @@ describe('matchTypeOf', () => {
     expect(STRENGTH_OF[type]).toBe('possible');
   });
 
+  it('calls work that is the posted solution a reference match, carrying no strength', () => {
+    // Would otherwise be exact: everybody who was handed the file has the same artifact, so
+    // how alike the artifacts are measures the handout rather than the students.
+    const asExact = matchTypeOf(group({ matchesAnswerFile: true }), 0.25);
+    expect(asExact).toBe('reference');
+    expect(STRENGTH_OF[asExact]).toBe('none');
+
+    // And the same when the students edited it enough to be only the same machine.
+    const asSameMachine = matchTypeOf(
+      group({ matchesAnswerFile: true, studentCount: 3, identicalStudentCount: 2 }),
+      0.25,
+    );
+    expect(asSameMachine).toBe('reference');
+  });
+
+  it('still calls a widely shared posted solution a common answer, so the dial keeps meaning', () => {
+    const type = matchTypeOf(
+      group({ matchesAnswerFile: true, studentCount: 42, identicalStudentCount: 42 }),
+      0.25,
+    );
+    expect(type).toBe('common');
+  });
+
   it('calls anything most of the class shares common, whatever the files look like', () => {
     // An exact artifact shared by half the class is convergence, not a finding.
     const type = matchTypeOf(group({ studentCount: 42, identicalStudentCount: 42 }), 0.25);
@@ -139,7 +162,33 @@ describe('clusterMatches', () => {
     );
 
     expect(cluster?.type).toBe('exact');
-    expect(cluster?.counts).toEqual({ exact: 1, 'same-machine': 0, structural: 1 });
+    expect(cluster?.counts).toEqual({ exact: 1, 'same-machine': 0, structural: 1, reference: 0 });
+  });
+
+  it('keeps the posted solution at the level it is true at', () => {
+    // One pair is the instructor's file; the other pair, connected through b, is not. The
+    // group as a whole is therefore NOT the reference solution, and saying so would excuse a
+    // match nobody checked.
+    const [cluster] = clusterMatches(
+      [
+        group({ matchId: 'ab', matchesAnswerFile: true, submissions: [submission('a'), submission('b')] }),
+        group({ matchId: 'bc', submissions: [submission('b'), submission('c')] }),
+      ],
+      0.25,
+    );
+
+    expect(cluster?.matchesAnswerFile).toBe(false);
+    expect(cluster?.answerFileRelationships).toBe(1);
+
+    // A group where every relationship is the posted solution can say it plainly.
+    const [all] = clusterMatches(
+      [
+        group({ matchId: 'ab', matchesAnswerFile: true, submissions: [submission('a'), submission('b')] }),
+        group({ matchId: 'bc', matchesAnswerFile: true, submissions: [submission('b'), submission('c')] }),
+      ],
+      0.25,
+    );
+    expect(all?.matchesAnswerFile).toBe(true);
   });
 
   it('carries the timing and reuse of everything in the group', () => {
@@ -231,7 +280,9 @@ describe('summarise', () => {
       0.25,
     );
 
-    expect(summarise(clusters)[0]).toBe('No matches worth reviewing. 1 common answer set aside.');
+    expect(summarise(clusters)[0]).toBe(
+      'No matches worth reviewing. 1 group set aside as a common answer or the posted solution.',
+    );
     expect(countByType(clusters)).toMatchObject({ all: 1, common: 1, exact: 0 });
   });
 

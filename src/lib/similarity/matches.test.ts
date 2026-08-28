@@ -27,6 +27,9 @@ const submission = (over: Record<string, unknown>) => ({
   assignmentId: 'a1',
   submittedAt: new Date('2026-08-14T12:00:00Z'),
   correct: null,
+  // Null unless a case says otherwise: an attempt that never reached a result, and also
+  // every attempt graded before the result time was recorded.
+  evaluatedAt: null,
   fileName: 'stored.jff',
   originalFileName: 'answer.jff',
   studentId: 's1',
@@ -376,7 +379,69 @@ describe('findSubmissionMatches', () => {
     expect(group?.identicalStudentCount).toBe(2);
   });
 
-  it('flags a file submitted after another student had already passed with it', async () => {
+  it('flags work submitted after another student\'s copy had already been marked correct', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({
+        id: 'sub-1',
+        studentId: 's1',
+        student: student('s1'),
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:00:00Z'),
+        // The mark existed at 12:05, which is the moment the claim is about.
+        evaluatedAt: new Date('2026-08-14T12:05:00Z'),
+      }),
+      submission({
+        id: 'sub-2',
+        studentId: 's2',
+        student: student('s2'),
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:30:00Z'),
+        evaluatedAt: new Date('2026-08-14T12:31:00Z'),
+      }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.reusedAfterPass).toBe(true);
+  });
+
+  it('does not claim reuse when the earlier attempt had not been marked yet', async () => {
+    // Alice submits at 12:00 and her result lands at 12:05. Bob submits at 12:01. Comparing
+    // submission times would call that reuse; there was nothing to reuse yet.
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({
+        id: 'sub-1',
+        studentId: 's1',
+        student: student('s1'),
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:00:00Z'),
+        evaluatedAt: new Date('2026-08-14T12:05:00Z'),
+      }),
+      submission({
+        id: 'sub-2',
+        studentId: 's2',
+        student: student('s2'),
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:01:00Z'),
+        evaluatedAt: new Date('2026-08-14T12:06:00Z'),
+      }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.reusedAfterPass).toBe(false);
+  });
+
+  it('says nothing about reuse for work graded before result times were recorded', async () => {
+    // Historical rows: correct, but nobody knows when the mark appeared.
     prismaMock.submission.groupBy.mockResolvedValue([
       { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
       { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
@@ -394,13 +459,53 @@ describe('findSubmissionMatches', () => {
         studentId: 's2',
         student: student('s2'),
         correct: true,
-        submittedAt: new Date('2026-08-14T12:30:00Z'),
+        submittedAt: new Date('2026-08-14T14:00:00Z'),
       }),
     ]);
 
     const [group] = await findSubmissionMatches(['p1'], problems);
 
-    expect(group?.reusedAfterPass).toBe(true);
+    expect(group?.reusedAfterPass).toBe(false);
+  });
+
+  it('never calls a student\'s own resubmission a reuse, or an incorrect result a pass', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      // s1 passed, then submitted the same work again: their own work, not a reuse.
+      submission({
+        id: 'sub-1',
+        studentId: 's1',
+        student: student('s1'),
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:00:00Z'),
+        evaluatedAt: new Date('2026-08-14T12:01:00Z'),
+      }),
+      submission({
+        id: 'sub-1b',
+        studentId: 's1',
+        student: student('s1'),
+        correct: true,
+        submittedAt: new Date('2026-08-14T12:10:00Z'),
+        evaluatedAt: new Date('2026-08-14T12:11:00Z'),
+      }),
+      // s2's copy arrived after an INCORRECT result of their own, which proves nothing.
+      submission({
+        id: 'sub-2',
+        studentId: 's2',
+        student: student('s2'),
+        correct: false,
+        submittedAt: new Date('2026-08-14T11:00:00Z'),
+        evaluatedAt: new Date('2026-08-14T11:01:00Z'),
+      }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    // s1's pass at 12:01 precedes nobody else's submission, so there is nothing to claim.
+    expect(group?.reusedAfterPass).toBe(false);
   });
 
   it('does not flag it when the first copy had not passed', async () => {
@@ -479,9 +584,9 @@ describe('findSubmissionMatches', () => {
     ]);
     prismaMock.submission.findMany.mockResolvedValue([
       // Three students, so ordinarily this would sort below the pair below.
-      submission({ id: 'sub-1', studentId: 's1', student: student('s1'), correct: true, submittedAt: new Date('2026-08-14T12:00:00Z') }),
-      submission({ id: 'sub-2', studentId: 's2', student: student('s2'), correct: true, submittedAt: new Date('2026-08-14T12:30:00Z') }),
-      submission({ id: 'sub-3', studentId: 's3', student: student('s3'), correct: true, submittedAt: new Date('2026-08-14T13:00:00Z') }),
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1'), correct: true, submittedAt: new Date('2026-08-14T12:00:00Z'), evaluatedAt: new Date('2026-08-14T12:02:00Z') }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2'), correct: true, submittedAt: new Date('2026-08-14T12:30:00Z'), evaluatedAt: new Date('2026-08-14T12:32:00Z') }),
+      submission({ id: 'sub-3', studentId: 's3', student: student('s3'), correct: true, submittedAt: new Date('2026-08-14T13:00:00Z'), evaluatedAt: new Date('2026-08-14T13:02:00Z') }),
       submission({ id: 'sub-4', problemId: 'p2', shapeHash: 'shape-z', contentHash: 'hash-z', studentId: 's4', student: student('s4') }),
       submission({ id: 'sub-5', problemId: 'p2', shapeHash: 'shape-z', contentHash: 'hash-z', studentId: 's5', student: student('s5') }),
     ]);
@@ -532,6 +637,34 @@ describe('findSubmissionMatches', () => {
     expect(group).toMatchObject({ kind: 'near', studentCount: 2, identicalStudentCount: 1 });
     expect(group?.evidence.length).toBeGreaterThan(0);
     expect(group?.submissions.map((s) => s.id).sort()).toEqual(['near-1', 'near-2']);
+  });
+
+  it('never says a structural match is work reused after a pass', async () => {
+    // The earlier student's work was marked correct long before the later submission, but
+    // these two are not copies of each other: that is what makes it a structural match. What
+    // passed is not what was submitted, so the sentence would describe something else.
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+    withNearMatchRows([
+      ...nearCrowd(),
+      nearRow({
+        correct: true,
+        submittedAt: new Date('2026-08-15T10:00:00Z'),
+        evaluatedAt: new Date('2026-08-15T10:01:00Z'),
+      }),
+      nearRow({
+        id: 'near-2',
+        studentId: 's2',
+        shapeHash: 'shape-2',
+        contentHash: 'hash-2',
+        student: student('s2'),
+        submittedAt: new Date('2026-08-15T12:20:00Z'),
+      }),
+    ]);
+
+    const [group] = await findSubmissionMatches(['p1'], problems);
+
+    expect(group?.kind).toBe('near');
+    expect(group?.reusedAfterPass).toBe(false);
   });
 
   it('ignores a description written under rules this code does not know', async () => {
