@@ -26,7 +26,9 @@ on:
       - '**.md'
   pull_request:
   # So the release gate has an answer when CI never ran on a commit: run it on that ref by
-  # hand rather than tagging something untested, or loosening the gate.
+  # hand rather than tagging something untested, or loosening the gate. A dispatch runs the
+  # FULL suite (everything a pull request gets, e2e included), because its whole purpose is
+  # to stand in for the validation a commit never had.
   workflow_dispatch:
 
 permissions:
@@ -78,7 +80,7 @@ jobs:
           ./gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
 
   lint:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -107,7 +109,7 @@ jobs:
   # ShellCheck over every RUN block, which nothing else here does. See .hadolint.yaml for
   # which rules are off and why.
   dockerfiles:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -134,7 +136,7 @@ jobs:
   # convention (shadcn primitives kept whole, types exported for symmetry) and would make
   # the gate noise rather than signal. Run `npx knip` locally to see the full picture.
   deadcode:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -190,7 +192,7 @@ jobs:
         # Same major + digest as docker-compose.dev.yml and deploy/docker-compose.yml.
         # Testing transaction and constraint behavior against a different Postgres than
         # we actually run would defeat the point of these tests.
-        image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+        image: postgres:15-alpine@sha256:fe0737ba566a2c5b2a28f34433c0a423261900ec17b9bf7ad115e1aae7e57f1b
         env:
           POSTGRES_DB: afct_test
           POSTGRES_USER: afct_user
@@ -230,7 +232,7 @@ jobs:
         run: npm run test:db
 
   docs-check:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -364,14 +366,14 @@ jobs:
   # started by playwright itself (see the note in playwright.config.ts on why it is `next
   # dev` and not a production build).
   e2e:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     services:
       postgres:
         # Same image as the test-db job and as production.
-        image: postgres:15-alpine@sha256:cd17e2ac98240fce1541ad2a803b34009b4eea5aec8a832363cdc7eca62e722e
+        image: postgres:15-alpine@sha256:fe0737ba566a2c5b2a28f34433c0a423261900ec17b9bf7ad115e1aae7e57f1b
         env:
           POSTGRES_DB: afct_test
           POSTGRES_USER: afct_user

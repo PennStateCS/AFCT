@@ -179,11 +179,34 @@ jobs:
               "ghcr.io/pennstatecs/afct-${img}:${TAG}" || echo "scan failed for ${img}"
           done
 
-      - name: Upload the scan results
+      # One upload per image, each under its own category. Uploading the directory in one
+      # step put four same-category runs in one file, which GitHub has refused since July
+      # 2025, and continue-on-error swallowed the refusal: every release scan since then
+      # was produced and then thrown away without reaching the Security tab.
+      - name: Upload the dashboard scan
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@d6317709a54fd87078d323eeb0e48ec331c8e621 # v3
+        uses: github/codeql-action/upload-sarif@45c373516f557556c15d420e3f5e0aa3d64366bc # v3.31.9
         with:
-          sarif_file: trivy-results
+          sarif_file: trivy-results/dashboard.sarif
+          category: trivy-dashboard
+      - name: Upload the nginx scan
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@45c373516f557556c15d420e3f5e0aa3d64366bc # v3.31.9
+        with:
+          sarif_file: trivy-results/nginx.sarif
+          category: trivy-nginx
+      - name: Upload the backup scan
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@45c373516f557556c15d420e3f5e0aa3d64366bc # v3.31.9
+        with:
+          sarif_file: trivy-results/backup.sarif
+          category: trivy-backup
+      - name: Upload the updater scan
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@45c373516f557556c15d420e3f5e0aa3d64366bc # v3.31.9
+        with:
+          sarif_file: trivy-results/updater.sarif
+          category: trivy-updater
 
       # Add the new version to the curated manifest on main so the updater offers it.
       # Idempotent (skips if already listed) and race-safe against concurrent main
