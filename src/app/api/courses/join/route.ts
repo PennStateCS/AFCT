@@ -18,6 +18,7 @@ import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
+import { evaluateJoinCodeRateLimit, formatRetryAfterSeconds } from '@/lib/security/rate-limiter';
 import { isAdmin } from '@/lib/permissions';
 import { readJson } from '@/lib/api/request';
 import { parseValidDate } from '@/lib/date-format';
@@ -62,6 +63,24 @@ export async function POST(req: Request) {
   const parsed = await readJson(req, JoinBody);
   if (!parsed.ok) return parsed.response;
   const { code } = parsed.data;
+
+  // Before the lookup: the code space is what makes registration codes safe, and that
+  // only holds if nobody gets to walk it. Keyed on the signed-in user, so a shared
+  // campus address never locks a lab out of joining.
+  const limit = evaluateJoinCodeRateLimit({ identifier: session.user.id });
+  if (limit.status === 'blocked') {
+    await createEnhancedActivityLog(prisma, req, {
+      userId: session.user.id,
+      action: 'COURSE_JOIN_RATE_LIMIT',
+      severity: 'SECURITY',
+      category: 'COURSE',
+      metadata: { reason: 'too many join-code attempts' },
+    });
+    return NextResponse.json(
+      { error: 'Too many attempts. Wait a few minutes and try again.' },
+      { status: 429, headers: { 'Retry-After': formatRetryAfterSeconds(limit.retryAfterMs) } },
+    );
+  }
 
   const course = await prisma.course.findUnique({
     where: { regCode: code.toUpperCase() },

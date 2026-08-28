@@ -25,9 +25,11 @@ vi.mock('@/lib/mail-queue', () => ({ queueMail: vi.fn() }));
 vi.mock('@/lib/public-app-url', () => ({ publicAppUrl: (p: string) => `https://afct.test${p}` }));
 
 import { POST } from './route';
+import { clearBucketsFor } from '@/lib/security/rate-limiter';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearBucketsFor(['password-change:u1', 'password-change:limited']);
   bcryptMock.compare.mockReset();
   bcryptMock.hash.mockReset();
   allowedMock.mockReset();
@@ -357,5 +359,59 @@ describe('POST /api/me/password, on an account with no password', () => {
     expect(res.status).toBe(400);
     expect(prismaMock.user.updateMany).not.toHaveBeenCalled();
     expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+});
+describe('current-password guessing', () => {
+  const attempt = () =>
+    POST(
+      new NextRequest('http://localhost/api/me/password', {
+        method: 'POST',
+        body: JSON.stringify({ oldPassword: 'a-guess', newPassword: 'Newpassword1!' }),
+      }),
+    );
+
+  /**
+   * The login lockout guards signing in; whoever holds a stolen session is already past
+   * it, and this form is their oracle for the one credential the session does not carry.
+   */
+  it('blocks repeated wrong current passwords, and says so in the log', async () => {
+    authMock.mockResolvedValue({ user: { id: 'limited', role: 'STUDENT' } });
+    prismaMock.user.findUnique.mockResolvedValue({ password: 'hash' });
+    bcryptMock.compare.mockResolvedValue(false);
+
+    let last: Response | null = null;
+    for (let i = 0; i < 6; i++) last = await attempt();
+
+    expect(last?.status).toBe(429);
+    expect(last?.headers.get('Retry-After')).toMatch(/^\d+$/);
+    expect(activityLogMock.mock.calls.at(-1)?.[2]).toMatchObject({
+      action: 'CHANGE_PASSWORD_RATE_LIMIT',
+      severity: 'SECURITY',
+    });
+    // Blocked before the compare: the oracle stops answering entirely.
+    expect(bcryptMock.compare).toHaveBeenCalledTimes(5);
+  });
+
+  it('does not charge policy fumbles on the new password', async () => {
+    authMock.mockResolvedValue({ user: { id: 'limited', role: 'STUDENT' } });
+    prismaMock.user.findUnique.mockResolvedValue({ password: 'hash' });
+
+    // Ten weak-new-password rejections, then a real attempt: still allowed, because the
+    // limiter sits after validation and only real current-password checks are charged.
+    for (let i = 0; i < 10; i++) {
+      const res = await POST(
+        new NextRequest('http://localhost/api/me/password', {
+          method: 'POST',
+          body: JSON.stringify({ oldPassword: 'a-guess', newPassword: 'weak' }),
+        }),
+      );
+      expect(res.status).toBe(400);
+    }
+
+    bcryptMock.compare.mockResolvedValue(false);
+    const res = await attempt();
+
+    expect(res.status).toBe(400);
+    expect(bcryptMock.compare).toHaveBeenCalled();
   });
 });

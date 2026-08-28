@@ -18,6 +18,7 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 
 import { POST } from './route';
+import { clearBucketsFor } from '@/lib/security/rate-limiter';
 
 const buildCourse = (overrides: Record<string, unknown> = {}) => ({
   id: 'course-1',
@@ -32,6 +33,9 @@ const buildCourse = (overrides: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The limiter is module-level state; a fresh user id per suite run keeps tests honest,
+  // but clearing the bucket keeps them independent of execution order too.
+  clearBucketsFor(['join-code:user-1', 'join-code:guesser']);
 });
 
 describe('POST /api/courses/join', () => {
@@ -281,5 +285,50 @@ describe('POST /api/courses/join', () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe('Registration is closed for this course.');
+  });
+});
+describe('join-code guessing', () => {
+  const makeRequest = (body: unknown) =>
+    new Request('http://localhost/api/courses/join', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  /**
+   * The code space is what makes registration codes safe, and that only holds if nobody
+   * gets to walk it: without a limiter a student can try codes as fast as the database
+   * answers, signed in the whole time.
+   */
+  it('blocks a signed-in user after repeated wrong codes', async () => {
+    authMock.mockResolvedValue({ user: { id: 'guesser', isAdmin: false } });
+    prismaMock.course.findUnique.mockResolvedValue(null);
+
+    let last: Response | null = null;
+    for (let i = 0; i < 11; i++) {
+      last = await POST(makeRequest({ code: `WRONG${String(i).padStart(3, '0')}` }));
+    }
+
+    expect(last?.status).toBe(429);
+    expect(last?.headers.get('Retry-After')).toMatch(/^\d+$/);
+    // The refusal is itself a security event: a walk through the code space should be
+    // visible to whoever reads the log, not just slowed down.
+    expect(activityLogMock.mock.calls.at(-1)?.[2]).toMatchObject({
+      action: 'COURSE_JOIN_RATE_LIMIT',
+      severity: 'SECURITY',
+    });
+  });
+
+  it("does not let one user's guessing block another", async () => {
+    authMock.mockResolvedValue({ user: { id: 'guesser', isAdmin: false } });
+    prismaMock.course.findUnique.mockResolvedValue(null);
+    for (let i = 0; i < 11; i++) {
+      await POST(makeRequest({ code: 'WRONGAAA' }));
+    }
+
+    authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
+    const res = await POST(makeRequest({ code: 'WRONGAAA' }));
+
+    expect(res.status).toBe(404);
   });
 });

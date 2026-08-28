@@ -5,6 +5,10 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcrypt';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import {
+  evaluatePasswordChangeRateLimit,
+  formatRetryAfterSeconds,
+} from '@/lib/security/rate-limiter';
 import { logError } from '@/lib/api/activity';
 import { isStrongPassword, passwordRequirementText } from '@/lib/password-policy';
 import { readJson } from '@/lib/api/request';
@@ -226,6 +230,24 @@ export async function POST(req: NextRequest) {
     // From here on this is a change, which needs the current password.
     if (!oldPassword) {
       return NextResponse.json({ error: 'Your current password is required' }, { status: 400 });
+    }
+
+    // Right before the compare, so only real guesses at the current password are charged:
+    // the login lockout guards signing in, and whoever holds a stolen session is already
+    // past it, with this form as their oracle for the one credential the session lacks.
+    const limit = evaluatePasswordChangeRateLimit({ identifier: userId });
+    if (limit.status === 'blocked') {
+      await createEnhancedActivityLog(prisma, req, {
+        userId,
+        action: 'CHANGE_PASSWORD_RATE_LIMIT',
+        severity: 'SECURITY',
+        category: 'USER',
+        metadata: { reason: 'too many current-password attempts' },
+      });
+      return NextResponse.json(
+        { error: 'Too many attempts. Wait a few minutes and try again.' },
+        { status: 429, headers: { 'Retry-After': formatRetryAfterSeconds(limit.retryAfterMs) } },
+      );
     }
 
     const isValid = await bcrypt.compare(oldPassword, user.password);

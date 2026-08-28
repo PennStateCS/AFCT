@@ -122,6 +122,35 @@ const AVATAR_UPLOAD_CONFIG: BucketConfig = {
   frictionDelayMs: 0,
 };
 
+// Guessing a course registration code from a signed-in account. The code space is large,
+// but only a limiter makes it matter: without one a student can try codes as fast as the
+// database answers. Keyed on the user id, since the caller is always signed in, so a
+// shared campus address never locks a whole lab out of joining. Only "ok" or "blocked".
+const JOIN_CODE_CONFIG: BucketConfig = {
+  windowMs: 15 * 60 * 1000,
+  maxAttempts: 10,
+  frictionThreshold: Number.MAX_SAFE_INTEGER,
+  challengeThreshold: Number.MAX_SAFE_INTEGER,
+  challengeCooldownMs: 0,
+  blockDurationMs: 15 * 60 * 1000,
+  frictionDelayMs: 0,
+};
+
+// Guessing the current password from inside a live session. The login lockout does not
+// cover this path: it guards signing in, and whoever holds a stolen session is already
+// past it, with the change-password form as their oracle for the one credential the
+// session does not give them. Charged only when a current password is actually checked,
+// so policy fumbles on the new password cost nothing. Matches the login lockout's shape.
+const PASSWORD_CHANGE_CONFIG: BucketConfig = {
+  windowMs: 15 * 60 * 1000,
+  maxAttempts: 5,
+  frictionThreshold: Number.MAX_SAFE_INTEGER,
+  challengeThreshold: Number.MAX_SAFE_INTEGER,
+  challengeCooldownMs: 0,
+  blockDurationMs: 15 * 60 * 1000,
+  frictionDelayMs: 0,
+};
+
 const HUMAN_DELAY_THRESHOLD_MS = 600;
 
 export type LimitReason = 'ip' | 'account';
@@ -521,6 +550,34 @@ export const evaluateAvatarUploadRateLimit = (params: { identifier?: string }): 
     {
       key: bucketKey('avatar-upload', params.identifier),
       config: AVATAR_UPLOAD_CONFIG,
+      reason: 'account' as LimitReason,
+    },
+  ]);
+
+/**
+ * Per-user limit on join-code attempts, hits and misses alike (a legitimate student
+ * joins a course once or twice a term, so charging successes costs nobody anything).
+ */
+export const evaluateJoinCodeRateLimit = (params: { identifier?: string }): RateLimitDecision =>
+  ensureEvaluations([
+    {
+      key: bucketKey('join-code', params.identifier),
+      config: JOIN_CODE_CONFIG,
+      reason: 'account' as LimitReason,
+    },
+  ]);
+
+/**
+ * Per-user limit on proving the current password in the change-password form. See the
+ * config note: this is the brute-force path the login lockout cannot see.
+ */
+export const evaluatePasswordChangeRateLimit = (params: {
+  identifier?: string;
+}): RateLimitDecision =>
+  ensureEvaluations([
+    {
+      key: bucketKey('password-change', params.identifier),
+      config: PASSWORD_CHANGE_CONFIG,
       reason: 'account' as LimitReason,
     },
   ]);
