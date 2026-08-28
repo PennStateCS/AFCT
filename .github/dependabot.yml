@@ -1,11 +1,14 @@
 # Dependabot configuration.
 #
-# We want SECURITY updates only (driven by the repo-level "Dependabot security
+# For npm: SECURITY updates only (driven by the repo-level "Dependabot security
 # updates" toggle), batched into a single PR per ecosystem instead of a stack of
 # one-per-package PRs. `open-pull-requests-limit: 0` disables routine version-bump
 # PRs; the `groups` blocks (applies-to: security-updates) collapse the security
 # fixes into one grouped PR each. `schedule` is required syntactically but does not
 # drive security updates (those trigger on alerts).
+#
+# GitHub Actions is the exception: routine bumps are enabled there, grouped and
+# monthly. See the note on that block.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -42,11 +45,15 @@ updates:
         patterns:
           - '*'
 
+  # Unlike npm, version bumps ARE wanted here: every action is pinned to a commit SHA,
+  # and a pin nobody proposes moving just rots. That is how the codeql-action pin ended
+  # up on a commit its own repository no longer reaches. Monthly and grouped, so this
+  # arrives as one PR of comment-annotated SHA bumps, not a stack.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-    open-pull-requests-limit: 0
+      interval: monthly
+    open-pull-requests-limit: 5
     # CI workflow pins, not the shipped app; tag as development.
     labels:
       - dependencies
@@ -54,5 +61,9 @@ updates:
     groups:
       actions-security:
         applies-to: security-updates
+        patterns:
+          - '*'
+      actions-versions:
+        applies-to: version-updates
         patterns:
           - '*'
