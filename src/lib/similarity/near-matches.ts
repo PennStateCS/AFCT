@@ -45,11 +45,14 @@ export type NearMatch = {
 };
 
 /**
- * A feature held by more than this share of the students who submitted the problem is
- * discarded before anything is compared. Twelve of forty students having the same little
- * piece of structure means the problem produces it, not that anybody shared a file.
+ * A feature held by at least this share of the students who submitted the problem is
+ * discarded before anything is compared. Ten of forty students having the same little piece
+ * of structure means the problem produces it, not that anybody shared a file.
  *
- * Same philosophy as the Common badge on a whole match, applied a level down.
+ * Same philosophy as the Common badge on a whole match, applied a level down, and the same
+ * boundary: at exactly this share the rule says common, not rare. `isCommon` in
+ * `lib/similarity/rarity` treats the boundary the same way, and two thresholds written as
+ * one number have to agree about what the number means.
  */
 export const FEATURE_COMMON_SHARE = 0.25;
 
@@ -96,7 +99,7 @@ function comparableInSize(a: ProvenanceFeatures, b: ProvenanceFeatures): boolean
 function weightOf(studentsWithFeature: number, studentsInProblem: number): number {
   if (studentsInProblem === 0 || studentsWithFeature < 2) return 0;
   const share = studentsWithFeature / studentsInProblem;
-  if (share > FEATURE_COMMON_SHARE) return 0;
+  if (share >= FEATURE_COMMON_SHARE) return 0;
   // 1/share, so a feature two of forty students have counts twenty times one that ten have.
   return 1 / Math.max(share, 1 / studentsInProblem);
 }

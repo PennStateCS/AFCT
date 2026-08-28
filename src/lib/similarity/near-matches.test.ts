@@ -79,6 +79,30 @@ describe('findNearMatches', () => {
     expect(findNearMatches(everybody)).toEqual([]);
   });
 
+  it('treats a feature held by exactly a quarter of the class as common, not rare', () => {
+    // Eight students, and the peculiar structure is held by two of them: exactly the 25%
+    // boundary. The whole-answer rule (`isCommon`) calls that share common, and this one has
+    // to agree, or the same number means two different things one level apart.
+    const matches = findNearMatches([
+      ...crowd(6),
+      person('a', [...ordinary, ...peculiar]),
+      person('b', [...ordinary, ...peculiar]),
+    ]);
+
+    expect(matches).toEqual([]);
+  });
+
+  it('still weighs a feature held by fewer than a quarter of the class', () => {
+    // One more student, so the same two hold it at 2 in 9, and it carries rarity again.
+    const matches = findNearMatches([
+      ...crowd(7),
+      person('a', [...ordinary, ...peculiar]),
+      person('b', [...ordinary, ...peculiar]),
+    ]);
+
+    expect(matches).toHaveLength(1);
+  });
+
   it('does not report a pair that the shape check already matched', () => {
     const shared = { shapeKey: 'the-same-shape' };
     const matches = findNearMatches([
