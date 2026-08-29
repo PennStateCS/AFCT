@@ -731,7 +731,12 @@ describe('AssignmentSimilarityPanel', () => {
     await openProblems();
     await screen.findByRole('article');
 
-    const text = container.textContent?.toLowerCase() ?? '';
+    // Everything except the standing note under the summary, which is allowed to use the
+    // word precisely because it is the sentence saying AFCT does not decide it. Asserted on
+    // its own below rather than exempted silently.
+    const note = screen.getByText(/Similarity results are informational/);
+    expect(note.textContent).toContain('does not determine whether plagiarism');
+    const text = (container.textContent ?? '').replace(note.textContent ?? '', '').toLowerCase();
     for (const word of [
       'suspicious',
       'plagiar',

@@ -210,6 +210,21 @@ export function AssignmentSimilarityPanel({
           )}
         </div>
 
+        {/*
+          What the page is for, in the reader's own terms, and outside the live region above:
+          it does not change, so a screen reader should not hear it again every time the
+          counts do. Plain text rather than a callout, because a warning box would make the
+          page look like it had found something.
+        */}
+        {isLoading ? null : (
+          <p className="text-muted-foreground max-w-3xl text-sm">
+            Similarity results are informational. AFCT identifies patterns and relationships between
+            submitted files, but it does not determine whether plagiarism or an academic integrity
+            violation occurred. These results are intended to help instructors review submissions
+            and apply their own judgment and course policies.
+          </p>
+        )}
+
         {clusters.length > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <SimilarityFilters counts={counts} value={filter} onChange={setFilter} />
