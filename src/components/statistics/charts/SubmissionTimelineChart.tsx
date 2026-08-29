@@ -6,9 +6,15 @@ import { ChartDataTable, ChartTooltip, useChartTooltip, useMeasuredWidth } from 
 
 type Props = {
   timeline: TimelinePoint[];
-  /** Assignment base due date (ISO); a marker is drawn on that day. */
-  dueDate: string;
-  /** Course timezone, so the due-date marker lands on the same local day as the buckets. */
+  /**
+   * The deadlines to mark, each an ISO instant and what to call it.
+   *
+   * One on an assignment page, one per assignment on a course page. A list rather than a
+   * single date because a term has a dozen, and a chart that could only draw the first would
+   * be showing the term's rhythm with most of its beats missing.
+   */
+  markers: { id: string; label: string; at: string }[];
+  /** Course timezone, so a marker lands on the same local day as the buckets. */
   timeZone: string;
   /** e.g. "students" or "groups". */
   unitPlural: string;
@@ -23,21 +29,28 @@ function shortDate(iso: string): string {
   return `${Number(m)}/${Number(d)}`;
 }
 
-export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlural }: Props) {
+export function SubmissionTimelineChart({ timeline, markers, timeZone, unitPlural }: Props) {
   const [ref, width] = useMeasuredWidth(640);
   const { state, showAtEvent, showAtElement, hide } = useChartTooltip();
 
-  const dueDay = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en-CA', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(new Date(dueDate)),
-    [dueDate, timeZone],
-  );
-  const dueIndex = timeline.findIndex((p) => p.date === dueDay);
+  // Which local day each marker falls on, and what to call it there. Several deadlines can
+  // land on one day, which is a real thing a course does in the last week of term.
+  const markedDays = useMemo(() => {
+    const day = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const byDay = new Map<string, string[]>();
+    for (const marker of markers) {
+      const key = day.format(new Date(marker.at));
+      byDay.set(key, [...(byDay.get(key) ?? []), marker.label]);
+    }
+    return byDay;
+  }, [markers, timeZone]);
+
+  const labelFor = (date: string) => markedDays.get(date)?.join(', ') ?? '';
 
   const plotW = Math.max(0, width - M.left - M.right);
   const plotH = HEIGHT - M.top - M.bottom;
@@ -71,8 +84,9 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
         {timeline.map((p, i) => {
           const x = M.left + i * slot + gap / 2;
           const y = yOf(p.count);
+          const due = labelFor(p.date);
           const label = `${shortDate(p.date)}: ${p.count} submission${p.count === 1 ? '' : 's'}${
-            i === dueIndex ? ', the due date' : ''
+            due ? `, due: ${due}` : ''
           }`;
           return (
             <g key={p.date}>
@@ -107,40 +121,49 @@ export function SubmissionTimelineChart({ timeline, dueDate, timeZone, unitPlura
           );
         })}
 
-        {/* Due-date marker */}
-        {dueIndex >= 0 && (
-          <g aria-hidden="true">
-            <line
-              x1={centerX(dueIndex)}
-              x2={centerX(dueIndex)}
-              y1={M.top}
-              y2={M.top + plotH}
-              className="stroke-border"
-              strokeWidth={1.5}
-              strokeDasharray="4 3"
-            />
-            <text
-              x={centerX(dueIndex)}
-              y={M.top - 4}
-              textAnchor="middle"
-              className="fill-muted-foreground text-[10px] font-medium"
-            >
-              Due
-            </text>
-          </g>
+        {/*
+          Deadline markers. The word "Due" is only written when there are few enough of them
+          to read: a term with a dozen assignments would otherwise be a row of overlapping
+          labels, and the lines alone still show the shape. Which deadline is which is in the
+          tooltip and the table.
+        */}
+        {timeline.map((p, i) =>
+          markedDays.has(p.date) ? (
+            <g key={`due-${p.date}`} aria-hidden="true">
+              <line
+                x1={centerX(i)}
+                x2={centerX(i)}
+                y1={M.top}
+                y2={M.top + plotH}
+                className="stroke-border"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+              />
+              {markedDays.size <= 3 && (
+                <text
+                  x={centerX(i)}
+                  y={M.top - 4}
+                  textAnchor="middle"
+                  className="fill-muted-foreground text-[10px] font-medium"
+                >
+                  Due
+                </text>
+              )}
+            </g>
+          ) : null,
         )}
       </svg>
 
       {/*
-        The due date is a column, not just a line on the drawing.
-        The marker and its "Due" label are inside an `aria-hidden` group, so a reader could see
-        every day's count and still not know which day the work was due, which is the whole
-        comparison this chart exists to support.
+        The deadlines are a column, not just lines on the drawing.
+        The markers are inside `aria-hidden` groups, so a reader could see every day's count
+        and still not know which day the work was due, which is the whole comparison this
+        chart exists to support.
       */}
       <ChartDataTable
-        caption={`Submissions per day for ${unitPlural}, with the due date marked.`}
-        headers={['Date', 'Submissions', 'Due date']}
-        rows={timeline.map((p, i) => [p.date, p.count, i === dueIndex ? 'Due' : ''])}
+        caption={`Submissions per day for ${unitPlural}, with each deadline marked.`}
+        headers={['Date', 'Submissions', 'Due']}
+        rows={timeline.map((p) => [p.date, p.count, labelFor(p.date)])}
       />
       <ChartTooltip state={state} />
     </div>

@@ -15,6 +15,7 @@ import { ProblemsCard } from '@/components/ProblemsCard';
 import { RosterCard } from '@/components/RosterCard';
 import { PrivilegeGradesCard } from '@/components/PrivilegeGradesCard';
 import { GroupSetsCard } from '@/components/groups/GroupSetsCard';
+import { CourseStatisticsPanel } from '@/components/course/CourseStatisticsPanel';
 import { userColumns } from '@/app/dashboard/courses/[id]/user-columns';
 import { useAssignmentColumns } from '@/app/dashboard/courses/[id]/assignment-columns';
 import { useProblemColumns } from '@/app/dashboard/courses/[id]/problem-columns';
@@ -250,6 +251,13 @@ export function AdminCourseView({
 
           <CourseTabPanel value="grades" active={tab === 'grades'}>
             <PrivilegeGradesCard courseId={course.id} />
+          </CourseTabPanel>
+
+          {/* Its own fetch, inside a panel that mounts nothing until the tab is opened, the
+              way Grades does it. A course's worth of statistics is not something to load on
+              the way past. */}
+          <CourseTabPanel value="statistics" active={tab === 'statistics'}>
+            <CourseStatisticsPanel courseId={course.id} />
           </CourseTabPanel>
 
           <CourseTabPanel value="groups" active={tab === 'groups'}>

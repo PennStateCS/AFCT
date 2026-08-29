@@ -1,6 +1,31 @@
 'use client';
 
-import type { ProblemStats } from '@/lib/assignment-statistics';
+import type { BoxPlotStats } from '@/lib/assignment-statistics';
+
+/**
+ * One row of the chart.
+ *
+ * Deliberately not the assignment page's `ProblemStats`: the same drawing now compares
+ * problems within an assignment, assignments within a course, and kinds of problem across a
+ * term, and only these fields are the drawing's business. A caller that had to invent empty
+ * attempt buckets to render a row was a caller shaped by the wrong type.
+ */
+export type BoxPlotRow = {
+  id: string;
+  title: string;
+  /**
+   * The second line under the title. Defaults to what the row is worth and what it cost,
+   * which is what a problem or an assignment has; a row that is neither (a topic, say) passes
+   * its own words, and a row with nothing to say passes none.
+   */
+  subtitle?: string;
+  order: number;
+  maxPoints?: number;
+  pointsLostMean?: number | null;
+  boxplot: BoxPlotStats | null;
+  gradedCount: number;
+  ungradedCount: number;
+};
 import {
   ChartDataTable,
   ChartTooltip,
@@ -10,7 +35,7 @@ import {
 } from './chart-utils';
 
 type Props = {
-  problems: ProblemStats[];
+  problems: BoxPlotRow[];
   /** e.g. "students" or "groups". */
   unitPlural: string;
 };
@@ -20,7 +45,17 @@ const AXIS_H = 26;
 const BOX_H = 18;
 const INSET = 6; // keep 0% and 100% marks off the very edge
 
-function statsText(p: ProblemStats, unitPlural: string): string {
+/** What sits under the row's name: the caller's words, or what it is worth and what it cost. */
+function secondLine(p: BoxPlotRow): string | null {
+  if (p.subtitle) return p.subtitle;
+  if (!p.maxPoints) return null;
+  const points = `${p.maxPoints} ${p.maxPoints === 1 ? 'pt' : 'pts'}`;
+  return p.pointsLostMean && p.pointsLostMean > 0
+    ? `${points} \u00b7 ${fmt1(p.pointsLostMean)} lost`
+    : points;
+}
+
+function statsText(p: BoxPlotRow, unitPlural: string): string {
   if (!p.boxplot) return `${p.title}: no graded ${unitPlural}.`;
   const b = p.boxplot;
   return (
@@ -28,12 +63,11 @@ function statsText(p: ProblemStats, unitPlural: string): string {
     `Middle 50% from ${fmt1(b.q1)}% to ${fmt1(b.q3)}%. ` +
     `Whiskers ${fmt1(b.whiskerLow)}% to ${fmt1(b.whiskerHigh)}%. ` +
     `${p.gradedCount} graded, ${p.ungradedCount} missing or ungraded. ` +
-    `Worth ${p.maxPoints} points` +
-    (p.pointsLostMean !== null ? `, ${fmt1(p.pointsLostMean)} lost on average.` : '.')
+    (secondLine(p) ? `${secondLine(p)}.` : '')
   );
 }
 
-function Tooltip({ p, unitPlural }: { p: ProblemStats; unitPlural: string }) {
+function Tooltip({ p, unitPlural }: { p: BoxPlotRow; unitPlural: string }) {
   const b = p.boxplot;
   return (
     <div className="space-y-0.5">
@@ -48,14 +82,18 @@ function Tooltip({ p, unitPlural }: { p: ProblemStats; unitPlural: string }) {
           <dd className="text-right tabular-nums">
             {fmt1(b.q1)}-{fmt1(b.q3)}%
           </dd>
-          <dt>Points</dt>
-          <dd className="text-right tabular-nums">{p.maxPoints}</dd>
-          {p.pointsLostMean !== null && (
+          {p.maxPoints ? (
+            <>
+              <dt>Points</dt>
+              <dd className="text-right tabular-nums">{p.maxPoints}</dd>
+            </>
+          ) : null}
+          {p.pointsLostMean != null && p.pointsLostMean > 0 ? (
             <>
               <dt>Average lost</dt>
               <dd className="text-right tabular-nums">{fmt1(p.pointsLostMean)}</dd>
             </>
-          )}
+          ) : null}
           <dt>Whiskers</dt>
           <dd className="text-right tabular-nums">
             {fmt1(b.whiskerLow)}-{fmt1(b.whiskerHigh)}%
@@ -100,15 +138,14 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
               title={p.title}
             >
               <span className="text-foreground truncate text-xs">{p.title}</span>
-              {/* What it is worth, and what it cost. The plot beside it is normalised to
-                  0-100% so the problems can be compared at all, which also hides that one
-                  of them is worth eight times another. */}
-              <span className="text-muted-foreground text-2xs truncate tabular-nums">
-                {p.maxPoints} {p.maxPoints === 1 ? 'pt' : 'pts'}
-                {p.pointsLostMean !== null && p.pointsLostMean > 0
-                  ? ` \u00b7 ${fmt1(p.pointsLostMean)} lost`
-                  : ''}
-              </span>
+              {/* What it is worth and what it cost, or whatever else this row is measured
+                  in. The plot beside it is normalised to 0-100% so the rows can be compared
+                  at all, which also hides that one of them is worth eight times another. */}
+              {secondLine(p) && (
+                <span className="text-muted-foreground text-2xs truncate tabular-nums">
+                  {secondLine(p)}
+                </span>
+              )}
             </div>
           ))}
           <div style={{ height: AXIS_H }} />
@@ -299,8 +336,8 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
           p.boxplot
             ? [
                 p.title,
-                p.maxPoints,
-                p.pointsLostMean !== null ? fmt1(p.pointsLostMean) : '-',
+                p.maxPoints ?? '-',
+                p.pointsLostMean != null ? fmt1(p.pointsLostMean) : '-',
                 `${fmt1(p.boxplot.median)}%`,
                 `${fmt1(p.boxplot.mean)}%`,
                 `${fmt1(p.boxplot.q1)}%`,
@@ -312,7 +349,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
               ]
             : [
                 p.title,
-                p.maxPoints,
+                p.maxPoints ?? '-',
                 '-',
                 '-',
                 '-',

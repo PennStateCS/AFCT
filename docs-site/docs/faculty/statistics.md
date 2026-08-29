@@ -20,3 +20,23 @@ Below that the page is in two columns on a wide screen: the reading on the left 
 Each chart has a matching data table for screen readers, and the figures update as more work is submitted and graded.
 
 An evaluation that failed is never counted as an attempt the student got wrong: no verdict was produced, so **Attempts to solve** and **First-attempt success** skip it while the timeline and the heatmap still show that the submission happened.
+
+## On a course
+
+The course's own **Statistics** tab sits beside Grades and covers the whole term.
+
+- **Course grade distribution** - every student's course percentage, in 10-point ranges, with a summary line and the same charting as the assignment page. It counts the way the Grades tab's Average column counts: every published assignment a student is assigned puts its full points in the denominator, and ungraded work reads as unearned, so the two tabs can never report two different course averages. A switch offers the other reading, counting only work that has been graded, which is the kinder number mid-term. The line under the chart says how many assignments are in the denominator and how many have any grades yet, because a course average in week 8 is partly a statement about how much term is left.
+
+  Unpublished drafts are counted by neither reading. A student cannot do work they cannot see.
+
+- **How the assignments compare** - a box plot per assignment in the order the class met them, so the card reads as the term's story rather than a ranking. Each row carries what the assignment is worth and the marks lost on it on average. A group assignment is measured in **groups** and an individual one in students, because counting a team of four as four identical results would let the big teams decide the shape of the chart.
+
+- **Performance by problem type** - finite automata, regular expressions, context-free grammars, pushdown automata, Turing machines, and a bucket for problems with no type set. The one view that says which topic did not land. Each row says how much of it has been graded, because mid-term the difference between an autograded topic and a hand-marked one is partly grading progress rather than difficulty. A problem set on two assignments counts twice, once per occasion: meeting a topic again on a midterm is a second performance.
+
+- **Grading workload** - what is waiting on a grader, per assignment, counted in pieces of work (one participant's one problem), which is what somebody marking actually works through.
+
+- **Worth a second look** - two counts, not names: how many students are below 60% on the reading currently shown, and how many have two or more assignments with nothing handed in. Those are different worries, and the second is the one you can still do something about. Who they are is in the Grades tab, which is the screen built to name them.
+
+- **Submissions over time** and **When submissions happen** - the same two charts as the assignment page, over the whole term, with every assignment's due date marked on the first. Per assignment they show one deadline's shape; across a course they show whether that is how this class always works.
+
+The course figures describe students who are enrolled and whose account is active, and the line under the heading says how many were left out and why. The Grades tab deliberately keeps dropped students visible, so its student count can be higher; that difference is the exclusions line.

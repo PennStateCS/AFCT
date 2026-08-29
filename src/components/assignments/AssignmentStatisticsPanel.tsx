@@ -318,7 +318,19 @@ export function AssignmentStatisticsPanel() {
               description={`Score distribution for each problem, on a shared 0-100% scale (${unitPlural}).`}
             >
               {stats.problems.length > 0 ? (
-                <ProblemBoxPlotChart problems={stats.problems} unitPlural={unitPlural} />
+                <ProblemBoxPlotChart
+                  problems={stats.problems.map((p) => ({
+                    id: p.id,
+                    title: p.title,
+                    order: p.order,
+                    maxPoints: p.maxPoints,
+                    pointsLostMean: p.pointsLostMean,
+                    boxplot: p.boxplot,
+                    gradedCount: p.gradedCount,
+                    ungradedCount: p.ungradedCount,
+                  }))}
+                  unitPlural={unitPlural}
+                />
               ) : (
                 <EmptyChart message="This assignment has no problems yet." />
               )}
@@ -330,7 +342,7 @@ export function AssignmentStatisticsPanel() {
               {stats.timeline.length > 0 ? (
                 <SubmissionTimelineChart
                   timeline={stats.timeline}
-                  dueDate={stats.baseDueDate}
+                  markers={[{ id: 'due', label: 'Due', at: stats.baseDueDate }]}
                   timeZone={stats.timezone}
                   unitPlural={unitPlural}
                 />
