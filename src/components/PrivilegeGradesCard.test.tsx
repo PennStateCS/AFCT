@@ -95,7 +95,7 @@ vi.mock('@/components/ui/data-table', () => ({
 // The two payloads the gradebook now fetches: columns once, then a page of students
 // whose rows already carry their own assigned flags and grades.
 const columnsPayload = {
-  assignments: [{ id: 'a1', title: 'Homework 1', maxPoints: 10 }],
+  assignments: [{ id: 'a1', title: 'Homework 1', maxPoints: 10, isPublished: true }],
   totalStudents: 2,
 };
 
@@ -133,6 +133,15 @@ const pagePayload = {
   total: 2,
 };
 
+/** A gradebook with a draft sitting in it, which is most gradebooks mid-term. */
+const withDraftPayload = {
+  assignments: [
+    { id: 'a1', title: 'Homework 1', maxPoints: 10, isPublished: true },
+    { id: 'draft', title: 'Homework 2', maxPoints: 10, isPublished: false },
+  ],
+  totalStudents: 1,
+};
+
 /** Serve the columns request and the page request from one fetch mock. */
 const installFetch = (page: unknown = pagePayload, columns: unknown = columnsPayload) => {
   const fetchMock = global.fetch as ReturnType<typeof vi.fn>;
@@ -148,6 +157,26 @@ describe('PrivilegeGradesCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
+  });
+
+  it('keeps a draft out of the Average, and says so on its column', async () => {
+    // Full marks on the work that is out, nothing on the draft. Counting the draft would
+    // report this student at 50% for work they have never been able to see.
+    installFetch(
+      {
+        rows: [row({ assigned: { a1: true, draft: true }, grades: { a1: 10, draft: null } })],
+        total: 1,
+      },
+      withDraftPayload,
+    );
+
+    renderWithClient(<PrivilegeGradesCard courseId="c1" />);
+
+    await waitFor(() => expect(screen.getByTestId('table-rows').textContent).toBe('1'));
+
+    const average = document.querySelector('[data-col="totalGrade"]');
+    expect(average?.textContent).toContain('100.00%');
+    expect(average?.textContent).toContain('10/10');
   });
 
   it('fetches the columns and one page of students, and renders them', async () => {
