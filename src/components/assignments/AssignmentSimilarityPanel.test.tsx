@@ -871,7 +871,6 @@ describe('AssignmentSimilarityPanel', () => {
   });
 
   it('lets the reader move where common begins, and remembers it', async () => {
-    const person = userEvent.setup();
     // 20 of 84 is under a quarter, so it starts as a finding.
     getMock.mockResolvedValue([group({ studentCount: 20, identicalStudentCount: 20 })]);
 
@@ -880,10 +879,13 @@ describe('AssignmentSimilarityPanel', () => {
     await openProblems();
     await screen.findByRole('article');
 
-    await person.click(screen.getByRole('button', { name: /Adjust/ }));
-    fireEvent.change(await screen.findByLabelText('Common-answer threshold'), {
-      target: { value: '0.2' },
-    });
+    // The dial itself, in the summary card, without opening anything first.
+    const slider = screen.getByLabelText('Common-answer threshold');
+    expect(slider).toHaveAttribute('min', '0.05');
+    expect(slider).toHaveAttribute('max', '1');
+    expect(slider).toHaveAttribute('step', '0.05');
+
+    fireEvent.change(slider, { target: { value: '0.2' } });
 
     // Past a fifth of the class it reads as the expected answer instead.
     await waitFor(() =>
@@ -892,5 +894,49 @@ describe('AssignmentSimilarityPanel', () => {
       ).not.toBeInTheDocument(),
     );
     expect(window.localStorage.getItem('afct.similarityCommonShare')).toBe('0.2');
+    expect(screen.getByLabelText('Common-answer threshold')).toHaveValue('0.2');
+    expect(screen.getAllByText('20%').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the same setting behind Adjust, for a card too narrow to hold the dial', async () => {
+    const person = userEvent.setup();
+    getMock.mockResolvedValue([group({ studentCount: 20, identicalStudentCount: 20 })]);
+
+    renderPanel();
+    await openProblems();
+    await screen.findByRole('article');
+
+    await person.click(screen.getByRole('button', { name: /Adjust/ }));
+
+    // Two presentations of one setting, never two settings: whichever the card is showing,
+    // moving it moves the other and the page with it.
+    const sliders = await screen.findAllByLabelText('Common-answer threshold');
+    expect(sliders).toHaveLength(2);
+    expect(sliders.every((slider) => (slider as HTMLInputElement).value === '0.25')).toBe(true);
+
+    fireEvent.change(sliders[1] as HTMLInputElement, { target: { value: '0.2' } });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('heading', { name: 'Exact JFLAP artifact' }),
+      ).not.toBeInTheDocument(),
+    );
+    const moved = screen.getAllByLabelText('Common-answer threshold');
+    expect(moved.every((slider) => (slider as HTMLInputElement).value === '0.2')).toBe(true);
+    expect(window.localStorage.getItem('afct.similarityCommonShare')).toBe('0.2');
+  });
+
+  it("explains the threshold in the reader's own unit", async () => {
+    const person = userEvent.setup();
+    getMock.mockResolvedValue([group()]);
+
+    const individual = renderPanel();
+    await person.click(await screen.findByRole('button', { name: /Adjust/ }));
+    expect(await screen.findByText(/share of a problem's students/)).toBeInTheDocument();
+    individual.unmount();
+
+    renderPanel({ groupAssignment: true });
+    await person.click(await screen.findByRole('button', { name: /Adjust/ }));
+    expect(await screen.findByText(/share of a problem's groups/)).toBeInTheDocument();
   });
 });

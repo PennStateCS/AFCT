@@ -13,6 +13,7 @@ import Spinner from '@/components/ui/spinner';
 import { CompareSubmissionsDialog } from '@/components/assignments/CompareSubmissionsDialog';
 import { SimilarityMatchCard } from '@/components/assignments/SimilarityMatchCard';
 import { SimilarityFilters, type MatchFilter } from '@/components/assignments/SimilarityFilters';
+import { CommonThresholdSlider } from '@/components/assignments/CommonThresholdSlider';
 import {
   clusterMatches,
   countByType,
@@ -176,7 +177,11 @@ export function AssignmentSimilarityPanel({
           finding and an expected answer currently sits. One card, not three, and never
           collapsible: it is the answer to "is there anything for me here", which is the
           question the page exists to answer first. */}
-      <div className="bg-card space-y-3 rounded-lg border p-4">
+      {/* A container, so the threshold control below can ask how much room THIS CARD has
+          rather than how wide the window is. The page sits inside a global sidebar and an
+          assignment rail, either of which can be open, so the same screen gives the card
+          very different widths and a viewport breakpoint would be guessing. */}
+      <div className="bg-card @container/triage space-y-3 rounded-lg border p-4">
         {/* One live region for the state of the page, so a screen reader hears the answer
             once rather than a card at a time. */}
         <div aria-live="polite">
@@ -217,7 +222,23 @@ export function AssignmentSimilarityPanel({
                   } matches.`}
             </span>
 
-            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
+            {/*
+              The same setting, twice, and only ever one of them on the page: the card is
+              either wide enough to hold the dial itself or it is not. Both drive the same
+              state, so whichever one a reader has, moving it is the same act.
+            */}
+            <div className="text-muted-foreground ms-auto hidden flex-col items-end gap-1 text-sm @[40rem]/triage:flex">
+              <Label htmlFor="common-share-inline" className="text-muted-foreground font-normal">
+                Common-answer threshold
+              </Label>
+              <CommonThresholdSlider
+                id="common-share-inline"
+                value={commonShare}
+                onChange={changeThreshold}
+              />
+            </div>
+
+            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm @[40rem]/triage:hidden">
               <span>Common-answer threshold: {Math.round(commonShare * 100)}%</span>
               <Popover>
                 <PopoverTrigger asChild>
@@ -236,22 +257,12 @@ export function AssignmentSimilarityPanel({
                       and set aside at the bottom of the page.
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <input
-                      id="common-share"
-                      type="range"
-                      min="0.05"
-                      max="1"
-                      step="0.05"
-                      value={commonShare}
-                      aria-valuetext={`${Math.round(commonShare * 100)} percent of the class`}
-                      onChange={(event) => changeThreshold(Number(event.target.value))}
-                      className="bg-primary-foreground accent-primary h-2 flex-1 cursor-pointer rounded-lg"
-                    />
-                    <span className="w-12 text-sm tabular-nums">
-                      {Math.round(commonShare * 100)}%
-                    </span>
-                  </div>
+                  <CommonThresholdSlider
+                    id="common-share"
+                    value={commonShare}
+                    onChange={changeThreshold}
+                    grow
+                  />
                 </PopoverContent>
               </Popover>
             </div>
