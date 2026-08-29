@@ -286,8 +286,12 @@ describe('ChartDataTable', () => {
   it('is visually hidden but not hidden from assistive technology', () => {
     render(<ChartDataTable caption="Score distribution" headers={['Band']} rows={[['0-59']]} />);
     const table = screen.getByRole('table', { name: 'Score distribution' });
-    expect(table.className).toContain('sr-only');
+    // The wrapper is what hides it. A table cannot be shrunk to a pixel, so `sr-only` on the
+    // table itself left it at content width and pushed the page sideways.
+    expect(table.parentElement?.className).toContain('sr-only');
+    expect(table.className).not.toContain('sr-only');
     expect(table).not.toHaveAttribute('aria-hidden');
+    expect(table.parentElement).not.toHaveAttribute('aria-hidden');
   });
 
   it('renders an empty body without crashing', () => {

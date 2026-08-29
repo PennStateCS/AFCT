@@ -145,33 +145,43 @@ export function ChartDataTable({
   headers: string[];
   rows: (string | number)[][];
 }) {
+  /*
+   * The wrapper carries `sr-only`, not the table.
+   *
+   * That utility hides a box by shrinking it to a pixel and clipping it, and a table refuses
+   * to be a pixel wide: it lays out at its content width whatever is asked of it, so every
+   * one of these pushed the page sideways and the Statistics tab scrolled horizontally with
+   * nothing visible to scroll to. A div takes the pixel, and the table inside it is clipped.
+   */
   return (
-    <table className="sr-only">
-      <caption>{caption}</caption>
-      <thead>
-        <tr>
-          {headers.map((h) => (
-            <th key={h} scope="col">
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, i) => (
-          <tr key={i}>
-            {row.map((cell, j) =>
-              j === 0 ? (
-                <th key={j} scope="row">
-                  {cell}
-                </th>
-              ) : (
-                <td key={j}>{cell}</td>
-              ),
-            )}
+    <div className="sr-only">
+      <table>
+        <caption>{caption}</caption>
+        <thead>
+          <tr>
+            {headers.map((h) => (
+              <th key={h} scope="col">
+                {h}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i}>
+              {row.map((cell, j) =>
+                j === 0 ? (
+                  <th key={j} scope="row">
+                    {cell}
+                  </th>
+                ) : (
+                  <td key={j}>{cell}</td>
+                ),
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

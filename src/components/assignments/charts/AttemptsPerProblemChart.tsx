@@ -7,6 +7,13 @@ export type AttemptsRow = {
   id: string;
   title: string;
   attempts: AttemptsToSolve;
+  /**
+   * How many got it right on their first submission, out of how many submitted.
+   *
+   * The same fact as the "1" bucket beside it, which is why it is a caption here rather than
+   * a chart of its own: the tab was showing one number twice.
+   */
+  firstTry: { correct: number; submitted: number };
 };
 
 type Props = {
@@ -65,8 +72,17 @@ export function AttemptsPerProblemChart({ problems, unitPlural }: Props) {
           const { segments, total } = segmentsFor(p.attempts);
           return (
             <div key={p.id}>
-              <div className="text-foreground mb-1 truncate text-xs font-medium" title={p.title}>
-                {p.title}
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <span className="text-foreground truncate text-xs font-medium" title={p.title}>
+                  {p.title}
+                </span>
+                {/* The first bar segment said in words: what share got it right straight
+                    away. It used to be a card of its own showing this same number. */}
+                {p.firstTry.submitted > 0 && (
+                  <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                    {fmtPct(p.firstTry.correct, p.firstTry.submitted)} first try
+                  </span>
+                )}
               </div>
               {total > 0 ? (
                 <div
@@ -135,11 +151,12 @@ export function AttemptsPerProblemChart({ problems, unitPlural }: Props) {
 
       <ChartDataTable
         caption={`Attempts to solve each problem, across the ${unitPlural} who submitted.`}
-        headers={['Problem', '1', '2', '3', '4', '5+', 'Not solved']}
+        headers={['Problem', '1', '2', '3', '4', '5+', 'Not solved', 'First try']}
         rows={problems.map((p) => [
           p.title,
           ...p.attempts.buckets.map((b) => b.count),
           p.attempts.unsolvedCount,
+          p.firstTry.submitted > 0 ? fmtPct(p.firstTry.correct, p.firstTry.submitted) : '-',
         ])}
       />
       <ChartTooltip state={state} />

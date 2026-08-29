@@ -1,9 +1,11 @@
 import { prisma } from '@/lib/prisma';
-import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
+import { ACTIVE_STUDENT_ROSTER, ANY_STUDENT_ROSTER, isEnrolled } from '@/lib/roster-status';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 import {
   buildAssignmentStatistics,
   type AssignmentStatistics,
+  type CohortExclusion,
   type StatsParticipant,
   type StatsProblem,
   type StatsSubmission,
@@ -21,6 +23,11 @@ import {
  * submission fans its grade out identically to every member (see submission-worker), a
  * group's per-problem grade is read from its members' grade rows, and its submissions are
  * the group's own (studentGroupId) submissions.
+ *
+ * Who is counted is a judgement, not an accident, so it is made in one place (`resolveCohort`
+ * below) and reported: the figures describe students who are enrolled, whose account is
+ * active, and who were assigned this work. Everybody else is counted as an exclusion with a
+ * reason, because a denominator that quietly shrinks is a denominator nobody can check.
  */
 export type AssignmentStatisticsPayload = AssignmentStatistics & {
   assignmentTitle: string;
@@ -30,10 +37,25 @@ export type AssignmentStatisticsPayload = AssignmentStatistics & {
   timezone: string;
 };
 
-type OverrideTarget = { targetType: 'STUDENT' | 'GROUP'; userId: string | null; groupId: string | null };
+/** The override columns `effectiveDeadline` needs, plus who each row is aimed at. */
+type OverrideRow = {
+  targetType: 'STUDENT' | 'GROUP';
+  userId: string | null;
+  groupId: string | null;
+  unlockAt: Date | null;
+  dueDate: Date | null;
+  lateCutoff: Date | null;
+  allowLateSubmissions: boolean | null;
+};
 
 /** Latest queue status per problem, keyed by participant id. */
 type LatestStatusMap = Map<string, Record<string, SubmissionQueueStatus>>;
+
+/** One student's recorded grades: the number, and when it was last written. */
+type GradeRecord = { grade: number; gradedAt: number };
+
+/** The people (or teams) the figures describe, and everybody they leave out. */
+type Cohort = { participants: StatsParticipant[]; exclusions: CohortExclusion[] };
 
 export async function getAssignmentStatistics(
   courseId: string,
@@ -45,11 +67,21 @@ export async function getAssignmentStatistics(
       id: true,
       title: true,
       dueDate: true,
+      unlockAt: true,
+      lateCutoff: true,
+      allowLateSubmissions: true,
       assignedToEveryone: true,
       groupSetId: true,
       course: { select: { timezone: true } },
       assignees: { select: { userId: true, groupId: true } },
-      problems: { select: { problemId: true, maxPoints: true, problem: { select: { title: true } } } },
+      problems: {
+        select: {
+          problemId: true,
+          maxPoints: true,
+          autograderEnabled: true,
+          problem: { select: { title: true } },
+        },
+      },
     },
   });
   if (!assignment) return null;
@@ -64,27 +96,37 @@ export async function getAssignmentStatistics(
       id: ap.problemId,
       title: ap.problem.title,
       maxPoints: Number(ap.maxPoints ?? 0),
+      autograderEnabled: ap.autograderEnabled,
       order: 0,
     }))
     .sort((a, b) => a.title.localeCompare(b.title))
     .map((p, i) => ({ ...p, order: i }));
 
-  // Override rows only decide who has a due-date exception (shown near the heading).
-  const overrides: OverrideTarget[] = await prisma.assignmentOverride.findMany({
+  // Every column `effectiveDeadline` reads, because "has an exception" now means "is held to
+  // a different date", which cannot be answered by the existence of a row.
+  const overrides: OverrideRow[] = await prisma.assignmentOverride.findMany({
     where: { assignmentId },
-    select: { targetType: true, userId: true, groupId: true },
+    select: {
+      targetType: true,
+      userId: true,
+      groupId: true,
+      unlockAt: true,
+      dueDate: true,
+      lateCutoff: true,
+      allowLateSubmissions: true,
+    },
   });
 
   // Per-(student, problem) recorded grade. A key existing means "graded"; a value of 0 is
-  // a real zero. Used directly for individual participants and aggregated for groups.
+  // a real zero. `updatedAt` comes along so a grade overtaken by newer work can say so.
   const gradeRows = await prisma.assignmentProblemGrade.findMany({
     where: { assignmentId },
-    select: { studentId: true, problemId: true, grade: true },
+    select: { studentId: true, problemId: true, grade: true, updatedAt: true },
   });
-  const gradesByStudent = new Map<string, Record<string, number>>();
+  const gradesByStudent = new Map<string, Record<string, GradeRecord>>();
   for (const g of gradeRows) {
     const rec = gradesByStudent.get(g.studentId) ?? {};
-    rec[g.problemId] = Number(g.grade);
+    rec[g.problemId] = { grade: Number(g.grade), gradedAt: g.updatedAt.getTime() };
     gradesByStudent.set(g.studentId, rec);
   }
 
@@ -117,9 +159,26 @@ export async function getAssignmentStatistics(
     latestStatus.set(k, rec);
   }
 
-  const participants = isGroupAssignment
-    ? await buildGroupParticipants(assignment.groupSetId!, assignment, overrides, gradesByStudent, latestStatus)
-    : await buildStudentParticipants(courseId, assignment, overrides, gradesByStudent, latestStatus);
+  const base = {
+    unlockAt: assignment.unlockAt,
+    dueDate: assignment.dueDate,
+    lateCutoff: assignment.lateCutoff,
+    allowLateSubmissions: assignment.allowLateSubmissions,
+  };
+
+  const { participants, exclusions } = isGroupAssignment
+    ? await buildGroupCohort(courseId, assignment.groupSetId!, assignment, {
+        base,
+        overrides,
+        gradesByStudent,
+        latestStatus,
+      })
+    : await buildStudentCohort(courseId, assignment, {
+        base,
+        overrides,
+        gradesByStudent,
+        latestStatus,
+      });
 
   // Only count submissions from participants who are actually assigned this assignment.
   const assignedIds = new Set(participants.map((p) => p.id));
@@ -130,6 +189,7 @@ export async function getAssignmentStatistics(
       problemId: r.problemId,
       submittedAt: r.submittedAt.getTime(),
       correct: r.correct === true,
+      status: r.status as SubmissionQueueStatus,
     }));
 
   const stats = buildAssignmentStatistics({
@@ -138,6 +198,7 @@ export async function getAssignmentStatistics(
     participants,
     submissions,
     timeZone,
+    exclusions,
   });
 
   return {
@@ -154,109 +215,234 @@ type AssignmentShape = {
   assignees: { userId: string | null; groupId: string | null }[];
 };
 
+type CohortInput = {
+  base: {
+    unlockAt: Date | null;
+    dueDate: Date;
+    lateCutoff: Date | null;
+    allowLateSubmissions: boolean;
+  };
+  overrides: OverrideRow[];
+  gradesByStudent: Map<string, Record<string, GradeRecord>>;
+  latestStatus: LatestStatusMap;
+};
+
+/** Split one student's grade record into the two shapes the pure core takes. */
+function splitGrades(record: Record<string, GradeRecord> | undefined): {
+  problemGrades: Record<string, number>;
+  gradedAtByProblem: Record<string, number>;
+} {
+  const problemGrades: Record<string, number> = {};
+  const gradedAtByProblem: Record<string, number> = {};
+  for (const [problemId, entry] of Object.entries(record ?? {})) {
+    problemGrades[problemId] = entry.grade;
+    gradedAtByProblem[problemId] = entry.gradedAt;
+  }
+  return { problemGrades, gradedAtByProblem };
+}
+
+/** Roll a list of reasons up into one count each, in a stable order. */
+function tally(reasons: CohortExclusion['reason'][]): CohortExclusion[] {
+  const order: CohortExclusion['reason'][] = ['dropped', 'inactive', 'no-group', 'empty-group'];
+  const counts = new Map<CohortExclusion['reason'], number>();
+  for (const reason of reasons) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  return order
+    .map((reason) => ({ reason, count: counts.get(reason) ?? 0 }))
+    .filter((entry) => entry.count > 0);
+}
+
 // ─── individual (student) participants ───────────────────────────────────────
 
-async function buildStudentParticipants(
+async function buildStudentCohort(
   courseId: string,
   assignment: AssignmentShape,
-  overrides: OverrideTarget[],
-  gradesByStudent: Map<string, Record<string, number>>,
-  latestStatus: LatestStatusMap,
-): Promise<StatsParticipant[]> {
-  // Statistics measure the active cohort, so dropped students are excluded (their
-  // individual submissions remain reviewable via the submissions view).
+  input: CohortInput,
+): Promise<Cohort> {
+  // Every student who has ever been on this roster, with the standing of each, because the
+  // page reports who was left out as well as who was counted. Statistics measure the active
+  // cohort (`roster-status.ts` names participation statistics as an ACTIVE_STUDENT_ROSTER
+  // surface); a dropped or disabled student's work stays reviewable in the submissions views.
   const roster = await prisma.roster.findMany({
-    where: { courseId, ...ACTIVE_STUDENT_ROSTER },
-    select: { userId: true },
+    where: { courseId, ...ANY_STUDENT_ROSTER },
+    select: { userId: true, status: true, user: { select: { inactive: true } } },
   });
-  const studentIds = roster.map((r) => r.userId);
-  if (studentIds.length === 0) return [];
+  if (roster.length === 0) return { participants: [], exclusions: [] };
 
-  // Group memberships only matter here if the assignment targets specific groups; load
-  // them for the assigned decision (individual assignments usually target students only).
-  const memberships =
+  // Group memberships matter here only when the assignment targets groups; load them once
+  // for the assigned decision (individual assignments usually target students directly).
+  const groupIdsByStudent = await membershipsOf(
     assignment.assignedToEveryone || assignment.assignees.some((a) => a.groupId)
-      ? await prisma.groupMembership.findMany({
-          where: { userId: { in: studentIds } },
-          select: { userId: true, groupId: true },
-        })
-      : [];
-  const groupIdsByStudent = new Map<string, string[]>();
-  for (const m of memberships) {
-    const list = groupIdsByStudent.get(m.userId) ?? [];
-    list.push(m.groupId);
-    groupIdsByStudent.set(m.userId, list);
-  }
+      ? roster.map((r) => r.userId)
+      : [],
+  );
 
-  const assignedStudentIds = studentIds.filter((id) =>
-    isStudentAssigned(
+  const participants: StatsParticipant[] = [];
+  const excluded: CohortExclusion['reason'][] = [];
+
+  for (const row of roster) {
+    const groupIds = groupIdsByStudent.get(row.userId) ?? [];
+    const assigned = isStudentAssigned(
       { assignedToEveryone: assignment.assignedToEveryone },
       assignment.assignees,
-      id,
-      groupIdsByStudent.get(id) ?? [],
-    ),
-  );
-  if (assignedStudentIds.length === 0) return [];
+      row.userId,
+      groupIds,
+    );
+    // Somebody this work never reached is not an exclusion, they are not in the picture.
+    if (!assigned) continue;
 
-  const studentHasException = new Set(
-    overrides.filter((o) => o.targetType === 'STUDENT' && o.userId).map((o) => o.userId!),
-  );
+    // Dropped first: a dropped student with a disabled account is reported the way the
+    // roster reports them, and counting them twice would break the arithmetic.
+    if (!isEnrolled(row.status)) {
+      excluded.push('dropped');
+      continue;
+    }
+    if (row.user?.inactive) {
+      excluded.push('inactive');
+      continue;
+    }
 
-  return assignedStudentIds.map((studentId) => ({
-    id: studentId,
-    hasException: studentHasException.has(studentId),
-    problemGrades: gradesByStudent.get(studentId) ?? {},
-    latestStatusByProblem: latestStatus.get(studentId) ?? {},
-  }));
+    participants.push({
+      id: row.userId,
+      ...deadlineFor(input, row.userId, groupIds),
+      ...splitGrades(input.gradesByStudent.get(row.userId)),
+      latestStatusByProblem: input.latestStatus.get(row.userId) ?? {},
+    });
+  }
+
+  return { participants, exclusions: tally(excluded) };
 }
 
 // ─── group participants ──────────────────────────────────────────────────────
 
-async function buildGroupParticipants(
+async function buildGroupCohort(
+  courseId: string,
   groupSetId: string,
   assignment: AssignmentShape,
-  overrides: OverrideTarget[],
-  gradesByStudent: Map<string, Record<string, number>>,
-  latestStatus: LatestStatusMap,
-): Promise<StatsParticipant[]> {
+  input: CohortInput,
+): Promise<Cohort> {
   const groups = await prisma.studentGroup.findMany({
     where: { groupSetId },
     select: { id: true, memberships: { select: { userId: true } } },
   });
 
+  // The active roster, used to decide whether a group still has anybody in it. Membership
+  // rows survive a student dropping (by design), so a group of leavers looks staffed here.
+  const active = new Set(
+    (
+      await prisma.roster.findMany({
+        where: { courseId, ...ACTIVE_STUDENT_ROSTER, user: { inactive: false } },
+        select: { userId: true },
+      })
+    ).map((r) => r.userId),
+  );
+
   const namedGroupIds = new Set(
     assignment.assignees.map((a) => a.groupId).filter((g): g is string => !!g),
   );
-  // Assigned groups: everyone -> all groups in the set, else the groups named as assignees.
-  // A memberless group can't participate, so it's not counted (avoids inflating "missing").
   const assignedGroups = groups.filter(
-    (g) => (assignment.assignedToEveryone || namedGroupIds.has(g.id)) && g.memberships.length > 0,
-  );
-  if (assignedGroups.length === 0) return [];
-
-  const groupHasException = new Set(
-    overrides.filter((o) => o.targetType === 'GROUP' && o.groupId).map((o) => o.groupId!),
+    (g) => assignment.assignedToEveryone || namedGroupIds.has(g.id),
   );
 
-  return assignedGroups.map((group) => {
-    // Aggregate members' grade rows: a problem is graded for the group when any member has
-    // a grade row (autograde writes identical rows to every member); take the max so a lone
-    // manually-graded member is still reflected.
-    const groupGrades: Record<string, number> = {};
+  const participants: StatsParticipant[] = [];
+  const excluded: CohortExclusion['reason'][] = [];
+
+  for (const group of assignedGroups) {
+    // Nobody left to do the work: counted as an exclusion rather than as a team that failed
+    // to submit, which is what an empty group looked like before.
+    if (!group.memberships.some((m) => active.has(m.userId))) {
+      excluded.push('empty-group');
+      continue;
+    }
+
+    /**
+     * The group's grade per problem: the highest recorded among its members, read from
+     * EVERY member row whatever that member's standing.
+     *
+     * Membership decides who is counted, not whether the work is graded. If the only member
+     * holding the grade row leaves, an active-members-only rule would report the group as
+     * ungraded here while the gradebook still shows the grade, and park marked work back on
+     * the grader's queue. Rows differing from each other means somebody hand-edited one
+     * member's grade; the gradebook is where that is visible.
+     */
+    const problemGrades: Record<string, number> = {};
+    const gradedAtByProblem: Record<string, number> = {};
     for (const member of group.memberships) {
-      const rec = gradesByStudent.get(member.userId);
-      if (!rec) continue;
-      for (const [problemId, grade] of Object.entries(rec)) {
-        const existing = groupGrades[problemId];
-        groupGrades[problemId] = existing === undefined ? grade : Math.max(existing, grade);
+      const record = input.gradesByStudent.get(member.userId);
+      if (!record) continue;
+      for (const [problemId, entry] of Object.entries(record)) {
+        const held = problemGrades[problemId];
+        if (held === undefined || entry.grade > held) problemGrades[problemId] = entry.grade;
+        const heldAt = gradedAtByProblem[problemId];
+        if (heldAt === undefined || entry.gradedAt > heldAt) {
+          gradedAtByProblem[problemId] = entry.gradedAt;
+        }
       }
     }
 
-    return {
+    participants.push({
       id: group.id,
-      hasException: groupHasException.has(group.id),
-      problemGrades: groupGrades,
-      latestStatusByProblem: latestStatus.get(group.id) ?? {},
-    };
+      // A group is held to whatever a GROUP override says about it. The id is passed as the
+      // subject as well, where it can only fail to match a student override: an override row
+      // aimed at a person says nothing about a team.
+      ...deadlineFor(input, group.id, [group.id]),
+      problemGrades,
+      gradedAtByProblem,
+      latestStatusByProblem: input.latestStatus.get(group.id) ?? {},
+    });
+  }
+
+  // Assigned students who are in no group of this set cannot submit at all. They are not
+  // participants (the unit is groups) and they are not missing work; they are a setup
+  // problem only this page is placed to notice.
+  const inAGroup = new Set(groups.flatMap((g) => g.memberships.map((m) => m.userId)));
+  const strandedIds = [...active].filter((userId) => !inAGroup.has(userId));
+  if (strandedIds.length > 0) {
+    const groupIdsByStudent = await membershipsOf(strandedIds);
+    for (const userId of strandedIds) {
+      const assigned = isStudentAssigned(
+        { assignedToEveryone: assignment.assignedToEveryone },
+        assignment.assignees,
+        userId,
+        groupIdsByStudent.get(userId) ?? [],
+      );
+      if (assigned) excluded.push('no-group');
+    }
+  }
+
+  return { participants, exclusions: tally(excluded) };
+}
+
+// ─── shared helpers ──────────────────────────────────────────────────────────
+
+/** Group memberships for a set of students, keyed by student. Empty in, empty out. */
+async function membershipsOf(userIds: string[]): Promise<Map<string, string[]>> {
+  const byStudent = new Map<string, string[]>();
+  if (userIds.length === 0) return byStudent;
+  const memberships = await prisma.groupMembership.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true, groupId: true },
   });
+  for (const m of memberships) {
+    byStudent.set(m.userId, [...(byStudent.get(m.userId) ?? []), m.groupId]);
+  }
+  return byStudent;
+}
+
+/**
+ * The due date this participant is actually held to, and whether it differs from the class's.
+ *
+ * Asked of the resolved date rather than of the override table: a row that moves only the
+ * unlock date, or one edited until every field is empty, changes nothing about when the work
+ * is due, and counting those told the reader there were exceptions to look into when there
+ * were none. The same resolver the rest of the app judges lateness with, so a submission
+ * this page calls late is one the submissions views call late too.
+ */
+function deadlineFor(
+  input: CohortInput,
+  subjectId: string,
+  groupIds: string[],
+): { dueAt: number; hasException: boolean } {
+  const resolved = effectiveDeadline(input.base, input.overrides, subjectId, groupIds);
+  const dueAt = resolved.dueDate.getTime();
+  return { dueAt, hasException: dueAt !== input.base.dueDate.getTime() };
 }

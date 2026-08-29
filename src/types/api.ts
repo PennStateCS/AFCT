@@ -1649,7 +1649,7 @@ export interface paths {
         };
         /**
          * Get an assignment's analytics
-         * @description Aggregate analytics for one assignment: score histogram, per-problem box plots, and  submission-status breakdown, measured in students (individual) or groups (group  assignment). Course staff (faculty or TAs) or a system admin only. These are aggregate  student-performance figures, a FERPA-relevant read, so the access is audited (throttled).
+         * @description Aggregate analytics for one assignment: score histogram, per-problem box plots, grading  progress and submission-status breakdown, measured in students (individual) or groups  (group assignment). The figures describe students who are enrolled, active and assigned  this work; anybody left out is reported as a count with a reason.   Course staff (faculty or TAs) or a system admin only. These are aggregate  student-performance figures, a FERPA-relevant read, so the access is audited (throttled).
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/statistics/route.ts)
          */
@@ -8571,6 +8571,8 @@ export interface operations {
                         unit?: "student" | "group";
                         participantCount?: number;
                         exceptionCount?: number;
+                        /** @description Who was left out of participantCount, and why */
+                        exclusions?: Record<string, never>[];
                         histogram?: Record<string, never>;
                         problems?: Record<string, never>[];
                         assignmentTitle?: string;

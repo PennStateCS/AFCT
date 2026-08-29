@@ -7,9 +7,12 @@ import { getAssignmentStatistics } from '@/lib/assignment-statistics-service';
 // background refetch doesn't flood the audit log (mirrors the grades matrix route).
 
 /**
- * Aggregate analytics for one assignment: score histogram, per-problem box plots, and
- * submission-status breakdown, measured in students (individual) or groups (group
- * assignment). Course staff (faculty or TAs) or a system admin only. These are aggregate
+ * Aggregate analytics for one assignment: score histogram, per-problem box plots, grading
+ * progress and submission-status breakdown, measured in students (individual) or groups
+ * (group assignment). The figures describe students who are enrolled, active and assigned
+ * this work; anybody left out is reported as a count with a reason.
+ *
+ * Course staff (faculty or TAs) or a system admin only. These are aggregate
  * student-performance figures, a FERPA-relevant read, so the access is audited (throttled).
  * @openapi
  * summary: Get an assignment's analytics
@@ -27,6 +30,7 @@ import { getAssignmentStatistics } from '@/lib/assignment-statistics-service';
  *             unit: { type: string, enum: [student, group] }
  *             participantCount: { type: integer }
  *             exceptionCount: { type: integer }
+ *             exclusions: { type: array, items: { type: object }, description: "Who was left out of participantCount, and why" }
  *             histogram: { type: object }
  *             problems: { type: array, items: { type: object } }
  *             assignmentTitle: { type: string }

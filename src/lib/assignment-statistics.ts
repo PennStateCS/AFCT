@@ -55,6 +55,79 @@ export function queueStatusKey(status: SubmissionQueueStatus | undefined): Statu
   return status ? QUEUE_STATUS_KEY[status] : 'missing';
 }
 
+/**
+ * Where a participant's work stands with the GRADER, which is not where it stands with the
+ * queue.
+ *
+ * The queue says whether the evaluator has run. On a hand-graded problem it always finishes
+ * and grades nothing, so a page reporting only the queue tells a professor "Completed" about
+ * work nobody has marked. These four states answer the question that screen is actually for:
+ * is there a grade, and is it still the grade for the work that is there now.
+ */
+export type GradingStateKey =
+  /** A grade is recorded, and no work has arrived since. A recorded zero is a grade. */
+  | 'graded'
+  /** A grade is recorded, but the participant submitted again after it was written. */
+  | 'graded-stale'
+  /** Work is there and carries no grade. */
+  | 'ungraded-submitted'
+  /** Nothing was submitted. */
+  | 'ungraded-missing';
+
+/** Fixed display + legend order: settled first, then what is waiting, then what is absent. */
+export const GRADING_ORDER: readonly GradingStateKey[] = [
+  'graded',
+  'graded-stale',
+  'ungraded-submitted',
+  'ungraded-missing',
+] as const;
+
+/** Plain-language labels, kept here (not in the component) so tests can assert them. */
+export const GRADING_LABELS: Record<GradingStateKey, string> = {
+  graded: 'Graded',
+  'graded-stale': 'Regrade needed',
+  'ungraded-submitted': 'Awaiting grading',
+  'ungraded-missing': 'Nothing submitted',
+};
+
+/**
+ * Whether the work arrived by the participant's own deadline.
+ *
+ * Judged on the attempt that HOLDS THE GRADE, which is the latest one: that is the rule the
+ * rest of AFCT grades by, and judging the first submission instead would call an on-time
+ * placeholder followed by the real work two days late "on time" while the grade came from
+ * the late attempt. `revised-late` keeps the difference visible rather than throwing it
+ * away, because a professor applying a late policy needs to know which of the two they have.
+ *
+ * Every participant is measured against THEIR OWN due date, so an extension is an extension
+ * rather than a black mark.
+ */
+export type TurnInStateKey =
+  /** Every attempt landed on or before their due date. */
+  | 'on-time'
+  /** They were on time, then submitted again after the deadline; the later work counts. */
+  | 'revised-late'
+  /** Nothing arrived until after their due date. */
+  | 'late'
+  /** Nothing arrived at all. */
+  | 'missing';
+
+/** Fixed display + legend order: on time first, nothing at all last. */
+export const TURN_IN_ORDER: readonly TurnInStateKey[] = [
+  'on-time',
+  'revised-late',
+  'late',
+  'missing',
+] as const;
+
+/** Plain-language labels, kept here (not in the component) so tests can assert them. */
+export const TURN_IN_LABELS: Record<TurnInStateKey, string> = {
+  'on-time': 'On time',
+  'revised-late': 'Revised late',
+  late: 'Late',
+  missing: 'Nothing submitted',
+};
+
 export const HISTOGRAM_BIN_COUNT = 10;
 
 // ─── primitive statistics ────────────────────────────────────────────────────
@@ -204,7 +277,22 @@ export type StatsSubmission = {
   submittedAt: number;
   /** Whether the evaluator judged it correct (a null/undefined verdict is not correct). */
   correct: boolean;
+  /** Where this attempt got to in the evaluation queue. */
+  status: SubmissionQueueStatus;
 };
+
+/**
+ * An attempt the evaluator actually judged.
+ *
+ * A FAILED run produced no verdict: something broke on our side and the file was never
+ * assessed. Counting it as an attempt the participant got wrong reports our fault as their
+ * mistake, and on a problem where the evaluator is having a bad day it does so for everybody
+ * at once. It still happened, so it stays in the timeline and the heatmap, which count
+ * events rather than verdicts.
+ */
+export function wasJudged(submission: StatsSubmission): boolean {
+  return submission.status !== 'FAILED';
+}
 
 export type AttemptsBucket = { label: string; count: number };
 export type AttemptsToSolve = {
@@ -257,7 +345,7 @@ function localParts(ms: number, timeZone: string): { date: string; hour: number;
 function byParticipantProblem(submissions: StatsSubmission[]): StatsSubmission[][] {
   const groups = new Map<string, StatsSubmission[]>();
   for (const s of submissions) {
-    const key = `${s.participantId} ${s.problemId}`;
+    const key = `${s.participantId}\u0000${s.problemId}`;
     const list = groups.get(key);
     if (list) list.push(s);
     else groups.set(key, [s]);
@@ -292,7 +380,7 @@ export function computeAttemptsToSolveByProblem(
   submissions: StatsSubmission[],
 ): Map<string, AttemptsToSolve> {
   const result = new Map<string, AttemptsToSolve>();
-  for (const list of byParticipantProblem(submissions)) {
+  for (const list of byParticipantProblem(submissions.filter(wasJudged))) {
     const problemId = list[0]!.problemId;
     let entry = result.get(problemId);
     if (!entry) {
@@ -318,7 +406,7 @@ export function computeFirstAttemptSuccess(
   submissions: StatsSubmission[],
 ): Map<string, { correct: number; submitted: number }> {
   const result = new Map<string, { correct: number; submitted: number }>();
-  for (const list of byParticipantProblem(submissions)) {
+  for (const list of byParticipantProblem(submissions.filter(wasJudged))) {
     const first = list[0];
     if (!first) continue;
     const rec = result.get(first.problemId) ?? { correct: 0, submitted: 0 };
@@ -389,6 +477,64 @@ export function heatmapLevel(count: number, max: number): HeatmapLevel {
   return 4;
 }
 
+/** When a participant first and last submitted a problem, epoch milliseconds. */
+export type SubmissionSpan = { first: number; latest: number };
+
+/** The span of each participant's attempts at each problem, keyed participant+problem. */
+export function submissionSpans(submissions: StatsSubmission[]): Map<string, SubmissionSpan> {
+  const spans = new Map<string, SubmissionSpan>();
+  for (const s of submissions) {
+    const key = `${s.participantId}\u0000${s.problemId}`;
+    const held = spans.get(key);
+    if (!held) {
+      spans.set(key, { first: s.submittedAt, latest: s.submittedAt });
+      continue;
+    }
+    if (s.submittedAt < held.first) held.first = s.submittedAt;
+    if (s.submittedAt > held.latest) held.latest = s.submittedAt;
+  }
+  return spans;
+}
+
+/**
+ * Where one participant stands with their deadline on one problem.
+ *
+ * The latest attempt decides, because it is the one that holds the grade. A participant
+ * whose latest attempt is on time cannot have a late one, since it would be the latest.
+ */
+export function turnInStateOf(
+  participant: StatsParticipant,
+  problemId: string,
+  spans: Map<string, SubmissionSpan>,
+): TurnInStateKey {
+  const span = spans.get(`${participant.id}\u0000${problemId}`);
+  if (!span) return 'missing';
+  if (span.latest <= participant.dueAt) return 'on-time';
+  return span.first <= participant.dueAt ? 'revised-late' : 'late';
+}
+
+/**
+ * Where one participant stands with the grader on one problem.
+ *
+ * A grade that predates the participant's newest submission is reported as needing another
+ * look rather than as settled. That is the case a hand-grading queue loses: the work was
+ * marked, the student sent more, and nothing on the page said so. Autograded problems
+ * regrade themselves, so it is rare there and harmless when it appears.
+ */
+export function gradingStateOf(
+  participant: StatsParticipant,
+  problemId: string,
+  spans: Map<string, SubmissionSpan>,
+): GradingStateKey {
+  const submittedAt = spans.get(`${participant.id}\u0000${problemId}`)?.latest;
+  if (participant.problemGrades[problemId] === undefined) {
+    return submittedAt === undefined ? 'ungraded-missing' : 'ungraded-submitted';
+  }
+  const gradedAt = participant.gradedAtByProblem[problemId];
+  if (gradedAt === undefined || submittedAt === undefined) return 'graded';
+  return submittedAt > gradedAt ? 'graded-stale' : 'graded';
+}
+
 // ─── assembly ────────────────────────────────────────────────────────────────
 
 export type StatsProblem = {
@@ -397,6 +543,14 @@ export type StatsProblem = {
   /** Position within the assignment; the box plots render in this order. */
   order: number;
   maxPoints: number;
+  /**
+   * Whether the autograder marks this problem.
+   *
+   * It decides how the two progress readings should be read, not what they contain: work
+   * waiting for a grade is a moment on an autograded problem and a queue of marking on a
+   * hand-graded one.
+   */
+  autograderEnabled: boolean;
 };
 
 export type StatsParticipant = {
@@ -410,10 +564,42 @@ export type StatsParticipant = {
    */
   problemGrades: Record<string, number>;
   /**
+   * The due date this participant is actually held to, epoch milliseconds: their override if
+   * they have one, the assignment's date otherwise. Timing is judged against this and never
+   * against the class's date, so an extension reads as an extension.
+   */
+  dueAt: number;
+  /**
+   * When each recorded grade was last written, epoch milliseconds, keyed by problem id. The
+   * keys mirror `problemGrades`. Compared against the latest submission so a grade that has
+   * been overtaken by newer work can say so instead of reading as settled.
+   */
+  gradedAtByProblem: Record<string, number>;
+  /**
    * The evaluation-queue state of the participant's LATEST submission per problem id. A key
    * is present only when a submission exists; a missing key means no submission (→ `missing`).
    */
   latestStatusByProblem: Record<string, SubmissionQueueStatus>;
+};
+
+/**
+ * Somebody the assignment was not measured on, and why.
+ *
+ * Every exclusion is a judgement about who the figures describe, so the page states them
+ * rather than quietly shrinking its denominator. Counts only: this is an aggregate surface
+ * and names belong on the roster and submissions screens.
+ */
+export type CohortExclusion = {
+  reason:
+    /** Left the course. Their work is kept and stays reviewable elsewhere. */
+    | 'dropped'
+    /** The account is disabled, so nobody can do this work. */
+    | 'inactive'
+    /** Assigned, but in no group in this assignment's group set, so they cannot submit. */
+    | 'no-group'
+    /** A group whose members have all left, so nobody is left to do it. */
+    | 'empty-group';
+  count: number;
 };
 
 export type BuildStatisticsInput = {
@@ -424,6 +610,8 @@ export type BuildStatisticsInput = {
   submissions: StatsSubmission[];
   /** Course timezone, for bucketing the timeline and activity heatmap by local time. */
   timeZone: string;
+  /** Who the loader left out, and why. Reported as given; nothing here recomputes it. */
+  exclusions?: CohortExclusion[];
 };
 
 export type ProblemStats = {
@@ -433,9 +621,33 @@ export type ProblemStats = {
   boxplot: BoxPlotStats | null;
   gradedCount: number;
   ungradedCount: number;
+  /** Whether the autograder marks this problem. False means a person does. */
+  autograderEnabled: boolean;
+  /**
+   * What this problem is worth.
+   *
+   * The box plot below normalises every problem to 0-100% so they can be compared at all,
+   * which also hides that one of them is worth eight times another. The weight has to travel
+   * with the shape or the comparison misleads.
+   */
+  maxPoints: number;
+  /**
+   * Marks lost per graded participant, on average: the mean of (points possible - points
+   * earned) over everybody who has a grade for this problem. Null when nobody does.
+   *
+   * The number a professor decides on. A problem everyone half-solved costs the class more
+   * than one a few people failed, and neither the median nor the spread says which is which
+   * until the points are in it. Not clamped: a grade above the maximum is a bonus somebody
+   * awarded on purpose, and pretending it was zero loss would flatter the problem.
+   */
+  pointsLostMean: number | null;
   /** Submission-status breakdown for THIS problem, in fixed order; counts sum to
    *  participantCount (every assigned participant is expected to do every problem). */
   status: { key: StatusKey; count: number }[];
+  /** Grading breakdown for THIS problem, in fixed order; counts sum to participantCount. */
+  grading: { key: GradingStateKey; count: number }[];
+  /** Turn-in breakdown for THIS problem, in fixed order; counts sum to participantCount. */
+  turnIn: { key: TurnInStateKey; count: number }[];
   /** How many participants got this problem right on their first submission... */
   firstAttemptCorrect: number;
   /** ...out of how many submitted it at all. */
@@ -450,17 +662,133 @@ export type AssignmentStatistics = {
   participantCount: number;
   /** Participants with a due-date exception applied. */
   exceptionCount: number;
-  histogram: {
-    bins: HistogramBin[];
-    includedCount: number;
-    excludedCount: number;
-    mean: number | null;
-    median: number | null;
-  };
+  /** Who was left out of `participantCount`, and why. Empty when nobody was. */
+  exclusions: CohortExclusion[];
+  histogram: ScoreDistribution;
+  /**
+   * The same distribution with work that was NEVER SUBMITTED counted as zero.
+   *
+   * A missing submission is not a zero until somebody decides it is: until the deadline
+   * passes, until an extension is refused, until the professor says so. So the page keeps
+   * both readings and lets them choose which they are looking at, rather than picking one
+   * and calling it the class average.
+   *
+   * Work that was submitted and not yet marked is NOT zeroed here. It is waiting on a
+   * grader, and reporting it as a zero would understate the class for as long as marking
+   * takes.
+   */
+  histogramCountingMissingAsZero: ScoreDistribution;
   problems: ProblemStats[];
   timeline: TimelinePoint[];
   heatmap: ActivityHeatmap;
 };
+
+/** One reading of the class's scores: the bars, the middle, the spread, and who is missing. */
+export type ScoreDistribution = {
+  bins: HistogramBin[];
+  includedCount: number;
+  excludedCount: number;
+  mean: number | null;
+  median: number | null;
+  /** Lowest and highest included percentage, for the summary line. Null when none. */
+  low: number | null;
+  high: number | null;
+  /**
+   * What the excluded participants are waiting on: problems they SUBMITTED and nobody has
+   * marked, commonest first. "14 excluded" is a fact nobody can act on; "12 are waiting on
+   * Problem 3" is the same fact with the next move in it.
+   */
+  waitingOn: { problemId: string; title: string; count: number }[];
+  /**
+   * Problems the excluded participants never submitted, commonest first.
+   *
+   * Kept apart from `waitingOn` because they are somebody else's job: one is a grader's
+   * queue, the other is a student who has handed in nothing, and a page that says "waiting
+   * on" about both sends the professor to mark work that does not exist.
+   */
+  notSubmitted: { problemId: string; title: string; count: number }[];
+  /**
+   * The assignment has no points to award, so no percentage exists for anybody. A
+   * different sentence from "not graded yet", and a different thing to do about it.
+   */
+  noPossiblePoints: boolean;
+};
+
+/** Turn a per-problem tally into the named, commonest-first list the page reads out. */
+function byProblem(
+  counts: Map<string, number>,
+  problems: StatsProblem[],
+): { problemId: string; title: string; count: number }[] {
+  return [...counts.entries()]
+    .map(([problemId, count]) => ({
+      problemId,
+      title: problems.find((p) => p.id === problemId)?.title ?? '',
+      count,
+    }))
+    .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title));
+}
+
+/**
+ * One reading of the score distribution.
+ *
+ * `missingAsZero` decides what to do about a problem a participant has no grade for. Off, it
+ * keeps them out of the chart entirely, because a partial score is not a score. On, a problem
+ * they never submitted counts as zero, while one they submitted and nobody has marked still
+ * keeps them out: that is a grader's queue, not a zero.
+ */
+export function buildScoreDistribution(
+  problems: StatsProblem[],
+  participants: StatsParticipant[],
+  spans: Map<string, SubmissionSpan>,
+  options: { missingAsZero: boolean } = { missingAsZero: false },
+): ScoreDistribution {
+  const totalPossible = problems.reduce((sum, p) => sum + p.maxPoints, 0);
+  const percentages: number[] = [];
+  let excludedCount = 0;
+  const waiting = new Map<string, number>();
+  const absent = new Map<string, number>();
+
+  for (const part of participants) {
+    const ungraded = problems.filter((p) => part.problemGrades[p.id] === undefined);
+    // Ungraded work that cannot be scored yet: everything with no grade, minus the pieces
+    // this reading is willing to call a zero.
+    const blocking = options.missingAsZero
+      ? ungraded.filter((p) => spans.has(`${part.id}\u0000${p.id}`))
+      : ungraded;
+
+    if (problems.length === 0 || blocking.length > 0 || totalPossible <= 0) {
+      excludedCount += 1;
+      // Only when there are points to score: on a zero-point assignment nobody is waiting
+      // on grading, the assignment simply has no percentage to report.
+      if (totalPossible > 0) {
+        for (const p of blocking) {
+          const tally = spans.has(`${part.id}\u0000${p.id}`) ? waiting : absent;
+          tally.set(p.id, (tally.get(p.id) ?? 0) + 1);
+        }
+      }
+      continue;
+    }
+
+    const earned = problems.reduce((sum, p) => sum + (part.problemGrades[p.id] ?? 0), 0);
+    const pct = assignmentPercentage(earned, totalPossible);
+    if (pct == null) excludedCount += 1;
+    else percentages.push(pct);
+  }
+
+  const histogram = computeScoreHistogram(percentages);
+  return {
+    bins: histogram.bins,
+    includedCount: percentages.length,
+    excludedCount,
+    mean: histogram.mean,
+    median: histogram.median,
+    low: percentages.length > 0 ? Math.min(...percentages) : null,
+    high: percentages.length > 0 ? Math.max(...percentages) : null,
+    waitingOn: byProblem(waiting, problems),
+    notSubmitted: byProblem(absent, problems),
+    noPossiblePoints: totalPossible <= 0,
+  };
+}
 
 /**
  * Turn already-loaded, database-agnostic participant facts into the full analytics
@@ -469,32 +797,17 @@ export type AssignmentStatistics = {
  */
 export function buildAssignmentStatistics(input: BuildStatisticsInput): AssignmentStatistics {
   const { problems, participants, unit, submissions, timeZone } = input;
-  const requiredProblemCount = problems.length;
-  const totalPossible = problems.reduce((sum, p) => sum + p.maxPoints, 0);
   const firstAttempt = computeFirstAttemptSuccess(submissions);
   const attemptsByProblem = computeAttemptsToSolveByProblem(submissions);
+  const spans = submissionSpans(submissions);
 
-  // Histogram: include a participant only when EVERY problem is graded for them, so
-  // partially graded work never pollutes the distribution. Everyone else is excluded and
-  // counted so the UI can state how many were left out.
-  const includedPercentages: number[] = [];
-  let excludedCount = 0;
-  for (const part of participants) {
-    const fullyGraded =
-      requiredProblemCount > 0 && problems.every((p) => part.problemGrades[p.id] !== undefined);
-    if (!fullyGraded || totalPossible <= 0) {
-      excludedCount += 1;
-      continue;
-    }
-    const earned = problems.reduce((sum, p) => sum + (part.problemGrades[p.id] ?? 0), 0);
-    const pct = assignmentPercentage(earned, totalPossible);
-    if (pct == null) {
-      excludedCount += 1;
-    } else {
-      includedPercentages.push(pct);
-    }
-  }
-  const histogram = computeScoreHistogram(includedPercentages);
+  // Two readings of the same scores: only fully graded work, and the same with work nobody
+  // submitted counted as zero. Which one is the class average is the professor's call, so
+  // the page carries both and says which it is showing.
+  const histogram = buildScoreDistribution(problems, participants, spans);
+  const histogramCountingMissingAsZero = buildScoreDistribution(problems, participants, spans, {
+    missingAsZero: true,
+  });
 
   // One entry per problem: its score box plot AND its own submission-status breakdown
   // (the queue state of each participant's latest submission for that problem, else
@@ -503,28 +816,45 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
     .sort((a, b) => a.order - b.order)
     .map((p) => {
       const values: number[] = [];
+      const lost: number[] = [];
       let gradedCount = 0;
       const statusCounts = new Map<StatusKey, number>(STATUS_ORDER.map((k) => [k, 0]));
+      const gradingCounts = new Map<GradingStateKey, number>(GRADING_ORDER.map((k) => [k, 0]));
+      const turnInCounts = new Map<TurnInStateKey, number>(TURN_IN_ORDER.map((k) => [k, 0]));
       for (const part of participants) {
         const key = queueStatusKey(part.latestStatusByProblem[p.id]);
         statusCounts.set(key, (statusCounts.get(key) ?? 0) + 1);
+
+        const gradingKey = gradingStateOf(part, p.id, spans);
+        gradingCounts.set(gradingKey, (gradingCounts.get(gradingKey) ?? 0) + 1);
+
+        const turnInKey = turnInStateOf(part, p.id, spans);
+        turnInCounts.set(turnInKey, (turnInCounts.get(turnInKey) ?? 0) + 1);
 
         const grade = part.problemGrades[p.id];
         if (grade === undefined) continue;
         gradedCount += 1;
         // A problem worth zero points has no meaningful normalized score; it still counts
-        // as graded but contributes no distribution point.
-        if (p.maxPoints > 0) values.push((grade / p.maxPoints) * 100);
+        // as graded but contributes no distribution point, and nothing can be lost on it.
+        if (p.maxPoints > 0) {
+          values.push((grade / p.maxPoints) * 100);
+          lost.push(p.maxPoints - grade);
+        }
       }
       const fa = firstAttempt.get(p.id) ?? { correct: 0, submitted: 0 };
       return {
         id: p.id,
         title: p.title,
         order: p.order,
+        autograderEnabled: p.autograderEnabled,
+        maxPoints: p.maxPoints,
+        pointsLostMean: meanOf(lost),
         boxplot: computeBoxPlot(values),
         gradedCount,
         ungradedCount: participants.length - gradedCount,
         status: STATUS_ORDER.map((key) => ({ key, count: statusCounts.get(key) ?? 0 })),
+        grading: GRADING_ORDER.map((key) => ({ key, count: gradingCounts.get(key) ?? 0 })),
+        turnIn: TURN_IN_ORDER.map((key) => ({ key, count: turnInCounts.get(key) ?? 0 })),
         firstAttemptCorrect: fa.correct,
         firstAttemptSubmitted: fa.submitted,
         attempts: attemptsByProblem.get(p.id) ?? emptyAttempts(),
@@ -535,13 +865,9 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
     unit,
     participantCount: participants.length,
     exceptionCount: participants.filter((p) => p.hasException).length,
-    histogram: {
-      bins: histogram.bins,
-      includedCount: includedPercentages.length,
-      excludedCount,
-      mean: histogram.mean,
-      median: histogram.median,
-    },
+    exclusions: (input.exclusions ?? []).filter((e) => e.count > 0),
+    histogram,
+    histogramCountingMissingAsZero,
     problems: problemStats,
     timeline: computeSubmissionTimeline(submissions, timeZone),
     heatmap: computeActivityHeatmap(submissions, timeZone),
