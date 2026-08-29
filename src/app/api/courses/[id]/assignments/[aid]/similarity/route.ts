@@ -4,8 +4,8 @@ import { apiError } from '@/lib/api/http';
 import { withAssignmentAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { findSubmissionMatches } from '@/lib/similarity/matches';
-import { COMMON_SHARE } from '@/lib/similarity/rarity';
-import { clusterMatches } from '@/lib/similarity/evidence';
+import { COMMON_SHARE, type ReviewSubject } from '@/lib/similarity/rarity';
+import { clusterMatches, isSetAside } from '@/lib/similarity/evidence';
 
 type Ctx = { params: Promise<{ id: string; aid: string }> };
 
@@ -37,6 +37,15 @@ type Ctx = { params: Promise<{ id: string; aid: string }> };
 export const GET = withAssignmentAuth<Ctx>(
   async (req, _ctx, { user, courseId, assignment }) => {
     try {
+      // Whether this assignment is submitted by teams. It decides who a finding is about and
+      // what rarity is counted in: on a group assignment any member may submit for the team,
+      // so counting members would rate work shared by two teams as if it were four students.
+      const groupSet = await prisma.assignment.findUnique({
+        where: { id: assignment.id },
+        select: { groupSetId: true },
+      });
+      const subject: ReviewSubject = groupSet?.groupSetId ? 'group' : 'student';
+
       const links = await prisma.assignmentProblem.findMany({
         where: { assignmentId: assignment.id },
         select: {
@@ -61,7 +70,10 @@ export const GET = withAssignmentAuth<Ctx>(
       // The badge asks for counts only. Same matching, same classification, same threshold;
       // it just does not pay for the attempt numbers that only a rendered card shows.
       const countOnly = new URL(req.url).searchParams.get('part') === 'count';
-      const groups = await findSubmissionMatches([...problems.keys()], problems, { countOnly });
+      const groups = await findSubmissionMatches(assignment.id, [...problems.keys()], problems, {
+        countOnly,
+        subject,
+      });
 
       // `?part=count` answers the tab badge: how many matches there are, without who they
       // are. Deliberately not logged, because nothing about a student is disclosed by a
@@ -72,10 +84,10 @@ export const GET = withAssignmentAuth<Ctx>(
         // Nineteen pairs between six sets of students is six things to read, and a badge
         // saying nineteen next to a page saying six is a badge nobody trusts. The reader's
         // own commonality setting lives in their browser, so this uses the default.
-        const clusters = clusterMatches(groups, COMMON_SHARE);
+        const clusters = clusterMatches(groups, COMMON_SHARE, subject);
         return NextResponse.json({
           matches: groups.length,
-          notable: clusters.filter((cluster) => cluster.type !== 'common').length,
+          notable: clusters.filter((cluster) => !isSetAside(cluster.type)).length,
           reusedAfterPass: groups.filter((group) => group.reusedAfterPass).length,
         });
       }

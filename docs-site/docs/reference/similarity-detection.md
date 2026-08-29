@@ -57,9 +57,10 @@ Indexed on `(problemId, contentHash)` and `(problemId, shapeHash)`. Nothing stor
 
 Rules it applies, all of which have tests:
 
-- **Scoped by problem.** A problem belongs to one course, so a match can never cross into another instructor's course. Do not widen this.
+- **Scoped by assignment AND problem.** Every read is narrowed by both: the group-by, the matched rows, the attempt numbering, and the provenance read the third check runs over. A problem is reusable, so the same question can be set again next term or in another section; work submitted to a different assignment is different work, and reporting it as a match would put two students who never took the same assignment on one card. The assignment belongs to one course, so this can never reach into another instructor's course either. Do not widen this.
 - **Group assignments.** A group whose submissions all belong to one student group is dropped: every member's submit writes its own row against the shared set, so a team matching itself is the group feature working.
-- **A student's own attempts are never paired with each other.**
+- **A student's own attempts are never paired with each other.** Every attempt within the assignment is still compared, and which attempt matched is what the card shows.
+- **Rarity is counted in review subjects, not rows.** Students on an individual assignment, teams on a group one (`ReviewSubject`, `lib/similarity/rarity.ts`). A team is one holder however many members submitted and however many attempts they made, and the same unit is used for the commonality threshold and for the feature weighting in the provenance check, so the number the reader is shown and the number the classifier uses are the same number. Work with no group recorded counts as its student, which is the only identity it has.
 - **No repeats.** A pair already matched by content or shape is not reported again as a near match.
 - **A missing byte hash is not a match.** Rows stored before the column existed have none, and they are counted separately rather than bucketed together, so "byte-for-byte identical" is never said about files nobody hashed. `scripts/backfill-content-hashes.mjs` fills them in.
 - **Reuse after passing is measured from `evaluatedAt`, not `submittedAt`.** The claim is that a result already existed, so it is timed from when the result landed. An attempt with no recorded result time makes no claim; `scripts/backfill-evaluated-at.mjs` recovers it from the evaluation entries in the activity log. A near match never claims reuse at all: the two submissions are not copies of each other, so whatever passed is not what was submitted.
@@ -69,8 +70,8 @@ Rules it applies, all of which have tests:
 
 `findNearMatches` (`lib/similarity/near-matches.ts`) is a pure function over rows already loaded, so it is testable without a database.
 
-1. Count how many **students** hold each feature, once each however many times they submitted.
-2. Discard anything held by `FEATURE_COMMON_SHARE` of them or more (0.25, the same inclusive boundary `isCommon` applies to a whole answer), and anything only one student holds: it cannot be shared, so it is evidence about nobody, and being the rarest thing in the problem it would otherwise dominate the denominator in step 5 and penalise a submission for being distinctive.
+1. Count how many **review subjects** hold each feature, once each however many times they submitted: students, or teams on a group assignment.
+2. Discard anything held by `FEATURE_COMMON_SHARE` of them or more (0.25, the same inclusive boundary `isCommon` applies to a whole answer), and anything only one subject holds: it cannot be shared, so it is evidence about nobody, and being the rarest thing in the problem it would otherwise dominate the denominator in step 5 and penalise a submission for being distinctive.
 3. Index the survivors; candidate pairs come only from sharing one, never from comparing everybody with everybody.
 4. Reject a pair whose sizes differ by more than `MAX_SIZE_DIFFERENCE_SHARE` (0.4). Two versions of one file differ by a state or two; machines of very different sizes are two machines however much skeleton they share.
 5. Score a pair by the summed rarity weight of its shared features, measured against the smaller of the two.
@@ -100,6 +101,8 @@ Everything the tab decides about *display* lives in `lib/similarity/evidence.ts`
 - **A group of more than one relationship makes no claim about all of its students.** They were gathered by being connected to somebody, not by all sharing one thing, so the heading reads "3 of 38 students are connected by 2 similarity relationships" and the kinds are listed underneath. `matchesAnswerFile` on a cluster means every relationship in it is the posted solution; a partial one is stated as a count instead.
 - `compareClusters` orders the page: match type first, then reuse after passing, then size, then recency.
 - `cluster.attempts` is what the card lists: every matching submission, deduplicated by id and NOT by student, so two attempts by one student are two rows. `cluster.students` stays what the counts are made of. A group assignment counts `cluster.groups` against `problemGroupCount` instead, falling back to students when the work carries no group.
+
+The filter row offers only the kinds it can show: `exact`, `same-machine` and `structural`, plus All. The set-aside kinds are not filters, because the section at the foot of the page is where they live and a filter that appeared to narrow to them while leaving the review list alone would be a lie. `countByType` is given the reviewable clusters for the same reason: All says what All shows.
 
 The card and its parts are `SimilarityMatchCard`, `SimilarityEvidenceBadge`, `SimilarityInfoPopover`, `SimilarityTimeline` and `SimilarityFilters`. The popover copy is the feature's explanation of itself and is worth as much care as the code.
 

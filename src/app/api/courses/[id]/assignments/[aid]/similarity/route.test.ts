@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   roster: { findFirst: vi.fn() },
   course: { findUnique: vi.fn() },
-  assignment: { findFirst: vi.fn() },
+  assignment: { findFirst: vi.fn(), findUnique: vi.fn() },
   assignmentProblem: { findMany: vi.fn() },
   submission: { groupBy: vi.fn(), findMany: vi.fn() },
 }));
@@ -49,6 +49,8 @@ beforeEach(() => {
     courseId: 'c1',
     isPublished: true,
   });
+  // Individual assignment unless a case says otherwise: no group set.
+  prismaMock.assignment.findUnique.mockResolvedValue({ groupSetId: null });
   prismaMock.assignmentProblem.findMany.mockResolvedValue([
     { problemId: 'p1', problem: { title: 'Even zeros', type: 'FA' } },
   ]);

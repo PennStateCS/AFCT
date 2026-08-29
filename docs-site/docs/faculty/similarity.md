@@ -10,7 +10,7 @@ That restraint is deliberate. Nothing in a submitted file can distinguish two st
 
 ## What it compares
 
-Every submission is described on the server as the file arrives, so this covers work sent from the web app and from the AFCT client alike, and nothing about it depends on the client behaving. Comparison always happens within a single problem: a match is only ever between students answering the same question in your course, and never reaches into another course.
+Every submission is described on the server as the file arrives, so this covers work sent from the web app and from the AFCT client alike, and nothing about it depends on the client behaving. Comparison always happens within one assignment and one problem: a match is only ever between students answering the same question on the same assignment. A problem you reuse next term, or set for another section, is compared separately, and nothing ever reaches into another course.
 
 There are three checks, from strictest to loosest.
 
@@ -83,11 +83,11 @@ The order is half the story. "11 minutes apart" only means something once you kn
 
 On an assignment submitted by groups, the group is who a finding is about: any member may submit for the team, so counting members would report two teams sharing work as four students. Cards count groups ("2 of 9 groups"), the attempt list leads with the group name, and the member who actually sent that attempt is named underneath as **Submitted by**. That is detail rather than ownership: the work belongs to the team.
 
-Members of one team matching each other is the feature working, not a finding, so it is never reported. Work submitted before AFCT recorded groups is still counted by student, which is the only thing that can be said about it truthfully.
+Members of one team matching each other is the feature working, not a finding, so it is never reported. Everything else is counted in teams too: the common-answer threshold, and how unusual a piece of structure is. A team is one voice however many of its members submitted, so three people on one team all sending the shared file does not make that work look common. Work submitted before AFCT recorded groups is still counted by student, which is the only thing that can be said about it truthfully.
 
 ### Filtering
 
-The row of filters at the top narrows the page to one kind of match, each with its count: useful on a large assignment where you want to read every exact artifact first and come back to the rest. The filter changes what is shown and nothing else.
+The row of filters at the top narrows the page to one kind of match, each with its count: useful on a large assignment where you want to read every exact artifact first and come back to the rest. The filter changes what is shown and nothing else, and **All** counts what it can show, so the number on it and the number of cards below always agree. Set-aside work is not in the filter row; it has its own section at the foot of the page.
 
 ### Statuses
 
