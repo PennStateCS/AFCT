@@ -27,6 +27,7 @@ vi.mock('@/components/assignments/CompareSubmissionsDialog', () => ({
 }));
 
 import { AssignmentSimilarityPanel } from './AssignmentSimilarityPanel';
+import { resetCommonShareForTests } from '@/lib/similarity-threshold';
 
 const student = (id: string, firstName: string) => ({
   id,
@@ -124,6 +125,9 @@ beforeEach(() => {
   getMock.mockReset();
   getMock.mockResolvedValue([]);
   window.localStorage.clear();
+  // The threshold is one reader's setting and outlives any single panel, so a test that
+  // moves it would otherwise hand its value to the next one.
+  resetCommonShareForTests();
 });
 
 describe('AssignmentSimilarityPanel', () => {

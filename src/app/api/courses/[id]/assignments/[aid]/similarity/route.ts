@@ -23,6 +23,7 @@ type Ctx = { params: Promise<{ id: string; aid: string }> };
  *   - { name: id, in: path, required: true, schema: { type: string } }
  *   - { name: aid, in: path, required: true, schema: { type: string } }
  *   - { name: part, in: query, required: false, schema: { type: string, enum: [count] }, description: "Counts only, for the tab badge" }
+ *   - { name: share, in: query, required: false, schema: { type: number, minimum: 0.05, maximum: 1 }, description: "The reader's commonality threshold, used with part=count so the badge counts what their page shows" }
  * responses:
  *   200:
  *     description: Groups of submissions sharing identical content, rarest first.
@@ -82,9 +83,16 @@ export const GET = withAssignmentAuth<Ctx>(
       if (countOnly) {
         // `notable` counts what the page counts: groups of related students, not pairs.
         // Nineteen pairs between six sets of students is six things to read, and a badge
-        // saying nineteen next to a page saying six is a badge nobody trusts. The reader's
-        // own commonality setting lives in their browser, so this uses the default.
-        const clusters = clusterMatches(groups, COMMON_SHARE, subject);
+        // saying nineteen next to a page saying six is a badge nobody trusts.
+        //
+        // The reader's own commonality setting lives in their browser, so the page sends it:
+        // it decides how many groups are set aside, and a badge counting at one threshold
+        // beside a page counting at another is the same broken promise. Anything missing or
+        // out of range falls back to the default rather than failing the request, since this
+        // is a badge and the number matters more than the argument.
+        const asked = Number(new URL(req.url).searchParams.get('share'));
+        const share = Number.isFinite(asked) && asked >= 0.05 && asked <= 1 ? asked : COMMON_SHARE;
+        const clusters = clusterMatches(groups, share, subject);
         return NextResponse.json({
           matches: groups.length,
           notable: clusters.filter((cluster) => !isSetAside(cluster.type)).length,

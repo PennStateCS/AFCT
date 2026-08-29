@@ -99,8 +99,10 @@ export const queryKeys = {
       ['course', courseId, 'assignment', assignmentId, 'statistics'] as const,
     similarity: (courseId: string, assignmentId: string) =>
       ['course', courseId, 'assignment', assignmentId, 'similarity'] as const,
-    similarityCount: (courseId: string, assignmentId: string) =>
-      ['course', courseId, 'assignment', assignmentId, 'similarity', 'count'] as const,
+    // The threshold is part of the question, so moving it asks again rather than showing a
+    // number that was true of a different setting.
+    similarityCount: (courseId: string, assignmentId: string, share?: number) =>
+      ['course', courseId, 'assignment', assignmentId, 'similarity', 'count', share] as const,
   },
 
   /** Calendar: assignments due in a date range (self-scoped to the caller). */

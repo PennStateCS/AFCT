@@ -23,9 +23,13 @@ import { COMMON_SHARE } from '@/lib/similarity/rarity';
 const req = () => new Request('http://localhost/api/courses/c1/assignments/a1/similarity');
 const ctx = () => ({ params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 const call = () => GET(req(), ctx());
-const callCount = () =>
+const callCount = (share?: number) =>
   GET(
-    new Request('http://localhost/api/courses/c1/assignments/a1/similarity?part=count'),
+    new Request(
+      `http://localhost/api/courses/c1/assignments/a1/similarity?part=count${
+        share === undefined ? '' : `&share=${share}`
+      }`,
+    ),
     ctx(),
   );
 
@@ -315,6 +319,42 @@ describe('GET /api/courses/[id]/assignments/[aid]/similarity', () => {
 
     expect(body.matches).toBe(1);
     expect(body.notable).toBe(0);
+  });
+
+  it("counts at the reader's own threshold, so the badge and the page agree", async () => {
+    // The same two of three students. At the default they are the expected answer and the
+    // badge says nothing; a reader who has moved their dial past that ratio is being shown
+    // the group on the page, and the badge has to be counting the same thing.
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
+      { problemId: 'p1', shapeHash: 'shape-b', contentHash: 'hash-b', studentId: 's3' },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue(
+      ['s1', 's2'].map((studentId, index) => ({
+        id: `sub-${index}`,
+        problemId: 'p1',
+        contentHash: 'hash-a',
+        shapeHash: 'shape-a',
+        assignmentId: 'a1',
+        submittedAt: new Date(`2026-08-14T1${index}:00:00Z`),
+        correct: false,
+        evaluatedAt: null,
+        fileName: `stored-${index}.jff`,
+        originalFileName: 'mine.jff',
+        studentId,
+        studentGroupId: null,
+        student: student(studentId),
+        studentGroup: null,
+      })),
+    );
+
+    expect((await (await callCount()).json()).notable).toBe(0);
+    // Two of three is 67%, so a threshold above that stops calling it the expected answer.
+    expect((await (await callCount(0.7)).json()).notable).toBe(1);
+    // And a nonsense value is a badge argument, not a request worth failing: back to the
+    // default rather than a 400 nobody would see.
+    expect((await (await callCount(9)).json()).notable).toBe(0);
   });
 
   it('writes no access entry for a count, which discloses nobody', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { ChevronDown, Fingerprint, Info, Users } from 'lucide-react';
@@ -26,7 +26,7 @@ import {
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
-import { COMMON_SHARE } from '@/lib/similarity/rarity';
+import { useCommonShare } from '@/lib/similarity-threshold';
 import { FILTER_NOUN, type ReviewSubject } from '@/components/assignments/similarity-format';
 import {
   formatDateInTimeZone,
@@ -53,9 +53,6 @@ import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/mat
  * It reports and never accuses. Strength describes the artifact evidence, no verdict is
  * stored, no percentage of similarity is shown, and the words stay factual.
  */
-
-/** Where the reader's own commonality setting is kept, so it survives a reload. */
-const THRESHOLD_KEY = 'afct.similarityCommonShare';
 
 export function AssignmentSimilarityPanel({
   groupAssignment = false,
@@ -84,20 +81,9 @@ export function AssignmentSimilarityPanel({
   // How much of a class has to share work before it reads as the answer rather than a
   // finding. There is no right number: it depends on the problem and on how the course is
   // taught, so the reader gets the dial. Their own setting, and it changes what is shown,
-  // never what is recorded.
-  const [commonShare, setCommonShare] = useState(COMMON_SHARE);
-  useEffect(() => {
-    const saved = Number(window.localStorage.getItem(THRESHOLD_KEY));
-    if (Number.isFinite(saved) && saved > 0 && saved <= 1) setCommonShare(saved);
-  }, []);
-  const changeThreshold = (value: number) => {
-    setCommonShare(value);
-    try {
-      window.localStorage.setItem(THRESHOLD_KEY, String(value));
-    } catch {
-      /* ignore storage the browser will not give us */
-    }
-  };
+  // never what is recorded. Shared with the tab's own count, which has to be answering the
+  // same question this page is.
+  const [commonShare, changeThreshold] = useCommonShare();
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.assignment.similarity(courseId, assignmentId),

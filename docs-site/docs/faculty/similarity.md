@@ -29,7 +29,7 @@ The tab opens with one line answering the only question worth asking at a glance
 > 1 contains an exact artifact match.
 > 5 similarity relationships are contained in these groups.
 
-Below it, groups are collected under the problem they belong to, strongest evidence first, with a heading giving the problem's title and how many students submitted it. The tab itself carries a count of the groups worth reviewing, so you can see there is something to read without opening it.
+Below it, groups are collected under the problem they belong to, strongest evidence first, with a heading giving the problem's title and how many students submitted it. The tab itself carries a count of the groups worth reviewing, so you can see there is something to read without opening it. It counts at your own threshold, so the number on the tab and the number on the page always agree.
 
 ### Groups, not pairs
 
