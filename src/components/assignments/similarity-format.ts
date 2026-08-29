@@ -7,16 +7,11 @@
 
 import type { MatchSubmission } from '@/lib/similarity/matches';
 import { MATCH_LABEL, isSetAside, type MatchCluster, type MatchType } from '@/lib/similarity/evidence';
+import { subjectCountsOf, type ReviewSubject } from '@/lib/similarity/rarity';
 
-/**
- * Who a finding is about: a student, or a team on a group assignment.
- *
- * Any member may submit for the team, so counting members would report two groups sharing
- * work as four students, and would call a team submitting its own work a match. The subject
- * comes from the assignment (it has a group set or it does not), never from guessing at the
- * rows.
- */
-export type ReviewSubject = 'student' | 'group';
+// One definition of who a finding is about, shared with the rule that classifies a common
+// answer: the words on the card and the threshold it is judged by have to agree.
+export type { ReviewSubject };
 
 /** "Attempt 3", or "Attempt unknown" when the numbering could not be worked out. */
 export function attemptLabel(attempt: number | null): string {
@@ -25,24 +20,23 @@ export function attemptLabel(attempt: number | null): string {
 
 /**
  * How many subjects a group involves, out of how many took the problem, and what to call
- * them.
- *
- * A group assignment falls back to counting students when no group is recorded on the work,
- * which is what old rows look like. Better a true sentence about students than an invented
- * denominator about groups.
+ * them. The same rule the commonality threshold is applied with, so the sentence on the card
+ * and the classification behind it can never disagree.
  */
 export function subjectCounts(
   cluster: MatchCluster,
   subject: ReviewSubject,
 ): { involved: number; total: number; noun: string } {
-  if (subject === 'group' && cluster.groups.length > 0 && cluster.problemGroupCount > 0) {
-    return { involved: cluster.groups.length, total: cluster.problemGroupCount, noun: 'group' };
-  }
-  return {
-    involved: cluster.students.length,
-    total: cluster.problemStudentCount,
-    noun: 'student',
-  };
+  const { sharing, total, noun } = subjectCountsOf(
+    {
+      studentCount: cluster.students.length,
+      problemStudentCount: cluster.problemStudentCount,
+      groupCount: cluster.groups.length,
+      problemGroupCount: cluster.problemGroupCount,
+    },
+    subject,
+  );
+  return { involved: sharing, total, noun };
 }
 
 /** What the students in this problem were asked to build, in the reader's words. */

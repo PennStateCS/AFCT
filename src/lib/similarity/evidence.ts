@@ -6,7 +6,7 @@
 // files, and orders the page so the strongest is read first.
 
 import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/matches';
-import { isCommon } from '@/lib/similarity/rarity';
+import { isCommon, type ReviewSubject } from '@/lib/similarity/rarity';
 
 /**
  * What kind of thing two submissions have in common.
@@ -68,8 +68,15 @@ export function isSetAside(type: MatchType): boolean {
  * check found is structural. Commonality wins over all of it: at that share of a class it is
  * convergence whatever the files look like.
  */
-export function matchTypeOf(group: SubmissionMatchGroup, commonShare: number): MatchType {
-  if (isCommon(group, commonShare)) return 'common';
+export function matchTypeOf(
+  group: SubmissionMatchGroup,
+  commonShare: number,
+  subject: ReviewSubject = 'student',
+): MatchType {
+  // Counted in the same unit the page talks in: teams on a group assignment, students
+  // otherwise. A ratio of students against a denominator of groups would be a number about
+  // nothing, and the threshold the reader is looking at says which one it is.
+  if (isCommon(group, commonShare, subject)) return 'common';
   // The instructor posted this work. Everyone holding that file has it, so how alike the
   // artifacts are says nothing about how they got there, and calling it very strong evidence
   // would be reporting the handout back to the person who wrote it.
@@ -187,6 +194,7 @@ function studentsOf(groups: SubmissionMatchGroup[]): MatchSubmission[] {
 export function clusterMatches(
   groups: SubmissionMatchGroup[],
   commonShare: number,
+  subject: ReviewSubject = 'student',
 ): MatchCluster[] {
   const clusters: MatchCluster[] = [];
 
@@ -198,8 +206,8 @@ export function clusterMatches(
   for (const [problemId, problemGroups] of byProblem) {
     // Common answers stand alone: folding one into a cluster of real findings would hide it
     // in something it does not belong to, and the page sets them aside on purpose.
-    const commonGroups = problemGroups.filter((group) => matchTypeOf(group, commonShare) === 'common');
-    const rest = problemGroups.filter((group) => matchTypeOf(group, commonShare) !== 'common');
+    const commonGroups = problemGroups.filter((group) => matchTypeOf(group, commonShare, subject) === 'common');
+    const rest = problemGroups.filter((group) => matchTypeOf(group, commonShare, subject) !== 'common');
 
     // Union-find over students, so anything connected through a shared student comes out
     // together however the relationships were discovered.
@@ -230,10 +238,10 @@ export function clusterMatches(
     }
 
     for (const [root, related] of members) {
-      clusters.push(buildCluster(`${problemId}:${root}`, related, commonShare));
+      clusters.push(buildCluster(`${problemId}:${root}`, related, commonShare, subject));
     }
     for (const group of commonGroups) {
-      clusters.push(buildCluster(`${problemId}:${group.matchId}`, [group], commonShare));
+      clusters.push(buildCluster(`${problemId}:${group.matchId}`, [group], commonShare, subject));
     }
   }
 
@@ -244,12 +252,14 @@ function buildCluster(
   id: string,
   relationships: SubmissionMatchGroup[],
   commonShare: number,
+  subject: ReviewSubject,
 ): MatchCluster {
   const ranked = [...relationships].sort(
-    (a, b) => TYPE_RANK[matchTypeOf(a, commonShare)] - TYPE_RANK[matchTypeOf(b, commonShare)],
+    (a, b) =>
+      TYPE_RANK[matchTypeOf(a, commonShare, subject)] - TYPE_RANK[matchTypeOf(b, commonShare, subject)],
   );
   const first = ranked[0] as SubmissionMatchGroup;
-  const type = matchTypeOf(first, commonShare);
+  const type = matchTypeOf(first, commonShare, subject);
 
   const counts = {
     exact: 0,
@@ -258,7 +268,7 @@ function buildCluster(
     reference: 0,
   } as MatchCluster['counts'];
   for (const group of ranked) {
-    const groupType = matchTypeOf(group, commonShare);
+    const groupType = matchTypeOf(group, commonShare, subject);
     if (groupType !== 'common') counts[groupType] += 1;
   }
 
