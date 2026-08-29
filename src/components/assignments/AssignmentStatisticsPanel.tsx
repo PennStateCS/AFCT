@@ -14,6 +14,7 @@ import type { AssignmentStatistics } from '@/lib/assignment-statistics';
 import { ScoreHistogramChart } from './charts/ScoreHistogramChart';
 import { SubmissionStatusBar } from './charts/SubmissionStatusBar';
 import { GradingProgressBar } from './charts/GradingProgressBar';
+import { TurnInStatusBar } from './charts/TurnInStatusBar';
 import { ProblemBoxPlotChart } from './charts/ProblemBoxPlotChart';
 import { AttemptsPerProblemChart } from './charts/AttemptsPerProblemChart';
 import { FirstAttemptChart } from './charts/FirstAttemptChart';
@@ -285,6 +286,36 @@ export function AssignmentStatisticsPanel() {
             />
           </StatCard>
         )}
+
+        <StatCard
+          className="lg:col-span-8"
+          title="Turn-in status"
+          description={`Whether each of the ${statusTotal} ${unitPlural} met their own due date, per problem.`}
+        >
+          {statusTotal > 0 && stats.problems.length > 0 ? (
+            <>
+              <TurnInStatusBar
+                series={stats.problems.map((p) => ({ id: p.id, label: p.title, turnIn: p.turnIn }))}
+                total={statusTotal}
+                unitPlural={unitPlural}
+              />
+              {stats.exceptionCount > 0 && (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  {stats.exceptionCount} {stats.exceptionCount === 1 ? 'is' : 'are'} measured
+                  against a different due date.
+                </p>
+              )}
+            </>
+          ) : (
+            <EmptyChart
+              message={
+                statusTotal === 0
+                  ? `No ${unitPlural} are assigned yet.`
+                  : 'This assignment has no problems yet.'
+              }
+            />
+          )}
+        </StatCard>
 
         <StatCard
           className="lg:col-span-8"

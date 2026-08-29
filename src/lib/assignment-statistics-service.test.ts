@@ -312,6 +312,53 @@ it('does not count an evaluation that failed as an attempt the student got wrong
   expect(stats.timeline.reduce((n, point) => n + point.count, 0)).toBe(2);
 });
 
+it('judges lateness on the attempt that holds the grade, against each student own date', async () => {
+  prismaMock.assignment.findFirst.mockResolvedValue(
+    baseAssignment({
+      problems: [
+        { problemId: 'p1', maxPoints: 10, autograderEnabled: true, problem: { title: 'P1' } },
+      ],
+    }),
+  );
+  setRoster(['s1', 's2', 's3', 's4', 's5'].map((userId) => rosterRow(userId)));
+  // s4 has an extension past the moment they actually submitted.
+  prismaMock.assignmentOverride.findMany.mockResolvedValue([
+    overrideRow({ userId: 's4', dueDate: LATER }),
+  ]);
+  const attempt = (studentId: string, at: string) => ({
+    studentId,
+    studentGroupId: null,
+    problemId: 'p1',
+    submittedAt: new Date(at),
+    correct: false,
+    status: 'COMPLETED',
+  });
+  prismaMock.submission.findMany.mockResolvedValue([
+    // s1: in before the deadline and left it there.
+    attempt('s1', '2026-08-09T10:00:00Z'),
+    // s2: in on time, then revised after the deadline. The later attempt holds the grade,
+    // so it is not simply "on time", and it is not simply "late" either.
+    attempt('s2', '2026-08-09T10:00:00Z'),
+    attempt('s2', '2026-08-12T10:00:00Z'),
+    // s3: nothing until after the deadline.
+    attempt('s3', '2026-08-12T09:00:00Z'),
+    // s4: same moment as s3, but they have until the 17th.
+    attempt('s4', '2026-08-12T09:00:00Z'),
+    // s5: nothing at all.
+  ]);
+
+  const stats = (await getAssignmentStatistics('c1', 'a1'))!;
+  const p1 = stats.problems.find((p) => p.id === 'p1')!;
+  const turnIn = Object.fromEntries(p1.turnIn.map((t) => [t.key, t.count]));
+
+  expect(turnIn).toEqual({
+    'on-time': 2, // s1, and s4 on their own date
+    'revised-late': 1, // s2
+    late: 1, // s3
+    missing: 1, // s5
+  });
+});
+
 describe('getAssignmentStatistics - group assignment', () => {
   it('measures in groups, aggregates member grades, and reports queue status', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue(baseAssignment({ groupSetId: 'gs1' }));

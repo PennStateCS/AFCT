@@ -90,6 +90,44 @@ export const GRADING_LABELS: Record<GradingStateKey, string> = {
   'ungraded-missing': 'Nothing submitted',
 };
 
+/**
+ * Whether the work arrived by the participant's own deadline.
+ *
+ * Judged on the attempt that HOLDS THE GRADE, which is the latest one: that is the rule the
+ * rest of AFCT grades by, and judging the first submission instead would call an on-time
+ * placeholder followed by the real work two days late "on time" while the grade came from
+ * the late attempt. `revised-late` keeps the difference visible rather than throwing it
+ * away, because a professor applying a late policy needs to know which of the two they have.
+ *
+ * Every participant is measured against THEIR OWN due date, so an extension is an extension
+ * rather than a black mark.
+ */
+export type TurnInStateKey =
+  /** Every attempt landed on or before their due date. */
+  | 'on-time'
+  /** They were on time, then submitted again after the deadline; the later work counts. */
+  | 'revised-late'
+  /** Nothing arrived until after their due date. */
+  | 'late'
+  /** Nothing arrived at all. */
+  | 'missing';
+
+/** Fixed display + legend order: on time first, nothing at all last. */
+export const TURN_IN_ORDER: readonly TurnInStateKey[] = [
+  'on-time',
+  'revised-late',
+  'late',
+  'missing',
+] as const;
+
+/** Plain-language labels, kept here (not in the component) so tests can assert them. */
+export const TURN_IN_LABELS: Record<TurnInStateKey, string> = {
+  'on-time': 'On time',
+  'revised-late': 'Revised late',
+  late: 'Late',
+  missing: 'Nothing submitted',
+};
+
 export const HISTOGRAM_BIN_COUNT = 10;
 
 // ─── primitive statistics ────────────────────────────────────────────────────
@@ -439,15 +477,40 @@ export function heatmapLevel(count: number, max: number): HeatmapLevel {
   return 4;
 }
 
-/** The newest submission per participant+problem, epoch milliseconds. */
-export function latestSubmissionTimes(submissions: StatsSubmission[]): Map<string, number> {
-  const latest = new Map<string, number>();
+/** When a participant first and last submitted a problem, epoch milliseconds. */
+export type SubmissionSpan = { first: number; latest: number };
+
+/** The span of each participant's attempts at each problem, keyed participant+problem. */
+export function submissionSpans(submissions: StatsSubmission[]): Map<string, SubmissionSpan> {
+  const spans = new Map<string, SubmissionSpan>();
   for (const s of submissions) {
     const key = `${s.participantId}\u0000${s.problemId}`;
-    const held = latest.get(key);
-    if (held === undefined || s.submittedAt > held) latest.set(key, s.submittedAt);
+    const held = spans.get(key);
+    if (!held) {
+      spans.set(key, { first: s.submittedAt, latest: s.submittedAt });
+      continue;
+    }
+    if (s.submittedAt < held.first) held.first = s.submittedAt;
+    if (s.submittedAt > held.latest) held.latest = s.submittedAt;
   }
-  return latest;
+  return spans;
+}
+
+/**
+ * Where one participant stands with their deadline on one problem.
+ *
+ * The latest attempt decides, because it is the one that holds the grade. A participant
+ * whose latest attempt is on time cannot have a late one, since it would be the latest.
+ */
+export function turnInStateOf(
+  participant: StatsParticipant,
+  problemId: string,
+  spans: Map<string, SubmissionSpan>,
+): TurnInStateKey {
+  const span = spans.get(`${participant.id}\u0000${problemId}`);
+  if (!span) return 'missing';
+  if (span.latest <= participant.dueAt) return 'on-time';
+  return span.first <= participant.dueAt ? 'revised-late' : 'late';
 }
 
 /**
@@ -461,9 +524,9 @@ export function latestSubmissionTimes(submissions: StatsSubmission[]): Map<strin
 export function gradingStateOf(
   participant: StatsParticipant,
   problemId: string,
-  latestSubmittedAt: Map<string, number>,
+  spans: Map<string, SubmissionSpan>,
 ): GradingStateKey {
-  const submittedAt = latestSubmittedAt.get(`${participant.id}\u0000${problemId}`);
+  const submittedAt = spans.get(`${participant.id}\u0000${problemId}`)?.latest;
   if (participant.problemGrades[problemId] === undefined) {
     return submittedAt === undefined ? 'ungraded-missing' : 'ungraded-submitted';
   }
@@ -500,6 +563,12 @@ export type StatsParticipant = {
    * charts (histogram, box plots), never the status chart.
    */
   problemGrades: Record<string, number>;
+  /**
+   * The due date this participant is actually held to, epoch milliseconds: their override if
+   * they have one, the assignment's date otherwise. Timing is judged against this and never
+   * against the class's date, so an extension reads as an extension.
+   */
+  dueAt: number;
   /**
    * When each recorded grade was last written, epoch milliseconds, keyed by problem id. The
    * keys mirror `problemGrades`. Compared against the latest submission so a grade that has
@@ -559,6 +628,8 @@ export type ProblemStats = {
   status: { key: StatusKey; count: number }[];
   /** Grading breakdown for THIS problem, in fixed order; counts sum to participantCount. */
   grading: { key: GradingStateKey; count: number }[];
+  /** Turn-in breakdown for THIS problem, in fixed order; counts sum to participantCount. */
+  turnIn: { key: TurnInStateKey; count: number }[];
   /** How many participants got this problem right on their first submission... */
   firstAttemptCorrect: number;
   /** ...out of how many submitted it at all. */
@@ -598,7 +669,7 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
   const totalPossible = problems.reduce((sum, p) => sum + p.maxPoints, 0);
   const firstAttempt = computeFirstAttemptSuccess(submissions);
   const attemptsByProblem = computeAttemptsToSolveByProblem(submissions);
-  const latestSubmittedAt = latestSubmissionTimes(submissions);
+  const spans = submissionSpans(submissions);
 
   // Histogram: include a participant only when EVERY problem is graded for them, so
   // partially graded work never pollutes the distribution. Everyone else is excluded and
@@ -632,12 +703,16 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
       let gradedCount = 0;
       const statusCounts = new Map<StatusKey, number>(STATUS_ORDER.map((k) => [k, 0]));
       const gradingCounts = new Map<GradingStateKey, number>(GRADING_ORDER.map((k) => [k, 0]));
+      const turnInCounts = new Map<TurnInStateKey, number>(TURN_IN_ORDER.map((k) => [k, 0]));
       for (const part of participants) {
         const key = queueStatusKey(part.latestStatusByProblem[p.id]);
         statusCounts.set(key, (statusCounts.get(key) ?? 0) + 1);
 
-        const gradingKey = gradingStateOf(part, p.id, latestSubmittedAt);
+        const gradingKey = gradingStateOf(part, p.id, spans);
         gradingCounts.set(gradingKey, (gradingCounts.get(gradingKey) ?? 0) + 1);
+
+        const turnInKey = turnInStateOf(part, p.id, spans);
+        turnInCounts.set(turnInKey, (turnInCounts.get(turnInKey) ?? 0) + 1);
 
         const grade = part.problemGrades[p.id];
         if (grade === undefined) continue;
@@ -657,6 +732,7 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
         ungradedCount: participants.length - gradedCount,
         status: STATUS_ORDER.map((key) => ({ key, count: statusCounts.get(key) ?? 0 })),
         grading: GRADING_ORDER.map((key) => ({ key, count: gradingCounts.get(key) ?? 0 })),
+        turnIn: TURN_IN_ORDER.map((key) => ({ key, count: turnInCounts.get(key) ?? 0 })),
         firstAttemptCorrect: fa.correct,
         firstAttemptSubmitted: fa.submitted,
         attempts: attemptsByProblem.get(p.id) ?? emptyAttempts(),

@@ -303,7 +303,7 @@ async function buildStudentCohort(
 
     participants.push({
       id: row.userId,
-      hasException: hasDateException(input, row.userId, groupIds),
+      ...deadlineFor(input, row.userId, groupIds),
       ...splitGrades(input.gradesByStudent.get(row.userId)),
       latestStatusByProblem: input.latestStatus.get(row.userId) ?? {},
     });
@@ -381,7 +381,10 @@ async function buildGroupCohort(
 
     participants.push({
       id: group.id,
-      hasException: hasDateException(input, group.id, [group.id]),
+      // A group is held to whatever a GROUP override says about it. The id is passed as the
+      // subject as well, where it can only fail to match a student override: an override row
+      // aimed at a person says nothing about a team.
+      ...deadlineFor(input, group.id, [group.id]),
       problemGrades,
       gradedAtByProblem,
       latestStatusByProblem: input.latestStatus.get(group.id) ?? {},
@@ -426,14 +429,20 @@ async function membershipsOf(userIds: string[]): Promise<Map<string, string[]>> 
 }
 
 /**
- * Whether this participant is held to a different due date from the rest of the class.
+ * The due date this participant is actually held to, and whether it differs from the class's.
  *
  * Asked of the resolved date rather than of the override table: a row that moves only the
  * unlock date, or one edited until every field is empty, changes nothing about when the work
  * is due, and counting those told the reader there were exceptions to look into when there
- * were none.
+ * were none. The same resolver the rest of the app judges lateness with, so a submission
+ * this page calls late is one the submissions views call late too.
  */
-function hasDateException(input: CohortInput, subjectId: string, groupIds: string[]): boolean {
+function deadlineFor(
+  input: CohortInput,
+  subjectId: string,
+  groupIds: string[],
+): { dueAt: number; hasException: boolean } {
   const resolved = effectiveDeadline(input.base, input.overrides, subjectId, groupIds);
-  return resolved.dueDate.getTime() !== input.base.dueDate.getTime();
+  const dueAt = resolved.dueDate.getTime();
+  return { dueAt, hasException: dueAt !== input.base.dueDate.getTime() };
 }

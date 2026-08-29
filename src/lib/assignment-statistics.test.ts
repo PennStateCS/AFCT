@@ -155,6 +155,8 @@ describe('buildAssignmentStatistics', () => {
   const mkParticipant = (over: Partial<StatsParticipant> & { id: string }): StatsParticipant => ({
     hasException: false,
     problemGrades: {},
+    // Far enough ahead that a case only about scores is never accidentally about lateness.
+    dueAt: new Date('2030-01-01T00:00:00Z').getTime(),
     gradedAtByProblem: {},
     latestStatusByProblem: {},
     ...over,

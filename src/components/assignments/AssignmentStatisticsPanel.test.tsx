@@ -14,9 +14,11 @@ import { AssignmentStatisticsPanel } from './AssignmentStatisticsPanel';
 import {
   GRADING_ORDER,
   STATUS_ORDER,
+  TURN_IN_ORDER,
   type AssignmentStatistics,
   type GradingStateKey,
   type StatusKey,
+  type TurnInStateKey,
 } from '@/lib/assignment-statistics';
 
 type Payload = AssignmentStatistics & {
@@ -31,6 +33,9 @@ const statusOf = (over: Partial<Record<StatusKey, number>>) =>
 const gradingOf = (over: Partial<Record<GradingStateKey, number>>) =>
   GRADING_ORDER.map((key) => ({ key, count: over[key] ?? 0 }));
 
+const turnInOf = (over: Partial<Record<TurnInStateKey, number>>) =>
+  TURN_IN_ORDER.map((key) => ({ key, count: over[key] ?? 0 }));
+
 const problem = (over: Partial<Payload['problems'][number]> = {}) => ({
   id: 'p1',
   title: 'Problem 1',
@@ -41,6 +46,7 @@ const problem = (over: Partial<Payload['problems'][number]> = {}) => ({
   ungradedCount: 0,
   status: statusOf({ completed: 2 }),
   grading: gradingOf({ graded: 2 }),
+  turnIn: turnInOf({ 'on-time': 2 }),
   firstAttemptCorrect: 0,
   firstAttemptSubmitted: 0,
   attempts: {
@@ -175,6 +181,20 @@ describe('AssignmentStatisticsPanel', () => {
     renderPanel();
 
     expect(await screen.findByText(/This problem is graded by hand/)).toBeInTheDocument();
+  });
+
+  it('says when some participants are measured against a different date', async () => {
+    serve(
+      payload({
+        exceptionCount: 2,
+        problems: [problem({ turnIn: turnInOf({ 'on-time': 1, late: 1 }) })],
+      }),
+    );
+
+    renderPanel();
+
+    expect(await screen.findByText('Turn-in status')).toBeInTheDocument();
+    expect(screen.getByText(/2 are measured against a different due date\./)).toBeInTheDocument();
   });
 
   it('counts groups rather than students on a group assignment', async () => {
