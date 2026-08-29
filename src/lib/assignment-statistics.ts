@@ -345,7 +345,7 @@ function localParts(ms: number, timeZone: string): { date: string; hour: number;
 function byParticipantProblem(submissions: StatsSubmission[]): StatsSubmission[][] {
   const groups = new Map<string, StatsSubmission[]>();
   for (const s of submissions) {
-    const key = `${s.participantId}\u0000${s.problemId}`;
+    const key = spanKey(s.participantId, s.problemId);
     const list = groups.get(key);
     if (list) list.push(s);
     else groups.set(key, [s]);
@@ -480,11 +480,21 @@ export function heatmapLevel(count: number, max: number): HeatmapLevel {
 /** When a participant first and last submitted a problem, epoch milliseconds. */
 export type SubmissionSpan = { first: number; latest: number };
 
+/**
+ * How a participant and a problem are keyed together in the span map.
+ *
+ * Exported because the course page builds the same map from its own rows and asks the same
+ * questions of it. A separator no id can contain, so "a" + "bc" and "ab" + "c" cannot collide.
+ */
+export function spanKey(participantId: string, problemId: string): string {
+  return `${participantId}\u0000${problemId}`;
+}
+
 /** The span of each participant's attempts at each problem, keyed participant+problem. */
 export function submissionSpans(submissions: StatsSubmission[]): Map<string, SubmissionSpan> {
   const spans = new Map<string, SubmissionSpan>();
   for (const s of submissions) {
-    const key = `${s.participantId}\u0000${s.problemId}`;
+    const key = spanKey(s.participantId, s.problemId);
     const held = spans.get(key);
     if (!held) {
       spans.set(key, { first: s.submittedAt, latest: s.submittedAt });
@@ -507,7 +517,7 @@ export function turnInStateOf(
   problemId: string,
   spans: Map<string, SubmissionSpan>,
 ): TurnInStateKey {
-  const span = spans.get(`${participant.id}\u0000${problemId}`);
+  const span = spans.get(spanKey(participant.id, problemId));
   if (!span) return 'missing';
   if (span.latest <= participant.dueAt) return 'on-time';
   return span.first <= participant.dueAt ? 'revised-late' : 'late';
@@ -526,7 +536,7 @@ export function gradingStateOf(
   problemId: string,
   spans: Map<string, SubmissionSpan>,
 ): GradingStateKey {
-  const submittedAt = spans.get(`${participant.id}\u0000${problemId}`)?.latest;
+  const submittedAt = spans.get(spanKey(participant.id, problemId))?.latest;
   if (participant.problemGrades[problemId] === undefined) {
     return submittedAt === undefined ? 'ungraded-missing' : 'ungraded-submitted';
   }
@@ -753,7 +763,7 @@ export function buildScoreDistribution(
     // Ungraded work that cannot be scored yet: everything with no grade, minus the pieces
     // this reading is willing to call a zero.
     const blocking = options.missingAsZero
-      ? ungraded.filter((p) => spans.has(`${part.id}\u0000${p.id}`))
+      ? ungraded.filter((p) => spans.has(spanKey(part.id, p.id)))
       : ungraded;
 
     if (problems.length === 0 || blocking.length > 0 || totalPossible <= 0) {
@@ -762,7 +772,7 @@ export function buildScoreDistribution(
       // on grading, the assignment simply has no percentage to report.
       if (totalPossible > 0) {
         for (const p of blocking) {
-          const tally = spans.has(`${part.id}\u0000${p.id}`) ? waiting : absent;
+          const tally = spans.has(spanKey(part.id, p.id)) ? waiting : absent;
           tally.set(p.id, (tally.get(p.id) ?? 0) + 1);
         }
       }

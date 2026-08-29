@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { BarChart3, ChevronDown, Maximize2, TriangleAlert } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { BarChart3, ChevronDown, TriangleAlert } from 'lucide-react';
 import {
   Card,
   CardAction,
@@ -14,14 +13,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  EmptyChart,
+  ExpandButton,
+  ExpandedChart,
+  StatCard,
+} from '@/components/statistics/StatCard';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import LoadingSpinner from '@/components/ui/loading-spinner';
@@ -30,14 +27,14 @@ import { queryKeys } from '@/lib/query-keys';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { formatDateTimeInTimeZone, zoneAbbrev } from '@/lib/date-format';
 import type { AssignmentStatistics } from '@/lib/assignment-statistics';
-import { ScoreHistogramChart } from './charts/ScoreHistogramChart';
-import { SubmissionStatusBar } from './charts/SubmissionStatusBar';
-import { GradingProgressBar } from './charts/GradingProgressBar';
-import { TurnInStatusBar } from './charts/TurnInStatusBar';
-import { ProblemBoxPlotChart } from './charts/ProblemBoxPlotChart';
-import { AttemptsPerProblemChart } from './charts/AttemptsPerProblemChart';
-import { SubmissionTimelineChart } from './charts/SubmissionTimelineChart';
-import { ActivityHeatmapChart } from './charts/ActivityHeatmapChart';
+import { ScoreHistogramChart } from '@/components/statistics/charts/ScoreHistogramChart';
+import { SubmissionStatusBar } from '@/components/statistics/charts/SubmissionStatusBar';
+import { GradingProgressBar } from '@/components/statistics/charts/GradingProgressBar';
+import { TurnInStatusBar } from '@/components/statistics/charts/TurnInStatusBar';
+import { ProblemBoxPlotChart } from '@/components/statistics/charts/ProblemBoxPlotChart';
+import { AttemptsPerProblemChart } from '@/components/statistics/charts/AttemptsPerProblemChart';
+import { SubmissionTimelineChart } from '@/components/statistics/charts/SubmissionTimelineChart';
+import { ActivityHeatmapChart } from '@/components/statistics/charts/ActivityHeatmapChart';
 
 // Mirrors the server payload (assignment-statistics-service). Declared here rather than
 // imported so this client component never pulls the Prisma-backed service into the bundle.
@@ -46,109 +43,6 @@ type StatisticsPayload = AssignmentStatistics & {
   baseDueDate: string;
   timezone: string;
 };
-
-/**
- * One chart, with a way to see it bigger.
- *
- * These charts are read at a glance and then squinted at: a box plot of eleven problems or a
- * week of submissions is legible in a column and not much more than legible. The dialog is
- * the same card's contents at the width of the window, which is also what somebody does when
- * they want to show a class or a colleague what happened.
- *
- * The children are rendered again inside the dialog rather than moved into it. Each chart
- * measures the box it is in and draws to fit, so the second copy simply comes out bigger;
- * nothing is mounted until the dialog is opened.
- */
-function StatCard({
-  title,
-  description,
-  className,
-  children,
-}: {
-  title: string;
-  description: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle aria-level={3} className="text-base">
-          {title}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-        <CardAction>
-          <ExpandButton title={title} onClick={() => setExpanded(true)} />
-        </CardAction>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-      <ExpandedChart
-        title={title}
-        description={description}
-        open={expanded}
-        onOpenChange={setExpanded}
-      >
-        {children}
-      </ExpandedChart>
-    </Card>
-  );
-}
-
-/** The control that opens one. Named for its card, so a screen reader hears which. */
-function ExpandButton({ title, onClick }: { title: string; onClick: () => void }) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className="text-muted-foreground size-7"
-      aria-label={`View ${title} full screen`}
-      onClick={onClick}
-    >
-      <Maximize2 className="size-4" aria-hidden="true" />
-    </Button>
-  );
-}
-
-/** The same chart, at the size of the window. */
-function ExpandedChart({
-  title,
-  description,
-  open,
-  onOpenChange,
-  children,
-}: {
-  title: string;
-  description: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  children: ReactNode;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Wider and taller than the default dialog, because the point of it is the size. The
-          body scrolls on its own so a long list of problems cannot push the heading off. */}
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-[95vw] gap-4 sm:max-w-[95vw]">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <div tabIndex={0} className="max-h-[75vh] overflow-auto">
-          {children}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function EmptyChart({ message }: { message: string }) {
-  return (
-    <div className="text-muted-foreground flex min-h-[8rem] flex-col items-center justify-center gap-1 text-center text-sm">
-      <p>{message}</p>
-    </div>
-  );
-}
 
 export function AssignmentStatisticsPanel() {
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
@@ -424,7 +318,19 @@ export function AssignmentStatisticsPanel() {
               description={`Score distribution for each problem, on a shared 0-100% scale (${unitPlural}).`}
             >
               {stats.problems.length > 0 ? (
-                <ProblemBoxPlotChart problems={stats.problems} unitPlural={unitPlural} />
+                <ProblemBoxPlotChart
+                  problems={stats.problems.map((p) => ({
+                    id: p.id,
+                    title: p.title,
+                    order: p.order,
+                    maxPoints: p.maxPoints,
+                    pointsLostMean: p.pointsLostMean,
+                    boxplot: p.boxplot,
+                    gradedCount: p.gradedCount,
+                    ungradedCount: p.ungradedCount,
+                  }))}
+                  unitPlural={unitPlural}
+                />
               ) : (
                 <EmptyChart message="This assignment has no problems yet." />
               )}
@@ -436,7 +342,7 @@ export function AssignmentStatisticsPanel() {
               {stats.timeline.length > 0 ? (
                 <SubmissionTimelineChart
                   timeline={stats.timeline}
-                  dueDate={stats.baseDueDate}
+                  markers={[{ id: 'due', label: 'Due', at: stats.baseDueDate }]}
                   timeZone={stats.timezone}
                   unitPlural={unitPlural}
                 />

@@ -437,6 +437,10 @@ const OBJECT_BY_ACTION: Record<
     const where = inside(assignmentNamed(m, r), courseTag(r, m));
     return where ? `Statistics for ${where}` : 'Assignment statistics';
   },
+  COURSE_STATISTICS_VIEWED: (m, r) => {
+    const where = courseTag(r, m);
+    return where ? `Course statistics for ${where}` : 'Course statistics';
+  },
   ASSIGNMENT_SIMILARITY_VIEWED: (m, r) => {
     const where = inside(assignmentNamed(m, r), courseTag(r, m));
     return where ? `Similarity report for ${where}` : 'Similarity report';
@@ -853,6 +857,18 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
     case 'ASSIGNMENT_STATISTICS_VIEWED': {
       const people = firstNum(metadata, 'participantCount');
       return people > 0 ? plural(people, 'participant') : null;
+    }
+
+    case 'COURSE_STATISTICS_VIEWED': {
+      // Same shape as the line above, one level wider: how many students the figures were
+      // about, and across how much work. Study data, so the wording stays put.
+      const people = firstNum(metadata, 'studentCount');
+      const assignments = firstNum(metadata, 'assignments');
+      const parts = [
+        people > 0 ? plural(people, 'student') : null,
+        assignments > 0 ? plural(assignments, 'assignment') : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? parts.join(', ') : null;
     }
 
     // Every file AFCT serves, and the answer is always the same one: which file. The name the

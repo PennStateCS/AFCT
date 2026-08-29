@@ -2440,6 +2440,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses/{id}/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a course's analytics
+         * @description Aggregate analytics for a whole course: the grade distribution, how the assignments compare,  how the class does on each kind of problem, what is waiting on a grader, and when work  arrives. Course staff (faculty or TAs) or a system admin only.   The figures describe students who are enrolled and whose account is active; anybody left  out is reported as a count with a reason. These are aggregate student-performance figures,  a FERPA-relevant read, so the access is audited (throttled).
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/statistics/route.ts)
+         */
+        get: operations["getCoursesByIdStatistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/courses/{id}/student-grades": {
         parameters: {
             query?: never;
@@ -11687,6 +11709,77 @@ export interface operations {
                 };
             };
             /** @description Not a system admin (logged as a security event). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Course not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdStatistics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Course-wide distribution, per-assignment comparison, problem-type performance, grading workload and submission timing. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        courseTitle?: string;
+                        timezone?: string;
+                        studentCount?: number;
+                        exclusions?: Record<string, never>[];
+                        distribution?: Record<string, never>;
+                        distributionGradedOnly?: Record<string, never>;
+                        assignments?: Record<string, never>[];
+                        problemTypes?: Record<string, never>[];
+                        workload?: Record<string, never>[];
+                        atRisk?: Record<string, never>;
+                        timeline?: Record<string, never>[];
+                        heatmap?: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not course staff (faculty or TA) or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 import { act, waitFor } from '@testing-library/react';
 import { Tabs } from '@/components/ui/tabs';
-import { CourseTabBar, TabBar, TabRail } from './course-tabs';
+import { COURSE_TABS, CourseTabBar, TabBar, TabRail } from './course-tabs';
 import { LOCAL_NAV_COLLAPSED_KEY, LocalNavLayout } from '@/components/local-nav';
 import { BookOpen } from 'lucide-react';
 
@@ -102,7 +102,8 @@ describe('CourseTabBar', () => {
 
     const lists = screen.getAllByRole('tablist', { name: 'Course content sections' });
     expect(lists).toHaveLength(1);
-    expect(within(lists[0]).getAllByRole('tab')).toHaveLength(7);
+    // Counted from the list itself: a tab added here should not need a number edited there.
+    expect(within(lists[0]).getAllByRole('tab')).toHaveLength(COURSE_TABS.length);
     expect(document.querySelectorAll('#tab-assignments')).toHaveLength(1);
     expect(screen.getByRole('tab', { name: 'Assignments, 2' })).toHaveAttribute(
       'aria-controls',
