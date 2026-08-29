@@ -80,6 +80,12 @@ export function SimilarityHelpPopover() {
         className="max-h-[70vh] w-96 space-y-3 overflow-y-auto text-sm"
       >
         <h4 className="font-semibold">What these results mean</h4>
+        {/* Said here rather than on the page: the overlap only puzzles somebody who has
+            noticed the numbers do not add up, and they are the person who opens this. */}
+        <p className="text-muted-foreground">
+          Filters show review groups containing each type of similarity relationship. A review group
+          may contain more than one relationship type, so filter counts can overlap.
+        </p>
         {HELP_ORDER.map((kind) => (
           <section key={kind} className="space-y-1">
             <h5 className="font-medium">{DISPLAY_LABEL[kind]}</h5>

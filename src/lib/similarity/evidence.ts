@@ -474,11 +474,43 @@ export function summarise(clusters: MatchCluster[]): string[] {
 }
 
 /**
- * How many clusters each filter would show, for the filter row's counts.
+ * Whether this group holds at least one relationship of a kind.
  *
- * Counted by what each card is LABELLED, so the number on a button and the cards behind it
- * are the same set. A group badged byte-for-byte identical is not also counted as an exact
- * artifact: the reader picked the button that matches what they saw.
+ * The rule the filter row means. A group is a set of people connected through each other,
+ * not one finding, so asking what it IS gives the wrong answer: a group whose strongest
+ * relationship is the same machine can hold three structural ones as well, and a reader
+ * looking for structural matches was being told there were none.
+ *
+ * `counts` is already the per-kind tally of the relationships in this group, so a group with
+ * three structural relationships is one group here, not three.
+ */
+export function clusterHasType(cluster: MatchCluster, type: DisplayMatchType): boolean {
+  // A common answer is a group of its own rather than a relationship inside one, so it is
+  // the only kind that has to be asked about the group itself.
+  if (type === 'common') return cluster.type === 'common';
+  return cluster.counts[type] > 0;
+}
+
+/**
+ * Every kind, in the page's own order. The filter row offers the first four; the last two are
+ * counted for completeness and shown in the set-aside section rather than as filters.
+ */
+const ALL_TYPES: DisplayMatchType[] = [
+  'byte-identical',
+  'exact',
+  'same-machine',
+  'structural',
+  'reference',
+  'common',
+];
+
+/**
+ * How many groups each filter would show, for the filter row's counts.
+ *
+ * Counted with the same rule that decides what a filter shows, so the number on a button and
+ * the cards behind it can never disagree. The categories overlap by design: one group
+ * holding two kinds of relationship is counted under both, so the parts do not add up to
+ * `all` and are not meant to.
  */
 export function countByType(clusters: MatchCluster[]): Record<DisplayMatchType | 'all', number> {
   const counts = {
@@ -492,7 +524,7 @@ export function countByType(clusters: MatchCluster[]): Record<DisplayMatchType |
   } as Record<DisplayMatchType | 'all', number>;
   for (const cluster of clusters) {
     counts.all += 1;
-    counts[cluster.displayType] += 1;
+    for (const type of ALL_TYPES) if (clusterHasType(cluster, type)) counts[type] += 1;
   }
   return counts;
 }

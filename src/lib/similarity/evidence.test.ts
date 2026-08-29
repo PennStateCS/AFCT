@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clusterHasType,
   clusterMatches,
   countByType,
   displayTypeOf,
@@ -415,6 +416,119 @@ describe('clusterMatches, on byte-identical relationships', () => {
       structural: 0,
       reference: 0,
     });
+  });
+});
+
+describe('countByType', () => {
+  // One group of four people: Alice and Bob sent the same machine, and Carol and Dave are
+  // tied in by structure. Four relationships, two kinds, one card.
+  const mixedCluster = () =>
+    clusterMatches(
+      [
+        group({
+          matchId: 'ab',
+          studentCount: 3,
+          identicalStudentCount: 2,
+          submissions: [submission('alice'), submission('bob')],
+        }),
+        group({
+          matchId: 'bc',
+          kind: 'near',
+          identicalStudentCount: 1,
+          submissions: [submission('bob'), submission('carol')],
+        }),
+        group({
+          matchId: 'cd',
+          kind: 'near',
+          identicalStudentCount: 1,
+          submissions: [submission('carol'), submission('dave')],
+        }),
+        group({
+          matchId: 'bd',
+          kind: 'near',
+          identicalStudentCount: 1,
+          submissions: [submission('bob'), submission('dave')],
+        }),
+      ],
+      0.25,
+    );
+
+  it('counts a group under every kind of relationship it holds', () => {
+    const counts = countByType(mixedCluster());
+
+    // One group, in two categories, and its three structural relationships are one entry
+    // rather than three: the number on a button is groups to read, not relationships.
+    expect(counts.all).toBe(1);
+    expect(counts['same-machine']).toBe(1);
+    expect(counts.structural).toBe(1);
+    expect(counts['byte-identical']).toBe(0);
+    expect(counts.exact).toBe(0);
+  });
+
+  it('lets the categories overlap rather than adding up to the whole', () => {
+    const clusters = [
+      ...mixedCluster(),
+      ...clusterMatches(
+        [
+          group({
+            matchId: 'p2',
+            problem: { id: 'p2', title: 'a^n b^n', type: 'CFG' },
+            studentCount: 3,
+            identicalStudentCount: 2,
+            submissions: [submission('erin'), submission('frank')],
+          }),
+        ],
+        0.25,
+      ),
+    ];
+
+    const counts = countByType(clusters);
+    expect(counts.all).toBe(2);
+    expect(counts['same-machine']).toBe(2);
+    expect(counts.structural).toBe(1);
+  });
+
+  it('counts a byte-identical group apart from an exact one', () => {
+    const clusters = [
+      // The same file to the byte.
+      ...clusterMatches(
+        [group({ matchId: 'a', submissions: [submission('a'), submission('b')] })],
+        0.25,
+      ),
+      // The same artifact once formatting is ignored, plus a structural relationship.
+      ...clusterMatches(
+        [
+          group({
+            matchId: 'b',
+            problem: { id: 'p2', title: 'a^n b^n', type: 'CFG' },
+            submissions: [submission('c', undefined, 'b1'), submission('d', undefined, 'b2')],
+          }),
+          group({
+            matchId: 'c',
+            problem: { id: 'p2', title: 'a^n b^n', type: 'CFG' },
+            kind: 'near',
+            identicalStudentCount: 1,
+            submissions: [submission('d'), submission('e')],
+          }),
+        ],
+        0.25,
+      ),
+    ];
+
+    const counts = countByType(clusters);
+    expect(counts.all).toBe(2);
+    expect(counts['byte-identical']).toBe(1);
+    expect(counts.exact).toBe(1);
+    expect(counts.structural).toBe(1);
+  });
+
+  it('answers the same question the filter asks', () => {
+    const [cluster] = mixedCluster();
+
+    // The rule behind both the count and what a button shows, so the two cannot drift.
+    expect(clusterHasType(cluster!, 'same-machine')).toBe(true);
+    expect(clusterHasType(cluster!, 'structural')).toBe(true);
+    expect(clusterHasType(cluster!, 'exact')).toBe(false);
   });
 });
 

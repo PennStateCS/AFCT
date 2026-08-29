@@ -16,6 +16,7 @@ import { SimilarityHelpPopover } from '@/components/assignments/SimilarityInfoPo
 import { SimilarityFilters, type MatchFilter } from '@/components/assignments/SimilarityFilters';
 import { CommonThresholdSlider } from '@/components/assignments/CommonThresholdSlider';
 import {
+  clusterHasType,
   clusterMatches,
   countByType,
   isSetAside,
@@ -137,12 +138,14 @@ export function AssignmentSimilarityPanel({
     // Derived from `clusters` rather than from the list above, so this memo depends only on
     // values it can see change.
     const reviewable = clusters.filter((cluster) => !isSetAside(cluster.type));
-    // Matched against what each card is LABELLED, so the cards behind a button are exactly
-    // the ones carrying that badge.
+    // Every group HOLDING a relationship of that kind, which is the same rule the counts on
+    // the buttons are made with. The whole group stays on the page: which of its
+    // relationships are the structural ones is a question the card answers when it is
+    // opened, and hiding the rest would remove the context that made it one card.
     const shown =
       filter === 'all'
         ? reviewable
-        : reviewable.filter((cluster) => cluster.displayType === filter);
+        : reviewable.filter((cluster) => clusterHasType(cluster, filter));
 
     const byProblem = new Map<
       string,
@@ -301,9 +304,14 @@ export function AssignmentSimilarityPanel({
             <span aria-live="polite" className="sr-only">
               {filter === 'all'
                 ? ''
-                : `Showing ${sections.reduce((n, [, section]) => n + section.clusters.length, 0)} ${
-                    FILTER_NOUN[filter]
-                  } matches.`}
+                : (() => {
+                    // "Containing", because a group that holds one structural relationship
+                    // among four is in this list and not everything in it is structural.
+                    const shown = sections.reduce((n, [, s]) => n + s.clusters.length, 0);
+                    return `Showing ${shown} review group${shown === 1 ? '' : 's'} containing ${
+                      FILTER_NOUN[filter]
+                    } relationships.`;
+                  })()}
             </span>
 
             <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm @[32rem]/triage:hidden">
@@ -403,7 +411,7 @@ export function AssignmentSimilarityPanel({
           than a page that appears to have lost its contents. */}
       {filter !== 'all' && sections.length === 0 ? (
         <p className="bg-card text-muted-foreground rounded-lg border p-4 text-sm">
-          No {FILTER_NOUN[filter]} matches were found for this assignment.
+          No review groups contain {FILTER_NOUN[filter]} relationships.
         </p>
       ) : null}
 

@@ -310,6 +310,7 @@ describe('AssignmentSimilarityPanel', () => {
       await screen.findByRole('heading', { name: 'What these results mean' }),
     ).toBeInTheDocument();
     expect(screen.getByText(/same file to the byte/)).toBeInTheDocument();
+    expect(screen.getByText(/filter counts can overlap/)).toBeInTheDocument();
     expect(screen.getByText(/same saved JFLAP artifact/)).toBeInTheDocument();
     // Said once: the page-level explanation and a card's own are the same strings, and only
     // one of them is open.
@@ -709,9 +710,63 @@ describe('AssignmentSimilarityPanel', () => {
     expect(empty).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryAllByRole('article')).toHaveLength(0);
     expect(
-      screen.getByText('No byte-for-byte identical matches were found for this assignment.'),
+      screen.getByText('No review groups contain byte-for-byte identical relationships.'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Showing 0 byte-for-byte identical matches.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Showing 0 review groups containing byte-for-byte identical relationships.'),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps a mixed group under every filter it holds a relationship for', async () => {
+    const person = userEvent.setup();
+    // One card: Alice and Bob sent the same machine, Carol and Dave are tied in by structure.
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'ab',
+        studentCount: 3,
+        identicalStudentCount: 2,
+        submissions: pairOf('alice', 'bob'),
+      }),
+      group({
+        matchId: 'bc',
+        kind: 'near',
+        identicalStudentCount: 1,
+        evidence: ['They differ by 1 transition'],
+        submissions: pairOf('bob', 'carol'),
+      }),
+      group({
+        matchId: 'cd',
+        kind: 'near',
+        identicalStudentCount: 1,
+        evidence: ['They differ by 1 transition'],
+        submissions: pairOf('carol', 'dave'),
+      }),
+    ]);
+
+    renderPanel();
+
+    const row = await screen.findByRole('group', { name: 'Filter matches' });
+    // One group, counted under both kinds it holds, and its two structural relationships
+    // are one entry rather than two.
+    expect(within(row).getByRole('button', { name: /Same machine/ }).textContent).toMatch(/1$/);
+    expect(within(row).getByRole('button', { name: /Structurally similar/ }).textContent).toMatch(
+      /1$/,
+    );
+    expect(within(row).getByRole('button', { name: /^All/ }).textContent).toMatch(/1$/);
+
+    await openProblems();
+    expect(await screen.findAllByRole('article')).toHaveLength(1);
+
+    // Present under the kind that is not its strongest, which is the whole point.
+    await person.click(within(row).getByRole('button', { name: /Structurally similar/ }));
+    expect(await screen.findAllByRole('article')).toHaveLength(1);
+    expect(
+      screen.getByText('Showing 1 review group containing structurally similar relationships.'),
+    ).toBeInTheDocument();
+
+    // And under its strongest as well.
+    await person.click(within(row).getByRole('button', { name: /Same machine/ }));
+    expect(await screen.findAllByRole('article')).toHaveLength(1);
   });
 
   it('collapses common answers, and renders none of them until asked', async () => {
