@@ -9,6 +9,7 @@ import {
   SimilarityEvidenceBadge,
   ReusedAfterPassBadge,
   ACCENT_BORDER,
+  MATCH_ICON,
 } from './SimilarityEvidenceBadge';
 import { SimilarityInfoPopover } from './SimilarityInfoPopover';
 import { SimilarityTimeline } from './SimilarityTimeline';
@@ -82,25 +83,24 @@ export function SimilarityMatchCard({
        * rather than over a card came out within a percent or two of no fill at all, so the one
        * thing the tint had to do, tell a set-aside group from a live one, it did not do.
        */
-      className={`space-y-3 rounded-lg border p-4 ${ACCENT_BORDER[cluster.type]} ${
+      className={`rounded-lg border p-4 sm:p-5 ${ACCENT_BORDER[cluster.type]} ${
         STRENGTH_OF[cluster.type] === 'none' ? 'bg-muted' : 'bg-card'
       }`}
     >
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Kind and size on one line: what this is, and how big the work is, before anything
+          else. Everything below is read in order after them. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <SimilarityEvidenceBadge type={cluster.type} />
         {cluster.reusedAfterPass ? <ReusedAfterPassBadge /> : null}
-        <SimilarityInfoPopover
-          type={cluster.type}
-          facts={clusterFacts(cluster, subject)}
-          reusedAfterPass={cluster.reusedAfterPass}
-        />
-        {size ? <span className="text-muted-foreground ms-auto text-sm">{size}</span> : null}
+        {size ? (
+          <span className="text-muted-foreground ms-auto text-sm tabular-nums">{size}</span>
+        ) : null}
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {/* The heading is the fact rather than the kind, because the badge above already
             says the kind and a reader who has read it once does not need it twice. */}
-        <h4 id={headingId} className="font-semibold">
+        <h4 id={headingId} className="text-base leading-snug font-semibold">
           {clusterHeadline(cluster, subject)}
           {showProblem && cluster.problem.title ? (
             <span className="text-muted-foreground font-normal"> · {cluster.problem.title}</span>
@@ -113,43 +113,83 @@ export function SimilarityMatchCard({
         </ul>
       </div>
 
-      <SimilarityTimeline
-        attempts={cluster.attempts}
-        subject={subject}
-        formatDay={formatDay}
-        formatTime={formatTime}
-      />
+      <div className="mt-4">
+        <SimilarityTimeline
+          attempts={cluster.attempts}
+          subject={subject}
+          formatDay={formatDay}
+          formatTime={formatTime}
+        />
+      </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
         {isGroup ? (
-          <Collapsible open={open} onOpenChange={setOpen} className="w-full space-y-3">
-            <CollapsibleContent className="space-y-2">
+          <Collapsible open={open} onOpenChange={setOpen} className="w-full">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CollapsibleTrigger asChild>
+                <Button variant="secondary" size="sm">
+                  <ChevronDown
+                    className={open ? 'rotate-180 transition-transform' : 'transition-transform'}
+                  />
+                  {open ? 'Hide' : 'Review'} the {cluster.relationships.length} relationships
+                </Button>
+              </CollapsibleTrigger>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <SimilarityInfoPopover
+                  type={cluster.type}
+                  facts={clusterFacts(cluster, subject)}
+                  reusedAfterPass={cluster.reusedAfterPass}
+                />
+                {/* Comparing everybody at once stays available, but secondary: in a group held
+                  together by a shared student, the evidence belongs to the relationships,
+                  and reviewing them one at a time is the thing to do first. */}
+                <Button variant="ghost" size="sm" onClick={() => onCompare(cluster.attempts)}>
+                  <Columns2 />
+                  Compare all
+                  <span className="sr-only">
+                    {' '}
+                    {cluster.attempts.map((s) => studentName(s.student)).join(' and ')}
+                  </span>
+                </Button>
+              </div>
+            </div>
+
+            <CollapsibleContent className="pt-3">
               {/* Each relationship with its own kind and its own compare, so a reader can go
                   straight to the files a given claim is about rather than guessing from a
-                  group of six. */}
+                  group of six. Quieter than the card that holds them: same information, one
+                  level down. */}
               <ul className="space-y-2">
                 {cluster.relationships.map((relationship) => {
                   const type = matchTypeOf(relationship, commonShare);
                   const strength = STRENGTH_OF[type];
                   const attempts = relationshipAttempts(relationship);
+                  const Icon = MATCH_ICON[type];
                   return (
                     <li
                       key={relationship.matchId}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm"
+                      className="bg-background/60 flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
                     >
-                      <div className="min-w-0">
-                        <p className="font-medium">
-                          {relationshipParties(relationship, subject)}
-                        </p>
-                        <p className="text-muted-foreground text-xs">
-                          {strength === 'none'
-                            ? MATCH_LABEL[type]
-                            : `${STRENGTH_LABEL[strength]} · ${MATCH_LABEL[type]}`}
-                          {attempts ? ` · ${attempts}` : ''}
-                        </p>
+                      <div className="flex min-w-0 items-start gap-2">
+                        <Icon
+                          className="text-muted-foreground mt-0.5 size-4 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            {relationshipParties(relationship, subject)}
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            {strength === 'none'
+                              ? MATCH_LABEL[type]
+                              : `${STRENGTH_LABEL[strength]} · ${MATCH_LABEL[type]}`}
+                            {attempts ? ` · ${attempts}` : ''}
+                          </p>
+                        </div>
                       </div>
                       <Button
-                        variant="secondary"
+                        variant="outline"
                         size="sm"
                         onClick={() => onCompare(relationship.submissions)}
                       >
@@ -165,37 +205,23 @@ export function SimilarityMatchCard({
                 })}
               </ul>
             </CollapsibleContent>
-
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <CollapsibleTrigger asChild>
-                <Button variant="secondary" size="sm">
-                  <ChevronDown
-                    className={open ? 'rotate-180 transition-transform' : 'transition-transform'}
-                  />
-                  {open ? 'Hide' : 'Review'} the {cluster.relationships.length} relationships
-                </Button>
-              </CollapsibleTrigger>
-              {/* Comparing everybody at once stays available, but secondary: in a group held
-                  together by a shared student, the evidence belongs to the relationships. */}
-              <Button variant="ghost" size="sm" onClick={() => onCompare(cluster.attempts)}>
-                <Columns2 />
-                Compare all
-                <span className="sr-only">
-                  {' '}
-                  {cluster.attempts.map((s) => studentName(s.student)).join(' and ')}
-                </span>
-              </Button>
-            </div>
           </Collapsible>
         ) : (
-          <Button variant="secondary" size="sm" onClick={() => onCompare(cluster.attempts)}>
-            <Columns2 />
-            Compare submissions
-            <span className="sr-only">
-              {' '}
-              for {cluster.attempts.map((s) => studentName(s.student)).join(' and ')}
-            </span>
-          </Button>
+          <>
+            <SimilarityInfoPopover
+              type={cluster.type}
+              facts={clusterFacts(cluster, subject)}
+              reusedAfterPass={cluster.reusedAfterPass}
+            />
+            <Button variant="secondary" size="sm" onClick={() => onCompare(cluster.attempts)}>
+              <Columns2 />
+              Compare submissions
+              <span className="sr-only">
+                {' '}
+                for {cluster.attempts.map((s) => studentName(s.student)).join(' and ')}
+              </span>
+            </Button>
+          </>
         )}
       </div>
     </article>

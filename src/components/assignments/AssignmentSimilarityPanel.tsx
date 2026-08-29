@@ -164,8 +164,10 @@ export function AssignmentSimilarityPanel({
     });
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
+    <div className="space-y-8">
+      {/* The triage block: what is here, how to narrow it, and where the line between a
+          finding and an expected answer currently sits. One block, not three cards. */}
+      <div className="space-y-3 border-b pb-4">
         <h2 className="flex items-center gap-2 text-xl font-semibold">
           <Fingerprint className="h-6 w-6" />
           Similarity
@@ -182,7 +184,12 @@ export function AssignmentSimilarityPanel({
           ) : (
             <div className="space-y-1">
               {summary.map((line, index) => (
-                <p key={line} className={index === 0 ? 'text-base font-medium' : 'text-sm'}>
+                <p
+                  key={line}
+                  className={
+                    index === 0 ? 'text-base font-medium' : 'text-muted-foreground text-sm'
+                  }
+                >
                   {line}
                 </p>
               ))}
@@ -248,11 +255,17 @@ export function AssignmentSimilarityPanel({
         ) : null}
       </div>
 
-      {sections.map(([problemId, section]) => (
+      {sections.map(([problemId, section], index) => (
         <section key={problemId} className="space-y-3">
-          <div>
-            <h3 className="text-lg font-semibold">{section.title ?? 'Unknown problem'}</h3>
-            <p className="text-muted-foreground text-sm">
+          {/* The problem is the anchor a reader scans by, so it gets a line of its own and a
+              number: "the second problem on this assignment" is how they hold the page. */}
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <h3 className="text-lg font-semibold">
+              <span className="text-muted-foreground font-normal">Problem {index + 1}</span>
+              <span className="text-muted-foreground font-normal"> — </span>
+              {section.title ?? 'Unknown problem'}
+            </h3>
+            <p className="text-muted-foreground ms-auto text-sm">
               {groupAssignment && section.groups > 0
                 ? `${section.groups} group${section.groups === 1 ? '' : 's'} submitted`
                 : `${section.students} student${section.students === 1 ? '' : 's'} submitted`}{' '}
@@ -277,10 +290,10 @@ export function AssignmentSimilarityPanel({
 
       {setAside.length > 0 ? (
         <Collapsible open={showCommon} onOpenChange={setShowCommon} className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-            <div>
-              <h3 className="flex items-center gap-2 text-lg font-semibold">
-                <Users className="size-5" aria-hidden="true" />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-6">
+            <div className="max-w-2xl">
+              <h3 className="text-muted-foreground flex items-center gap-2 text-base font-semibold">
+                <Users className="size-4" aria-hidden="true" />
                 Set aside ({setAside.length})
               </h3>
               <p className="text-muted-foreground text-sm">

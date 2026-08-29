@@ -1,5 +1,6 @@
 'use client';
 
+import { CircleCheck, CircleX, CircleDashed, FileDown } from 'lucide-react';
 import { apiPaths } from '@/lib/api-paths';
 import type { MatchSubmission } from '@/lib/similarity/matches';
 import {
@@ -10,11 +11,49 @@ import {
   type ReviewSubject,
 } from './similarity-format';
 
+/**
+ * The whole list is one grid and every row dissolves into it (`sm:contents`), which is what
+ * makes the columns line up down the card while each one is only as wide as it needs to be.
+ *
+ * Fixed column widths would align too, but they cannot shrink: on a tablet the row ran past
+ * the edge of the card. Auto columns cannot, and the subject column takes whatever is left.
+ * Below `sm` none of this applies and each attempt stacks into two lines.
+ */
+const LIST_GRID = 'sm:grid sm:grid-cols-[minmax(8rem,22rem)_auto_auto_auto_auto_minmax(4rem,1fr)]';
+
+/**
+ * Each cell carries the row's rule and padding, because the row itself has no box at `sm`.
+ * The columns are separated by padding rather than a grid gap so the rules meet and read as
+ * one line across the row instead of as five dashes, and each cell is made block-level so it
+ * fills its column: an inline cell is only as wide as its text, and the rule under a short
+ * "Correct" stopped short of the one beside it.
+ */
+const CELL_BASE = 'sm:border-t sm:py-2 sm:pe-4 sm:whitespace-nowrap';
+const CELL = `sm:block ${CELL_BASE}`;
+
 /** The middle dot between facts on a phone. The desktop grid separates them by column. */
 function Dot() {
   return (
     <span aria-hidden="true" className="sm:hidden">
       ·
+    </span>
+  );
+}
+
+/** What the autograder made of an attempt: an icon reinforcing a word, never a colour alone. */
+function Result({ correct, className = '' }: { correct: boolean | null; className?: string }) {
+  const Icon = correct === true ? CircleCheck : correct === false ? CircleX : CircleDashed;
+  const tone =
+    correct === true
+      ? 'text-badge-success'
+      : correct === false
+        ? 'text-badge-danger'
+        : 'text-muted-foreground';
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 sm:flex ${className}`}>
+      <Icon className={`size-3.5 shrink-0 ${tone}`} aria-hidden="true" />
+      {resultLabel(correct)}
     </span>
   );
 }
@@ -51,7 +90,25 @@ export function SimilarityTimeline({
   const spansDays = new Set(attempts.map((a) => formatDay(a.submittedAt))).size > 1;
 
   return (
-    <ol aria-label="Matching attempts, earliest first" className="divide-border divide-y text-sm">
+    <ol aria-label="Matching attempts, earliest first" className={`text-sm ${LIST_GRID}`}>
+      {/*
+        Column names, on a wide screen only, and hidden from assistive technology: every row
+        already says "Attempt 2" and "Correct" in full, so reading the headings as well would
+        be repeating each row before hearing it. It lives inside the grid because that is the
+        only way its columns can be the same columns.
+      */}
+      <li
+        aria-hidden="true"
+        className="text-muted-foreground hidden pb-1 text-xs font-medium sm:contents"
+      >
+        <span className="sm:pe-4 sm:pb-1">{subject === 'group' ? 'Group' : 'Student'}</span>
+        <span className="sm:pe-4 sm:pb-1">Attempt</span>
+        <span className="sm:pe-4 sm:pb-1">Submitted</span>
+        <span className="sm:pe-4 sm:pb-1">Result</span>
+        <span className="sm:pe-4 sm:pb-1">Relative</span>
+        <span className="sm:pb-1 sm:text-right">Open</span>
+      </li>
+
       {attempts.map((submission, index) => {
         const name = studentName(submission.student);
         // The group leads on a group assignment, but only when this attempt actually has one:
@@ -64,14 +121,14 @@ export function SimilarityTimeline({
           <li
             key={submission.id}
             /*
-             * Two lines on a phone, one row on a desktop, from one piece of markup.
-             * `sm:contents` dissolves the wrapper below so its children become cells of this
-             * grid, which keeps the columns aligned across rows without rendering the same
-             * facts twice for a screen reader to read out twice.
+             * Two lines on a phone, one row of the grid on a desktop, from one piece of
+             * markup: `sm:contents` dissolves this box so its cells become the grid's own,
+             * which keeps the columns aligned without rendering the same facts twice for a
+             * screen reader to read out twice.
              */
-            className="flex flex-col gap-y-0.5 py-2 first:pt-0 last:pb-0 sm:grid sm:grid-cols-[minmax(9rem,1.4fr)_auto_auto_auto_auto_auto] sm:items-baseline sm:gap-x-4"
+            className="flex flex-col gap-y-0.5 border-t py-2 sm:contents"
           >
-            <span className="font-medium">
+            <span className={`font-medium ${CELL}`}>
               {primary}
               {group ? (
                 <span className="text-muted-foreground block text-xs font-normal">
@@ -81,20 +138,20 @@ export function SimilarityTimeline({
             </span>
 
             <span className="text-muted-foreground flex flex-wrap items-baseline gap-x-2 text-xs sm:contents sm:text-sm">
-              <span className="tabular-nums">{attemptLabel(submission.attempt)}</span>
+              <span className={`tabular-nums ${CELL}`}>{attemptLabel(submission.attempt)}</span>
               <Dot />
 
-              <time dateTime={submission.submittedAt} className="tabular-nums">
+              <time dateTime={submission.submittedAt} className={`tabular-nums ${CELL}`}>
                 {spansDays
                   ? `${formatDay(submission.submittedAt)} ${formatTime(submission.submittedAt)}`
                   : formatTime(submission.submittedAt)}
               </time>
               <Dot />
 
-              <span>{resultLabel(submission.correct)}</span>
+              <Result correct={submission.correct} className={CELL_BASE} />
               <Dot />
 
-              <span className="tabular-nums sm:text-right">
+              <span className={`tabular-nums ${CELL}`}>
                 {index === 0 ? (
                   <span className="text-foreground font-medium">First</span>
                 ) : (
@@ -105,22 +162,27 @@ export function SimilarityTimeline({
               {submission.fileName ? (
                 <>
                   <Dot />
-                  <a
-                    className="underline sm:justify-self-end"
-                    href={apiPaths.files.submission(encodeURIComponent(submission.fileName), {
-                      download: true,
-                    })}
-                    download={submission.originalFileName ?? 'submission'}
-                  >
-                    Open
-                    <span className="sr-only">
-                      {' '}
-                      {primary}&apos;s {attemptLabel(submission.attempt).toLowerCase()}
-                    </span>
-                  </a>
+                  {/* Wrapped so the cell itself fills its column: an anchor sized to its own
+                      text would leave the row's rule stopping short of the edge. */}
+                  <span className={`${CELL} sm:pe-0 sm:text-right`}>
+                    <a
+                      className="text-primary inline-flex items-center gap-1 underline-offset-2 hover:underline"
+                      href={apiPaths.files.submission(encodeURIComponent(submission.fileName), {
+                        download: true,
+                      })}
+                      download={submission.originalFileName ?? 'submission'}
+                    >
+                      <FileDown className="size-3.5 shrink-0" aria-hidden="true" />
+                      Open
+                      <span className="sr-only">
+                        {' '}
+                        {primary}&apos;s {attemptLabel(submission.attempt).toLowerCase()}
+                      </span>
+                    </a>
+                  </span>
                 </>
               ) : (
-                <span aria-hidden="true" />
+                <span aria-hidden="true" className={`${CELL} sm:pe-0`} />
               )}
             </span>
           </li>

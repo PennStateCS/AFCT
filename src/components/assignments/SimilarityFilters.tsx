@@ -15,9 +15,16 @@ export type MatchFilter = MatchType | 'all';
  */
 const ORDER: MatchFilter[] = ['all', 'exact', 'same-machine', 'structural'];
 
+/**
+ * Shorter than the card labels, and only where the short form still says the same thing.
+ *
+ * "Exact artifact" for "Exact JFLAP artifact": the file format is on every card already and
+ * a filter row is read at a glance. Nothing here changes what a kind means, and the full
+ * label stays on the card and in the popover that explains it.
+ */
 const LABEL: Record<MatchFilter, string> = {
   all: 'All',
-  exact: MATCH_LABEL.exact,
+  exact: 'Exact artifact',
   'same-machine': MATCH_LABEL['same-machine'],
   structural: MATCH_LABEL.structural,
   reference: MATCH_LABEL.reference,
@@ -51,7 +58,9 @@ export function SimilarityFilters({
             key={filter}
             type="button"
             size="sm"
-            variant={selected ? 'secondary' : 'ghost'}
+            // Outline rather than ghost when unselected, so the row reads as a set of
+            // choices rather than as loose text, and the selected one is unmistakably filled.
+            variant={selected ? 'secondary' : 'outline'}
             // The selected state has to be announced, not just shaded.
             aria-pressed={selected}
             onClick={() => onChange(filter)}
@@ -61,7 +70,11 @@ export function SimilarityFilters({
             {/* Quieter than the label only when the button is unselected. On the filled
                 selected button, muted grey sits on a dark background and stops being
                 readable, so the count takes the button's own foreground colour. */}
-            <span className={`tabular-nums ${selected ? '' : 'text-muted-foreground'}`}>
+            <span
+              className={`rounded px-1 tabular-nums ${
+                selected ? 'bg-secondary-foreground/10' : 'text-muted-foreground bg-muted'
+              }`}
+            >
               {counts[filter]}
             </span>
           </Button>

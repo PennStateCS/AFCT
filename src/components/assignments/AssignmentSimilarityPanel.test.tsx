@@ -296,7 +296,7 @@ describe('AssignmentSimilarityPanel', () => {
     renderPanel();
     await screen.findAllByRole('article');
 
-    const exactFilter = screen.getByRole('button', { name: /Exact JFLAP artifact/ });
+    const exactFilter = screen.getByRole('button', { name: /Exact artifact/ });
     await person.click(exactFilter);
 
     expect(exactFilter).toHaveAttribute('aria-pressed', 'true');
