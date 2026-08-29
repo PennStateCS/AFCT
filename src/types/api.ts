@@ -8489,6 +8489,8 @@ export interface operations {
             query?: {
                 /** @description Counts only, for the tab badge */
                 part?: "count";
+                /** @description The reader's commonality threshold, used with part=count so the badge counts what their page shows */
+                share?: number;
             };
             header?: never;
             path: {

@@ -8,50 +8,63 @@ import type { MatchSubmission } from '@/lib/similarity/matches';
 import {
   SimilarityEvidenceBadge,
   ReusedAfterPassBadge,
+  RelatedSubmissionsBadge,
   ACCENT_BORDER,
 } from './SimilarityEvidenceBadge';
 import { SimilarityInfoPopover } from './SimilarityInfoPopover';
 import { SimilarityTimeline } from './SimilarityTimeline';
-import type { MatchCluster } from '@/lib/similarity/evidence';
+import { DISPLAY_STRENGTH_OF, displayTypeOf, type MatchCluster } from '@/lib/similarity/evidence';
 import {
+  attemptLabel,
   clusterDetails,
+  listOf,
   clusterFacts,
   clusterHeadline,
-  relationshipSummary,
+  relationshipDetails,
+  relationshipParticipants,
   sizeLabel,
   studentName,
+  type ReviewSubject,
 } from './similarity-format';
 
 /**
  * One group of related submissions.
  *
- * The first three lines carry the review: how strong the artifact evidence is, what kind of
- * match it is, and why that matters here. Everything after is detail for somebody who has
+ * The first lines carry the review: how strong the artifact evidence is, what kind of match
+ * it is, and why that matters here. Then the attempts themselves, because which attempt
+ * matched is the thing being reviewed. Everything after is detail for somebody who has
  * decided to look. Reuse after passing sits beside the kind rather than above it, because a
  * weaker artifact match does not become a stronger one because of when it arrived.
  *
  * A group of two is the whole card. A group of more than two keeps its relationships behind
  * one control, so a course where six students share work is one card to read rather than the
- * fifteen nearly identical ones the pairs would make.
+ * fifteen nearly identical ones the pairs would make. Compare then belongs to a relationship
+ * rather than to the whole group: the evidence is about the files in that relationship.
  */
 export function SimilarityMatchCard({
   cluster,
+  subject,
+  commonShare,
   onCompare,
   formatDay,
   formatTime,
   showProblem = false,
 }: {
   cluster: MatchCluster;
-  onCompare: (students: MatchSubmission[]) => void;
+  /** Whether this assignment is reviewed as students or as groups. */
+  subject: ReviewSubject;
+  /** The reader's commonality setting, so each relationship can name its own kind. */
+  commonShare: number;
+  onCompare: (submissions: MatchSubmission[]) => void;
   formatDay: (iso: string) => string;
   formatTime: (iso: string) => string;
-  /** Set in the common list, which is not grouped under a problem heading. */
+  /** Set in the set-aside list, which is not grouped under a problem heading. */
   showProblem?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const headingId = `match-${cluster.id}-heading`;
   const size = sizeLabel(cluster);
-  const details = clusterDetails(cluster);
+  const details = clusterDetails(cluster, subject);
   const isGroup = cluster.relationships.length > 1;
 
   return (
@@ -61,102 +74,194 @@ export function SimilarityMatchCard({
        * bg-card, like the cards everywhere else. These were transparent, which was invisible
        * while the workspace was white and left the tab reading as a list of outlines.
        *
-       * A common answer is set aside rather than acted on, so it stays quieter: bg-muted, one
-       * step off the card the others sit on. It was `bg-muted/30`, which over the page rather
-       * than over a card came out within a percent or two of no fill at all, so the one thing
-       * the tint had to do, tell a set-aside group from a live one, it did not do.
+       * A set-aside group is explained rather than acted on, so it stays quieter: bg-muted,
+       * one step off the card the others sit on. It was `bg-muted/30`, which over the page
+       * rather than over a card came out within a percent or two of no fill at all, so the one
+       * thing the tint had to do, tell a set-aside group from a live one, it did not do.
        */
-      className={`space-y-3 rounded-lg border p-4 ${ACCENT_BORDER[cluster.type]} ${
-        cluster.type === 'common' ? 'bg-muted' : 'bg-card'
-      }`}
+      className={`@container/match overflow-hidden rounded-lg p-4 sm:p-5 ${
+        // A mixed group takes the neutral frame: the colour of its strongest relationship
+        // would be colouring the whole card by something true of part of it.
+        cluster.homogeneous ? ACCENT_BORDER[cluster.displayType] : ACCENT_BORDER.common
+      } ${DISPLAY_STRENGTH_OF[cluster.displayType] === 'none' ? 'bg-muted' : 'bg-card'}`}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <SimilarityEvidenceBadge type={cluster.type} />
+      {/* Kind and size on one line: what this is, and how big the work is, before anything
+          else. Everything below is read in order after them. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {cluster.homogeneous ? (
+          <SimilarityEvidenceBadge type={cluster.displayType} />
+        ) : (
+          <RelatedSubmissionsBadge count={cluster.relationships.length} />
+        )}
         {cluster.reusedAfterPass ? <ReusedAfterPassBadge /> : null}
-        <SimilarityInfoPopover
-          type={cluster.type}
-          facts={clusterFacts(cluster)}
-          reusedAfterPass={cluster.reusedAfterPass}
-        />
-        {size ? <span className="text-muted-foreground ms-auto text-sm">{size}</span> : null}
+        {size ? (
+          <span className="text-muted-foreground ms-auto text-sm tabular-nums">{size}</span>
+        ) : null}
       </div>
 
-      <div className="space-y-1">
-        {/* The heading is the fact rather than the kind, because the badge above already
+      {/*
+        The reading and the evidence side by side once there is room for both: what this
+        group is, on the left, and the attempts it is made of, on the right.
+        
+        Measured on the CARD rather than the window, because the card is what has to hold
+        them: the same screen gives a different width with the assignment menu collapsed, and
+        the six-column attempt table needs about 37rem before it stops being a scrolling
+        exercise. Below that the two stack.
+      */}
+      <div className="@[56rem]/match:grid @[56rem]/match:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] @[56rem]/match:gap-6">
+        <div className="space-y-1.5">
+          {/* The heading is the fact rather than the kind, because the badge above already
             says the kind and a reader who has read it once does not need it twice. */}
-        <h4 id={headingId} className="font-semibold">
-          {clusterHeadline(cluster)}
-          {showProblem && cluster.problem.title ? (
-            <span className="text-muted-foreground font-normal"> · {cluster.problem.title}</span>
-          ) : null}
-        </h4>
-        {isGroup ? (
-          <p className="text-muted-foreground text-sm">
-            {relationshipSummary(cluster).join(' · ')}
-          </p>
-        ) : (
+          <h4 id={headingId} className="text-base leading-snug font-semibold">
+            {clusterHeadline(cluster, subject)}
+            {showProblem && cluster.problem.title ? (
+              <span className="text-muted-foreground font-normal"> · {cluster.problem.title}</span>
+            ) : null}
+          </h4>
           <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-sm">
             {details.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
-        )}
+        </div>
+
+        {/* Focusable, and scrollable on its own if the columns cannot fit: a table a reader
+            cannot reach with the keyboard is a table some readers do not have. */}
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Matching attempts"
+          className="mt-4 min-w-0 overflow-x-auto @[56rem]/match:mt-0"
+        >
+          <SimilarityTimeline
+            attempts={cluster.attempts}
+            subject={subject}
+            formatDay={formatDay}
+            formatTime={formatTime}
+          />
+        </div>
       </div>
 
-      <SimilarityTimeline
-        students={cluster.students}
-        formatDay={formatDay}
-        formatTime={formatTime}
-      />
-
-      <div className="flex flex-wrap items-center justify-end gap-2">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
         {isGroup ? (
           <Collapsible open={open} onOpenChange={setOpen} className="w-full">
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <ChevronDown
-                  className={open ? 'rotate-180 transition-transform' : 'transition-transform'}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CollapsibleTrigger asChild>
+                <Button variant="secondary" size="sm">
+                  <ChevronDown
+                    className={open ? 'rotate-180 transition-transform' : 'transition-transform'}
+                  />
+                  {open ? 'Hide' : 'Review'} the {cluster.relationships.length} relationships
+                </Button>
+              </CollapsibleTrigger>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <SimilarityInfoPopover
+                  type={cluster.displayType}
+                  facts={clusterFacts(cluster, subject)}
+                  reusedAfterPass={cluster.reusedAfterPass}
                 />
-                {open ? 'Hide' : 'Review'} the {cluster.relationships.length} relationships
-              </Button>
-            </CollapsibleTrigger>
+                {/* Comparing everybody at once stays available, but secondary: in a group held
+                  together by a shared student, the evidence belongs to the relationships,
+                  and reviewing them one at a time is the thing to do first. */}
+                <Button variant="ghost" size="sm" onClick={() => onCompare(cluster.attempts)}>
+                  <Columns2 />
+                  Compare all
+                  <span className="sr-only">
+                    {' '}
+                    {listOf([...new Set(cluster.attempts.map((s) => studentName(s.student)))])}
+                  </span>
+                </Button>
+              </div>
+            </div>
+
             <CollapsibleContent className="pt-3">
-              {/* Each relationship with its own compare, so a reader can go straight to the
-                  two files a given claim is about rather than guessing from a group of six. */}
-              <ul className="space-y-2">
-                {cluster.relationships.map((relationship) => (
-                  <li
-                    key={relationship.matchId}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm"
-                  >
-                    <span>
-                      {[
-                        ...new Set(relationship.submissions.map((s) => studentName(s.student))),
-                      ].join(' and ')}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onCompare(relationship.submissions)}
+              {/* Each relationship with its own kind and its own compare, so a reader can go
+                  straight to the files a given claim is about rather than guessing from a
+                  group of six. Quieter than the card that holds them: same information, one
+                  level down. */}
+              <ul aria-label="Relationships in this group" className="space-y-2">
+                {cluster.relationships.map((relationship) => {
+                  const type = displayTypeOf(relationship, commonShare);
+                  const participants = relationshipParticipants(relationship, subject);
+                  return (
+                    <li
+                      key={relationship.matchId}
+                      className="bg-background/60 space-y-2 rounded-md border px-3 py-2.5 text-sm"
                     >
-                      <Columns2 />
-                      Compare
-                    </Button>
-                  </li>
-                ))}
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 space-y-1.5">
+                          <SimilarityEvidenceBadge type={type} />
+
+                          {/* Each participant with the attempts of theirs that are IN this
+                              relationship. "Attempts 1 and 2" over three names leaves whose
+                              unanswered, which is the question a reader actually has. */}
+                          <ul className="space-y-0.5">
+                            {participants.map((participant) => (
+                              <li key={participant.id} className="flex flex-wrap gap-x-2">
+                                <span className="font-medium">{participant.name}</span>
+                                <span className="text-muted-foreground">
+                                  {participant.attempts
+                                    .map((attempt) => attemptLabel(attempt.attempt))
+                                    .join(', ')}
+                                </span>
+                                {subject === 'group' && participant.attempts[0]?.studentGroup ? (
+                                  <span className="text-muted-foreground text-xs">
+                                    submitted by{' '}
+                                    {participant.attempts
+                                      .map((attempt) => studentName(attempt.student))
+                                      .join(', ')}
+                                  </span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onCompare(relationship.submissions)}
+                        >
+                          <Columns2 />
+                          Compare
+                          <span className="sr-only">
+                            {' '}
+                            {listOf(participants.map((participant) => participant.name))}
+                          </span>
+                        </Button>
+                      </div>
+
+                      {/* What THIS relationship can say for itself, which is not always what
+                          the card above it says. */}
+                      <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-xs">
+                        {relationshipDetails(relationship, subject).map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                    </li>
+                  );
+                })}
               </ul>
             </CollapsibleContent>
           </Collapsible>
-        ) : null}
-
-        <Button variant="secondary" size="sm" onClick={() => onCompare(cluster.students)}>
-          <Columns2 />
-          Compare submissions
-          <span className="sr-only">
-            {' '}
-            for {cluster.students.map((s) => studentName(s.student)).join(' and ')}
-          </span>
-        </Button>
+        ) : (
+          <>
+            <SimilarityInfoPopover
+              type={cluster.displayType}
+              facts={clusterFacts(cluster, subject)}
+              reusedAfterPass={cluster.reusedAfterPass}
+            />
+            <Button variant="secondary" size="sm" onClick={() => onCompare(cluster.attempts)}>
+              <Columns2 />
+              Compare submissions
+              <span className="sr-only">
+                {' '}
+                for {listOf([...new Set(cluster.attempts.map((s) => studentName(s.student)))])}
+              </span>
+            </Button>
+          </>
+        )}
       </div>
     </article>
   );

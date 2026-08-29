@@ -19,6 +19,7 @@ import { PROVENANCE_FEATURE_VERSION, type ProvenanceFeatures } from './provenanc
 // Re-exported for the server side, which has no reason to know the rule moved. Client
 // components must import it from './rarity' directly: this module reaches for Prisma.
 export { isCommon, COMMON_SHARE } from './rarity';
+import type { ReviewSubject } from './rarity';
 
 /** A student as the Similarity tab shows them. */
 export type MatchStudent = {
@@ -46,10 +47,24 @@ export type MatchSubmission = {
   fileName: string | null;
   originalFileName: string | null;
   /**
-   * Short handle for the exact file. Two submissions in a match sharing this are byte for
-   * byte the same; two that differ are the same machine drawn differently.
+   * Short handle for the file's normalised contents. Two submissions in a match sharing this
+   * are the same file once formatting is set aside; two that differ are the same machine
+   * drawn differently. Whether the raw bytes agree is a stricter question, answered for the
+   * group as a whole by `byteIdenticalStudentCount`.
    */
   contentKey: string;
+  /**
+   * Which set of byte-identical files this submission belongs to, within its own match:
+   * `b1`, `b2`, and so on. Two submissions in a match sharing this were the same file to the
+   * byte; two that differ were not.
+   *
+   * Null when the raw file was never hashed, which is every submission stored before that
+   * column existed, and which means "not known" rather than "different".
+   *
+   * A label made up for the response rather than the hash itself: the page needs to know
+   * which submissions go together, and nothing else, so nothing else is sent.
+   */
+  byteKey: string | null;
   student: MatchStudent;
   studentGroup: { id: string; name: string } | null;
 };
@@ -81,11 +96,33 @@ export type SubmissionMatchGroup = {
   /** How many different students have submitted this problem at all: the denominator. */
   problemStudentCount: number;
   /**
-   * The largest number of students in this match who submitted the byte-identical file.
-   * Equal to `studentCount` when the whole match is one file, and 1 when every student's
-   * file differs in some incidental way.
+   * The same two counts for a group assignment, where the thing being reviewed is a group
+   * rather than a person: any member may submit for the team, so counting members would say
+   * "4 of 30 students" about what is really two groups out of nine.
+   *
+   * Both 0 when no submission here belongs to a group, which is every individual assignment.
+   */
+  groupCount: number;
+  problemGroupCount: number;
+  /**
+   * The largest number of students in this match who submitted the same file once formatting
+   * is set aside. Equal to `studentCount` when the whole match is one file, and 1 when every
+   * student's file differs in some incidental way.
    */
   identicalStudentCount: number;
+  /**
+   * The largest number of students in this match whose files are identical byte for byte,
+   * nothing normalised away.
+   *
+   * The strictest thing the detector can say, and the only one that needs no qualifier: not
+   * "the same work", not "the same file once formatting is set aside", the same bytes. Always
+   * at most `identicalStudentCount`, because identical bytes normalise to identical contents.
+   *
+   * 1 when no two agree AND when nobody's file has been hashed yet, which is every submission
+   * stored before the column existed. The page has no way to tell those apart, so it says
+   * nothing rather than guessing; a backfill is what turns the old rows into an answer.
+   */
+  byteIdenticalStudentCount: number;
   /**
    * The shortest time between two different students submitting this same content, in
    * milliseconds. Context, not a verdict: six minutes apart reads differently from three
@@ -93,8 +130,8 @@ export type SubmissionMatchGroup = {
    */
   closestGapMs: number | null;
   /**
-   * A student submitted the byte-identical file AFTER another student's copy of it had
-   * already been marked correct.
+   * A student submitted the same file AFTER another student's copy of it had already been
+   * marked correct.
    *
    * This is the shape of the thing a large course is most likely to miss: submit, see the
    * autograder say full marks, pass the file on. It is still not a verdict, and the reader
@@ -122,16 +159,40 @@ const studentSelect = {
 } as const;
 
 /**
- * Groups of submissions that share their exact content, for the problems given.
+ * Options for a caller that wants the same matches, minus what only a rendered card needs.
  *
- * Scoped by problem id, and a problem belongs to exactly one course, so this can never
- * reach across into another instructor's course. Matching happens at read time rather than
- * being stamped on a submission when it is graded: a stamp would only ever mark the second
- * student of a pair, and would go stale the moment anything else was submitted.
+ * Deliberately not a second, cheaper matching rule: every group, every count and every
+ * classification is produced by the same code either way, because a badge that disagreed
+ * with the page it points at would be worse than no badge. The only thing `countOnly` drops
+ * is attempt numbering, which is two reads spent on a sentence nobody is going to see.
+ */
+export type FindMatchesOptions = {
+  countOnly?: boolean;
+  /**
+   * Who the finding is about. Group work is counted by team, because any member may submit
+   * for the team and counting members would both inflate a match and make the class look
+   * larger than it is. Defaults to students.
+   */
+  subject?: ReviewSubject;
+};
+
+/**
+ * Groups of submissions that share their exact content, for one assignment's problems.
+ *
+ * Scoped by assignment AND problem, on every read. A problem is reusable, so the same
+ * question can be set again next term or in another section, and work submitted to a
+ * different assignment is a different piece of work: reporting it as a match would put two
+ * students who never took the same assignment on one card. The assignment also belongs to
+ * exactly one course, so this can never reach across into another instructor's course.
+ *
+ * Matching happens at read time rather than being stamped on a submission when it is graded:
+ * a stamp would only ever mark the second student of a pair, and would go stale the moment
+ * anything else was submitted.
  *
  * Ordered rarest first, which is the order a professor wants to read them in.
  */
 export async function findSubmissionMatches(
+  assignmentId: string,
   problemIds: string[],
   problems: Map<
     string,
@@ -142,6 +203,7 @@ export async function findSubmissionMatches(
       answerShapeHash?: string | null;
     }
   >,
+  options: FindMatchesOptions = {},
 ): Promise<SubmissionMatchGroup[]> {
   if (problemIds.length === 0) return [];
 
@@ -153,17 +215,26 @@ export async function findSubmissionMatches(
   // match as the file it came from. Which of them are byte-identical is recorded inside the
   // group instead, because that is a different claim and reads differently.
   const perStudent = await prisma.submission.groupBy({
-    by: ['problemId', 'shapeHash', 'contentHash', 'studentId'],
-    where: { problemId: { in: problemIds }, contentHash: { not: null } },
+    by: ['problemId', 'shapeHash', 'contentHash', 'studentId', 'studentGroupId'],
+    where: { assignmentId, problemId: { in: problemIds }, contentHash: { not: null } },
   });
 
   const studentsPerProblem = new Map<string, Set<string>>();
   const studentsPerShape = new Map<string, Set<string>>();
+  // The same two tallies counted by team, for a group assignment. Empty for an individual
+  // one, where no submission carries a group.
+  const groupsPerProblem = new Map<string, Set<string>>();
+  const groupsPerShape = new Map<string, Set<string>>();
   for (const row of perStudent) {
     if (!row.contentHash) continue;
     const problemStudents = studentsPerProblem.get(row.problemId) ?? new Set<string>();
     problemStudents.add(row.studentId);
     studentsPerProblem.set(row.problemId, problemStudents);
+    if (row.studentGroupId) {
+      const problemGroups = groupsPerProblem.get(row.problemId) ?? new Set<string>();
+      problemGroups.add(row.studentGroupId);
+      groupsPerProblem.set(row.problemId, problemGroups);
+    }
 
     // A file with no shape (a regular expression, or one that would not parse) can still be
     // matched on its exact contents, so it groups under its own hash.
@@ -171,6 +242,11 @@ export async function findSubmissionMatches(
     const shapeStudents = studentsPerShape.get(key) ?? new Set<string>();
     shapeStudents.add(row.studentId);
     studentsPerShape.set(key, shapeStudents);
+    if (row.studentGroupId) {
+      const shapeGroups = groupsPerShape.get(key) ?? new Set<string>();
+      shapeGroups.add(row.studentGroupId);
+      groupsPerShape.set(key, shapeGroups);
+    }
   }
 
   // Only work two or more different students submitted. One student's own resubmissions are
@@ -189,45 +265,59 @@ export async function findSubmissionMatches(
     else sharedShapes.push(value);
   }
 
-  const submissions = sharedKeys.length === 0 ? [] : await prisma.submission.findMany({
-    where: {
-      problemId: { in: problemIds },
-      OR: [
-        ...(sharedShapes.length ? [{ shapeHash: { in: sharedShapes } }] : []),
-        ...(sharedContents.length ? [{ contentHash: { in: sharedContents } }] : []),
-      ],
-    },
-    orderBy: { submittedAt: 'desc' },
-    select: {
-      id: true,
-      problemId: true,
-      contentHash: true,
-      shapeHash: true,
-      assignmentId: true,
-      submittedAt: true,
-      correct: true,
-      fileName: true,
-      originalFileName: true,
-      studentId: true,
-      studentGroupId: true,
-      provenanceFeatures: true,
-      student: { select: studentSelect },
-      studentGroup: { select: { id: true, name: true } },
-    },
-  });
+  const submissions =
+    sharedKeys.length === 0
+      ? []
+      : await prisma.submission.findMany({
+          where: {
+            assignmentId,
+            problemId: { in: problemIds },
+            OR: [
+              ...(sharedShapes.length ? [{ shapeHash: { in: sharedShapes } }] : []),
+              ...(sharedContents.length ? [{ contentHash: { in: sharedContents } }] : []),
+            ],
+          },
+          orderBy: { submittedAt: 'desc' },
+          select: {
+            id: true,
+            problemId: true,
+            contentHash: true,
+            shapeHash: true,
+            byteHash: true,
+            assignmentId: true,
+            submittedAt: true,
+            correct: true,
+            evaluatedAt: true,
+            fileName: true,
+            originalFileName: true,
+            studentId: true,
+            studentGroupId: true,
+            provenanceFeatures: true,
+            student: { select: studentSelect },
+            studentGroup: { select: { id: true, name: true } },
+          },
+        });
 
   // Which attempt each matched submission was for its student. One query over the students
   // and problems already in play, so it stays proportional to the matches, not the course.
-  const attemptNumbers = await numberAttempts(submissions);
+  const attemptNumbers = await numberAttempts(assignmentId, submissions, options);
 
   const groups = new Map<string, SubmissionMatchGroup>();
   // Which student group (if any) owns each submission in a match, and when each landed.
   const groupOwners = new Map<string, Set<string | null>>();
   const submissionTimes = new Map<string, TimedSubmission[]>();
 
+  // The raw hash of each matched submission, kept here rather than on the row it describes:
+  // the page is told which submissions agree, not what they hash to.
+  const byteHashes = new Map<string, string | null>();
   // Distinct students per exact file within a match, for the "and these two are the same
   // file" claim the group carries.
   const studentsPerContentInGroup = new Map<string, Map<string, Set<string>>>();
+  // The same, one step stricter: distinct students per raw file. Keyed only where a byte hash
+  // exists. A submission stored before the column did have a null one, and bucketing those
+  // together under a shared placeholder the way the content map does would report unhashed
+  // files as identical, which is precisely the overclaim this check exists to remove.
+  const studentsPerByteInGroup = new Map<string, Map<string, Set<string>>>();
 
   for (const submission of submissions) {
     const shapeKey = submission.shapeHash ?? `exact-${submission.contentHash}`;
@@ -252,7 +342,10 @@ export async function findSubmissionMatches(
         },
         studentCount: students.size,
         problemStudentCount: studentsPerProblem.get(submission.problemId)?.size ?? 0,
+        groupCount: groupsPerShape.get(key)?.size ?? 0,
+        problemGroupCount: groupsPerProblem.get(submission.problemId)?.size ?? 0,
         identicalStudentCount: 1,
+        byteIdenticalStudentCount: 1,
         closestGapMs: null,
         reusedAfterPass: false,
         matchesAnswerFile:
@@ -272,9 +365,13 @@ export async function findSubmissionMatches(
       fileName: submission.fileName,
       originalFileName: submission.originalFileName,
       contentKey: (submission.contentHash ?? '').slice(0, 8),
+      // Filled in below, once the whole group is known: the label is per match, so it cannot
+      // be worked out one row at a time.
+      byteKey: null,
       student: submission.student,
       studentGroup: submission.studentGroup,
     });
+    byteHashes.set(submission.id, submission.byteHash);
     groups.set(key, group);
 
     const perContent = studentsPerContentInGroup.get(key) ?? new Map<string, Set<string>>();
@@ -282,6 +379,14 @@ export async function findSubmissionMatches(
     sameFile.add(submission.studentId);
     perContent.set(submission.contentHash ?? '', sameFile);
     studentsPerContentInGroup.set(key, perContent);
+
+    if (submission.byteHash) {
+      const perByte = studentsPerByteInGroup.get(key) ?? new Map<string, Set<string>>();
+      const sameBytes = perByte.get(submission.byteHash) ?? new Set<string>();
+      sameBytes.add(submission.studentId);
+      perByte.set(submission.byteHash, sameBytes);
+      studentsPerByteInGroup.set(key, perByte);
+    }
 
     const owners = groupOwners.get(key) ?? new Set<string | null>();
     owners.add(submission.studentGroupId);
@@ -291,7 +396,10 @@ export async function findSubmissionMatches(
     times.push({
       studentId: submission.studentId,
       at: submission.submittedAt.getTime(),
-      correct: submission.correct,
+      passedAt:
+        submission.correct === true && submission.evaluatedAt
+          ? submission.evaluatedAt.getTime()
+          : null,
       contentHash: submission.contentHash ?? '',
     });
     submissionTimes.set(key, times);
@@ -314,11 +422,18 @@ export async function findSubmissionMatches(
       1,
       ...[...(studentsPerContentInGroup.get(key)?.values() ?? [])].map((set) => set.size),
     );
+    group.byteIdenticalStudentCount = Math.max(
+      1,
+      ...[...(studentsPerByteInGroup.get(key)?.values() ?? [])].map((set) => set.size),
+    );
+    labelByteSets(group, byteHashes);
     reportable.push(group);
   }
 
   // The third check, over everything the first two left behind.
-  reportable.push(...(await findNearMatchGroups(problemIds, problems, attemptNumbers)));
+  reportable.push(
+    ...(await findNearMatchGroups(assignmentId, problemIds, problems, attemptNumbers, options)),
+  );
 
   // Work that was reused after it had already passed comes first whatever its size: it is
   // the case a large course is most likely to miss. Then rarest first, so what needs reading
@@ -338,16 +453,22 @@ export async function findSubmissionMatches(
  * attempt" has to mean their third, or it is worse than saying nothing.
  */
 async function numberAttempts(
+  assignmentId: string,
   matched: { id: string; problemId: string; studentId: string }[],
+  options: FindMatchesOptions = {},
 ): Promise<Map<string, number>> {
   const numbers = new Map<string, number>();
-  if (matched.length === 0) return numbers;
+  // Nothing decides anything by the attempt number: it is there so a card can say "their
+  // third attempt". A caller that only wants how many matches there are skips the two reads
+  // it costs, and every classification below is the same either way.
+  if (matched.length === 0 || options.countOnly) return numbers;
 
   const attempts = await prisma.submission.findMany({
     where: {
-      OR: [
-        ...new Set(matched.map((row) => `${row.problemId}:${row.studentId}`)),
-      ].map((pair) => {
+      // Within this assignment: "their third attempt" means their third at this problem in
+      // this assignment, which is the thing the reader is looking at.
+      assignmentId,
+      OR: [...new Set(matched.map((row) => `${row.problemId}:${row.studentId}`))].map((pair) => {
         const [problemId, studentId] = pair.split(':') as [string, string];
         return { problemId, studentId };
       }),
@@ -366,6 +487,29 @@ async function numberAttempts(
   return numbers;
 }
 
+/**
+ * Number the sets of byte-identical files inside one match, so the page can say WHICH
+ * submissions were the same file rather than how many.
+ *
+ * Numbered per match and in the order they appear, which is all the page needs: `b1` means
+ * nothing outside the group it was assigned in, and the hash it stands for never leaves the
+ * server. A submission whose file was never hashed keeps a null label, because "not known"
+ * and "different" are not the same answer.
+ */
+function labelByteSets(group: SubmissionMatchGroup, byteHashes: Map<string, string | null>): void {
+  const labels = new Map<string, string>();
+  for (const submission of group.submissions) {
+    const hash = byteHashes.get(submission.id);
+    if (!hash) continue;
+    // Carrying the match's own id, so two matches cannot both call their first set `b1` and
+    // have a reader of the page conclude that submissions in different matches agree. They
+    // cannot: identical bytes normalise to identical contents, so byte-equal work is always
+    // inside one match. The prefix makes that impossible to get wrong by accident.
+    if (!labels.has(hash)) labels.set(hash, `${group.matchId}-b${labels.size + 1}`);
+    submission.byteKey = labels.get(hash) ?? null;
+  }
+}
+
 /** The size of the work, from the description stored with it. */
 function sizeOf(features: unknown): { stateCount: number | null; transitionCount: number | null } {
   const described = features as ProvenanceFeatures | null;
@@ -381,26 +525,39 @@ function sizeOf(features: unknown): { stateCount: number | null; transitionCount
 type TimedSubmission = {
   studentId: string;
   at: number;
-  correct: boolean | null;
+  /**
+   * When this attempt was marked correct, if it ever was. Null for anything not marked
+   * correct, and for a correct attempt graded before the result time was recorded, where
+   * "not known" is the only honest answer.
+   */
+  passedAt: number | null;
   contentHash: string;
 };
 
 /**
- * Did somebody submit the byte-identical file after another student's copy had already been
- * marked correct?
+ * Did somebody submit the same work after another student's copy had ALREADY been marked
+ * correct?
  *
- * Byte-identical, not merely the same work: the claim is that this exact file had already
- * been shown to pass, which is only true of the file itself. Ordering alone, with no gap
- * limit: a file passed along a week later is the same act as one passed along in the corridor.
+ * Measured against when the earlier result landed, not when the earlier attempt was sent.
+ * Those are different moments, and only the first one supports the sentence the page prints:
+ * an evaluation takes as long as it takes, so comparing submission times would say a student
+ * who submitted a minute after somebody else had "seen it pass" when the mark did not exist
+ * for another four minutes. Where the result time is not known, which is every attempt graded
+ * before it was recorded, this says nothing rather than assuming.
+ *
+ * Keyed on the contents rather than the raw bytes, and deliberately: the claim is that this
+ * work had already been shown to pass, which grading decides from the contents, and a file
+ * saved again by JFLAP is the same work for this purpose. Ordering alone, with no gap limit:
+ * work passed along a week later is the same act as work passed along in the corridor.
  */
 function wasReusedAfterPassing(times: TimedSubmission[]): boolean {
   return times.some((later) =>
     times.some(
       (earlier) =>
-        earlier.correct === true &&
+        earlier.passedAt !== null &&
         earlier.studentId !== later.studentId &&
         earlier.contentHash === later.contentHash &&
-        earlier.at < later.at,
+        earlier.passedAt < later.at,
     ),
   );
 }
@@ -423,7 +580,6 @@ function closestGap(times: TimedSubmission[]): number | null {
   return closest;
 }
 
-
 /**
  * Pairs that share uncommon structure without being equal.
  *
@@ -433,6 +589,7 @@ function closestGap(times: TimedSubmission[]): number | null {
  * "9 of 10 transitions match" to submissions it was never measured against.
  */
 async function findNearMatchGroups(
+  assignmentId: string,
   problemIds: string[],
   problems: Map<
     string,
@@ -444,9 +601,15 @@ async function findNearMatchGroups(
     }
   >,
   attemptNumbers: Map<string, number>,
+  options: FindMatchesOptions = {},
 ): Promise<SubmissionMatchGroup[]> {
+  const subject = options.subject ?? 'student';
   const rows = await prisma.submission.findMany({
-    where: { problemId: { in: problemIds }, provenanceFeatures: { not: Prisma.DbNull } },
+    where: {
+      assignmentId,
+      problemId: { in: problemIds },
+      provenanceFeatures: { not: Prisma.DbNull },
+    },
     orderBy: { submittedAt: 'asc' },
     select: {
       id: true,
@@ -460,6 +623,7 @@ async function findNearMatchGroups(
       originalFileName: true,
       contentHash: true,
       shapeHash: true,
+      byteHash: true,
       provenanceFeatures: true,
       student: { select: studentSelect },
       studentGroup: { select: { id: true, name: true } },
@@ -469,7 +633,7 @@ async function findNearMatchGroups(
   // The exact checks only numbered the submissions they matched, and a near match usually
   // involves different ones, so number these too rather than showing a blank where the other
   // cards show "Submission 3".
-  const nearAttempts = await numberAttempts(rows);
+  const nearAttempts = await numberAttempts(assignmentId, rows, options);
 
   const groups: SubmissionMatchGroup[] = [];
 
@@ -480,6 +644,9 @@ async function findNearMatchGroups(
     if (forProblem.length < 2) continue;
 
     const studentsInProblem = new Set(forProblem.map((row) => row.studentId)).size;
+    const groupsInProblem = new Set(
+      forProblem.map((row) => row.studentGroupId).filter((id): id is string => id !== null),
+    ).size;
 
     const inputs: NearMatchInput[] = [];
     for (const row of forProblem) {
@@ -500,7 +667,7 @@ async function findNearMatchGroups(
 
     const byId = new Map(forProblem.map((row) => [row.id, row]));
 
-    for (const near of findNearMatches(inputs)) {
+    for (const near of findNearMatches(inputs, { subject })) {
       const pair = [byId.get(near.a.id), byId.get(near.b.id)].filter(
         (row): row is (typeof forProblem)[number] => Boolean(row),
       );
@@ -517,19 +684,29 @@ async function findNearMatchGroups(
         },
         studentCount: 2,
         problemStudentCount: studentsInProblem,
-        // Neither is the other's file; that is what makes this the third check.
+        groupCount: new Set(
+          pair.map((row) => row.studentGroupId).filter((id): id is string => id !== null),
+        ).size,
+        problemGroupCount: groupsInProblem,
+        // Neither is the other's file; that is what makes this the third check. The byte
+        // count is 1 for the same reason and can never be anything else: identical bytes
+        // normalise to identical contents, so byte-equal work is grouped by the first two
+        // checks and never reaches this one.
         identicalStudentCount: 1,
-        closestGapMs: Math.abs(
-          near.a.submittedAt.getTime() - near.b.submittedAt.getTime(),
-        ),
-        reusedAfterPass: pair.some((row) =>
-          pair.some(
-            (other) =>
-              other.correct === true &&
-              other.studentId !== row.studentId &&
-              other.submittedAt < row.submittedAt,
-          ),
-        ),
+        byteIdenticalStudentCount: 1,
+        closestGapMs: Math.abs(near.a.submittedAt.getTime() - near.b.submittedAt.getTime()),
+        /**
+         * Never claimed for a structural match, and not because the timing is unknown.
+         *
+         * The badge says work was reused after another student's copy had been marked
+         * correct. These two submissions are not copies of each other: that is the whole
+         * definition of this third check, which reports pairs that share uncommon structure
+         * WITHOUT being the same work. Whatever passed for the earlier student is not what
+         * the later one submitted, so the sentence would be describing something that did
+         * not happen. The chronology on the card still shows both times and both results,
+         * which is the part the data actually supports.
+         */
+        reusedAfterPass: false,
         matchesAnswerFile: false,
         ...sizeOf(pair[0]?.provenanceFeatures),
         submissions: pair
@@ -544,6 +721,10 @@ async function findNearMatchGroups(
             fileName: row.fileName,
             originalFileName: row.originalFileName,
             contentKey: (row.contentHash ?? '').slice(0, 8),
+            // Two near-matched files are never the same bytes (identical bytes normalise to
+            // identical contents, which the first two checks would have grouped), so each
+            // gets its own label and the page says nothing about raw equality here.
+            byteKey: row.byteHash ? `near-${row.id}` : null,
             student: row.student,
             studentGroup: row.studentGroup,
           })),

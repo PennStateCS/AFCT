@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { ChevronDown, Fingerprint, Users } from 'lucide-react';
+import { ChevronDown, Fingerprint, Info, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -12,17 +12,22 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import Spinner from '@/components/ui/spinner';
 import { CompareSubmissionsDialog } from '@/components/assignments/CompareSubmissionsDialog';
 import { SimilarityMatchCard } from '@/components/assignments/SimilarityMatchCard';
+import { SimilarityHelpPopover } from '@/components/assignments/SimilarityInfoPopover';
 import { SimilarityFilters, type MatchFilter } from '@/components/assignments/SimilarityFilters';
+import { CommonThresholdSlider } from '@/components/assignments/CommonThresholdSlider';
 import {
+  clusterHasType,
   clusterMatches,
   countByType,
+  isSetAside,
   summarise,
   type MatchCluster,
 } from '@/lib/similarity/evidence';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
-import { COMMON_SHARE } from '@/lib/similarity/rarity';
+import { useCommonShare } from '@/lib/similarity-threshold';
+import { FILTER_NOUN, type ReviewSubject } from '@/components/assignments/similarity-format';
 import {
   formatDateInTimeZone,
   formatTimeInTimeZone,
@@ -49,13 +54,23 @@ import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/mat
  * stored, no percentage of similarity is shown, and the words stay factual.
  */
 
-/** Where the reader's own commonality setting is kept, so it survives a reload. */
-const THRESHOLD_KEY = 'afct.similarityCommonShare';
-
-export function AssignmentSimilarityPanel() {
+export function AssignmentSimilarityPanel({
+  groupAssignment = false,
+}: {
+  /**
+   * Whether this assignment is submitted by groups, which the assignment page already knows
+   * from its group set. It decides who a finding is about: on a group assignment any member
+   * may submit for the team, so counting members would report two teams sharing work as four
+   * students. Passed in rather than fetched again here.
+   */
+  groupAssignment?: boolean;
+} = {}) {
+  const subject: ReviewSubject = groupAssignment ? 'group' : 'student';
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { timezone } = useEffectiveTimezone();
   const [showCommon, setShowCommon] = useState(false);
+  // Which problems the reader has opened. Closed is the starting point for all of them.
+  const [openProblems, setOpenProblems] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<MatchFilter>('all');
   const [comparing, setComparing] = useState<{
     submissions: MatchSubmission[];
@@ -66,20 +81,9 @@ export function AssignmentSimilarityPanel() {
   // How much of a class has to share work before it reads as the answer rather than a
   // finding. There is no right number: it depends on the problem and on how the course is
   // taught, so the reader gets the dial. Their own setting, and it changes what is shown,
-  // never what is recorded.
-  const [commonShare, setCommonShare] = useState(COMMON_SHARE);
-  useEffect(() => {
-    const saved = Number(window.localStorage.getItem(THRESHOLD_KEY));
-    if (Number.isFinite(saved) && saved > 0 && saved <= 1) setCommonShare(saved);
-  }, []);
-  const changeThreshold = (value: number) => {
-    setCommonShare(value);
-    try {
-      window.localStorage.setItem(THRESHOLD_KEY, String(value));
-    } catch {
-      /* ignore storage the browser will not give us */
-    }
-  };
+  // never what is recorded. Shared with the tab's own count, which has to be answering the
+  // same question this page is.
+  const [commonShare, changeThreshold] = useCommonShare();
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.assignment.similarity(courseId, assignmentId),
@@ -99,36 +103,66 @@ export function AssignmentSimilarityPanel() {
   };
   const formatFull = (iso: string) => `${formatDay(iso)} ${formatTime(iso)}`.trim();
 
-  const clusters = useMemo(() => clusterMatches(data ?? [], commonShare), [data, commonShare]);
+  const clusters = useMemo(
+    () => clusterMatches(data ?? [], commonShare, subject),
+    [data, commonShare, subject],
+  );
 
-  const worthReviewing = clusters.filter((cluster) => cluster.type !== 'common');
-  const common = clusters.filter((cluster) => cluster.type === 'common');
+  // Set aside rather than reviewed: what the class as a whole answered, and what the
+  // instructor handed out. Both explain a match instead of raising one.
+  const worthReviewing = clusters.filter((cluster) => !isSetAside(cluster.type));
+  const setAside = clusters.filter((cluster) => isSetAside(cluster.type));
   const summary = summarise(clusters);
-  const counts = countByType(clusters);
+  // Counted over what the filters can actually show, so "All 6" and six cards agree.
+  const counts = countByType(worthReviewing);
 
   // Grouped under their problem, with the strongest evidence first inside each, and the
   // problem holding the strongest first on the page.
   const sections = useMemo(() => {
+    // Only the review kinds are offered as filters; the set-aside ones have their own
+    // section below, with their own count and their own control.
+    // Derived from `clusters` rather than from the list above, so this memo depends only on
+    // values it can see change.
+    const reviewable = clusters.filter((cluster) => !isSetAside(cluster.type));
+    // Every group HOLDING a relationship of that kind, which is the same rule the counts on
+    // the buttons are made with. The whole group stays on the page: which of its
+    // relationships are the structural ones is a question the card answers when it is
+    // opened, and hiding the rest would remove the context that made it one card.
     const shown =
-      filter === 'all' || filter === 'common'
-        ? worthReviewing
-        : worthReviewing.filter((cluster) => cluster.type === filter);
+      filter === 'all'
+        ? reviewable
+        : reviewable.filter((cluster) => clusterHasType(cluster, filter));
 
     const byProblem = new Map<
       string,
-      { title: string | null; students: number; clusters: MatchCluster[] }
+      { title: string | null; students: number; groups: number; clusters: MatchCluster[] }
     >();
     for (const cluster of shown) {
       const section = byProblem.get(cluster.problem.id) ?? {
         title: cluster.problem.title,
         students: cluster.problemStudentCount,
+        // Only counted when the work actually carries groups, so a group assignment whose
+        // older submissions have none falls back to the true student count rather than an
+        // invented team one.
+        groups: cluster.problemGroupCount,
         clusters: [],
       };
       section.clusters.push(cluster);
       byProblem.set(cluster.problem.id, section);
     }
     return [...byProblem.entries()];
-  }, [worthReviewing, filter]);
+  }, [clusters, filter]);
+
+  // Said once, shown in both places the threshold can be adjusted from, so the narrow card
+  // and the wide one explain it in the same words. Group-aware: on a group assignment the
+  // thing being counted is teams.
+  const thresholdHelp = (
+    <p className="text-muted-foreground text-sm">
+      Work shared by at least this share of a problem&apos;s{' '}
+      {groupAssignment ? 'groups' : 'students'} is treated as the expected answer and set aside at
+      the bottom of the page.
+    </p>
+  );
 
   const compare = (students: MatchSubmission[], problem: MatchCluster['problem']) =>
     setComparing({
@@ -138,34 +172,115 @@ export function AssignmentSimilarityPanel() {
     });
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-3">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <Fingerprint className="h-6 w-6" />
-          Similarity
-        </h2>
+    <div className="space-y-4">
+      {/* The triage block: what is here, how to narrow it, and where the line between a
+          finding and an expected answer currently sits. One card, not three, and never
+          collapsible: it is the answer to "is there anything for me here", which is the
+          question the page exists to answer first.
 
-        {/* One live region for the state of the page, so a screen reader hears the answer
-            once rather than a card at a time. */}
-        <div aria-live="polite" className="max-w-3xl">
-          {isLoading ? (
-            <div className="flex items-center gap-3 text-sm">
-              <Spinner />
-              <span>Looking for related submissions...</span>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {summary.map((line, index) => (
-                <p key={line} className={index === 0 ? 'text-base font-medium' : 'text-sm'}>
-                  {line}
-                </p>
-              ))}
-            </div>
-          )}
+          A container, so the parts below can ask how much room THIS CARD has rather than how
+          wide the window is. The page sits inside a global sidebar and an assignment rail,
+          either of which can be open, so the same screen gives the card very different
+          widths and a viewport breakpoint would be guessing. */}
+      <div className="bg-card @container/triage space-y-4 rounded-lg border p-4">
+        {/* The name of the page and the way in to reading it, on one line: the question
+            "what am I looking at" arrives with the heading, not three cards later. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Fingerprint className="h-6 w-6" />
+            Similarity
+          </h2>
+          <div className="ms-auto">
+            <SimilarityHelpPopover />
+          </div>
         </div>
 
+        {/* What is here, and the one setting that changes it, side by side once the card is
+            wide enough to hold both. Below that they stack in the same order. */}
+        <div className="@[48rem]/triage:grid @[48rem]/triage:grid-cols-[minmax(0,1fr)_auto] @[48rem]/triage:gap-6">
+          <div className="space-y-3">
+            {/* One live region for the state of the page, so a screen reader hears the answer
+                once rather than a card at a time. */}
+            <div aria-live="polite">
+              {isLoading ? (
+                <div className="flex items-center gap-3 text-sm">
+                  <Spinner />
+                  <span>Looking for related submissions...</span>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {summary.map((line, index) => (
+                    <p
+                      key={line}
+                      className={
+                        index === 0 ? 'text-base font-medium' : 'text-muted-foreground text-sm'
+                      }
+                    >
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/*
+              What the page is for, in the reader's own terms, and outside the live region
+              above: it does not change, so a screen reader should not hear it again every
+              time the counts do. Plain text rather than a callout, because a warning box
+              would make the page look like it had found something.
+            */}
+            {isLoading ? null : (
+              <p className="text-muted-foreground max-w-3xl text-sm">
+                Similarity results are informational. AFCT identifies patterns and relationships
+                between submitted files, but it does not determine whether plagiarism or an academic
+                integrity violation occurred. These results are intended to help instructors review
+                submissions and apply their own judgment and course policies.
+              </p>
+            )}
+          </div>
+
+          {/*
+            The dial itself, where there is room for it. A rule separates it from the reading
+            on a wide card and disappears when the two stack, because a line across a column
+            of stacked blocks separates nothing.
+
+            Below the narrower of the two sizes it is not drawn at all: what is left is the
+            Adjust button in the filter row, which opens the same control. Both drive the
+            same state, so whichever one a reader has, moving it is the same act.
+          */}
+          {clusters.length > 0 ? (
+            <div className="text-muted-foreground mt-3 hidden flex-col items-start gap-1.5 text-sm @[32rem]/triage:flex @[48rem]/triage:mt-0 @[48rem]/triage:border-s @[48rem]/triage:ps-6">
+              <div className="flex items-center gap-1">
+                <Label htmlFor="common-share-inline" className="text-muted-foreground font-normal">
+                  Common-answer threshold
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      aria-label="Explain the common-answer threshold"
+                    >
+                      <Info className="size-4" aria-hidden="true" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">{thresholdHelp}</PopoverContent>
+                </Popover>
+              </div>
+              <CommonThresholdSlider
+                id="common-share-inline"
+                value={commonShare}
+                onChange={changeThreshold}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* The filters anchor the card: they act on everything above them, so they run the
+            full width of it rather than sitting under one column. */}
         {clusters.length > 0 ? (
-          <div className="flex max-w-3xl flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
             <SimilarityFilters counts={counts} value={filter} onChange={setFilter} />
 
             {/*
@@ -175,13 +290,18 @@ export function AssignmentSimilarityPanel() {
             <span aria-live="polite" className="sr-only">
               {filter === 'all'
                 ? ''
-                : `Showing ${sections.reduce((n, [, section]) => n + section.clusters.length, 0)} ${
-                    filter === 'common' ? 'common' : filter
-                  } matches.`}
+                : (() => {
+                    // "Containing", because a group that holds one structural relationship
+                    // among four is in this list and not everything in it is structural.
+                    const shown = sections.reduce((n, [, s]) => n + s.clusters.length, 0);
+                    return `Showing ${shown} review group${shown === 1 ? '' : 's'} containing ${
+                      FILTER_NOUN[filter]
+                    } relationships.`;
+                  })()}
             </span>
 
-            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
-              <span>Common threshold: {Math.round(commonShare * 100)}%</span>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm @[32rem]/triage:hidden">
+              <span>Common-answer threshold: {Math.round(commonShare * 100)}%</span>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="ghost" size="sm">
@@ -191,29 +311,16 @@ export function AssignmentSimilarityPanel() {
                 <PopoverContent className="w-80 space-y-3">
                   <div className="space-y-1">
                     <Label htmlFor="common-share" className="text-sm font-medium">
-                      Common threshold
+                      Common-answer threshold
                     </Label>
-                    <p className="text-muted-foreground text-sm">
-                      Work shared by at least this share of a problem&apos;s students is treated as
-                      the expected answer and set aside at the bottom of the page.
-                    </p>
+                    {thresholdHelp}
                   </div>
-                  <div className="flex items-center gap-3">
-                    <input
-                      id="common-share"
-                      type="range"
-                      min="0.05"
-                      max="1"
-                      step="0.05"
-                      value={commonShare}
-                      aria-valuetext={`${Math.round(commonShare * 100)} percent of the class`}
-                      onChange={(event) => changeThreshold(Number(event.target.value))}
-                      className="bg-primary-foreground accent-primary h-2 flex-1 cursor-pointer rounded-lg"
-                    />
-                    <span className="w-12 text-sm tabular-nums">
-                      {Math.round(commonShare * 100)}%
-                    </span>
-                  </div>
+                  <CommonThresholdSlider
+                    id="common-share"
+                    value={commonShare}
+                    onChange={changeThreshold}
+                    grow
+                  />
                 </PopoverContent>
               </Popover>
             </div>
@@ -221,71 +328,130 @@ export function AssignmentSimilarityPanel() {
         ) : null}
       </div>
 
-      {sections.map(([problemId, section]) => (
-        <section key={problemId} className="max-w-3xl space-y-3">
-          <div>
-            <h3 className="text-lg font-semibold">{section.title ?? 'Unknown problem'}</h3>
-            <p className="text-muted-foreground text-sm">
-              {section.students} student{section.students === 1 ? '' : 's'} submitted ·{' '}
-              {section.clusters.length} match group
-              {section.clusters.length === 1 ? '' : 's'}
-            </p>
-          </div>
+      {/*
+        One card per problem, closed to start.
+        
+        A reader arrives asking which problem needs them, not which student: the closed list
+        answers that in a screen, and opening one is the decision to read it. Each card holds
+        its own match cards rather than the page holding a flat run of them, so a problem with
+        nine groups cannot bury the next problem underneath it.
+      */}
+      {sections.map(([problemId, section], index) => {
+        const isOpen = openProblems[problemId] ?? false;
+        const submitted =
+          groupAssignment && section.groups > 0
+            ? `${section.groups} group${section.groups === 1 ? '' : 's'} submitted`
+            : `${section.students} student${section.students === 1 ? '' : 's'} submitted`;
 
-          {section.clusters.map((cluster) => (
-            <SimilarityMatchCard
-              key={cluster.id}
-              cluster={cluster}
-              onCompare={(students) => compare(students, cluster.problem)}
-              formatDay={formatDay}
-              formatTime={formatTime}
-            />
-          ))}
-        </section>
-      ))}
-
-      {common.length > 0 ? (
-        <Collapsible open={showCommon} onOpenChange={setShowCommon} className="max-w-3xl space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-            <div>
-              <h3 className="flex items-center gap-2 text-lg font-semibold">
-                <Users className="size-5" aria-hidden="true" />
-                Common answers ({common.length})
+        return (
+          <Collapsible
+            key={problemId}
+            open={isOpen}
+            onOpenChange={(open) =>
+              setOpenProblems((previous) => ({ ...previous, [problemId]: open }))
+            }
+            asChild
+          >
+            <section className="bg-card overflow-hidden rounded-lg border">
+              {/* The button is inside the heading, which is what makes the closed page read
+                  as a list of problems to a screen reader rather than a list of buttons. */}
+              <h3 className="text-lg font-semibold">
+                <CollapsibleTrigger className="hover:bg-muted/60 focus-visible:ring-ring flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 p-4 text-start focus-visible:ring-2 focus-visible:outline-none">
+                  <ChevronDown
+                    className={`text-muted-foreground size-5 shrink-0 self-center transition-transform ${
+                      isOpen ? 'rotate-180' : ''
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="text-muted-foreground font-normal">Problem {index + 1}</span>
+                  <span className="text-muted-foreground font-normal">—</span>
+                  <span>{section.title ?? 'Unknown problem'}</span>
+                  <span className="text-muted-foreground ms-auto text-sm font-normal">
+                    {submitted} · {section.clusters.length} match group
+                    {section.clusters.length === 1 ? '' : 's'}
+                  </span>
+                </CollapsibleTrigger>
               </h3>
-              <p className="text-muted-foreground text-sm">
-                Set aside because at least {Math.round(commonShare * 100)}% of a problem&apos;s
-                students submitted them.
-              </p>
-            </div>
-            <CollapsibleTrigger asChild>
-              <Button variant="outline" size="sm">
-                <ChevronDown
-                  className={
-                    showCommon ? 'rotate-180 transition-transform' : 'transition-transform'
-                  }
-                />
-                {showCommon ? 'Hide' : 'Show'} common answers
-              </Button>
-            </CollapsibleTrigger>
-          </div>
 
-          {/* Nothing renders until it is asked for: some of these hold thirty students. */}
-          <CollapsibleContent className="space-y-3">
-            {common.map((cluster) => (
-              <SimilarityMatchCard
-                key={cluster.id}
-                cluster={cluster}
-                showProblem
-                onCompare={(students) => compare(students, cluster.problem)}
-                formatDay={formatDay}
-                formatTime={formatTime}
-              />
-            ))}
-          </CollapsibleContent>
+              {/* Nothing inside is drawn until it is asked for: a problem can hold thirty
+                  students' attempts, and this page is read one problem at a time. */}
+              <CollapsibleContent className="bg-muted/30 space-y-3 border-t p-4">
+                {section.clusters.map((cluster) => (
+                  <SimilarityMatchCard
+                    key={cluster.id}
+                    cluster={cluster}
+                    subject={subject}
+                    commonShare={commonShare}
+                    onCompare={(submissions) => compare(submissions, cluster.problem)}
+                    formatDay={formatDay}
+                    formatTime={formatTime}
+                  />
+                ))}
+              </CollapsibleContent>
+            </section>
+          </Collapsible>
+        );
+      })}
+
+      {/* Choosing a kind with nothing in it is a question, and it deserves an answer rather
+          than a page that appears to have lost its contents. */}
+      {filter !== 'all' && sections.length === 0 ? (
+        <p className="bg-card text-muted-foreground rounded-lg border p-4 text-sm">
+          No review groups contain {FILTER_NOUN[filter]} relationships.
+        </p>
+      ) : null}
+
+      {setAside.length > 0 ? (
+        <Collapsible open={showCommon} onOpenChange={setShowCommon} asChild>
+          {/* The same card as a problem. It was a shade darker to mark it as the section
+              read last, but on a page of white cards one grey one reads as disabled rather
+              than as quieter, and its heading already says what it holds. */}
+          <section className="bg-card overflow-hidden rounded-lg border">
+            <h3 className="text-base font-semibold">
+              <CollapsibleTrigger className="hover:bg-muted/60 focus-visible:ring-ring flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 p-4 text-start focus-visible:ring-2 focus-visible:outline-none">
+                <ChevronDown
+                  className={`text-muted-foreground size-5 shrink-0 self-center transition-transform ${
+                    showCommon ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden="true"
+                />
+                <Users
+                  className="text-muted-foreground size-4 shrink-0 self-center"
+                  aria-hidden="true"
+                />
+                <span>Set aside ({setAside.length})</span>
+                <span className="text-muted-foreground ms-auto text-sm font-normal">
+                  Common answers and the instructor&apos;s own solution
+                </span>
+              </CollapsibleTrigger>
+            </h3>
+
+            {/* Nothing renders until it is asked for: some of these hold thirty students. */}
+            <CollapsibleContent className="space-y-3 border-t p-4">
+              <p className="text-muted-foreground max-w-3xl text-sm">
+                Work at least {Math.round(commonShare * 100)}% of a problem&apos;s{' '}
+                {groupAssignment ? 'groups' : 'students'} submitted, and work that is the solution
+                the instructor posted. Both explain a match rather than raising one.
+              </p>
+              {setAside.map((cluster) => (
+                <SimilarityMatchCard
+                  key={cluster.id}
+                  cluster={cluster}
+                  subject={subject}
+                  commonShare={commonShare}
+                  showProblem
+                  onCompare={(submissions) => compare(submissions, cluster.problem)}
+                  formatDay={formatDay}
+                  formatTime={formatTime}
+                />
+              ))}
+            </CollapsibleContent>
+          </section>
         </Collapsible>
       ) : null}
 
       <CompareSubmissionsDialog
+        subject={subject}
         open={comparing !== null}
         onOpenChange={(open) => !open && setComparing(null)}
         submissions={comparing?.submissions ?? null}

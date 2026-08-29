@@ -14,6 +14,7 @@
 import { createHash } from 'crypto';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom';
+import { childrenNamed, machineElements } from './jff-elements';
 
 /**
  * The `<structure>` element on its own, with layout-irrelevant text removed.
@@ -97,11 +98,37 @@ function shapeOfAutomaton(doc: XmlDocument): string | null {
 
   const type = (doc.getElementsByTagName('type').item(0)?.textContent ?? '').trim().toLowerCase();
 
-  const states = [...Array.from(doc.getElementsByTagName('state'))];
+  // The machine's own states and transitions. A building block holds an automaton of its
+  // own, whose states start again from id zero; mixing those in here would both inflate the
+  // machine and collide with its ids. The blocks are described separately, below.
+  const states = machineElements(doc, 'state');
   if (states.length === 0) return null;
 
-  // Renumber by the file's own id order, so a state list written in a different order still
-  // lines up. Names and positions go entirely.
+  const lines = machineLines(states, machineElements(doc, 'transition'));
+  return [type, ...lines, ...blockShapeLines(doc)].join('|');
+}
+
+const childText = (node: XmlElement, tag: string): string =>
+  (node.getElementsByTagName(tag).item(0)?.textContent ?? '').trim();
+
+/** Everything a transition carries besides its endpoints: read/pop/push, read/write/move. */
+function transitionLabel(transition: XmlElement): string {
+  return Array.from(transition.getElementsByTagName('*'))
+    .filter((node) => node.nodeName !== 'from' && node.nodeName !== 'to')
+    .map((node) => `${node.nodeName}=${(node.textContent ?? '').trim()}`)
+    .sort()
+    .join(',');
+}
+
+/**
+ * One machine's states and transitions as sorted lines, with its ids renumbered in order.
+ *
+ * Renumbering by the file's own id order means a state list written in a different order
+ * still lines up, while names and positions go entirely. Used for the machine itself and,
+ * separately, for each building block, so a block is described under the same rules rather
+ * than under its own.
+ */
+function machineLines(states: XmlElement[], transitions: XmlElement[]): string[] {
   const ids = states
     .map((state) => state.getAttribute('id') ?? '')
     .sort((a, b) => (Number(a) || 0) - (Number(b) || 0));
@@ -116,24 +143,40 @@ function shapeOfAutomaton(doc: XmlDocument): string | null {
     })
     .sort();
 
-  const child = (node: XmlElement, tag: string) =>
-    (node.getElementsByTagName(tag).item(0)?.textContent ?? '').trim();
-
-  const transitionLines = Array.from(doc.getElementsByTagName('transition'))
+  const transitionLines = transitions
     .map((transition) => {
-      const from = numbering.get(child(transition, 'from')) ?? -1;
-      const to = numbering.get(child(transition, 'to')) ?? -1;
-      // Everything else the type carries: read/pop/push for a PDA, read/write/move for a TM.
-      const rest = Array.from(transition.getElementsByTagName('*'))
-        .filter((node) => node.nodeName !== 'from' && node.nodeName !== 'to')
-        .map((node) => `${node.nodeName}=${(node.textContent ?? '').trim()}`)
-        .sort()
-        .join(',');
-      return `t${from}>${to}[${rest}]`;
+      const from = numbering.get(childText(transition, 'from')) ?? -1;
+      const to = numbering.get(childText(transition, 'to')) ?? -1;
+      return `t${from}>${to}[${transitionLabel(transition)}]`;
     })
     .sort();
 
-  return [type, ...stateLines, ...transitionLines].join('|');
+  return [...stateLines, ...transitionLines];
+}
+
+/**
+ * Each Turing-machine building block as a little machine of its own, under its own name.
+ *
+ * A block's insides are deliberately left out of the lines above, where their ids would
+ * collide with the machine's own. They still have to count for something: two machines with
+ * the same top level and different work inside a block are two different machines, and
+ * hashing them the same would report them as one machine drawn differently. Described under
+ * the same rules as any other machine, so renumbering or reordering inside a block changes
+ * nothing, and sorted, so the order the blocks were written in does not either.
+ */
+function blockShapeLines(doc: XmlDocument): string[] {
+  return Array.from(doc.getElementsByTagName('block'))
+    .flatMap((block) => {
+      const name = (block.getAttribute('name') ?? '').trim();
+      const inner = childrenNamed(block, 'automaton')[0];
+      if (!inner) return [`b:${name}`];
+
+      return machineLines(
+        childrenNamed(inner, 'state'),
+        childrenNamed(inner, 'transition'),
+      ).map((line) => `b:${name}:${line}`);
+    })
+    .sort();
 }
 
 /** A grammar with its productions in a fixed order, so reordering them changes nothing. */
@@ -170,4 +213,26 @@ export function submissionShapeHash(content: Buffer | string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * sha256 of the file exactly as it arrived, with nothing normalised away.
+ *
+ * The other two fingerprints deliberately look past the incidental: formatting for one,
+ * layout and names for the other. That is what makes them useful, and it is also why
+ * neither can say "these are the same file" without a qualifier. This one can. Two
+ * submissions sharing it are the same bytes: same trailing newline, same line endings,
+ * same JFLAP comment header, same everything.
+ *
+ * It is never a way to FIND a match. Identical bytes normalise to an identical
+ * `contentHash`, so byte-equal work is already grouped by the checks above; this only
+ * sharpens what can be said about a group that exists. Null for an empty file, which has
+ * nothing to compare. Unlike the other two there is no trimming rule: a file that is only
+ * whitespace is still a file somebody sent.
+ */
+export function submissionByteHash(content: Buffer | string): string | null {
+  const buffer = typeof content === 'string' ? Buffer.from(content, 'utf8') : content;
+  if (buffer.length === 0) return null;
+
+  return createHash('sha256').update(buffer).digest('hex');
 }

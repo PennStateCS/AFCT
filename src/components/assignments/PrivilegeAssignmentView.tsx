@@ -40,6 +40,7 @@ import { AssignmentTypeCard } from '@/components/assignments/AssignmentTypeCard'
 import { AssignmentBasicsForm } from '@/components/assignments/AssignmentBasicsForm';
 import { AssignmentStatisticsPanel } from '@/components/assignments/AssignmentStatisticsPanel';
 import { AssignmentSimilarityPanel } from '@/components/assignments/AssignmentSimilarityPanel';
+import { useCommonShare } from '@/lib/similarity-threshold';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
@@ -493,10 +494,11 @@ export default function AssignmentDashboardPage({
   // discloses nothing about a student and writes no access entry; without it nobody in a
   // large course finds out there is anything to read without opening the tab on the off
   // chance.
+  const [commonShare] = useCommonShare();
   const similarityCountQuery = useQuery({
-    queryKey: queryKeys.assignment.similarityCount(id, aid),
+    queryKey: queryKeys.assignment.similarityCount(id, aid, commonShare),
     queryFn: async () => {
-      const res = await fetch(apiPaths.assignmentSimilarityCount(id, aid));
+      const res = await fetch(apiPaths.assignmentSimilarityCount(id, aid, commonShare));
       if (!res.ok) throw new Error('Failed to fetch similarity counts');
       return (await res.json()) as { matches: number; notable: number; reusedAfterPass: number };
     },
@@ -871,7 +873,10 @@ export default function AssignmentDashboardPage({
             <AssignmentStatisticsPanel />
           </TabsContent>
           <TabsContent value="similarity">
-            <AssignmentSimilarityPanel />
+            {/* A group set means the work belongs to teams, which changes who a finding is
+                about: any member may submit for the team. The panel is told rather than
+                left to infer it from the rows. */}
+            <AssignmentSimilarityPanel groupAssignment={!!assignment.groupSetId} />
           </TabsContent>
           <TabsContent value="settings">
             {/* This tab had no heading at all: two panels appeared under the tab rail with

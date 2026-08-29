@@ -4,8 +4,8 @@ import { apiError } from '@/lib/api/http';
 import { withAssignmentAuth } from '@/lib/api/with-auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { findSubmissionMatches } from '@/lib/similarity/matches';
-import { COMMON_SHARE } from '@/lib/similarity/rarity';
-import { clusterMatches } from '@/lib/similarity/evidence';
+import { COMMON_SHARE, type ReviewSubject } from '@/lib/similarity/rarity';
+import { clusterMatches, isSetAside } from '@/lib/similarity/evidence';
 
 type Ctx = { params: Promise<{ id: string; aid: string }> };
 
@@ -23,6 +23,7 @@ type Ctx = { params: Promise<{ id: string; aid: string }> };
  *   - { name: id, in: path, required: true, schema: { type: string } }
  *   - { name: aid, in: path, required: true, schema: { type: string } }
  *   - { name: part, in: query, required: false, schema: { type: string, enum: [count] }, description: "Counts only, for the tab badge" }
+ *   - { name: share, in: query, required: false, schema: { type: number, minimum: 0.05, maximum: 1 }, description: "The reader's commonality threshold, used with part=count so the badge counts what their page shows" }
  * responses:
  *   200:
  *     description: Groups of submissions sharing identical content, rarest first.
@@ -37,6 +38,15 @@ type Ctx = { params: Promise<{ id: string; aid: string }> };
 export const GET = withAssignmentAuth<Ctx>(
   async (req, _ctx, { user, courseId, assignment }) => {
     try {
+      // Whether this assignment is submitted by teams. It decides who a finding is about and
+      // what rarity is counted in: on a group assignment any member may submit for the team,
+      // so counting members would rate work shared by two teams as if it were four students.
+      const groupSet = await prisma.assignment.findUnique({
+        where: { id: assignment.id },
+        select: { groupSetId: true },
+      });
+      const subject: ReviewSubject = groupSet?.groupSetId ? 'group' : 'student';
+
       const links = await prisma.assignmentProblem.findMany({
         where: { assignmentId: assignment.id },
         select: {
@@ -58,21 +68,34 @@ export const GET = withAssignmentAuth<Ctx>(
           },
         ]),
       );
-      const groups = await findSubmissionMatches([...problems.keys()], problems);
+      // The badge asks for counts only. Same matching, same classification, same threshold;
+      // it just does not pay for the attempt numbers that only a rendered card shows.
+      const countOnly = new URL(req.url).searchParams.get('part') === 'count';
+      const groups = await findSubmissionMatches(assignment.id, [...problems.keys()], problems, {
+        countOnly,
+        subject,
+      });
 
       // `?part=count` answers the tab badge: how many matches there are, without who they
       // are. Deliberately not logged, because nothing about a student is disclosed by a
       // number, and the assignment page would otherwise write an access entry every time
       // anybody opened any tab.
-      if (new URL(req.url).searchParams.get('part') === 'count') {
+      if (countOnly) {
         // `notable` counts what the page counts: groups of related students, not pairs.
         // Nineteen pairs between six sets of students is six things to read, and a badge
-        // saying nineteen next to a page saying six is a badge nobody trusts. The reader's
-        // own commonality setting lives in their browser, so this uses the default.
-        const clusters = clusterMatches(groups, COMMON_SHARE);
+        // saying nineteen next to a page saying six is a badge nobody trusts.
+        //
+        // The reader's own commonality setting lives in their browser, so the page sends it:
+        // it decides how many groups are set aside, and a badge counting at one threshold
+        // beside a page counting at another is the same broken promise. Anything missing or
+        // out of range falls back to the default rather than failing the request, since this
+        // is a badge and the number matters more than the argument.
+        const asked = Number(new URL(req.url).searchParams.get('share'));
+        const share = Number.isFinite(asked) && asked >= 0.05 && asked <= 1 ? asked : COMMON_SHARE;
+        const clusters = clusterMatches(groups, share, subject);
         return NextResponse.json({
           matches: groups.length,
-          notable: clusters.filter((cluster) => cluster.type !== 'common').length,
+          notable: clusters.filter((cluster) => !isSetAside(cluster.type)).length,
           reusedAfterPass: groups.filter((group) => group.reusedAfterPass).length,
         });
       }

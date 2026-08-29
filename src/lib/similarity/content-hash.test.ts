@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { submissionContentHash, submissionShapeHash } from './content-hash';
+import { submissionByteHash, submissionContentHash, submissionShapeHash } from './content-hash';
 
 const fa = (opts: { x?: string; comment?: string; crlf?: boolean; trailing?: string } = {}) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>${opts.comment ?? ''}<structure>
@@ -111,5 +111,96 @@ describe('submissionShapeHash', () => {
   it('has nothing to say about a file with no structure to speak of', () => {
     expect(submissionShapeHash('(a|b)*abb')).toBeNull();
     expect(submissionShapeHash('<structure><type>re</type><expression>a*</expression></structure>')).toBeNull();
+  });
+});
+
+/**
+ * A Turing machine built from blocks, which is the one shape of file where a `<state>` in
+ * the document is not necessarily a state of the machine.
+ */
+const tmWithBlock = (
+  opts: { blockName?: string; innerRead?: string; innerIds?: [string, string]; blockX?: string } = {},
+) => {
+  const [innerFrom, innerTo] = opts.innerIds ?? ['0', '1'];
+  return `<structure><type>turing</type><automaton>
+  <state id="0" name="q0"><x>10</x><y>10</y><initial/></state>
+  <state id="1" name="q1"><x>90</x><y>10</y><final/></state>
+  <transition><from>0</from><to>1</to><read>a</read><write>b</write><move>R</move></transition>
+  <block id="2" name="${opts.blockName ?? 'shift-right'}"><x>${opts.blockX ?? '50'}</x><y>90</y><automaton>
+    <state id="${innerFrom}" name="b0"><x>5</x><y>5</y><initial/></state>
+    <state id="${innerTo}" name="b1"><x>60</x><y>5</y><final/></state>
+    <transition><from>${innerFrom}</from><to>${innerTo}</to><read>${opts.innerRead ?? 'a'}</read><write>a</write><move>R</move></transition>
+  </automaton></block>
+</automaton></structure>`;
+};
+
+describe('submissionShapeHash with Turing-machine building blocks', () => {
+  it('does not fold a block\'s inner machine into the machine that holds it', () => {
+    // The block's two states and one transition must not read as part of the top-level
+    // machine. The check: a flat machine with the same top level hashes differently from one
+    // whose block happens to make up the difference, and a machine whose block ids collide
+    // with the top-level ids (0 and 1, which is what JFLAP writes) is unaffected by that.
+    const flat = `<structure><type>turing</type><automaton>
+      <state id="0" name="q0"><x>10</x><y>10</y><initial/></state>
+      <state id="1" name="q1"><x>90</x><y>10</y><final/></state>
+      <transition><from>0</from><to>1</to><read>a</read><write>b</write><move>R</move></transition>
+    </automaton></structure>`;
+
+    expect(submissionShapeHash(tmWithBlock())).not.toBe(submissionShapeHash(flat));
+    // Renumbering inside the block is the block's own business, exactly as it is for the
+    // machine: same little machine, same hash.
+    expect(submissionShapeHash(tmWithBlock({ innerIds: ['5', '6'] }))).toBe(
+      submissionShapeHash(tmWithBlock()),
+    );
+  });
+
+  it('is stable for the same block machine and moves with what the blocks do', () => {
+    expect(submissionShapeHash(tmWithBlock())).toBe(submissionShapeHash(tmWithBlock()));
+    // Where the block sits is layout, and layout is what this hash forgets.
+    expect(submissionShapeHash(tmWithBlock({ blockX: '400' }))).toBe(
+      submissionShapeHash(tmWithBlock()),
+    );
+    // What the block does, and what it is called, are the machine.
+    expect(submissionShapeHash(tmWithBlock({ innerRead: 'z' }))).not.toBe(
+      submissionShapeHash(tmWithBlock()),
+    );
+    expect(submissionShapeHash(tmWithBlock({ blockName: 'shift-left' }))).not.toBe(
+      submissionShapeHash(tmWithBlock()),
+    );
+  });
+});
+
+describe('submissionByteHash', () => {
+  it('is stable for the same bytes', () => {
+    expect(submissionByteHash(fa())).toBe(submissionByteHash(fa()));
+    expect(submissionByteHash(fa())).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('separates files the other fingerprints deliberately treat as one', () => {
+    // The case this exists for: same work, same normalised contents, different files. The
+    // exact fingerprint says these are the same; only this one can say they are not.
+    const plain = fa();
+    const windows = fa({ crlf: true });
+    const commented = fa({ comment: '<!--Created with JFLAP 7.1.-->' });
+
+    expect(submissionContentHash(windows)).toBe(submissionContentHash(plain));
+    expect(submissionContentHash(commented)).toBe(submissionContentHash(plain));
+    expect(submissionByteHash(windows)).not.toBe(submissionByteHash(plain));
+    expect(submissionByteHash(commented)).not.toBe(submissionByteHash(plain));
+  });
+
+  it('agrees whenever the bytes agree, which is what makes it safe to report', () => {
+    // Identical bytes must normalise identically, or the tab could say two files are the same
+    // file while grouping them apart. Buffer and string spellings of the same content too.
+    expect(submissionByteHash(Buffer.from(fa(), 'utf8'))).toBe(submissionByteHash(fa()));
+    expect(submissionContentHash(Buffer.from(fa(), 'utf8'))).toBe(submissionContentHash(fa()));
+  });
+
+  it('has nothing to say about an empty file', () => {
+    expect(submissionByteHash(Buffer.alloc(0))).toBeNull();
+    expect(submissionByteHash('')).toBeNull();
+    // Whitespace is still bytes somebody sent, unlike the normalising fingerprints.
+    expect(submissionByteHash('   ')).toMatch(/^[0-9a-f]{64}$/);
+    expect(submissionContentHash('   ')).toBeNull();
   });
 });

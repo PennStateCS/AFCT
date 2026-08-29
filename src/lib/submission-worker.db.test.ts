@@ -436,6 +436,10 @@ describe('persisting an evaluation', () => {
     const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
     expect(after).toMatchObject({ status: 'COMPLETED', correct: true, processingToken: null });
     expect(await gradeRows()).toMatchObject([{ grade: 100, gradeSource: 'AUTOGRADER' }]);
+    // When the result became readable, written by the same statement that landed it. The
+    // Similarity tab times "already marked correct" from this and says nothing without it.
+    expect(after.evaluatedAt).toBeInstanceOf(Date);
+    expect(after.evaluatedAt!.getTime()).toBeGreaterThanOrEqual(after.submittedAt.getTime());
   });
 
   /**
@@ -455,6 +459,8 @@ describe('persisting an evaluation', () => {
     expect(after.status).toBe('PROCESSING');
     expect(after.processingToken).toBe(token);
     expect(after.feedback).toBeNull();
+    // The result time rolled back with everything else: no result, no time.
+    expect(after.evaluatedAt).toBeNull();
     expect(await gradeRows()).toHaveLength(0);
 
     // And therefore recoverable: the worker's own requeue still matches the row.

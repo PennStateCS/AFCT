@@ -238,6 +238,36 @@ describe('extractProvenanceFeatures', () => {
     // The block's own 0>1 is recorded against the block, so it cannot be mistaken for the
     // top-level 0>1 and inflate a match between two unrelated machines.
     expect(features).toContain('b:shift-right:0>1');
+
+    // And the machine is described as the machine, not as the machine plus whatever the
+    // block contains. Both inner states carry ids the top level also uses, so counting them
+    // here would have made a two-state machine look like a four-state one and given it a
+    // second, imaginary 0>1 edge.
+    const described = extractProvenanceFeatures(withBlocks);
+    expect(described?.stateCount).toBe(2);
+    expect(described?.transitionCount).toBe(1);
+    expect(features.filter((feature) => feature === 't:0>1')).toHaveLength(1);
+  });
+
+  it('does not let two unrelated block machines share the block\'s inner topology', () => {
+    // Two different machines that each hold a block. Nothing about the top levels is shared,
+    // so the only features they could share are the ones a block contributed. They should
+    // share only what the blocks genuinely have in common, under the block's own name.
+    const machine = (topId: number, blockName: string) => `<structure><type>turing</type><automaton>
+      <state id="${topId}" name="q0"><x>10</x><y>10</y><initial/></state>
+      <state id="${topId + 1}" name="q1"><x>90</x><y>10</y><final/></state>
+      <transition><from>${topId}</from><to>${topId + 1}</to><read>a</read><write>b</write><move>R</move></transition>
+      <block id="${topId + 2}" name="${blockName}"><x>50</x><y>90</y><automaton>
+        <state id="0" name="b0"><x>5</x><y>5</y><initial/></state>
+        <state id="1" name="b1"><x>60</x><y>5</y><final/></state>
+        <transition><from>0</from><to>1</to><read>a</read><write>a</write><move>R</move></transition>
+      </automaton></block>
+    </automaton></structure>`;
+
+    const shared = sharedWith(machine(0, 'shift-right'), machine(40, 'tally'));
+    // The inner ids are 0 and 1 in both files, but they belong to differently named blocks,
+    // so nothing about the top-level id topology is shared between the two machines.
+    expect(shared.filter((feature) => feature.startsWith('t:'))).toHaveLength(0);
   });
 
   it('keeps a grammar as written, which the shape hash deliberately forgets', () => {

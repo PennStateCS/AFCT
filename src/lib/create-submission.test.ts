@@ -642,15 +642,21 @@ describe('createSubmission', () => {
 
       await call({ file: file('<structure><type>fa</type></structure>') });
 
-      const [{ data }] = tx.submission.create.mock.calls[0] as [{ data: { contentHash: string } }];
+      const [{ data }] = tx.submission.create.mock.calls[0] as [
+        { data: { contentHash: string; byteHash: string } },
+      ];
       expect(data.contentHash).toMatch(/^[0-9a-f]{64}$/);
+      // The raw bytes as well, so the tab can say "the same file" without a qualifier. (For
+      // this fixture the two agree: it is already exactly its own canonical form.)
+      expect(data.byteHash).toMatch(/^[0-9a-f]{64}$/);
       // Same content, second submission: the whole point is that these agree.
       const second = setup();
       await call({ file: file('<structure><type>fa</type></structure>', 'other-name.jff') });
       const [{ data: secondData }] = second.tx.submission.create.mock.calls[0] as [
-        { data: { contentHash: string } },
+        { data: { contentHash: string; byteHash: string } },
       ];
       expect(secondData.contentHash).toBe(data.contentHash);
+      expect(secondData.byteHash).toBe(data.byteHash);
     });
 
     it('describes the artifact it stores, for the check that survives an edit', async () => {
@@ -679,9 +685,10 @@ describe('createSubmission', () => {
       await call({ file: null });
 
       const [{ data }] = tx.submission.create.mock.calls[0] as [
-        { data: { contentHash: null; provenanceFeatures: unknown } },
+        { data: { contentHash: null; byteHash: null; provenanceFeatures: unknown } },
       ];
       expect(data.contentHash).toBeNull();
+      expect(data.byteHash).toBeNull();
       // Prisma's JSON null, not a description of nothing.
       expect(data.provenanceFeatures).toBeDefined();
     });

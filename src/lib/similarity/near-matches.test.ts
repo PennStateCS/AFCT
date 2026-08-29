@@ -79,6 +79,100 @@ describe('findNearMatches', () => {
     expect(findNearMatches(everybody)).toEqual([]);
   });
 
+  it('treats a feature held by exactly a quarter of the class as common, not rare', () => {
+    // Eight students, and the peculiar structure is held by two of them: exactly the 25%
+    // boundary. The whole-answer rule (`isCommon`) calls that share common, and this one has
+    // to agree, or the same number means two different things one level apart.
+    const matches = findNearMatches([
+      ...crowd(6),
+      person('a', [...ordinary, ...peculiar]),
+      person('b', [...ordinary, ...peculiar]),
+    ]);
+
+    expect(matches).toEqual([]);
+  });
+
+  it('still weighs a feature held by fewer than a quarter of the class', () => {
+    // One more student, so the same two hold it at 2 in 9, and it carries rarity again.
+    const matches = findNearMatches([
+      ...crowd(7),
+      person('a', [...ordinary, ...peculiar]),
+      person('b', [...ordinary, ...peculiar]),
+    ]);
+
+    expect(matches).toHaveLength(1);
+  });
+
+  it('counts a team once, however many members submitted', () => {
+    // Ten teams. Two members of one team hold the peculiar structure, and so does one member
+    // of another. Counted by student that is three holders among eleven, which is over the
+    // quarter and therefore common; counted by team it is two of ten, which is rare.
+    const teamA = { studentGroupId: 'g-a' };
+    const submissions = [
+      ...Array.from({ length: 8 }, (_, index) =>
+        person(`crowd-${index}`, [...ordinary, `f:s:own-${index}`], {
+          studentGroupId: `g-crowd-${index}`,
+        }),
+      ),
+      person('a1', [...ordinary, ...peculiar], teamA),
+      person('a2', [...ordinary, ...peculiar], teamA),
+      person('b', [...ordinary, ...peculiar], { studentGroupId: 'g-b' }),
+    ];
+
+    const matches = findNearMatches(submissions, { subject: 'group' });
+
+    // One card, between the two teams. The two members of team A are never a pair with each
+    // other: teammates share their work by design.
+    expect(matches).toHaveLength(1);
+    const groups = [matches[0]?.a.studentGroupId, matches[0]?.b.studentGroupId].sort();
+    expect(groups).toEqual(['g-a', 'g-b']);
+  });
+
+  it('counts a team once however many attempts it made', () => {
+    const teamA = { studentGroupId: 'g-a' };
+    const submissions = [
+      ...Array.from({ length: 8 }, (_, index) =>
+        person(`crowd-${index}`, [...ordinary, `f:s:own-${index}`], {
+          studentGroupId: `g-crowd-${index}`,
+        }),
+      ),
+      // The same student of team A, twice.
+      person('a', [...ordinary, ...peculiar], teamA),
+      person('a', [...ordinary, ...peculiar], { ...teamA, id: 'sub-a-again' }),
+      person('b', [...ordinary, ...peculiar], { studentGroupId: 'g-b' }),
+    ];
+
+    expect(findNearMatches(submissions, { subject: 'group' })).toHaveLength(1);
+  });
+
+  it('still counts by student on an individual assignment', () => {
+    // The same cohort with no groups: three students of eleven hold the peculiar structure,
+    // which is over a quarter and therefore common, so nothing is reported.
+    const matches = findNearMatches([
+      ...crowd(8),
+      person('a1', [...ordinary, ...peculiar]),
+      person('a2', [...ordinary, ...peculiar]),
+      person('b', [...ordinary, ...peculiar]),
+    ]);
+
+    expect(matches).toEqual([]);
+  });
+
+  it('falls back to the student when a group assignment has rows with no group', () => {
+    // Historical work carries no team. It counts as its student, which is the only identity
+    // it has, rather than being lumped in with every other group-less row.
+    const matches = findNearMatches(
+      [
+        ...crowd(7),
+        person('a', [...ordinary, ...peculiar]),
+        person('b', [...ordinary, ...peculiar]),
+      ],
+      { subject: 'group' },
+    );
+
+    expect(matches).toHaveLength(1);
+  });
+
   it('does not report a pair that the shape check already matched', () => {
     const shared = { shapeKey: 'the-same-shape' };
     const matches = findNearMatches([

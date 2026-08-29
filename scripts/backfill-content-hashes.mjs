@@ -1,9 +1,15 @@
 // Fingerprint submissions that were stored before the server started doing it.
 //
-// The Similarity tab reads `Submission.contentHash` and `shapeHash`, both written when a
-// file arrives. Anything submitted earlier has neither and would never match anything, so
-// this reads each stored file once and fills them in. Safe to run more than once: it only touches rows that
-// have a file and no hash yet, and it never changes a hash that already exists.
+// The Similarity tab reads `Submission.contentHash`, `shapeHash` and `byteHash`, all written
+// when a file arrives. Anything submitted earlier has none of them and would never match
+// anything, so this reads each stored file once and fills them in. Safe to run more than once:
+// it only touches rows that have a file and a missing hash, and it never changes a hash that
+// already exists.
+//
+// Two passes, because the hashes arrived at different times. The first fills in a submission
+// that has never been fingerprinted at all; the second catches rows that were fingerprinted
+// before `byteHash` existed. A row whose file yields no `contentHash` is skipped by both: the
+// matching query ignores those rows entirely, so a byte hash on one would never be read.
 //
 // Run it where the uploads volume is mounted, which is the app container:
 //   docker exec afct-dev sh -c 'cd /app && node scripts/backfill-content-hashes.mjs'
@@ -19,7 +25,7 @@ import { createRequire } from 'node:module';
 // knows how to connect (Prisma 7 needs the driver adapter this client already sets up).
 const require = createRequire(import.meta.url);
 require('tsx/cjs');
-const { submissionContentHash, submissionShapeHash } = require('../src/lib/similarity/content-hash.ts');
+const { submissionContentHash, submissionShapeHash, submissionByteHash } = require('../src/lib/similarity/content-hash.ts');
 const { extractProvenanceFeatures } = require('../src/lib/similarity/provenance.ts');
 const { prisma } = require('../src/lib/prisma.ts');
 
@@ -66,6 +72,7 @@ try {
             data: {
               contentHash,
               shapeHash,
+              byteHash: submissionByteHash(buffer),
               provenanceFeatures: extractProvenanceFeatures(buffer) ?? undefined,
             },
           });
@@ -86,6 +93,62 @@ try {
     dryRun
       ? `Dry run: ${hashed} submissions would be fingerprinted, ${missing} skipped.`
       : `Done: ${hashed} submissions fingerprinted, ${missing} skipped.`,
+  );
+
+  // Pass two: rows fingerprinted before `byteHash` existed. The raw hash is the one claim
+  // that needs no qualifier ("these are the same file", not "the same file once formatting is
+  // set aside"), and the tab stays silent about a row that has not got one.
+  //
+  // Its own skip counter, not the one above: a dry run writes nothing, so every row it looks
+  // at still matches the query and the loop would read the same batch forever. Reusing the
+  // first pass's counter would instead step past rows nobody had looked at.
+  let byteScanned = 0;
+  let byteHashed = 0;
+  let byteSkipped = 0;
+  let byteLeftBehind = 0;
+
+  for (;;) {
+    const batch = await prisma.submission.findMany({
+      where: { contentHash: { not: null }, byteHash: null, fileName: { not: null } },
+      select: { id: true, fileName: true },
+      orderBy: { submittedAt: 'asc' },
+      take: BATCH,
+      skip: byteLeftBehind,
+    });
+    if (batch.length === 0) break;
+
+    for (const submission of batch) {
+      byteScanned++;
+      try {
+        // The stored file is the upload byte for byte (`storeSubmissionFile` writes the buffer
+        // it was handed), so a hash filled in here is the same value a live submission gets.
+        const buffer = await readFile(path.join(UPLOAD_DIR, submission.fileName));
+        const byteHash = submissionByteHash(buffer);
+        if (!byteHash) {
+          byteSkipped++;
+          byteLeftBehind++;
+          continue;
+        }
+        if (dryRun) {
+          byteLeftBehind++;
+        } else {
+          await prisma.submission.update({ where: { id: submission.id }, data: { byteHash } });
+        }
+        byteHashed++;
+      } catch (error) {
+        byteSkipped++;
+        byteLeftBehind++;
+        console.warn(`  skipped ${submission.id}: ${error.message}`);
+      }
+    }
+
+    console.log(`  ${byteScanned} rechecked, ${byteHashed} byte-hashed, ${byteSkipped} skipped`);
+  }
+
+  console.log(
+    dryRun
+      ? `Dry run: ${byteHashed} submissions would get a byte hash, ${byteSkipped} skipped.`
+      : `Done: ${byteHashed} submissions byte-hashed, ${byteSkipped} skipped.`,
   );
 
   // Reference solutions too: without these the tab cannot say when matching work is simply

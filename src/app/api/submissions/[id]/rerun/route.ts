@@ -133,6 +133,8 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
         status: 'PENDING',
         feedback: null,
         correct: null,
+        // The old result is gone, so the time it landed is gone with it.
+        evaluatedAt: null,
         evaluationRaw: Prisma.DbNull,
         // A fresh attempt budget, and the row is nobody's: clearing the token is what stops a
         // worker that was mid-evaluation from writing its result over the rerun. `attempts` was

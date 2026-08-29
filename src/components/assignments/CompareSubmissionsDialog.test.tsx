@@ -27,6 +27,7 @@ const submission = (id: string, firstName: string, fileName: string | null): Mat
   fileName,
   originalFileName: `${firstName}.jff`,
   contentKey: `key-${id}`,
+  byteKey: 'b1',
   correct: true,
   attempt: 1,
   student: {
@@ -46,24 +47,47 @@ const pair = (fileNameB: string | null = 'stored-b.jff') => [
   submission('b', 'Grace', fileNameB),
 ];
 
-const show = (problemType: string | null, submissions: MatchSubmission[] = pair()) =>
+const show = (
+  problemType: string | null,
+  submissions: MatchSubmission[] = pair(),
+  subject: 'student' | 'group' = 'student',
+) =>
   render(
     <CompareSubmissionsDialog
       open
       onOpenChange={() => {}}
       submissions={submissions}
+      subject={subject}
       problemType={problemType}
       problemTitle="Even zeros"
       formatSubmittedAt={() => '14 Aug 2026, 12:00 UTC'}
     />,
   );
 
+/** The two files the dialog is actually showing, left then right. */
+const shownFiles = () =>
+  screen
+    .getAllByTestId(/-viewer$/)
+    .map((node) => node.textContent?.split('/').pop() ?? '');
+
+/** An attempt at a given minute, optionally on a team. */
+const attempt = (
+  id: string,
+  firstName: string,
+  minute: number,
+  over: Partial<MatchSubmission> = {},
+): MatchSubmission => ({
+  ...submission(id, firstName, `stored-${id}.jff`),
+  submittedAt: `2026-08-14T12:${String(minute).padStart(2, '0')}:00.000Z`,
+  ...over,
+});
+
 describe('CompareSubmissionsDialog', () => {
   it('shows both students in one dialog, each with their own file', () => {
     show('FA');
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      'Even zeros: 2 students submitted identical work',
+      'Even zeros: comparing 2 matching attempts',
     );
     expect(screen.getByText('Ada Student')).toBeInTheDocument();
     expect(screen.getByText('Grace Student')).toBeInTheDocument();
@@ -154,5 +178,75 @@ describe('CompareSubmissionsDialog', () => {
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('opens on two different students rather than one student twice', () => {
+    // Alice's two attempts are the closest pair in time, and comparing somebody with
+    // themselves answers nothing.
+    const alice = { id: 'student-alice', firstName: 'Alice', lastName: 'Student', avatar: null, cropX: null, cropY: null, zoom: null };
+    show('FA', [
+      attempt('a1', 'Alice', 10, { student: alice }),
+      attempt('a2', 'Alice', 12, { student: alice }),
+      attempt('b1', 'Bob', 40),
+    ]);
+
+    // Read from the two panes rather than the dialog text: every attempt's name also
+    // appears in the pickers, so only the files actually being shown prove the choice.
+    expect(shownFiles()).toContain('stored-b1.jff');
+    // One of Alice's two attempts, whichever is closest to Bob's, and never both.
+    expect(shownFiles().filter((file) => file.startsWith('stored-a')).length).toBe(1);
+  });
+
+  it('opens on two different teams on a group assignment, not two members of one', () => {
+    // Alice and Bob are one team and submitted a minute apart; Carol is another team, an
+    // hour later. Two members of one team share their work by design, so the pair that
+    // means something is the one across teams.
+    const teamA = { id: 'g-a', name: 'Group 4' };
+    const teamB = { id: 'g-b', name: 'Group 7' };
+    show(
+      'FA',
+      [
+        attempt('a1', 'Alice', 10, { studentGroup: teamA }),
+        attempt('a2', 'Bob', 11, { studentGroup: teamA }),
+        attempt('c1', 'Carol', 50, { studentGroup: teamB }),
+      ],
+      'group',
+    );
+
+    expect(shownFiles()).toContain('stored-c1.jff');
+    // One of team A's two attempts, and not both of them.
+    expect(shownFiles().filter((file) => file.startsWith('stored-a')).length).toBe(1);
+  });
+
+  it('picks the closest cross-team pair when there is more than one', () => {
+    const teamA = { id: 'g-a', name: 'Group 4' };
+    const teamB = { id: 'g-b', name: 'Group 7' };
+    show(
+      'FA',
+      [
+        attempt('a1', 'Alice', 10, { studentGroup: teamA }),
+        attempt('c1', 'Carol', 55, { studentGroup: teamB }),
+        attempt('c2', 'Dan', 12, { studentGroup: teamB }),
+      ],
+      'group',
+    );
+
+    // Alice at :10 and Dan at :12 are the closest pair from different teams.
+    expect(shownFiles()).toEqual(['stored-a1.jff', 'stored-c2.jff']);
+  });
+
+  it('falls back to different students when a group assignment has no groups on the work', () => {
+    const alice = { id: 'student-alice', firstName: 'Alice', lastName: 'Student', avatar: null, cropX: null, cropY: null, zoom: null };
+    show(
+      'FA',
+      [
+        attempt('a1', 'Alice', 10, { student: alice }),
+        attempt('a2', 'Alice', 12, { student: alice }),
+        attempt('b1', 'Bob', 40),
+      ],
+      'group',
+    );
+
+    expect(shownFiles()).toContain('stored-b1.jff');
   });
 });

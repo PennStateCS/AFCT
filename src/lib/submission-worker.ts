@@ -537,6 +537,10 @@ export async function persistEvaluation(opts: {
               ? Prisma.JsonNull
               : (opts.evaluation.evaluationRaw as Prisma.InputJsonValue),
           status: opts.evaluation.status,
+          // When the result became readable, stamped in the write that lands it so the two
+          // can never disagree. Only the Similarity tab reads it, to say whether one
+          // student's work was already marked correct when another submitted the same work.
+          evaluatedAt: new Date(),
         },
       });
       if (owned.count === 0) return 'stale';

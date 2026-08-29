@@ -175,9 +175,16 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/statistics`,
   assignmentSimilarity: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/similarity`,
-  /** Counts only, for the tab badge: no names, and no access entry in the activity log. */
-  assignmentSimilarityCount: (courseId: string, aid: string) =>
-    `/api/courses/${courseId}/assignments/${aid}/similarity?part=count`,
+  /**
+   * Counts only, for the tab badge: no names, and no access entry in the activity log.
+   *
+   * `share` is the reader's own commonality threshold, which decides how many groups are set
+   * aside and therefore how many are worth reviewing. Sent so the number on the tab and the
+   * number on the page are answers to the same question. Omitted, the server uses the default.
+   */
+  assignmentSimilarityCount: (courseId: string, aid: string, share?: number) =>
+    `/api/courses/${courseId}/assignments/${aid}/similarity?part=count` +
+    (share === undefined ? '' : `&share=${share}`),
   assignmentReviewData: (courseId: string, aid: string, studentId: string) =>
     `/api/courses/${courseId}/assignments/${aid}/review-data/${studentId}`,
   assignmentSubmissions: (courseId: string, aid: string, sid: string) =>
