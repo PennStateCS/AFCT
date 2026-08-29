@@ -7,10 +7,10 @@
 
 import type { MatchSubmission } from '@/lib/similarity/matches';
 import {
-  MATCH_LABEL,
+  DISPLAY_LABEL,
   isSetAside,
+  type DisplayMatchType,
   type MatchCluster,
-  type MatchType,
 } from '@/lib/similarity/evidence';
 import { subjectCountsOf, type ReviewSubject } from '@/lib/similarity/rarity';
 
@@ -509,9 +509,14 @@ export function relationshipDetails(
 export function relationshipSummary(cluster: MatchCluster): string[] {
   const parts: string[] = [];
   // Lowercased to sit inside a sentence, except JFLAP, which is a name.
-  const say = (count: number, kind: MatchType) =>
-    `${count} ${MATCH_LABEL[kind].toLowerCase().replace('jflap', 'JFLAP')} relationship${count === 1 ? '' : 's'}`;
+  const say = (count: number, kind: DisplayMatchType) =>
+    `${count} ${DISPLAY_LABEL[kind].toLowerCase().replace('jflap', 'JFLAP')} relationship${count === 1 ? '' : 's'}`;
 
+  // Named the way each relationship's own badge names it, so a group that holds both kinds
+  // does not describe them all as exact and then show a stronger badge underneath.
+  if (cluster.counts['byte-identical'] > 0) {
+    parts.push(say(cluster.counts['byte-identical'], 'byte-identical'));
+  }
   if (cluster.counts.exact > 0) parts.push(say(cluster.counts.exact, 'exact'));
   if (cluster.counts['same-machine'] > 0) {
     parts.push(say(cluster.counts['same-machine'], 'same-machine'));

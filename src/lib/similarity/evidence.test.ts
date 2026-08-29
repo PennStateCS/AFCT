@@ -2,13 +2,22 @@ import { describe, expect, it } from 'vitest';
 import {
   clusterMatches,
   countByType,
+  displayTypeOf,
   matchTypeOf,
   summarise,
+  DISPLAY_STRENGTH_OF,
   STRENGTH_OF,
 } from './evidence';
 import type { SubmissionMatchGroup } from './matches';
 
-const submission = (studentId: string, at = '2026-08-15T12:00:00.000Z') => ({
+const submission = (
+  studentId: string,
+  at = '2026-08-15T12:00:00.000Z',
+  // Which set of byte-identical files this one is in, as the API labels them. The default
+  // fixture is one set; a case about files that merely normalise alike passes its own, and
+  // null is a file stored before it was ever hashed.
+  byteKey: string | null = 'b1',
+) => ({
   id: `sub-${studentId}-${at}`,
   submittedAt: at,
   correct: true,
@@ -17,7 +26,7 @@ const submission = (studentId: string, at = '2026-08-15T12:00:00.000Z') => ({
   fileName: `${studentId}.jff`,
   originalFileName: `${studentId}.jff`,
   contentKey: 'aaaa1111',
-  byteKey: 'b1',
+  byteKey,
   student: {
     id: studentId,
     firstName: studentId,
@@ -153,17 +162,28 @@ describe('clusterMatches', () => {
     expect(clusters.map((cluster) => cluster.type).sort()).toEqual(['common', 'exact']);
   });
 
-  it('takes the strongest evidence in a group as the group\'s own', () => {
+  it("takes the strongest evidence in a group as the group's own", () => {
     const [cluster] = clusterMatches(
       [
-        group({ matchId: 'weak', kind: 'near', identicalStudentCount: 1, submissions: [submission('a'), submission('b')] }),
+        group({
+          matchId: 'weak',
+          kind: 'near',
+          identicalStudentCount: 1,
+          submissions: [submission('a'), submission('b')],
+        }),
         group({ matchId: 'strong', submissions: [submission('b'), submission('c')] }),
       ],
       0.25,
     );
 
     expect(cluster?.type).toBe('exact');
-    expect(cluster?.counts).toEqual({ exact: 1, 'same-machine': 0, structural: 1, reference: 0 });
+    expect(cluster?.counts).toEqual({
+      'byte-identical': 1,
+      exact: 0,
+      'same-machine': 0,
+      structural: 1,
+      reference: 0,
+    });
   });
 
   it('keeps the posted solution at the level it is true at', () => {
@@ -172,7 +192,11 @@ describe('clusterMatches', () => {
     // match nobody checked.
     const [cluster] = clusterMatches(
       [
-        group({ matchId: 'ab', matchesAnswerFile: true, submissions: [submission('a'), submission('b')] }),
+        group({
+          matchId: 'ab',
+          matchesAnswerFile: true,
+          submissions: [submission('a'), submission('b')],
+        }),
         group({ matchId: 'bc', submissions: [submission('b'), submission('c')] }),
       ],
       0.25,
@@ -184,8 +208,16 @@ describe('clusterMatches', () => {
     // A group where every relationship is the posted solution can say it plainly.
     const [all] = clusterMatches(
       [
-        group({ matchId: 'ab', matchesAnswerFile: true, submissions: [submission('a'), submission('b')] }),
-        group({ matchId: 'bc', matchesAnswerFile: true, submissions: [submission('b'), submission('c')] }),
+        group({
+          matchId: 'ab',
+          matchesAnswerFile: true,
+          submissions: [submission('a'), submission('b')],
+        }),
+        group({
+          matchId: 'bc',
+          matchesAnswerFile: true,
+          submissions: [submission('b'), submission('c')],
+        }),
       ],
       0.25,
     );
@@ -195,7 +227,11 @@ describe('clusterMatches', () => {
   it('carries the timing and reuse of everything in the group', () => {
     const [cluster] = clusterMatches(
       [
-        group({ matchId: 'one', closestGapMs: 60_000, submissions: [submission('a'), submission('b')] }),
+        group({
+          matchId: 'one',
+          closestGapMs: 60_000,
+          submissions: [submission('a'), submission('b')],
+        }),
         group({
           matchId: 'two',
           closestGapMs: 20 * 60_000,
@@ -214,10 +250,25 @@ describe('clusterMatches', () => {
   it('puts the strongest evidence at the top of the page', () => {
     const clusters = clusterMatches(
       [
-        group({ matchId: 'near', kind: 'near', identicalStudentCount: 1, submissions: [submission('x'), submission('y')] }),
-        group({ matchId: 'common', studentCount: 42, identicalStudentCount: 42, submissions: [submission('m'), submission('n')] }),
+        group({
+          matchId: 'near',
+          kind: 'near',
+          identicalStudentCount: 1,
+          submissions: [submission('x'), submission('y')],
+        }),
+        group({
+          matchId: 'common',
+          studentCount: 42,
+          identicalStudentCount: 42,
+          submissions: [submission('m'), submission('n')],
+        }),
         group({ matchId: 'exact', submissions: [submission('a'), submission('b')] }),
-        group({ matchId: 'shape', studentCount: 3, identicalStudentCount: 2, submissions: [submission('c'), submission('d')] }),
+        group({
+          matchId: 'shape',
+          studentCount: 3,
+          identicalStudentCount: 2,
+          submissions: [submission('c'), submission('d')],
+        }),
       ],
       0.25,
     );
@@ -257,13 +308,136 @@ describe('clusterMatches', () => {
   });
 });
 
-describe('summarise', () => {
-  it('counts groups rather than pairs, and says when any are exact', () => {
-    const clusters = clusterMatches(
+describe('displayTypeOf', () => {
+  it('calls a match where every file agrees to the byte what it is', () => {
+    const type = displayTypeOf(group(), 0.25);
+    expect(type).toBe('byte-identical');
+    // The same rung as an exact artifact, said more precisely, not a new tier above it.
+    expect(DISPLAY_STRENGTH_OF[type]).toBe('very-strong');
+  });
+
+  it('says it of three files as readily as of two', () => {
+    const three = group({
+      studentCount: 3,
+      identicalStudentCount: 3,
+      submissions: [submission('a'), submission('b'), submission('c')],
+    });
+
+    expect(displayTypeOf(three, 0.25)).toBe('byte-identical');
+  });
+
+  it('stays an exact artifact when the files only agree once formatting is ignored', () => {
+    const normalised = group({
+      submissions: [submission('a', undefined, 'b1'), submission('b', undefined, 'b2')],
+    });
+
+    expect(displayTypeOf(normalised, 0.25)).toBe('exact');
+  });
+
+  it('stays an exact artifact when a raw file was never hashed', () => {
+    // Null is "not known", not "different": the claim is blocked, not contradicted.
+    const unhashed = group({
+      submissions: [submission('a', undefined, null), submission('b', undefined, null)],
+    });
+    expect(displayTypeOf(unhashed, 0.25)).toBe('exact');
+
+    const half = group({
+      submissions: [submission('a'), submission('b', undefined, null)],
+    });
+    expect(displayTypeOf(half, 0.25)).toBe('exact');
+  });
+
+  it('does not promote a match where only some of the files agree to the byte', () => {
+    // a and b are the same file; c is the same artifact once formatting is ignored. The
+    // badge speaks for the whole relationship, so it stays at what covers all three, and
+    // who the stronger fact is about is said in the relationship's own details.
+    const partial = group({
+      studentCount: 3,
+      identicalStudentCount: 3,
+      submissions: [submission('a'), submission('b'), submission('c', undefined, 'b2')],
+    });
+
+    expect(displayTypeOf(partial, 0.25)).toBe('exact');
+  });
+
+  it('leaves every other kind exactly where it was', () => {
+    // Same machine, structural, the posted solution and a common answer are all unchanged by
+    // raw equality: the first two cannot be byte-equal, and the last two are explained by
+    // something other than how alike the files are.
+    expect(displayTypeOf(group({ studentCount: 3, identicalStudentCount: 2 }), 0.25)).toBe(
+      'same-machine',
+    );
+    expect(displayTypeOf(group({ kind: 'near', identicalStudentCount: 1 }), 0.25)).toBe(
+      'structural',
+    );
+    expect(displayTypeOf(group({ matchesAnswerFile: true }), 0.25)).toBe('reference');
+    expect(displayTypeOf(group({ studentCount: 42, identicalStudentCount: 42 }), 0.25)).toBe(
+      'common',
+    );
+  });
+});
+
+describe('clusterMatches, on byte-identical relationships', () => {
+  it('labels a group where every relationship agrees to the byte', () => {
+    const [cluster] = clusterMatches(
       [
         group({ matchId: 'ab', submissions: [submission('a'), submission('b')] }),
-        group({ matchId: 'ac', submissions: [submission('a'), submission('c')] }),
-        group({ matchId: 'xy', kind: 'near', identicalStudentCount: 1, submissions: [submission('x'), submission('y')] }),
+        group({ matchId: 'bc', submissions: [submission('b'), submission('c')] }),
+      ],
+      0.25,
+    );
+
+    expect(cluster?.homogeneous).toBe(true);
+    expect(cluster?.displayType).toBe('byte-identical');
+    expect(cluster?.counts['byte-identical']).toBe(2);
+  });
+
+  it('stays neutral where one relationship is byte-equal and another only normalises alike', () => {
+    // Alice and Bob sent the same file; Bob and Carol sent the same artifact saved
+    // differently. Neither statement is true of all three, so the group makes neither.
+    const [cluster] = clusterMatches(
+      [
+        group({ matchId: 'ab', submissions: [submission('alice'), submission('bob')] }),
+        group({
+          matchId: 'bc',
+          submissions: [submission('bob', undefined, 'b1'), submission('carol', undefined, 'b2')],
+        }),
+      ],
+      0.25,
+    );
+
+    expect(cluster?.homogeneous).toBe(false);
+    expect(cluster?.type).toBe('exact');
+    expect(cluster?.counts).toEqual({
+      'byte-identical': 1,
+      exact: 1,
+      'same-machine': 0,
+      structural: 0,
+      reference: 0,
+    });
+  });
+});
+
+describe('summarise', () => {
+  it('counts groups rather than pairs, and says when any are exact', () => {
+    // Files that normalise alike without being byte-equal, so what is counted here is the
+    // exact-artifact line rather than the stronger one below it.
+    const clusters = clusterMatches(
+      [
+        group({
+          matchId: 'ab',
+          submissions: [submission('a', undefined, 'b1'), submission('b', undefined, 'b2')],
+        }),
+        group({
+          matchId: 'ac',
+          submissions: [submission('a', undefined, 'b1'), submission('c', undefined, 'b3')],
+        }),
+        group({
+          matchId: 'xy',
+          kind: 'near',
+          identicalStudentCount: 1,
+          submissions: [submission('x'), submission('y')],
+        }),
       ],
       0.25,
     );
@@ -273,6 +447,26 @@ describe('summarise', () => {
     expect(lines).toContain('1 contains an exact artifact match.');
     // The pair count is kept, but as secondary information.
     expect(lines).toContain('3 similarity relationships are contained in these groups.');
+  });
+
+  it('says byte-for-byte identical work separately from an exact artifact', () => {
+    const clusters = clusterMatches(
+      [
+        // One group whose files are identical to the byte.
+        group({ matchId: 'ab', submissions: [submission('a'), submission('b')] }),
+        // One whose files only normalise alike, in another problem so it stays its own group.
+        group({
+          matchId: 'xy',
+          problem: { id: 'p2', title: 'a^n b^n', type: 'CFG' },
+          submissions: [submission('x', undefined, 'b1'), submission('y', undefined, 'b2')],
+        }),
+      ],
+      0.25,
+    );
+
+    const lines = summarise(clusters);
+    expect(lines).toContain('1 contains a byte-for-byte identical match.');
+    expect(lines).toContain('1 contains an exact artifact match.');
   });
 
   it('does not count common answers as worth reviewing', () => {

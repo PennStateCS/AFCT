@@ -13,7 +13,7 @@ import {
 } from './SimilarityEvidenceBadge';
 import { SimilarityInfoPopover } from './SimilarityInfoPopover';
 import { SimilarityTimeline } from './SimilarityTimeline';
-import { STRENGTH_OF, matchTypeOf, type MatchCluster } from '@/lib/similarity/evidence';
+import { DISPLAY_STRENGTH_OF, displayTypeOf, type MatchCluster } from '@/lib/similarity/evidence';
 import {
   attemptLabel,
   clusterDetails,
@@ -82,14 +82,14 @@ export function SimilarityMatchCard({
       className={`@container/match overflow-hidden rounded-lg border p-4 sm:p-5 ${
         // A mixed group takes the neutral edge: the colour of its strongest relationship
         // would be colouring the whole card by something true of part of it.
-        cluster.homogeneous ? ACCENT_BORDER[cluster.type] : ACCENT_BORDER.common
-      } ${STRENGTH_OF[cluster.type] === 'none' ? 'bg-muted' : 'bg-card'}`}
+        cluster.homogeneous ? ACCENT_BORDER[cluster.displayType] : ACCENT_BORDER.common
+      } ${DISPLAY_STRENGTH_OF[cluster.displayType] === 'none' ? 'bg-muted' : 'bg-card'}`}
     >
       {/* Kind and size on one line: what this is, and how big the work is, before anything
           else. Everything below is read in order after them. */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {cluster.homogeneous ? (
-          <SimilarityEvidenceBadge type={cluster.type} />
+          <SimilarityEvidenceBadge type={cluster.displayType} />
         ) : (
           <RelatedSubmissionsBadge count={cluster.relationships.length} />
         )}
@@ -157,7 +157,7 @@ export function SimilarityMatchCard({
 
               <div className="flex flex-wrap items-center gap-2">
                 <SimilarityInfoPopover
-                  type={cluster.type}
+                  type={cluster.displayType}
                   facts={clusterFacts(cluster, subject)}
                   reusedAfterPass={cluster.reusedAfterPass}
                 />
@@ -182,7 +182,7 @@ export function SimilarityMatchCard({
                   level down. */}
               <ul aria-label="Relationships in this group" className="space-y-2">
                 {cluster.relationships.map((relationship) => {
-                  const type = matchTypeOf(relationship, commonShare);
+                  const type = displayTypeOf(relationship, commonShare);
                   const participants = relationshipParticipants(relationship, subject);
                   return (
                     <li
@@ -248,7 +248,7 @@ export function SimilarityMatchCard({
         ) : (
           <>
             <SimilarityInfoPopover
-              type={cluster.type}
+              type={cluster.displayType}
               facts={clusterFacts(cluster, subject)}
               reusedAfterPass={cluster.reusedAfterPass}
             />

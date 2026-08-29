@@ -53,10 +53,67 @@ export const STRENGTH_OF: Record<MatchType, EvidenceStrength> = {
 };
 
 /**
+ * What a relationship is CALLED on the page, which can be stronger than what the detector
+ * matched on.
+ *
+ * The detector's kinds are about how a match was found. This one is about what can honestly
+ * be said of the match once it has been found, and there is one thing stronger than the same
+ * saved artifact: the same raw file, nothing normalised away. That is not another way of
+ * finding matches and never becomes one, which is why it lives here and not in `MatchType`.
+ */
+export type DisplayMatchType = MatchType | 'byte-identical';
+
+export const DISPLAY_LABEL: Record<DisplayMatchType, string> = {
+  ...MATCH_LABEL,
+  // Says what was measured rather than naming a file format, because that is the whole
+  // reason this kind exists: no normalisation, no qualifier, the same bytes.
+  'byte-identical': 'Byte-for-byte identical',
+};
+
+export const DISPLAY_STRENGTH_OF: Record<DisplayMatchType, EvidenceStrength> = {
+  ...STRENGTH_OF,
+  // The same rung as an exact artifact rather than a new one above it. It is a sharper
+  // statement of the same finding, not a louder one, and the page has no tier above
+  // "very strong" for a reason.
+  'byte-identical': 'very-strong',
+};
+
+/**
+ * Every submission in this relationship is the same file to the byte.
+ *
+ * Every one of them, deliberately: the badge speaks for the whole relationship, so a subset
+ * that agrees does not earn it. A missing byte key means the file was stored before it was
+ * hashed, which is "not known" rather than "different", so it blocks the claim without
+ * contradicting it.
+ */
+export function isWhollyByteIdentical(group: SubmissionMatchGroup): boolean {
+  if (group.submissions.length < 2) return false;
+  const keys = group.submissions.map((submission) => submission.byteKey);
+  if (keys.some((key) => !key)) return false;
+  return new Set(keys).size === 1;
+}
+
+/**
+ * What to call one relationship: its kind, or the stronger thing that is true of all of it.
+ *
+ * Only an exact match can be upgraded. Identical bytes normalise to identical contents, so
+ * anything byte-equal is already exact, and requiring it here means a partly-identical group
+ * or a structural one can never be labelled with a claim about raw files.
+ */
+export function displayTypeOf(
+  group: SubmissionMatchGroup,
+  commonShare: number,
+  subject: ReviewSubject = 'student',
+): DisplayMatchType {
+  const type = matchTypeOf(group, commonShare, subject);
+  return type === 'exact' && isWhollyByteIdentical(group) ? 'byte-identical' : type;
+}
+
+/**
  * Groups the page explains rather than asks about: the expected answer, and the answer the
  * instructor supplied. Still shown, still openable, kept out of the review queue.
  */
-export function isSetAside(type: MatchType): boolean {
+export function isSetAside(type: DisplayMatchType): boolean {
   return type === 'common' || type === 'reference';
 }
 
@@ -114,15 +171,26 @@ export type MatchCluster = {
   /** The groups involved, for a group assignment. Empty for an individual one. */
   groups: { id: string; name: string }[];
   type: MatchType;
-  strength: EvidenceStrength;
-  counts: Record<Exclude<MatchType, 'common'>, number>;
   /**
-   * Every relationship in this group is the same kind of match.
+   * What the group is CALLED, which is the strongest thing true of every relationship in it.
+   *
+   * The same as `type` unless every relationship is byte-identical, in which case the card
+   * can say so. Falls back to `type` for a mixed group, where the card shows the neutral
+   * badge instead and the relationships carry their own.
+   */
+  displayType: DisplayMatchType;
+  strength: EvidenceStrength;
+  counts: Record<Exclude<DisplayMatchType, 'common'>, number>;
+  /**
+   * Every relationship in this group is the same kind of match, judged the way the page
+   * labels them.
    *
    * A group of one kind can be labelled with that kind: it describes all of it. A group
    * holding an exact match and a structural one cannot, because the strongest of them is not
    * true of everybody in it, so the card says how many relationships there are and each one
-   * carries its own badge.
+   * carries its own badge. Byte-for-byte identical counts as its own kind here for the same
+   * reason: one byte-identical relationship among exact ones does not make the group
+   * byte-identical.
    */
   homogeneous: boolean;
   /**
@@ -276,21 +344,24 @@ function buildCluster(
   const first = ranked[0] as SubmissionMatchGroup;
   const type = matchTypeOf(first, commonShare, subject);
 
+  // Counted as the page labels them, so what the card says its relationships are cannot
+  // disagree with the badges on those relationships.
   const counts = {
+    'byte-identical': 0,
     exact: 0,
     'same-machine': 0,
     structural: 0,
     reference: 0,
   } as MatchCluster['counts'];
   for (const group of ranked) {
-    const groupType = matchTypeOf(group, commonShare, subject);
+    const groupType = displayTypeOf(group, commonShare, subject);
     if (groupType !== 'common') counts[groupType] += 1;
   }
 
   const students = studentsOf(ranked);
   const attempts = attemptsOf(ranked);
-  const homogeneous =
-    new Set(ranked.map((group) => matchTypeOf(group, commonShare, subject))).size === 1;
+  const displayTypes = ranked.map((group) => displayTypeOf(group, commonShare, subject));
+  const homogeneous = new Set(displayTypes).size === 1;
   // One entry per group, in the order they first appear, so a group assignment can be read
   // as teams rather than as a list of whoever happened to press submit.
   const groups = [
@@ -314,6 +385,8 @@ function buildCluster(
     attempts,
     groups,
     type,
+    // Only a group where every relationship says the same thing can be labelled with it.
+    displayType: homogeneous ? (displayTypes[0] as DisplayMatchType) : type,
     strength: STRENGTH_OF[type],
     counts,
     homogeneous,
@@ -367,7 +440,16 @@ export function summarise(clusters: MatchCluster[]): string[] {
 
   if (setAside > 0) lines.push(asideLine);
 
-  const exact = worthReviewing.filter((cluster) => cluster.type === 'exact').length;
+  // Said separately because they are different claims, and the stronger one first. A group
+  // holding both kinds is counted in both lines, which is what "contain" means here: the two
+  // numbers are what is inside the groups, not a partition of them.
+  const byteIdentical = worthReviewing.filter((cluster) => cluster.counts['byte-identical'] > 0);
+  if (byteIdentical.length > 0) {
+    const n = byteIdentical.length;
+    lines.push(`${n} contain${n === 1 ? 's' : ''} a byte-for-byte identical match.`);
+  }
+
+  const exact = worthReviewing.filter((cluster) => cluster.counts.exact > 0).length;
   if (exact > 0) {
     lines.push(`${exact} contain${exact === 1 ? 's' : ''} an exact artifact match.`);
   }

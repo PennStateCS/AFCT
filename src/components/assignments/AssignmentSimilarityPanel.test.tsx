@@ -55,12 +55,25 @@ const submission = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const pairOf = (a: string, b: string) => [
-  submission({ id: `sub-${a}`, student: student(a, a), submittedAt: '2026-08-14T22:42:00.000Z' }),
+const pairOf = (
+  a: string,
+  b: string,
+  // Which set of byte-identical files each of the two is in. The same set by default, which
+  // is what a shared file looks like; a case about files that only normalise alike passes
+  // two different ones.
+  [aBytes, bBytes]: [string | null, string | null] = ['b1', 'b1'],
+) => [
+  submission({
+    id: `sub-${a}`,
+    student: student(a, a),
+    submittedAt: '2026-08-14T22:42:00.000Z',
+    byteKey: aBytes,
+  }),
   submission({
     id: `sub-${b}`,
     student: student(b, b),
     submittedAt: '2026-08-14T22:49:00.000Z',
+    byteKey: bBytes,
   }),
 ];
 
@@ -122,8 +135,8 @@ describe('AssignmentSimilarityPanel', () => {
 
   it('summarises in match groups, not pairs, and calls out exact artifacts', async () => {
     getMock.mockResolvedValue([
-      group({ matchId: 'ab', submissions: pairOf('a', 'b') }),
-      group({ matchId: 'ac', submissions: pairOf('a', 'c') }),
+      group({ matchId: 'ab', submissions: pairOf('a', 'b', ['b1', 'b2']) }),
+      group({ matchId: 'ac', submissions: pairOf('a', 'c', ['b1', 'b3']) }),
     ]);
 
     renderPanel();
@@ -137,7 +150,7 @@ describe('AssignmentSimilarityPanel', () => {
     ).toBeInTheDocument();
   });
 
-  it('gives an exact artifact the strongest presentation', async () => {
+  it('says byte-for-byte identical when that is true of the whole relationship', async () => {
     getMock.mockResolvedValue([group()]);
 
     renderPanel();
@@ -146,7 +159,10 @@ describe('AssignmentSimilarityPanel', () => {
 
     const card = await screen.findByRole('article');
     expect(within(card).getByText('Very strong')).toBeInTheDocument();
-    expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
+    // The strongest thing that is true of these two files, and only it: "exact artifact" is
+    // the same finding stated more weakly, and both would read as two different claims.
+    expect(within(card).getByText('Byte-for-byte identical')).toBeInTheDocument();
+    expect(within(card).queryByText('Exact JFLAP artifact')).toBeNull();
     expect(
       within(card).getByRole('heading', {
         name: '2 of 84 students submitted the same saved machine',
@@ -160,6 +176,23 @@ describe('AssignmentSimilarityPanel', () => {
       within(card).queryByText('The structure and the saved drawing coordinates are identical.'),
     ).not.toBeInTheDocument();
     expect(screen.getByText('11 states · 17 transitions')).toBeInTheDocument();
+  });
+
+  it('stays an exact artifact when the files only agree once formatting is ignored', async () => {
+    getMock.mockResolvedValue([group({ submissions: pairOf('ada', 'grace', ['b1', 'b2']) })]);
+
+    renderPanel();
+
+    await openProblems();
+
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
+    expect(within(card).queryByText('Byte-for-byte identical')).toBeNull();
+    // And no claim about the raw files, because there is none to make.
+    expect(within(card).queryByText(/byte-for-byte identical/)).toBeNull();
+    expect(
+      within(card).getByText('The structure and the saved drawing coordinates are identical.'),
+    ).toBeInTheDocument();
   });
 
   it('still describes the drawing when the raw files were never hashed', async () => {
@@ -255,13 +288,13 @@ describe('AssignmentSimilarityPanel', () => {
 
     // Both are present, and reuse is a badge beside the match type rather than in place of it.
     const card = await screen.findByRole('article');
-    expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
+    expect(within(card).getByText('Byte-for-byte identical')).toBeInTheDocument();
     expect(within(card).getByText('Reused after passing')).toBeInTheDocument();
   });
 
   it('explains a match type in a popover reachable by keyboard', async () => {
     const person = userEvent.setup();
-    getMock.mockResolvedValue([group()]);
+    getMock.mockResolvedValue([group({ submissions: pairOf('ada', 'grace', ['b1', 'b2']) })]);
     renderPanel();
     await openProblems();
     await screen.findByRole('button', { name: 'Explain exact jflap artifact match' });
@@ -300,7 +333,7 @@ describe('AssignmentSimilarityPanel', () => {
         name: '3 of 84 students are connected by 3 similarity relationships',
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/3 exact jflap artifact relationships/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 byte-for-byte identical relationships/i)).toBeInTheDocument();
   });
 
   it("keeps a group's relationships behind one control", async () => {
@@ -329,7 +362,7 @@ describe('AssignmentSimilarityPanel', () => {
     expect(within(ab as HTMLElement).getByText('a Student')).toBeInTheDocument();
     expect(within(ab as HTMLElement).getAllByText('Attempt 1').length).toBeGreaterThan(0);
     // Each relationship carries its own evidence badge rather than borrowing the card's.
-    expect(screen.getAllByText(/Exact JFLAP artifact/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Byte-for-byte identical/).length).toBeGreaterThanOrEqual(2);
     // Two relationship compares, plus the secondary whole-group one, each named for who it
     // is between so a reader moving between buttons knows which files they will see.
     const compares = screen.getAllByRole('button', { name: /Compare/ });
@@ -428,6 +461,36 @@ describe('AssignmentSimilarityPanel', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps the badge at what covers everyone when only some files agree to the byte', async () => {
+    // Ada and Grace sent the same file; Hedy sent the same artifact saved differently. The
+    // badge speaks for all three, so it stays at the exact artifact and the stronger fact
+    // is said about the two it is true of.
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'subset',
+        studentCount: 3,
+        identicalStudentCount: 3,
+        submissions: [
+          submission({ id: 'sub-ada', student: student('ada', 'Ada'), byteKey: 'b1' }),
+          submission({ id: 'sub-grace', student: student('grace', 'Grace'), byteKey: 'b1' }),
+          submission({ id: 'sub-hedy', student: student('hedy', 'Hedy'), byteKey: 'b2' }),
+        ],
+      }),
+    ]);
+
+    renderPanel();
+    await openProblems();
+
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
+    expect(within(card).queryByText('Byte-for-byte identical')).toBeNull();
+    expect(
+      within(card).getByText(
+        'Ada Student and Grace Student submitted byte-for-byte identical files.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('stays neutral about a group of two different kinds of relationship', async () => {
     getMock.mockResolvedValue([
       group({ matchId: 'ab', submissions: pairOf('alice', 'bob') }),
@@ -454,7 +517,7 @@ describe('AssignmentSimilarityPanel', () => {
     const rows = within(
       await screen.findByRole('list', { name: 'Relationships in this group' }),
     ).getAllByRole('listitem');
-    const exact = rows.find((row) => row.textContent?.includes('Exact JFLAP artifact'))!;
+    const exact = rows.find((row) => row.textContent?.includes('Byte-for-byte identical'))!;
     const structural = rows.find((row) => row.textContent?.includes('Structurally similar'))!;
     expect(within(exact).getByText(/Very strong/i)).toBeInTheDocument();
     expect(within(structural).getByText(/Possible/i)).toBeInTheDocument();
