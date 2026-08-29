@@ -19,6 +19,7 @@ import { PROVENANCE_FEATURE_VERSION, type ProvenanceFeatures } from './provenanc
 // Re-exported for the server side, which has no reason to know the rule moved. Client
 // components must import it from './rarity' directly: this module reaches for Prisma.
 export { isCommon, COMMON_SHARE } from './rarity';
+import type { ReviewSubject } from './rarity';
 
 /** A student as the Similarity tab shows them. */
 export type MatchStudent = {
@@ -153,19 +154,33 @@ const studentSelect = {
  * with the page it points at would be worse than no badge. The only thing `countOnly` drops
  * is attempt numbering, which is two reads spent on a sentence nobody is going to see.
  */
-export type FindMatchesOptions = { countOnly?: boolean };
+export type FindMatchesOptions = {
+  countOnly?: boolean;
+  /**
+   * Who the finding is about. Group work is counted by team, because any member may submit
+   * for the team and counting members would both inflate a match and make the class look
+   * larger than it is. Defaults to students.
+   */
+  subject?: ReviewSubject;
+};
 
 /**
- * Groups of submissions that share their exact content, for the problems given.
+ * Groups of submissions that share their exact content, for one assignment's problems.
  *
- * Scoped by problem id, and a problem belongs to exactly one course, so this can never
- * reach across into another instructor's course. Matching happens at read time rather than
- * being stamped on a submission when it is graded: a stamp would only ever mark the second
- * student of a pair, and would go stale the moment anything else was submitted.
+ * Scoped by assignment AND problem, on every read. A problem is reusable, so the same
+ * question can be set again next term or in another section, and work submitted to a
+ * different assignment is a different piece of work: reporting it as a match would put two
+ * students who never took the same assignment on one card. The assignment also belongs to
+ * exactly one course, so this can never reach across into another instructor's course.
+ *
+ * Matching happens at read time rather than being stamped on a submission when it is graded:
+ * a stamp would only ever mark the second student of a pair, and would go stale the moment
+ * anything else was submitted.
  *
  * Ordered rarest first, which is the order a professor wants to read them in.
  */
 export async function findSubmissionMatches(
+  assignmentId: string,
   problemIds: string[],
   problems: Map<
     string,
@@ -189,7 +204,7 @@ export async function findSubmissionMatches(
   // group instead, because that is a different claim and reads differently.
   const perStudent = await prisma.submission.groupBy({
     by: ['problemId', 'shapeHash', 'contentHash', 'studentId', 'studentGroupId'],
-    where: { problemId: { in: problemIds }, contentHash: { not: null } },
+    where: { assignmentId, problemId: { in: problemIds }, contentHash: { not: null } },
   });
 
   const studentsPerProblem = new Map<string, Set<string>>();
@@ -240,6 +255,7 @@ export async function findSubmissionMatches(
 
   const submissions = sharedKeys.length === 0 ? [] : await prisma.submission.findMany({
     where: {
+      assignmentId,
       problemId: { in: problemIds },
       OR: [
         ...(sharedShapes.length ? [{ shapeHash: { in: sharedShapes } }] : []),
@@ -269,7 +285,7 @@ export async function findSubmissionMatches(
 
   // Which attempt each matched submission was for its student. One query over the students
   // and problems already in play, so it stays proportional to the matches, not the course.
-  const attemptNumbers = await numberAttempts(submissions, options);
+  const attemptNumbers = await numberAttempts(assignmentId, submissions, options);
 
   const groups = new Map<string, SubmissionMatchGroup>();
   // Which student group (if any) owns each submission in a match, and when each landed.
@@ -392,7 +408,9 @@ export async function findSubmissionMatches(
   }
 
   // The third check, over everything the first two left behind.
-  reportable.push(...(await findNearMatchGroups(problemIds, problems, attemptNumbers, options)));
+  reportable.push(
+    ...(await findNearMatchGroups(assignmentId, problemIds, problems, attemptNumbers, options)),
+  );
 
   // Work that was reused after it had already passed comes first whatever its size: it is
   // the case a large course is most likely to miss. Then rarest first, so what needs reading
@@ -412,6 +430,7 @@ export async function findSubmissionMatches(
  * attempt" has to mean their third, or it is worse than saying nothing.
  */
 async function numberAttempts(
+  assignmentId: string,
   matched: { id: string; problemId: string; studentId: string }[],
   options: FindMatchesOptions = {},
 ): Promise<Map<string, number>> {
@@ -423,6 +442,9 @@ async function numberAttempts(
 
   const attempts = await prisma.submission.findMany({
     where: {
+      // Within this assignment: "their third attempt" means their third at this problem in
+      // this assignment, which is the thing the reader is looking at.
+      assignmentId,
       OR: [
         ...new Set(matched.map((row) => `${row.problemId}:${row.studentId}`)),
       ].map((pair) => {
@@ -524,6 +546,7 @@ function closestGap(times: TimedSubmission[]): number | null {
  * "9 of 10 transitions match" to submissions it was never measured against.
  */
 async function findNearMatchGroups(
+  assignmentId: string,
   problemIds: string[],
   problems: Map<
     string,
@@ -537,8 +560,13 @@ async function findNearMatchGroups(
   attemptNumbers: Map<string, number>,
   options: FindMatchesOptions = {},
 ): Promise<SubmissionMatchGroup[]> {
+  const subject = options.subject ?? 'student';
   const rows = await prisma.submission.findMany({
-    where: { problemId: { in: problemIds }, provenanceFeatures: { not: Prisma.DbNull } },
+    where: {
+      assignmentId,
+      problemId: { in: problemIds },
+      provenanceFeatures: { not: Prisma.DbNull },
+    },
     orderBy: { submittedAt: 'asc' },
     select: {
       id: true,
@@ -561,7 +589,7 @@ async function findNearMatchGroups(
   // The exact checks only numbered the submissions they matched, and a near match usually
   // involves different ones, so number these too rather than showing a blank where the other
   // cards show "Submission 3".
-  const nearAttempts = await numberAttempts(rows, options);
+  const nearAttempts = await numberAttempts(assignmentId, rows, options);
 
   const groups: SubmissionMatchGroup[] = [];
 
@@ -595,7 +623,7 @@ async function findNearMatchGroups(
 
     const byId = new Map(forProblem.map((row) => [row.id, row]));
 
-    for (const near of findNearMatches(inputs)) {
+    for (const near of findNearMatches(inputs, { subject })) {
       const pair = [byId.get(near.a.id), byId.get(near.b.id)].filter(
         (row): row is (typeof forProblem)[number] => Boolean(row),
       );

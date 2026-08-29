@@ -118,7 +118,7 @@ const nearRow = (over: Record<string, unknown> = {}) => ({
 
 describe('findSubmissionMatches', () => {
   it('asks for nothing when the assignment has no problems', async () => {
-    await expect(findSubmissionMatches([], problems)).resolves.toEqual([]);
+    await expect(findSubmissionMatches('a1', [], problems)).resolves.toEqual([]);
     expect(prismaMock.submission.groupBy).not.toHaveBeenCalled();
   });
 
@@ -133,7 +133,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-2', studentId: 's2', student: student('s2') }),
     ]);
 
-    const [group, ...rest] = await findSubmissionMatches(['p1'], problems);
+    const [group, ...rest] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(rest).toHaveLength(0);
     expect(group).toMatchObject({
@@ -150,7 +150,7 @@ describe('findSubmissionMatches', () => {
       { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1' },
     ]);
 
-    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
+    await expect(findSubmissionMatches('a1', ['p1'], problems)).resolves.toEqual([]);
     // Nothing shared, so it never goes back for the submissions an exact match would need.
     // The third check still runs, which is the whole point of it.
     const exactReads = prismaMock.submission.findMany.mock.calls.filter(
@@ -170,7 +170,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-3', studentId: 's2', student: student('s2') }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.studentCount).toBe(2);
     expect(group?.submissions).toHaveLength(3);
@@ -203,7 +203,7 @@ describe('findSubmissionMatches', () => {
       })),
     ]);
 
-    const groups = await findSubmissionMatches(['p1', 'p2'], problems);
+    const groups = await findSubmissionMatches('a1', ['p1', 'p2'], problems);
 
     expect(groups.map((g) => [g.problem.id, g.studentCount, g.problemStudentCount])).toEqual([
       ['p1', 2, 2],
@@ -218,7 +218,7 @@ describe('findSubmissionMatches', () => {
       { problemId: 'p2', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2' },
     ]);
 
-    await expect(findSubmissionMatches(['p1', 'p2'], problems)).resolves.toEqual([]);
+    await expect(findSubmissionMatches('a1', ['p1', 'p2'], problems)).resolves.toEqual([]);
   });
 
   it('says how close together two students submitted, ignoring their own resubmissions', async () => {
@@ -248,7 +248,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.closestGapMs).toBe(5 * 60 * 1000);
   });
@@ -265,7 +265,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-2', studentId: 's2', student: student('s2'), studentGroupId: 'g1' }),
     ]);
 
-    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
+    await expect(findSubmissionMatches('a1', ['p1'], problems)).resolves.toEqual([]);
   });
 
   it('still reports a match that reaches outside the team', async () => {
@@ -281,7 +281,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-3', studentId: 's3', student: student('s3'), studentGroupId: null }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.studentCount).toBe(3);
   });
@@ -297,7 +297,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-2', studentId: 's2', student: student('s2'), contentHash: 'hash-moved' }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.studentCount).toBe(2);
     // Nobody submitted the same FILE, so the group says so.
@@ -317,7 +317,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-3', studentId: 's3', student: student('s3'), contentHash: 'hash-moved' }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.studentCount).toBe(3);
     expect(group?.identicalStudentCount).toBe(2);
@@ -337,7 +337,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-3', studentId: 's3', student: student('s3'), byteHash: 'bytes-b' }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.identicalStudentCount).toBe(3);
     expect(group?.byteIdenticalStudentCount).toBe(2);
@@ -357,7 +357,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-2', studentId: 's2', student: student('s2') }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.identicalStudentCount).toBe(2);
     expect(group?.byteIdenticalStudentCount).toBe(1);
@@ -373,7 +373,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-2', studentId: 's2', student: student('s2'), shapeHash: null, contentHash: 'hash-re' }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.studentCount).toBe(2);
     expect(group?.identicalStudentCount).toBe(2);
@@ -404,7 +404,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.reusedAfterPass).toBe(true);
   });
@@ -435,7 +435,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.reusedAfterPass).toBe(false);
   });
@@ -463,7 +463,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.reusedAfterPass).toBe(false);
   });
@@ -502,7 +502,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     // s1's pass at 12:01 precedes nobody else's submission, so there is nothing to claim.
     expect(group?.reusedAfterPass).toBe(false);
@@ -530,7 +530,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.reusedAfterPass).toBe(false);
   });
@@ -547,7 +547,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-3', studentId: 's2', student: student('s2'), correct: null, submittedAt: new Date('2026-08-14T11:00:00Z') }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.reusedAfterPass).toBe(false);
   });
@@ -569,7 +569,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.reusedAfterPass).toBe(false);
   });
@@ -591,7 +591,7 @@ describe('findSubmissionMatches', () => {
       submission({ id: 'sub-5', problemId: 'p2', shapeHash: 'shape-z', contentHash: 'hash-z', studentId: 's5', student: student('s5') }),
     ]);
 
-    const groups = await findSubmissionMatches(['p1', 'p2'], problems);
+    const groups = await findSubmissionMatches('a1', ['p1', 'p2'], problems);
 
     expect(groups[0]?.problem.id).toBe('p1');
     expect(groups[0]?.reusedAfterPass).toBe(true);
@@ -611,7 +611,7 @@ describe('findSubmissionMatches', () => {
       ['p1', { title: 'Even zeros', type: 'FA', answerContentHash: 'hash-a', answerShapeHash: null }],
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], withAnswer);
+    const [group] = await findSubmissionMatches('a1', ['p1'], withAnswer);
 
     expect(group?.matchesAnswerFile).toBe(true);
   });
@@ -631,7 +631,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group, ...rest] = await findSubmissionMatches(['p1'], problems);
+    const [group, ...rest] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(rest).toHaveLength(0);
     expect(group).toMatchObject({ kind: 'near', studentCount: 2, identicalStudentCount: 1 });
@@ -661,7 +661,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    const [group] = await findSubmissionMatches(['p1'], problems);
+    const [group] = await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(group?.kind).toBe('near');
     expect(group?.reusedAfterPass).toBe(false);
@@ -681,7 +681,7 @@ describe('findSubmissionMatches', () => {
       }),
     ]);
 
-    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
+    await expect(findSubmissionMatches('a1', ['p1'], problems)).resolves.toEqual([]);
   });
 
   it('does not repeat a pair the shape check already matched', async () => {
@@ -693,7 +693,7 @@ describe('findSubmissionMatches', () => {
     ]);
 
     // Both carry shape-1, so they are already one match; saying it again here adds nothing.
-    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
+    await expect(findSubmissionMatches('a1', ['p1'], problems)).resolves.toEqual([]);
   });
 
   it('says nothing about a pair when the cohort is too small for anything to be unusual', async () => {
@@ -704,18 +704,60 @@ describe('findSubmissionMatches', () => {
       nearRow({ id: 'near-2', studentId: 's2', shapeHash: 'shape-2', student: student('s2') }),
     ]);
 
-    await expect(findSubmissionMatches(['p1'], problems)).resolves.toEqual([]);
+    await expect(findSubmissionMatches('a1', ['p1'], problems)).resolves.toEqual([]);
   });
 
-  it('only looks at submissions that have a hash', async () => {
+  it('only looks at submissions that have a hash, in this assignment', async () => {
     prismaMock.submission.groupBy.mockResolvedValue([]);
 
-    await findSubmissionMatches(['p1'], problems);
+    await findSubmissionMatches('a1', ['p1'], problems);
 
     expect(prismaMock.submission.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { problemId: { in: ['p1'] }, contentHash: { not: null } },
+        where: { assignmentId: 'a1', problemId: { in: ['p1'] }, contentHash: { not: null } },
       }),
     );
+  });
+
+  it('never reaches into another assignment that sets the same problem', async () => {
+    // A problem is reusable, so the same question can be set again next term or in another
+    // section. Two students who never took the same assignment are not a match, so the
+    // assignment is part of every read, not just the problem.
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1', studentGroupId: null },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2', studentGroupId: null },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1') }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2') }),
+    ]);
+
+    await findSubmissionMatches('a1', ['p1'], problems);
+
+    // Every read is narrowed the same way: the group-by, the matched rows, the attempt
+    // numbering and the provenance read the third check runs over.
+    for (const call of prismaMock.submission.findMany.mock.calls) {
+      expect((call[0] as { where: { assignmentId?: string } }).where.assignmentId).toBe('a1');
+    }
+    expect(prismaMock.submission.findMany).toHaveBeenCalled();
+  });
+
+  it('numbers attempts within this assignment, not across every assignment', async () => {
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's1', studentGroupId: null },
+      { problemId: 'p1', shapeHash: 'shape-a', contentHash: 'hash-a', studentId: 's2', studentGroupId: null },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ id: 'sub-1', studentId: 's1', student: student('s1') }),
+      submission({ id: 'sub-2', studentId: 's2', student: student('s2') }),
+    ]);
+
+    await findSubmissionMatches('a1', ['p1'], problems);
+
+    const attemptRead = prismaMock.submission.findMany.mock.calls.find(
+      (call) => (call[0] as { select?: Record<string, unknown> })?.select?.studentId &&
+        !(call[0] as { select?: Record<string, unknown> })?.select?.student,
+    );
+    expect((attemptRead?.[0] as { where: { assignmentId: string } }).where.assignmentId).toBe('a1');
   });
 });
