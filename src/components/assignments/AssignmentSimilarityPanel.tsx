@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { ChevronDown, Fingerprint, Users } from 'lucide-react';
+import { ChevronDown, Fingerprint, Info, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -163,6 +163,17 @@ export function AssignmentSimilarityPanel({
     return [...byProblem.entries()];
   }, [clusters, filter]);
 
+  // Said once, shown in both places the threshold can be adjusted from, so the narrow card
+  // and the wide one explain it in the same words. Group-aware: on a group assignment the
+  // thing being counted is teams.
+  const thresholdHelp = (
+    <p className="text-muted-foreground text-sm">
+      Work shared by at least this share of a problem&apos;s{' '}
+      {groupAssignment ? 'groups' : 'students'} is treated as the expected answer and set aside at
+      the bottom of the page.
+    </p>
+  );
+
   const compare = (students: MatchSubmission[], problem: MatchCluster['problem']) =>
     setComparing({
       submissions: students,
@@ -172,61 +183,107 @@ export function AssignmentSimilarityPanel({
 
   return (
     <div className="space-y-4">
-      <h2 className="flex items-center gap-2 text-xl font-semibold">
-        <Fingerprint className="h-6 w-6" />
-        Similarity
-      </h2>
-
       {/* The triage block: what is here, how to narrow it, and where the line between a
           finding and an expected answer currently sits. One card, not three, and never
           collapsible: it is the answer to "is there anything for me here", which is the
-          question the page exists to answer first. */}
-      {/* A container, so the threshold control below can ask how much room THIS CARD has
-          rather than how wide the window is. The page sits inside a global sidebar and an
-          assignment rail, either of which can be open, so the same screen gives the card
-          very different widths and a viewport breakpoint would be guessing. */}
-      <div className="bg-card @container/triage space-y-3 rounded-lg border p-4">
-        {/* One live region for the state of the page, so a screen reader hears the answer
-            once rather than a card at a time. */}
-        <div aria-live="polite">
-          {isLoading ? (
-            <div className="flex items-center gap-3 text-sm">
-              <Spinner />
-              <span>Looking for related submissions...</span>
+          question the page exists to answer first.
+
+          A container, so the parts below can ask how much room THIS CARD has rather than how
+          wide the window is. The page sits inside a global sidebar and an assignment rail,
+          either of which can be open, so the same screen gives the card very different
+          widths and a viewport breakpoint would be guessing. */}
+      <div className="bg-card @container/triage space-y-4 rounded-lg border p-4">
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
+          <Fingerprint className="h-6 w-6" />
+          Similarity
+        </h2>
+
+        {/* What is here, and the one setting that changes it, side by side once the card is
+            wide enough to hold both. Below that they stack in the same order. */}
+        <div className="@[48rem]/triage:grid @[48rem]/triage:grid-cols-[minmax(0,1fr)_auto] @[48rem]/triage:gap-6">
+          <div className="space-y-3">
+            {/* One live region for the state of the page, so a screen reader hears the answer
+                once rather than a card at a time. */}
+            <div aria-live="polite">
+              {isLoading ? (
+                <div className="flex items-center gap-3 text-sm">
+                  <Spinner />
+                  <span>Looking for related submissions...</span>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {summary.map((line, index) => (
+                    <p
+                      key={line}
+                      className={
+                        index === 0 ? 'text-base font-medium' : 'text-muted-foreground text-sm'
+                      }
+                    >
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="space-y-1">
-              {summary.map((line, index) => (
-                <p
-                  key={line}
-                  className={
-                    index === 0 ? 'text-base font-medium' : 'text-muted-foreground text-sm'
-                  }
-                >
-                  {line}
-                </p>
-              ))}
+
+            {/*
+              What the page is for, in the reader's own terms, and outside the live region
+              above: it does not change, so a screen reader should not hear it again every
+              time the counts do. Plain text rather than a callout, because a warning box
+              would make the page look like it had found something.
+            */}
+            {isLoading ? null : (
+              <p className="text-muted-foreground max-w-3xl text-sm">
+                Similarity results are informational. AFCT identifies patterns and relationships
+                between submitted files, but it does not determine whether plagiarism or an academic
+                integrity violation occurred. These results are intended to help instructors review
+                submissions and apply their own judgment and course policies.
+              </p>
+            )}
+          </div>
+
+          {/*
+            The dial itself, where there is room for it. A rule separates it from the reading
+            on a wide card and disappears when the two stack, because a line across a column
+            of stacked blocks separates nothing.
+
+            Below the narrower of the two sizes it is not drawn at all: what is left is the
+            Adjust button in the filter row, which opens the same control. Both drive the
+            same state, so whichever one a reader has, moving it is the same act.
+          */}
+          {clusters.length > 0 ? (
+            <div className="text-muted-foreground mt-3 hidden flex-col items-start gap-1.5 text-sm @[32rem]/triage:flex @[48rem]/triage:mt-0 @[48rem]/triage:border-s @[48rem]/triage:ps-6">
+              <div className="flex items-center gap-1">
+                <Label htmlFor="common-share-inline" className="text-muted-foreground font-normal">
+                  Common-answer threshold
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      aria-label="Explain the common-answer threshold"
+                    >
+                      <Info className="size-4" aria-hidden="true" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">{thresholdHelp}</PopoverContent>
+                </Popover>
+              </div>
+              <CommonThresholdSlider
+                id="common-share-inline"
+                value={commonShare}
+                onChange={changeThreshold}
+              />
             </div>
-          )}
+          ) : null}
         </div>
 
-        {/*
-          What the page is for, in the reader's own terms, and outside the live region above:
-          it does not change, so a screen reader should not hear it again every time the
-          counts do. Plain text rather than a callout, because a warning box would make the
-          page look like it had found something.
-        */}
-        {isLoading ? null : (
-          <p className="text-muted-foreground max-w-3xl text-sm">
-            Similarity results are informational. AFCT identifies patterns and relationships between
-            submitted files, but it does not determine whether plagiarism or an academic integrity
-            violation occurred. These results are intended to help instructors review submissions
-            and apply their own judgment and course policies.
-          </p>
-        )}
-
+        {/* The filters anchor the card: they act on everything above them, so they run the
+            full width of it rather than sitting under one column. */}
         {clusters.length > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
             <SimilarityFilters counts={counts} value={filter} onChange={setFilter} />
 
             {/*
@@ -241,23 +298,7 @@ export function AssignmentSimilarityPanel({
                   } matches.`}
             </span>
 
-            {/*
-              The same setting, twice, and only ever one of them on the page: the card is
-              either wide enough to hold the dial itself or it is not. Both drive the same
-              state, so whichever one a reader has, moving it is the same act.
-            */}
-            <div className="text-muted-foreground ms-auto hidden flex-col items-end gap-1 text-sm @[40rem]/triage:flex">
-              <Label htmlFor="common-share-inline" className="text-muted-foreground font-normal">
-                Common-answer threshold
-              </Label>
-              <CommonThresholdSlider
-                id="common-share-inline"
-                value={commonShare}
-                onChange={changeThreshold}
-              />
-            </div>
-
-            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm @[40rem]/triage:hidden">
+            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm @[32rem]/triage:hidden">
               <span>Common-answer threshold: {Math.round(commonShare * 100)}%</span>
               <Popover>
                 <PopoverTrigger asChild>
@@ -270,11 +311,7 @@ export function AssignmentSimilarityPanel({
                     <Label htmlFor="common-share" className="text-sm font-medium">
                       Common-answer threshold
                     </Label>
-                    <p className="text-muted-foreground text-sm">
-                      Work shared by at least this share of a problem&apos;s{' '}
-                      {groupAssignment ? 'groups' : 'students'} is treated as the expected answer
-                      and set aside at the bottom of the page.
-                    </p>
+                    {thresholdHelp}
                   </div>
                   <CommonThresholdSlider
                     id="common-share"

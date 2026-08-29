@@ -50,7 +50,9 @@ export function CommonThresholdSlider({
       <span aria-hidden="true" className="text-xs tabular-nums">
         100%
       </span>
-      <span className="text-foreground w-10 text-end text-sm font-medium tabular-nums">
+      {/* Boxed, because it is the value the whole page is read against: on a row of small
+          grey numbers it was the one thing a reader had to hunt for. */}
+      <span className="text-foreground rounded-md border px-1.5 py-0.5 text-sm font-medium tabular-nums">
         {percent}%
       </span>
     </div>

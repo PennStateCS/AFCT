@@ -106,7 +106,9 @@ export function SimilarityFilters({
           <Button
             key={filter}
             type="button"
-            size="sm"
+            // Full size rather than small: these are the controls the page is reviewed with,
+            // and a row of text chips read as decoration next to the cards below them.
+            size="default"
             // Outlined rather than ghost, so the row reads as a set of choices rather than as
             // loose text, and the chosen one carries a ring as well as a fill.
             variant="outline"
@@ -115,7 +117,7 @@ export function SimilarityFilters({
             aria-pressed={selected}
             onClick={() => onChange(filter)}
           >
-            {Icon ? <Icon className="size-3.5" aria-hidden="true" /> : null}
+            {Icon ? <Icon className="size-4" aria-hidden="true" /> : null}
             {LABEL[filter]}
             {/* Quieter than the label only when the button is unselected. On the filled
                 selected button, muted grey sits on a dark background and stops being
@@ -124,7 +126,7 @@ export function SimilarityFilters({
                 whatever kind it is. A zero is quieter than a count, but no quieter than the
                 muted text elsewhere: it says "none of these", not "unavailable". */}
             <span
-              className={`rounded bg-current/10 px-1 tabular-nums ${
+              className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-current/10 px-1.5 text-xs tabular-nums ${
                 counts[filter] === 0 ? 'opacity-80' : ''
               }`}
             >
