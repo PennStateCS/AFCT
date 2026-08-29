@@ -161,7 +161,24 @@ export function relationshipByteLines(
   relationship: MatchCluster['relationships'][number],
   subject: ReviewSubject = 'student',
 ): string[] {
+  return byteEvidenceOf(relationship, subject).lines;
+}
+
+/**
+ * What raw-file equality this relationship supports, as sentences and as the set of
+ * participants they cover.
+ *
+ * The covered set is the point: a weaker sentence about the same submissions ("identical once
+ * formatting is set aside") is already implied by "identical to the byte" and only makes a
+ * reader wonder whether the two mean different things. The caller can only suppress it if it
+ * knows exactly who the stronger sentence spoke for.
+ */
+export function byteEvidenceOf(
+  relationship: MatchCluster['relationships'][number],
+  subject: ReviewSubject = 'student',
+): { lines: string[]; covered: Set<string>; coversEveryone: boolean } {
   const participants = relationshipParticipants(relationship, subject);
+  const nothing = { lines: [], covered: new Set<string>(), coversEveryone: false };
 
   // Which participants hold each set of identical bytes, and how many submissions that is.
   const sets = new Map<string, { names: Set<string>; submissions: number }>();
@@ -176,25 +193,37 @@ export function relationshipByteLines(
   }
 
   const shared = [...sets.values()].filter((set) => set.names.size > 1);
-  if (shared.length === 0) return [];
+  if (shared.length === 0) return nothing;
 
+  const covered = new Set(shared.flatMap((set) => [...set.names]));
   const naming = (set: { names: Set<string>; submissions: number }) =>
     `${listOf([...set.names])} submitted byte-for-byte identical files.`;
 
   if (shared.length > 1) {
     // Two separate sets inside one relationship: the same work, saved by two different
     // hands. Say how many there are, then say who is in each.
-    return [
-      `${shared.length} sets of byte-for-byte identical files were found.`,
-      ...shared.map(naming),
-    ];
+    return {
+      lines: [
+        `${shared.length} sets of byte-for-byte identical files were found.`,
+        ...shared.map(naming),
+      ],
+      covered,
+      coversEveryone: covered.size >= participants.length,
+    };
   }
 
   const only = shared[0]!;
-  if (only.names.size < participants.length) return [naming(only)];
-  return only.submissions === 2
-    ? ['Files are byte-for-byte identical.']
-    : [`All ${only.submissions} submitted files are byte-for-byte identical.`];
+  if (only.names.size < participants.length) {
+    return { lines: [naming(only)], covered, coversEveryone: false };
+  }
+  return {
+    lines:
+      only.submissions === 2
+        ? ['Files are byte-for-byte identical.']
+        : [`All ${only.submissions} submitted files are byte-for-byte identical.`],
+    covered,
+    coversEveryone: true,
+  };
 }
 
 /**
@@ -299,7 +328,6 @@ export function clusterDetails(
     cluster.relationships.length === 1 && first && !isSetAside(cluster.type)
       ? relationshipByteLines(first, subject)
       : [byteIdenticalLine(cluster)].filter((line): line is string => line !== null);
-  const byteLine = byteLines[0] ?? null;
 
   // More than one relationship means the students were gathered by being connected to
   // somebody, not by all sharing one thing, so there is no single claim to make about them.
@@ -319,34 +347,37 @@ export function clusterDetails(
   }
 
   if (cluster.type === 'exact') {
-    // Strongest first: if the bytes agree there is nothing to qualify, and the lines below
-    // are the weaker version of the same statement.
     lines.push(...byteLines);
-    // A grammar or an expression has no drawing to agree on, so saying the coordinates
-    // match would be describing something that does not exist.
-    lines.push(
-      cluster.stateCount
-        ? 'The structure and the saved drawing coordinates are identical.'
-        : 'The contents are identical once formatting is set aside.',
-    );
-    if (cluster.stateCount !== null && cluster.stateCount > 0) {
+    // Everything below is the same fact stated more weakly: files identical to the byte are
+    // identical before anything is normalised, and their drawings cannot differ either. Two
+    // sentences for one fact only make a reader hunt for the difference between them.
+    const coveredByBytes = first ? byteEvidenceOf(first, subject).coversEveryone : false;
+    if (!coveredByBytes) {
+      // A grammar or an expression has no drawing to agree on, so saying the coordinates
+      // match would be describing something that does not exist.
       lines.push(
-        `All ${cluster.stateCount} state position${cluster.stateCount === 1 ? '' : 's'} are identical.`,
+        cluster.stateCount
+          ? 'The structure and the saved drawing coordinates are identical.'
+          : 'The contents are identical once formatting is set aside.',
       );
+      if (cluster.stateCount !== null && cluster.stateCount > 0) {
+        lines.push(
+          `All ${cluster.stateCount} state position${cluster.stateCount === 1 ? '' : 's'} are identical.`,
+        );
+      }
     }
   }
 
   if (cluster.type === 'same-machine') {
     lines.push('State names or positions differ.');
-    const exact = cluster.relationships.filter(
-      (group) => group.identicalStudentCount > 1 && group.kind === 'same-work',
-    ).length;
-    // The byte line replaces the content-level one rather than joining it: two adjacent
-    // sentences saying nearly the same thing at different strictness is worse than either.
-    if (byteLine) {
-      lines.push(...byteLines);
-    } else if (exact > 0) {
-      lines.push('Some of them submitted the same file, once formatting is set aside.');
+    // Whatever this one relationship can say for itself, minus its own version of the line
+    // above. It names who each statement is about, which "some of them" never did.
+    if (first) {
+      lines.push(
+        ...relationshipDetails(first, subject).filter(
+          (line) => line !== 'The same machine, with state names or positions differing.',
+        ),
+      );
     }
   }
 
@@ -426,12 +457,50 @@ export function relationshipDetails(
 ): string[] {
   if (relationship.kind === 'near') return relationship.evidence;
 
-  const lines = relationshipByteLines(relationship, subject);
-  const participants = relationshipParticipants(relationship, subject).length;
+  const participants = relationshipParticipants(relationship, subject);
+  const bytes = byteEvidenceOf(relationship, subject);
+  const lines = [...bytes.lines];
+
+  // Everyone here already agrees to the byte. Saying they also agree once formatting is set
+  // aside is the same fact stated more weakly, and two sentences invite a reader to look for
+  // the difference between them.
+  if (bytes.coversEveryone) return lines;
+
+  // Whose normalised contents agree: the participants holding the most common content key.
+  // Not `identicalStudentCount`, which is a number and cannot say who.
+  const byContent = new Map<string, Set<string>>();
+  for (const participant of participants) {
+    for (const submission of participant.attempts) {
+      if (!submission.contentKey) continue;
+      byContent.set(
+        submission.contentKey,
+        (byContent.get(submission.contentKey) ?? new Set<string>()).add(participant.name),
+      );
+    }
+  }
+  const sameContents = [...byContent.values()].sort((a, b) => b.size - a.size)[0] ?? new Set();
+
+  if (sameContents.size < participants.length) {
+    // The machine is shared; the saved file is not. That is the whole of what a same-machine
+    // relationship can claim.
+    lines.push('The same machine, with state names or positions differing.');
+    return lines;
+  }
+
+  const rest = [...sameContents].filter((name) => !bytes.covered.has(name));
+  // Nobody was byte-identical, so there is nobody to distinguish the rest from: one plain
+  // sentence about the whole relationship.
+  if (rest.length === 0 || bytes.covered.size === 0) {
+    lines.push(
+      'The files contain the same saved artifact after formatting differences are ignored.',
+    );
+    return lines;
+  }
+
+  // Part of the relationship agreed to the byte and the rest did not: two different facts
+  // about two different people, so both are said, and both name who they are about.
   lines.push(
-    relationship.identicalStudentCount >= participants
-      ? 'Contents are identical once formatting is set aside.'
-      : 'The same machine, with state names or positions differing.',
+    `${listOf(rest)} submitted the same saved artifact after formatting differences are ignored.`,
   );
   return lines;
 }

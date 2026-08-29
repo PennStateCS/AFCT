@@ -15,6 +15,7 @@ const student = (
   over: {
     attempt?: number;
     byteKey?: string | null;
+    contentKey?: string;
     group?: { id: string; name: string } | null;
     at?: string;
   } = {},
@@ -26,7 +27,7 @@ const student = (
   assignmentId: 'a1',
   fileName: `${id}.jff`,
   originalFileName: `${id}.jff`,
-  contentKey: 'aaaa1111',
+  contentKey: over.contentKey ?? 'aaaa1111',
   // Which set of byte-identical files this submission is in. Same label, same bytes.
   byteKey: over.byteKey === undefined ? 'b1' : over.byteKey,
   student: {
@@ -254,17 +255,65 @@ describe('relationshipParticipants', () => {
 });
 
 describe('relationshipDetails', () => {
-  it("carries the relationship's own evidence, strongest first", () => {
-    expect(relationshipDetails(relationship())).toEqual([
-      'Files are byte-for-byte identical.',
-      'Contents are identical once formatting is set aside.',
+  it('says the strongest fact and not the weaker version of it', () => {
+    // Byte-identical files are identical before any normalising is done, so saying they also
+    // match once formatting is set aside is the same fact said less strongly.
+    expect(relationshipDetails(relationship())).toEqual(['Files are byte-for-byte identical.']);
+
+    const three = relationship({
+      studentCount: 3,
+      submissions: [student('a'), student('b'), student('c')],
+    });
+    expect(relationshipDetails(three)).toEqual([
+      'All 3 submitted files are byte-for-byte identical.',
     ]);
   });
 
-  it('says the machine is the same when the files are not', () => {
+  it('uses the normalised wording when the raw files differ', () => {
+    const formatted = relationship({
+      submissions: [student('a', { byteKey: 'b1' }), student('b', { byteKey: 'b2' })],
+    });
+
+    expect(relationshipDetails(formatted)).toEqual([
+      'The files contain the same saved artifact after formatting differences are ignored.',
+    ]);
+  });
+
+  it('claims nothing about bytes when no file was hashed', () => {
+    const unhashed = relationship({
+      submissions: [student('a', { byteKey: null }), student('b', { byteKey: null })],
+    });
+
+    expect(relationshipDetails(unhashed)).toEqual([
+      'The files contain the same saved artifact after formatting differences are ignored.',
+    ]);
+  });
+
+  it('separates the part that agrees to the byte from the part that does not', () => {
+    // Miles and Sam sent the same file; Stephen sent the same work saved differently. Two
+    // facts about two different people, so both are said and both name who they are about.
+    const subset = relationship({
+      studentCount: 3,
+      submissions: [
+        student('Miles', { byteKey: 'b1' }),
+        student('Sam', { byteKey: 'b1' }),
+        student('Stephen', { byteKey: 'b2' }),
+      ],
+    });
+
+    expect(relationshipDetails(subset)).toEqual([
+      'Miles Student and Sam Student submitted byte-for-byte identical files.',
+      'Stephen Student submitted the same saved artifact after formatting differences are ignored.',
+    ]);
+  });
+
+  it('says the machine is the same when the saved contents are not', () => {
     const redrawn = relationship({
       identicalStudentCount: 1,
-      submissions: [student('a', { byteKey: 'b1' }), student('b', { byteKey: 'b2' })],
+      submissions: [
+        student('a', { byteKey: 'b1', contentKey: 'c1' }),
+        student('b', { byteKey: 'b2', contentKey: 'c2' }),
+      ],
     });
 
     expect(relationshipDetails(redrawn)).toEqual([

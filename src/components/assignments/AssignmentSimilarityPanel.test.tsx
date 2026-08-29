@@ -152,8 +152,35 @@ describe('AssignmentSimilarityPanel', () => {
         name: '2 of 84 students submitted the same saved machine',
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText('All 11 state positions are identical.')).toBeInTheDocument();
+    // Byte-identical files are identical before anything is normalised and their drawings
+    // cannot differ, so the card says the strongest fact and stops.
+    expect(within(card).getByText('Files are byte-for-byte identical.')).toBeInTheDocument();
+    expect(within(card).queryByText(/state positions are identical/)).not.toBeInTheDocument();
+    expect(
+      within(card).queryByText('The structure and the saved drawing coordinates are identical.'),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('11 states · 17 transitions')).toBeInTheDocument();
+  });
+
+  it('still describes the drawing when the raw files were never hashed', async () => {
+    getMock.mockResolvedValue([
+      group({
+        submissions: [
+          submission({ id: 'sub-a', student: student('a', 'Ada'), byteKey: null }),
+          submission({ id: 'sub-b', student: student('b', 'Grace'), byteKey: null }),
+        ],
+      }),
+    ]);
+
+    renderPanel();
+    await openProblems();
+
+    const card = await screen.findByRole('article');
+    expect(within(card).queryByText(/byte-for-byte/)).not.toBeInTheDocument();
+    expect(
+      within(card).getByText('The structure and the saved drawing coordinates are identical.'),
+    ).toBeInTheDocument();
+    expect(within(card).getByText('All 11 state positions are identical.')).toBeInTheDocument();
   });
 
   it('calls a grammar a grammar, and claims nothing about its layout', async () => {
@@ -175,9 +202,11 @@ describe('AssignmentSimilarityPanel', () => {
         name: '2 of 84 students submitted the same saved grammar',
       }),
     ).toBeInTheDocument();
+    // Both files are the same bytes, so the card says that and not the weaker version of it.
+    expect(within(card).getByText('Files are byte-for-byte identical.')).toBeInTheDocument();
     expect(
-      within(card).getByText('The contents are identical once formatting is set aside.'),
-    ).toBeInTheDocument();
+      within(card).queryByText('The contents are identical once formatting is set aside.'),
+    ).not.toBeInTheDocument();
     // Nothing has states, so nothing says it has none.
     expect(within(card).queryByText(/0 states/)).not.toBeInTheDocument();
   });

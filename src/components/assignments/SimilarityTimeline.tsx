@@ -28,7 +28,7 @@ const LIST_GRID = 'sm:grid sm:grid-cols-[minmax(8rem,22rem)_auto_auto_auto_auto_
  * fills its column: an inline cell is only as wide as its text, and the rule under a short
  * "Correct" stopped short of the one beside it.
  */
-const CELL_BASE = 'sm:border-t sm:py-2 sm:pe-4 sm:whitespace-nowrap';
+const CELL_BASE = 'sm:border-t sm:py-2 sm:pe-3 sm:whitespace-nowrap';
 const CELL = `sm:block ${CELL_BASE}`;
 
 /** The middle dot between facts on a phone. The desktop grid separates them by column. */
@@ -101,11 +101,11 @@ export function SimilarityTimeline({
         aria-hidden="true"
         className="text-muted-foreground hidden pb-1 text-xs font-medium sm:contents"
       >
-        <span className="sm:pe-4 sm:pb-1">{subject === 'group' ? 'Group' : 'Student'}</span>
-        <span className="sm:pe-4 sm:pb-1">Attempt</span>
-        <span className="sm:pe-4 sm:pb-1">Submitted</span>
-        <span className="sm:pe-4 sm:pb-1">Result</span>
-        <span className="sm:pe-4 sm:pb-1">Relative</span>
+        <span className="sm:pe-3 sm:pb-1">{subject === 'group' ? 'Group' : 'Student'}</span>
+        <span className="sm:pe-3 sm:pb-1">Attempt</span>
+        <span className="sm:pe-3 sm:pb-1">Submitted</span>
+        <span className="sm:pe-3 sm:pb-1">Result</span>
+        <span className="sm:pe-3 sm:pb-1">Relative</span>
         <span className="sm:pb-1 sm:text-right">Open</span>
       </li>
 

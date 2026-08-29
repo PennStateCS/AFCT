@@ -79,7 +79,7 @@ export function SimilarityMatchCard({
        * rather than over a card came out within a percent or two of no fill at all, so the one
        * thing the tint had to do, tell a set-aside group from a live one, it did not do.
        */
-      className={`rounded-lg border p-4 sm:p-5 ${
+      className={`@container/match overflow-hidden rounded-lg border p-4 sm:p-5 ${
         // A mixed group takes the neutral edge: the colour of its strongest relationship
         // would be colouring the whole card by something true of part of it.
         cluster.homogeneous ? ACCENT_BORDER[cluster.type] : ACCENT_BORDER.common
@@ -99,29 +99,47 @@ export function SimilarityMatchCard({
         ) : null}
       </div>
 
-      <div className="space-y-1.5">
-        {/* The heading is the fact rather than the kind, because the badge above already
+      {/*
+        The reading and the evidence side by side once there is room for both: what this
+        group is, on the left, and the attempts it is made of, on the right.
+        
+        Measured on the CARD rather than the window, because the card is what has to hold
+        them: the same screen gives a different width with the assignment menu collapsed, and
+        the six-column attempt table needs about 37rem before it stops being a scrolling
+        exercise. Below that the two stack.
+      */}
+      <div className="@[56rem]/match:grid @[56rem]/match:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] @[56rem]/match:gap-6">
+        <div className="space-y-1.5">
+          {/* The heading is the fact rather than the kind, because the badge above already
             says the kind and a reader who has read it once does not need it twice. */}
-        <h4 id={headingId} className="text-base leading-snug font-semibold">
-          {clusterHeadline(cluster, subject)}
-          {showProblem && cluster.problem.title ? (
-            <span className="text-muted-foreground font-normal"> · {cluster.problem.title}</span>
-          ) : null}
-        </h4>
-        <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-sm">
-          {details.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      </div>
+          <h4 id={headingId} className="text-base leading-snug font-semibold">
+            {clusterHeadline(cluster, subject)}
+            {showProblem && cluster.problem.title ? (
+              <span className="text-muted-foreground font-normal"> · {cluster.problem.title}</span>
+            ) : null}
+          </h4>
+          <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-sm">
+            {details.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
 
-      <div className="mt-4">
-        <SimilarityTimeline
-          attempts={cluster.attempts}
-          subject={subject}
-          formatDay={formatDay}
-          formatTime={formatTime}
-        />
+        {/* Focusable, and scrollable on its own if the columns cannot fit: a table a reader
+            cannot reach with the keyboard is a table some readers do not have. */}
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label="Matching attempts"
+          className="mt-4 min-w-0 overflow-x-auto @[56rem]/match:mt-0"
+        >
+          <SimilarityTimeline
+            attempts={cluster.attempts}
+            subject={subject}
+            formatDay={formatDay}
+            formatTime={formatTime}
+          />
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t pt-3">
