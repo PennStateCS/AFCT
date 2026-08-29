@@ -91,8 +91,21 @@ export type MatchCluster = {
   problem: SubmissionMatchGroup['problem'];
   /** The relationships this group is made of, strongest first. */
   relationships: SubmissionMatchGroup[];
-  /** Every student involved, earliest submission first. */
+  /** Every student involved, earliest submission first, one entry each. */
   students: MatchSubmission[];
+  /**
+   * Every submission that actually matched, earliest first, deduplicated by submission id
+   * rather than by student.
+   *
+   * `students` answers "who is in this", which is what the counts are about. This answers
+   * "what did they send", which is what a reader checks: a problem can allow several
+   * attempts, and a student whose second and fourth attempts both matched has two rows here.
+   * Nothing else in the group is included, so an attempt that had nothing to do with the
+   * finding never appears.
+   */
+  attempts: MatchSubmission[];
+  /** The groups involved, for a group assignment. Empty for an individual one. */
+  groups: { id: string; name: string }[];
   type: MatchType;
   strength: EvidenceStrength;
   counts: Record<Exclude<MatchType, 'common'>, number>;
@@ -103,6 +116,8 @@ export type MatchCluster = {
    */
   byteIdenticalStudentCount: number;
   problemStudentCount: number;
+  /** How many groups submitted this problem at all. 0 for an individual assignment. */
+  problemGroupCount: number;
   reusedAfterPass: boolean;
   /**
    * EVERY relationship in this group is work that matches the problem's own posted solution.
@@ -129,6 +144,24 @@ const TYPE_RANK: Record<MatchType, number> = {
   reference: 3,
   common: 4,
 };
+
+/**
+ * Every matched submission in the group, once each, earliest first.
+ *
+ * Deduplicated by submission id and NOT by student: the same student's second and fourth
+ * attempts are two different things that matched, and collapsing them to one row hides the
+ * attempt a reader is being asked about. The same submission can appear in two relationships
+ * of one cluster, which is what the id check is for.
+ */
+function attemptsOf(groups: SubmissionMatchGroup[]): MatchSubmission[] {
+  const seen = new Map<string, MatchSubmission>();
+  for (const group of groups) {
+    for (const submission of group.submissions) {
+      if (!seen.has(submission.id)) seen.set(submission.id, submission);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+}
 
 /** One entry per student, earliest submission first. */
 function studentsOf(groups: SubmissionMatchGroup[]): MatchSubmission[] {
@@ -230,6 +263,17 @@ function buildCluster(
   }
 
   const students = studentsOf(ranked);
+  const attempts = attemptsOf(ranked);
+  // One entry per group, in the order they first appear, so a group assignment can be read
+  // as teams rather than as a list of whoever happened to press submit.
+  const groups = [
+    ...new Map(
+      attempts
+        .map((submission) => submission.studentGroup)
+        .filter((group): group is { id: string; name: string } => group !== null)
+        .map((group) => [group.id, group]),
+    ).values(),
+  ];
   const gaps = ranked
     .map((group) => group.closestGapMs)
     .filter((gap): gap is number => gap !== null);
@@ -240,6 +284,8 @@ function buildCluster(
     problem: first.problem,
     relationships: ranked,
     students,
+    attempts,
+    groups,
     type,
     strength: STRENGTH_OF[type],
     counts,
@@ -247,6 +293,7 @@ function buildCluster(
       ...ranked.map((group) => group.byteIdenticalStudentCount),
     ),
     problemStudentCount: first.problemStudentCount,
+    problemGroupCount: first.problemGroupCount,
     reusedAfterPass: ranked.some((group) => group.reusedAfterPass),
     matchesAnswerFile: ranked.every((group) => group.matchesAnswerFile),
     answerFileRelationships: ranked.filter((group) => group.matchesAnswerFile).length,

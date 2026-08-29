@@ -83,6 +83,15 @@ export type SubmissionMatchGroup = {
   /** How many different students have submitted this problem at all: the denominator. */
   problemStudentCount: number;
   /**
+   * The same two counts for a group assignment, where the thing being reviewed is a group
+   * rather than a person: any member may submit for the team, so counting members would say
+   * "4 of 30 students" about what is really two groups out of nine.
+   *
+   * Both 0 when no submission here belongs to a group, which is every individual assignment.
+   */
+  groupCount: number;
+  problemGroupCount: number;
+  /**
    * The largest number of students in this match who submitted the same file once formatting
    * is set aside. Equal to `studentCount` when the whole match is one file, and 1 when every
    * student's file differs in some incidental way.
@@ -179,17 +188,26 @@ export async function findSubmissionMatches(
   // match as the file it came from. Which of them are byte-identical is recorded inside the
   // group instead, because that is a different claim and reads differently.
   const perStudent = await prisma.submission.groupBy({
-    by: ['problemId', 'shapeHash', 'contentHash', 'studentId'],
+    by: ['problemId', 'shapeHash', 'contentHash', 'studentId', 'studentGroupId'],
     where: { problemId: { in: problemIds }, contentHash: { not: null } },
   });
 
   const studentsPerProblem = new Map<string, Set<string>>();
   const studentsPerShape = new Map<string, Set<string>>();
+  // The same two tallies counted by team, for a group assignment. Empty for an individual
+  // one, where no submission carries a group.
+  const groupsPerProblem = new Map<string, Set<string>>();
+  const groupsPerShape = new Map<string, Set<string>>();
   for (const row of perStudent) {
     if (!row.contentHash) continue;
     const problemStudents = studentsPerProblem.get(row.problemId) ?? new Set<string>();
     problemStudents.add(row.studentId);
     studentsPerProblem.set(row.problemId, problemStudents);
+    if (row.studentGroupId) {
+      const problemGroups = groupsPerProblem.get(row.problemId) ?? new Set<string>();
+      problemGroups.add(row.studentGroupId);
+      groupsPerProblem.set(row.problemId, problemGroups);
+    }
 
     // A file with no shape (a regular expression, or one that would not parse) can still be
     // matched on its exact contents, so it groups under its own hash.
@@ -197,6 +215,11 @@ export async function findSubmissionMatches(
     const shapeStudents = studentsPerShape.get(key) ?? new Set<string>();
     shapeStudents.add(row.studentId);
     studentsPerShape.set(key, shapeStudents);
+    if (row.studentGroupId) {
+      const shapeGroups = groupsPerShape.get(key) ?? new Set<string>();
+      shapeGroups.add(row.studentGroupId);
+      groupsPerShape.set(key, shapeGroups);
+    }
   }
 
   // Only work two or more different students submitted. One student's own resubmissions are
@@ -285,6 +308,8 @@ export async function findSubmissionMatches(
         },
         studentCount: students.size,
         problemStudentCount: studentsPerProblem.get(submission.problemId)?.size ?? 0,
+        groupCount: groupsPerShape.get(key)?.size ?? 0,
+        problemGroupCount: groupsPerProblem.get(submission.problemId)?.size ?? 0,
         identicalStudentCount: 1,
         byteIdenticalStudentCount: 1,
         closestGapMs: null,
@@ -547,6 +572,9 @@ async function findNearMatchGroups(
     if (forProblem.length < 2) continue;
 
     const studentsInProblem = new Set(forProblem.map((row) => row.studentId)).size;
+    const groupsInProblem = new Set(
+      forProblem.map((row) => row.studentGroupId).filter((id): id is string => id !== null),
+    ).size;
 
     const inputs: NearMatchInput[] = [];
     for (const row of forProblem) {
@@ -584,6 +612,10 @@ async function findNearMatchGroups(
         },
         studentCount: 2,
         problemStudentCount: studentsInProblem,
+        groupCount: new Set(
+          pair.map((row) => row.studentGroupId).filter((id): id is string => id !== null),
+        ).size,
+        problemGroupCount: groupsInProblem,
         // Neither is the other's file; that is what makes this the third check. The byte
         // count is 1 for the same reason and can never be anything else: identical bytes
         // normalise to identical contents, so byte-equal work is grouped by the first two
