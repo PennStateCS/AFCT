@@ -167,14 +167,16 @@ export function AssignmentSimilarityPanel({
 
   return (
     <div className="space-y-4">
-      {/* The triage block: what is here, how to narrow it, and where the line between a
-          finding and an expected answer currently sits. One block, not three cards. */}
-      <div className="space-y-3 border-b pb-4">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <Fingerprint className="h-6 w-6" />
-          Similarity
-        </h2>
+      <h2 className="flex items-center gap-2 text-xl font-semibold">
+        <Fingerprint className="h-6 w-6" />
+        Similarity
+      </h2>
 
+      {/* The triage block: what is here, how to narrow it, and where the line between a
+          finding and an expected answer currently sits. One card, not three, and never
+          collapsible: it is the answer to "is there anything for me here", which is the
+          question the page exists to answer first. */}
+      <div className="bg-card space-y-3 rounded-lg border p-4">
         {/* One live region for the state of the page, so a screen reader hears the answer
             once rather than a card at a time. */}
         <div aria-live="polite">
@@ -323,46 +325,50 @@ export function AssignmentSimilarityPanel({
       })}
 
       {setAside.length > 0 ? (
-        <Collapsible open={showCommon} onOpenChange={setShowCommon} className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-6">
-            <div className="max-w-2xl">
-              <h3 className="text-muted-foreground flex items-center gap-2 text-base font-semibold">
-                <Users className="size-4" aria-hidden="true" />
-                Set aside ({setAside.length})
-              </h3>
-              <p className="text-muted-foreground text-sm">
+        <Collapsible open={showCommon} onOpenChange={setShowCommon} asChild>
+          {/* The same card as a problem, one step quieter: these groups are shown for
+              completeness, and a reader who opens one is checking rather than reviewing. */}
+          <section className="bg-muted/40 overflow-hidden rounded-lg border">
+            <h3 className="text-base font-semibold">
+              <CollapsibleTrigger className="hover:bg-muted/70 focus-visible:ring-ring flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 p-4 text-start focus-visible:ring-2 focus-visible:outline-none">
+                <ChevronDown
+                  className={`text-muted-foreground size-5 shrink-0 self-center transition-transform ${
+                    showCommon ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden="true"
+                />
+                <Users
+                  className="text-muted-foreground size-4 shrink-0 self-center"
+                  aria-hidden="true"
+                />
+                <span>Set aside ({setAside.length})</span>
+                <span className="text-muted-foreground ms-auto text-sm font-normal">
+                  Common answers and the instructor&apos;s own solution
+                </span>
+              </CollapsibleTrigger>
+            </h3>
+
+            {/* Nothing renders until it is asked for: some of these hold thirty students. */}
+            <CollapsibleContent className="space-y-3 border-t p-4">
+              <p className="text-muted-foreground max-w-3xl text-sm">
                 Work at least {Math.round(commonShare * 100)}% of a problem&apos;s{' '}
                 {groupAssignment ? 'groups' : 'students'} submitted, and work that is the solution
                 the instructor posted. Both explain a match rather than raising one.
               </p>
-            </div>
-            <CollapsibleTrigger asChild>
-              <Button variant="outline" size="sm">
-                <ChevronDown
-                  className={
-                    showCommon ? 'rotate-180 transition-transform' : 'transition-transform'
-                  }
+              {setAside.map((cluster) => (
+                <SimilarityMatchCard
+                  key={cluster.id}
+                  cluster={cluster}
+                  subject={subject}
+                  commonShare={commonShare}
+                  showProblem
+                  onCompare={(submissions) => compare(submissions, cluster.problem)}
+                  formatDay={formatDay}
+                  formatTime={formatTime}
                 />
-                {showCommon ? 'Hide' : 'Show'} set-aside groups
-              </Button>
-            </CollapsibleTrigger>
-          </div>
-
-          {/* Nothing renders until it is asked for: some of these hold thirty students. */}
-          <CollapsibleContent className="space-y-3">
-            {setAside.map((cluster) => (
-              <SimilarityMatchCard
-                key={cluster.id}
-                cluster={cluster}
-                subject={subject}
-                commonShare={commonShare}
-                showProblem
-                onCompare={(submissions) => compare(submissions, cluster.problem)}
-                formatDay={formatDay}
-                formatTime={formatTime}
-              />
-            ))}
-          </CollapsibleContent>
+              ))}
+            </CollapsibleContent>
+          </section>
         </Collapsible>
       ) : null}
 

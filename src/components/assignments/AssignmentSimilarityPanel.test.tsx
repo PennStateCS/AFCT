@@ -345,14 +345,16 @@ describe('AssignmentSimilarityPanel', () => {
     await screen.findAllByRole('article');
 
     // A button that narrowed the page to a set-aside kind and then left the review list where
-    // it was would be worse than no button; those two have their own section instead.
-    expect(screen.queryByRole('button', { name: /Common answer/ })).not.toBeInTheDocument();
+    // it was would be worse than no button; those two have their own card instead. Scoped to
+    // the filter row, because that card's own header says "Common answers" too.
+    const filters = within(screen.getByRole('group', { name: 'Filter matches' }));
+    expect(filters.queryByRole('button', { name: /Common answer/ })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: /Instructor reference solution/ }),
+      filters.queryByRole('button', { name: /Instructor reference solution/ }),
     ).not.toBeInTheDocument();
     // And All counts what All can show: one review card, not three groups.
     expect(screen.getByRole('button', { name: 'All1' })).toBeInTheDocument();
-    expect(screen.getByText('Set aside (2)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Set aside \(2\)/ })).toBeInTheDocument();
   });
 
   it('filters to one kind of match, and says which is selected', async () => {
@@ -395,7 +397,8 @@ describe('AssignmentSimilarityPanel', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('article')).not.toBeInTheDocument();
 
-    const toggle = screen.getByRole('button', { name: /Show set-aside groups/ });
+    // Its own card, closed like a problem's, opened from the header.
+    const toggle = screen.getByRole('button', { name: /Set aside \(1\)/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
     await person.click(toggle);
