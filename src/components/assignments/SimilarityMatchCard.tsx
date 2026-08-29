@@ -79,8 +79,8 @@ export function SimilarityMatchCard({
        * rather than over a card came out within a percent or two of no fill at all, so the one
        * thing the tint had to do, tell a set-aside group from a live one, it did not do.
        */
-      className={`@container/match overflow-hidden rounded-lg border p-4 sm:p-5 ${
-        // A mixed group takes the neutral edge: the colour of its strongest relationship
+      className={`@container/match overflow-hidden rounded-lg p-4 sm:p-5 ${
+        // A mixed group takes the neutral frame: the colour of its strongest relationship
         // would be colouring the whole card by something true of part of it.
         cluster.homogeneous ? ACCENT_BORDER[cluster.displayType] : ACCENT_BORDER.common
       } ${DISPLAY_STRENGTH_OF[cluster.displayType] === 'none' ? 'bg-muted' : 'bg-card'}`}

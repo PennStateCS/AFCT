@@ -29,6 +29,68 @@ const WHAT_THIS_MEANS: Record<DisplayMatchType, string> = {
     'Enough of the class submitted this same work that the similarity is most likely explained by everyone converging on the expected answer. It is kept for completeness and set aside so it does not crowd out the rest.',
 };
 
+/**
+ * The kinds in the order the page ranks them, for the whole-page explanation. The two at the
+ * end are the set-aside ones, which are on the page too and are the pair most likely to be
+ * misread as findings.
+ */
+const HELP_ORDER: DisplayMatchType[] = [
+  'byte-identical',
+  'exact',
+  'same-machine',
+  'structural',
+  'reference',
+  'common',
+];
+
+/**
+ * How to read the page, rather than how to read one card.
+ *
+ * The same paragraphs the cards explain themselves with, gathered in one place and reachable
+ * before a reader has opened anything. Somebody meeting this tab for the first time has the
+ * question "what am I looking at" before they have a card in front of them, and an icon
+ * beside a heading was not an answer they could find.
+ */
+export function SimilarityHelpPopover() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        {/* The words when the card has room for them, the icon alone when it does not. The
+            name never changes with the width: aria-label carries it either way, so a screen
+            reader hears the same control on a phone as on a desktop. */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          aria-label="What these results mean"
+        >
+          <Info className="size-4" aria-hidden="true" />
+          <span aria-hidden="true" className="hidden @[26rem]/triage:inline @[48rem]/triage:hidden">
+            What this means
+          </span>
+          <span aria-hidden="true" className="hidden @[48rem]/triage:inline">
+            What these results mean
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        /* Long enough to need scrolling on a short window, and a scroll container a keyboard
+           can reach: Radix focuses this element when it opens. */
+        className="max-h-[70vh] w-96 space-y-3 overflow-y-auto text-sm"
+      >
+        <h4 className="font-semibold">What these results mean</h4>
+        {HELP_ORDER.map((kind) => (
+          <section key={kind} className="space-y-1">
+            <h5 className="font-medium">{DISPLAY_LABEL[kind]}</h5>
+            <p className="text-muted-foreground">{WHAT_THIS_MEANS[kind]}</p>
+          </section>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 const REUSE_EXPLANATION =
   "At least one submission here arrived after another student's copy of the same work had already been marked correct, measured from when that result landed rather than when it was submitted. That is useful context about timing. It does not by itself establish what happened.";
 
@@ -45,15 +107,23 @@ export function SimilarityInfoPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        {/* A real button with a real name: the explanation has to be reachable by keyboard
-            and by a screen reader, not parked behind a hover. */}
+        {/* The same control as the one beside the page heading, saying the same thing in the
+            same way: words where the card has room for them, the icon alone where it does
+            not. The name adds which kind this particular card is about, so a reader moving
+            between buttons is not offered five identical ones, and it begins with the words
+            on the button so what is seen and what is announced cannot disagree. */}
         <Button
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          aria-label={`Explain ${DISPLAY_LABEL[type].toLowerCase()} match`}
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          aria-label={`What this means: ${DISPLAY_LABEL[type]
+            .toLowerCase()
+            .replace('jflap', 'JFLAP')} match`}
         >
           <Info className="size-4" aria-hidden="true" />
+          <span aria-hidden="true" className="hidden @[36rem]/match:inline">
+            What this means
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-96 space-y-3 text-sm">

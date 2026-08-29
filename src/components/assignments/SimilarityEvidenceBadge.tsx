@@ -52,14 +52,22 @@ const BADGE_VARIANT: Record<DisplayMatchType, 'danger' | 'warning' | 'info' | 'n
   common: 'neutral',
 };
 
-/** The left edge of a card, echoing the badge for people scanning rather than reading. */
+/**
+ * The whole edge of a card, echoing the badge for people scanning rather than reading.
+ *
+ * All four sides rather than the left one alone: a card can be tall enough that its badge
+ * and its accent are both off the top of the screen while the reader is halfway down it, and
+ * a framed card says what kind it is wherever they happen to be looking. Two pixels, in the
+ * badge's own border colour, so it frames the card without becoming the loudest thing on the
+ * page. It supplies the card's ONLY border: `border` as well would set the width twice.
+ */
 export const ACCENT_BORDER: Record<DisplayMatchType, string> = {
-  'byte-identical': 'border-l-4 border-l-badge-danger-border',
-  exact: 'border-l-4 border-l-badge-danger-border',
-  'same-machine': 'border-l-4 border-l-badge-warning-border',
-  structural: 'border-l-4 border-l-badge-info-border',
-  reference: 'border-l-4 border-l-badge-neutral-border',
-  common: 'border-l-4 border-l-badge-neutral-border',
+  'byte-identical': 'border-2 border-badge-danger-border',
+  exact: 'border-2 border-badge-danger-border',
+  'same-machine': 'border-2 border-badge-warning-border',
+  structural: 'border-2 border-badge-info-border',
+  reference: 'border-2 border-badge-neutral-border',
+  common: 'border-2 border-badge-neutral-border',
 };
 
 export function SimilarityEvidenceBadge({ type }: { type: DisplayMatchType }) {

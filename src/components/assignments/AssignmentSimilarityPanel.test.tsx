@@ -292,14 +292,49 @@ describe('AssignmentSimilarityPanel', () => {
     expect(within(card).getByText('Reused after passing')).toBeInTheDocument();
   });
 
+  it('explains how to read the page from the heading, by keyboard', async () => {
+    const person = userEvent.setup();
+    getMock.mockResolvedValue([group()]);
+
+    renderPanel();
+
+    // One name at every width: the words come and go with the room, the accessible name
+    // does not.
+    const help = await screen.findByRole('button', { name: 'What these results mean' });
+
+    help.focus();
+    await person.keyboard('{Enter}');
+
+    // The same paragraphs the cards use, gathered before a reader has opened a card.
+    expect(
+      await screen.findByRole('heading', { name: 'What these results mean' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/same file to the byte/)).toBeInTheDocument();
+    expect(screen.getByText(/same saved JFLAP artifact/)).toBeInTheDocument();
+    // Said once: the page-level explanation and a card's own are the same strings, and only
+    // one of them is open.
+    expect(screen.getAllByText(/same file to the byte/)).toHaveLength(1);
+    // And the standing note is still on the page, not replaced by the button.
+    expect(screen.getByText(/Similarity results are informational/)).toBeInTheDocument();
+
+    await person.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('heading', { name: 'What these results mean' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
   it('explains a match type in a popover reachable by keyboard', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([group({ submissions: pairOf('ada', 'grace', ['b1', 'b2']) })]);
     renderPanel();
     await openProblems();
-    await screen.findByRole('button', { name: 'Explain exact jflap artifact match' });
+    await screen.findByRole('button', { name: 'What this means: exact JFLAP artifact match' });
 
-    await person.click(screen.getByRole('button', { name: 'Explain exact jflap artifact match' }));
+    await person.click(
+      screen.getByRole('button', { name: 'What this means: exact JFLAP artifact match' }),
+    );
 
     expect(await screen.findByRole('heading', { name: 'What this means' })).toBeInTheDocument();
     expect(screen.getByText(/same saved JFLAP artifact/)).toBeInTheDocument();

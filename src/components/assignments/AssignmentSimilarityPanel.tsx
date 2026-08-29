@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import Spinner from '@/components/ui/spinner';
 import { CompareSubmissionsDialog } from '@/components/assignments/CompareSubmissionsDialog';
 import { SimilarityMatchCard } from '@/components/assignments/SimilarityMatchCard';
+import { SimilarityHelpPopover } from '@/components/assignments/SimilarityInfoPopover';
 import { SimilarityFilters, type MatchFilter } from '@/components/assignments/SimilarityFilters';
 import { CommonThresholdSlider } from '@/components/assignments/CommonThresholdSlider';
 import {
@@ -193,10 +194,17 @@ export function AssignmentSimilarityPanel({
           either of which can be open, so the same screen gives the card very different
           widths and a viewport breakpoint would be guessing. */}
       <div className="bg-card @container/triage space-y-4 rounded-lg border p-4">
-        <h2 className="flex items-center gap-2 text-xl font-semibold">
-          <Fingerprint className="h-6 w-6" />
-          Similarity
-        </h2>
+        {/* The name of the page and the way in to reading it, on one line: the question
+            "what am I looking at" arrives with the heading, not three cards later. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Fingerprint className="h-6 w-6" />
+            Similarity
+          </h2>
+          <div className="ms-auto">
+            <SimilarityHelpPopover />
+          </div>
+        </div>
 
         {/* What is here, and the one setting that changes it, side by side once the card is
             wide enough to hold both. Below that they stack in the same order. */}
