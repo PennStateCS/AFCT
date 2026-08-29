@@ -99,6 +99,7 @@ Everything the tab decides about *display* lives in `lib/similarity/evidence.ts`
 - `clusterMatches` runs union-find over shared students, per problem, so four students who all share work are one card rather than six. Common groups are never folded into a cluster of findings. Relationships stay on the cluster and are rendered behind one control.
 - **A group of more than one relationship makes no claim about all of its students.** They were gathered by being connected to somebody, not by all sharing one thing, so the heading reads "3 of 38 students are connected by 2 similarity relationships" and the kinds are listed underneath. `matchesAnswerFile` on a cluster means every relationship in it is the posted solution; a partial one is stated as a count instead.
 - `compareClusters` orders the page: match type first, then reuse after passing, then size, then recency.
+- `cluster.attempts` is what the card lists: every matching submission, deduplicated by id and NOT by student, so two attempts by one student are two rows. `cluster.students` stays what the counts are made of. A group assignment counts `cluster.groups` against `problemGroupCount` instead, falling back to students when the work carries no group.
 
 The card and its parts are `SimilarityMatchCard`, `SimilarityEvidenceBadge`, `SimilarityInfoPopover`, `SimilarityTimeline` and `SimilarityFilters`. The popover copy is the feature's explanation of itself and is worth as much care as the code.
 

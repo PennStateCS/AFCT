@@ -78,11 +78,11 @@ const group = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const renderPanel = () => {
+const renderPanel = (props: { groupAssignment?: boolean } = {}) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={client}>
-      <AssignmentSimilarityPanel />
+      <AssignmentSimilarityPanel {...props} />
     </QueryClientProvider>,
   );
 };
@@ -246,7 +246,17 @@ describe('AssignmentSimilarityPanel', () => {
     await person.click(toggle);
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(await screen.findAllByRole('button', { name: 'Compare' })).toHaveLength(2);
+    // One Compare per relationship, each naming who it is between, so a reader opening one
+    // knows which two files they are about to see.
+    // Each relationship says who it is between and what kind it is, and carries its own
+    // Compare: the evidence belongs to those two files, not to the whole component.
+    // Named twice on purpose: once in the row, once inside the button, so a reader moving
+    // between buttons hears which relationship each Compare belongs to.
+    expect(await screen.findAllByText('a Student and b Student')).toHaveLength(2);
+    expect(screen.getAllByText('a Student and c Student')).toHaveLength(2);
+    expect(screen.getAllByText(/Very strong · Exact JFLAP artifact/)).toHaveLength(2);
+    // Two relationship compares, plus the secondary whole-group one.
+    expect(screen.getAllByRole('button', { name: /Compare/ })).toHaveLength(3);
   });
 
   it('filters to one kind of match, and says which is selected', async () => {
@@ -304,7 +314,7 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    const chronology = await screen.findByRole('list', { name: 'Submission order' });
+    const chronology = await screen.findByRole('list', { name: 'Matching attempts, earliest first' });
     const rows = within(chronology).getAllByRole('listitem');
 
     expect(within(rows[0] as HTMLElement).getByText('sarah Student')).toBeInTheDocument();
@@ -324,6 +334,113 @@ describe('AssignmentSimilarityPanel', () => {
       expect(text).not.toContain(word);
     }
     expect(text).not.toContain('hash');
+  });
+
+  it('shows every matching attempt, including two from the same student', async () => {
+    // Sarah's second and fourth attempts both matched. Both have to be visible: which
+    // attempt matched is the thing being reviewed, and a per-student list would show one.
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'attempts',
+        submissions: [
+          submission({
+            id: 'sub-sarah-2',
+            student: student('sarah', 'sarah'),
+            attempt: 2,
+            submittedAt: '2026-08-14T22:42:00.000Z',
+          }),
+          submission({
+            id: 'sub-michael-1',
+            student: student('michael', 'michael'),
+            attempt: 1,
+            submittedAt: '2026-08-14T22:49:00.000Z',
+          }),
+          submission({
+            id: 'sub-sarah-4',
+            student: student('sarah', 'sarah'),
+            attempt: 4,
+            submittedAt: '2026-08-14T23:36:00.000Z',
+          }),
+        ],
+      }),
+    ]);
+
+    renderPanel();
+
+    const attempts = await screen.findByRole('list', { name: 'Matching attempts, earliest first' });
+    const rows = within(attempts).getAllByRole('listitem');
+
+    expect(rows).toHaveLength(3);
+    expect(within(rows[0] as HTMLElement).getByText('sarah Student')).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText('Attempt 2')).toBeInTheDocument();
+    expect(within(rows[1] as HTMLElement).getByText('michael Student')).toBeInTheDocument();
+    // Chronological, and Sarah's later attempt is a row of its own rather than folded away.
+    expect(within(rows[2] as HTMLElement).getByText('sarah Student')).toBeInTheDocument();
+    expect(within(rows[2] as HTMLElement).getByText('Attempt 4')).toBeInTheDocument();
+    expect(within(rows[2] as HTMLElement).getByText('+54 min')).toBeInTheDocument();
+  });
+
+  it('reviews a group assignment as groups, naming who submitted each attempt', async () => {
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'teams',
+        groupCount: 2,
+        problemGroupCount: 9,
+        submissions: [
+          submission({
+            id: 'sub-g4-1',
+            student: student('alice', 'Alice'),
+            studentGroup: { id: 'g4', name: 'Group 4' },
+            attempt: 1,
+            submittedAt: '2026-08-14T22:42:00.000Z',
+          }),
+          submission({
+            id: 'sub-g7-1',
+            student: student('david', 'David'),
+            studentGroup: { id: 'g7', name: 'Group 7' },
+            attempt: 1,
+            submittedAt: '2026-08-14T22:49:00.000Z',
+          }),
+          // The same team again, submitted by a different member. Still one group.
+          submission({
+            id: 'sub-g4-2',
+            student: student('bob', 'Bob'),
+            studentGroup: { id: 'g4', name: 'Group 4' },
+            attempt: 2,
+            submittedAt: '2026-08-14T22:58:00.000Z',
+          }),
+        ],
+      }),
+    ]);
+
+    renderPanel({ groupAssignment: true });
+
+    // Two groups, not three students, and counted against the groups who submitted.
+    expect(
+      await screen.findByRole('heading', { name: /2 of 9 groups/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('9 groups submitted · 1 match group')).toBeInTheDocument();
+
+    const attempts = screen.getByRole('list', { name: 'Matching attempts, earliest first' });
+    const rows = within(attempts).getAllByRole('listitem');
+    expect(rows).toHaveLength(3);
+    // The team leads; the member who pressed submit is kept as secondary detail, because any
+    // member may submit and the work is not theirs alone.
+    expect(within(rows[0] as HTMLElement).getByText('Group 4')).toBeInTheDocument();
+    expect(within(rows[0] as HTMLElement).getByText('Submitted by Alice Student')).toBeInTheDocument();
+    expect(within(rows[2] as HTMLElement).getByText('Group 4')).toBeInTheDocument();
+    expect(within(rows[2] as HTMLElement).getByText('Submitted by Bob Student')).toBeInTheDocument();
+  });
+
+  it('falls back to counting students when a group assignment has no groups on the work', async () => {
+    // Older rows carry no group. Better a true sentence about students than an invented
+    // denominator about teams.
+    getMock.mockResolvedValue([group({ matchId: 'legacy', submissions: pairOf('a', 'b') })]);
+
+    renderPanel({ groupAssignment: true });
+
+    expect(await screen.findByRole('heading', { name: /2 of 84 students/ })).toBeInTheDocument();
+    expect(screen.getByText('84 students submitted · 1 match group')).toBeInTheDocument();
   });
 
   it('opens the comparison from the card, earliest student first', async () => {
@@ -347,7 +464,7 @@ describe('AssignmentSimilarityPanel', () => {
     await screen.findByRole('article');
 
     await person.click(screen.getByRole('button', { name: /Adjust/ }));
-    fireEvent.change(await screen.findByLabelText('Common threshold'), {
+    fireEvent.change(await screen.findByLabelText('Common-answer threshold'), {
       target: { value: '0.2' },
     });
 

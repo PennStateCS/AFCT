@@ -71,11 +71,19 @@ A **Structurally similar** card lists what the submissions actually share, and e
 > - 3 pairs of states keep the same underlying identifiers, which are not the visible names
 > - Both contain the same unusual feature: a state nothing reaches, a dead end, or a repeated transition
 
-### Chronology
+### The attempts
 
-Each card lists its students earliest first, showing the time each submitted, which of their attempts it was, what the autograder made of it, a **First** marker on the earliest, and how long after the first each of the others arrived.
+Each card lists the attempts that actually matched, earliest first: who sent it, which attempt of theirs it was, when, what the autograder made of it, a **First** marker on the earliest, and how long after the first each of the others arrived. **Open** downloads that exact file.
+
+One row per attempt, not per student. Where a problem allows several tries and two of somebody's attempts both matched, both are listed, because which attempt matched is the thing you are being asked about. Attempts that had nothing to do with the finding are not shown at all.
 
 The order is half the story. "11 minutes apart" only means something once you know which way round.
+
+### Group assignments
+
+On an assignment submitted by groups, the group is who a finding is about: any member may submit for the team, so counting members would report two teams sharing work as four students. Cards count groups ("2 of 9 groups"), the attempt list leads with the group name, and the member who actually sent that attempt is named underneath as **Submitted by**. That is detail rather than ownership: the work belongs to the team.
+
+Members of one team matching each other is the feature working, not a finding, so it is never reported. Work submitted before AFCT recorded groups is still counted by student, which is the only thing that can be said about it truthfully.
 
 ### Filtering
 
@@ -97,7 +105,7 @@ The **Common threshold** control at the top sets where that quarter falls. It is
 
 **Compare submissions** opens two files side by side, drawn the way that problem type is normally read: two automata, two grammars, two expressions. Node positions are kept as the students left them, because where somebody placed their states is exactly what separates a copied file from the same answer worked out twice. Any notes a student wrote on the JFLAP canvas are drawn too, which is what lets you read the text behind a line about writing that matches word for word. When a group involves more than two students, either side can be switched to any of the others, and each relationship inside the group has its own **Compare** so you can go straight to the two files a given line is about.
 
-Individual files can also be opened from the chronology. Opening or downloading a student's submission is recorded in the system log, as it is everywhere else in AFCT.
+Individual files can also be opened from the attempt list. Opening or downloading a student's submission is recorded in the system log, as it is everywhere else in AFCT.
 
 ## What it will miss
 

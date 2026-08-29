@@ -63,7 +63,7 @@ describe('CompareSubmissionsDialog', () => {
     show('FA');
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      'Even zeros: 2 students submitted identical work',
+      'Even zeros: comparing 2 matching attempts',
     );
     expect(screen.getByText('Ada Student')).toBeInTheDocument();
     expect(screen.getByText('Grace Student')).toBeInTheDocument();
