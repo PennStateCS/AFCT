@@ -19,6 +19,7 @@
 // do is not a question this code can answer.
 
 import type { ProvenanceFeatures } from './provenance';
+import type { ReviewSubject } from './rarity';
 
 /** A submission as this comparison needs it. */
 export type NearMatchInput = {
@@ -107,6 +108,20 @@ function weightOf(studentsWithFeature: number, studentsInProblem: number): numbe
 const prefixOf = (feature: string): string => feature.slice(0, feature.indexOf(':'));
 
 /**
+ * Who a submission counts as, for rarity.
+ *
+ * A team is one holder of a feature however many members submitted and however many times.
+ * Work with no group recorded, which is what a group assignment's older rows look like,
+ * counts as its student: the only identity it actually has.
+ */
+function ownerKey(subject: ReviewSubject): (submission: NearMatchInput) => string {
+  return (submission) =>
+    subject === 'group' && submission.studentGroupId
+      ? `group:${submission.studentGroupId}`
+      : `student:${submission.studentId}`;
+}
+
+/**
  * Pairs of submissions that share uncommon structure, most convincing first.
  *
  * Every attempt is compared, not just one per student: a copied file can arrive on a fourth
@@ -118,24 +133,29 @@ const prefixOf = (feature: string): string => feature.slice(0, feature.indexOf('
  * assignments are skipped for the same reason they are elsewhere, since teammates sharing
  * work is the group feature working.
  */
-export function findNearMatches(submissions: NearMatchInput[]): NearMatch[] {
+export function findNearMatches(
+  submissions: NearMatchInput[],
+  options: { subject?: ReviewSubject } = {},
+): NearMatch[] {
   if (submissions.length < 2) return [];
 
-  const students = new Set(submissions.map((submission) => submission.studentId));
-  if (students.size < 2) return [];
+  const owner = ownerKey(options.subject ?? 'student');
+  const subjects = new Set(submissions.map(owner));
+  if (subjects.size < 2) return [];
 
-  // How many STUDENTS hold each feature, counted once each however many times they
-  // submitted: a student who tried five times must not make their own quirks look common.
+  // How many SUBJECTS hold each feature, counted once each however many times they
+  // submitted: a student who tried five times must not make their own quirks look common,
+  // and neither must a team whose three members each submitted the shared file.
   const holders = new Map<string, Set<string>>();
   for (const submission of submissions) {
     for (const feature of new Set(submission.features.features)) {
-      holders.set(feature, (holders.get(feature) ?? new Set<string>()).add(submission.studentId));
+      holders.set(feature, (holders.get(feature) ?? new Set<string>()).add(owner(submission)));
     }
   }
 
   const weights = new Map<string, number>();
-  for (const [feature, studentsWithIt] of holders) {
-    const weight = weightOf(studentsWithIt.size, students.size);
+  for (const [feature, subjectsWithIt] of holders) {
+    const weight = weightOf(subjectsWithIt.size, subjects.size);
     if (weight > 0) weights.set(feature, weight);
   }
 
@@ -156,10 +176,11 @@ export function findNearMatches(submissions: NearMatchInput[]): NearMatch[] {
       for (let j = i + 1; j < holdersOfFeature.length; j++) {
         const a = holdersOfFeature[i]!;
         const b = holdersOfFeature[j]!;
-        // One student's own attempts are not a pair with each other.
+        // One subject's own attempts are not a pair with each other: a student's own
+        // resubmissions, and on a group assignment a team's own members, who share their
+        // work by design.
         if (a.studentId === b.studentId) continue;
         if (a.features.machineType !== b.features.machineType) continue;
-        // Teammates on a group assignment share their work by design.
         if (a.studentGroupId && a.studentGroupId === b.studentGroupId) continue;
         // Already in the same match on the strength of an exact or shape hash.
         if (a.shapeKey && a.shapeKey === b.shapeKey) continue;
@@ -172,16 +193,16 @@ export function findNearMatches(submissions: NearMatchInput[]): NearMatch[] {
   // Every attempt is compared, because a file can be copied on a fourth try as easily as a
   // first, and comparing only one attempt each would miss exactly that. But two students get
   // one card between them: the attempts that match each other best, not one per combination.
-  const bestPerStudentPair = new Map<string, NearMatch>();
+  const bestPerSubjectPair = new Map<string, NearMatch>();
   for (const { a, b } of candidates.values()) {
     const match = scorePair(a, b, weights);
     if (!match) continue;
-    const pairKey = [a.studentId, b.studentId].sort().join(':');
-    const held = bestPerStudentPair.get(pairKey);
-    if (!held || match.score > held.score) bestPerStudentPair.set(pairKey, match);
+    const pairKey = [owner(a), owner(b)].sort().join(':');
+    const held = bestPerSubjectPair.get(pairKey);
+    if (!held || match.score > held.score) bestPerSubjectPair.set(pairKey, match);
   }
 
-  return [...bestPerStudentPair.values()].sort((x, y) => y.score - x.score);
+  return [...bestPerSubjectPair.values()].sort((x, y) => y.score - x.score);
 }
 
 function scorePair(
