@@ -257,7 +257,7 @@ function localParts(ms: number, timeZone: string): { date: string; hour: number;
 function byParticipantProblem(submissions: StatsSubmission[]): StatsSubmission[][] {
   const groups = new Map<string, StatsSubmission[]>();
   for (const s of submissions) {
-    const key = `${s.participantId} ${s.problemId}`;
+    const key = `${s.participantId}\u0000${s.problemId}`;
     const list = groups.get(key);
     if (list) list.push(s);
     else groups.set(key, [s]);
