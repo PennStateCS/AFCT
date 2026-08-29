@@ -501,7 +501,11 @@ function labelByteSets(group: SubmissionMatchGroup, byteHashes: Map<string, stri
   for (const submission of group.submissions) {
     const hash = byteHashes.get(submission.id);
     if (!hash) continue;
-    if (!labels.has(hash)) labels.set(hash, `b${labels.size + 1}`);
+    // Carrying the match's own id, so two matches cannot both call their first set `b1` and
+    // have a reader of the page conclude that submissions in different matches agree. They
+    // cannot: identical bytes normalise to identical contents, so byte-equal work is always
+    // inside one match. The prefix makes that impossible to get wrong by accident.
+    if (!labels.has(hash)) labels.set(hash, `${group.matchId}-b${labels.size + 1}`);
     submission.byteKey = labels.get(hash) ?? null;
   }
 }
@@ -720,7 +724,7 @@ async function findNearMatchGroups(
             // Two near-matched files are never the same bytes (identical bytes normalise to
             // identical contents, which the first two checks would have grouped), so each
             // gets its own label and the page says nothing about raw equality here.
-            byteKey: row.byteHash ? `b${row.id}` : null,
+            byteKey: row.byteHash ? `near-${row.id}` : null,
             student: row.student,
             studentGroup: row.studentGroup,
           })),

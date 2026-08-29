@@ -212,6 +212,10 @@ export function relationshipByteLines(
 export function byteIdenticalLine(cluster: MatchCluster): string | null {
   if (isSetAside(cluster.type)) return null;
   if (cluster.students.length < 2 || cluster.attempts.length < 2) return null;
+  // Only a cluster of one relationship can be one set of files. Byte-equal work always sits
+  // in the same relationship (identical bytes normalise to identical contents), so a cluster
+  // of several is several sets by definition, and each says so for itself.
+  if (cluster.relationships.length !== 1) return null;
 
   const keys = new Set(cluster.attempts.map((attempt) => attempt.byteKey));
   if (keys.size !== 1) return null;

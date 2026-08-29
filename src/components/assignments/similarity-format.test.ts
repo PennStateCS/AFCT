@@ -188,6 +188,20 @@ describe('byte-for-byte equality, said where it is true', () => {
       '3 of them submitted byte-for-byte identical files.',
     );
   });
+  it('says nothing at cluster level when a cluster holds more than one relationship', () => {
+    // Two relationships, each internally byte-identical, are two different files: byte-equal
+    // work always sits in one relationship, so a cluster spanning two cannot be one set.
+    const twoRelationships = cluster({
+      students: [student('a'), student('b'), student('c')],
+      attempts: [student('a'), student('b'), student('c')],
+      relationships: [
+        relationship({ matchId: 'r1', submissions: [student('a'), student('b')] }),
+        relationship({ matchId: 'r2', submissions: [student('b'), student('c')] }),
+      ],
+    });
+
+    expect(byteIdenticalLine(twoRelationships)).toBeNull();
+  });
 });
 
 describe('relationshipParticipants', () => {
