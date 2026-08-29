@@ -477,6 +477,24 @@ export function heatmapLevel(count: number, max: number): HeatmapLevel {
   return 4;
 }
 
+/**
+ * The running total of a timeline, day by day.
+ *
+ * Cumulative because a term is too long to read as bars: at fifteen weeks the daily counts
+ * are a picket fence, while a running total turns the same data into a shape, where the
+ * interesting thing is the slope. Flat means nobody is working; a riser means everybody is,
+ * and where the riser STARTS relative to a deadline is the whole point of drawing it.
+ */
+export function runningTotals(
+  timeline: TimelinePoint[],
+): { date: string; count: number; total: number }[] {
+  let total = 0;
+  return timeline.map((point) => {
+    total += point.count;
+    return { date: point.date, count: point.count, total };
+  });
+}
+
 /** When a participant first and last submitted a problem, epoch milliseconds. */
 export type SubmissionSpan = { first: number; latest: number };
 

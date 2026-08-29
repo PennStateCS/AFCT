@@ -12,6 +12,7 @@ import {
   computeSubmissionTimeline,
   computeActivityHeatmap,
   heatmapLevel,
+  runningTotals,
   buildAssignmentStatistics,
   STATUS_ORDER,
   type StatsParticipant,
@@ -599,5 +600,23 @@ describe('problem weight', () => {
     });
 
     expect(stats.problems[0]!.pointsLostMean).toBeNull();
+  });
+});
+
+describe('runningTotals', () => {
+  it('adds each day to the days before it', () => {
+    const totals = runningTotals([
+      { date: '2026-09-01', count: 3 },
+      { date: '2026-09-02', count: 0 },
+      { date: '2026-09-03', count: 7 },
+    ]);
+
+    expect(totals.map((t) => t.total)).toEqual([3, 3, 10]);
+    // The day's own count survives: the shape is the running total, the tooltip is the day.
+    expect(totals.map((t) => t.count)).toEqual([3, 0, 7]);
+  });
+
+  it('has nothing to say about an empty term', () => {
+    expect(runningTotals([])).toEqual([]);
   });
 });
