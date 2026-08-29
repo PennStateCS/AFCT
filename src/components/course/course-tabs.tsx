@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  BarChart3,
   BookOpen,
   FileText,
   GraduationCap,
@@ -38,6 +39,8 @@ export const COURSE_TABS: readonly CourseTabDef[] = [
   { value: 'problems', label: 'Problems', Icon: FileText },
   { value: 'roster', label: 'Roster', Icon: GraduationCap },
   { value: 'grades', label: 'Grades', Icon: Table },
+  // Beside Grades on purpose: the same numbers, read as a class rather than as a table.
+  { value: 'statistics', label: 'Statistics', Icon: BarChart3 },
   { value: 'groups', label: 'Groups', Icon: Users },
   { value: 'activity', label: 'Activity', Icon: Activity },
   { value: 'settings', label: 'Settings', Icon: Settings },

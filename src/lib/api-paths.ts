@@ -171,6 +171,8 @@ export const apiPaths = {
     `/api/courses/${courseId}/assignments/${aid}/problem-grades/${studentId}`,
   assignmentProblemGradesSummary: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/problem-grades/summary`,
+  /** Course-wide analytics: the Statistics tab beside Grades. */
+  courseStatistics: (courseId: string) => `/api/courses/${courseId}/statistics`,
   assignmentStatistics: (courseId: string, aid: string) =>
     `/api/courses/${courseId}/assignments/${aid}/statistics`,
   assignmentSimilarity: (courseId: string, aid: string) =>

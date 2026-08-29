@@ -28,6 +28,8 @@ export const queryKeys = {
 
   // --- A single course and its sections ------------------------------------
   course: {
+    /** The course-wide Statistics tab. */
+    statistics: (courseId: string) => ['course', courseId, 'statistics'] as const,
     /** Prefix for every entry scoped to a course; use to invalidate all of them. */
     all: (courseId: string) => ['course', courseId] as const,
     view: (courseId: string, view: string) => ['course', courseId, view] as const,

@@ -76,6 +76,7 @@ export type TabType =
   | 'problems'
   | 'roster'
   | 'grades'
+  | 'statistics'
   | 'groups'
   | 'activity'
   | 'settings';

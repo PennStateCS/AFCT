@@ -1,0 +1,277 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const prismaMock = vi.hoisted(() => ({
+  course: { findUnique: vi.fn() },
+  roster: { findMany: vi.fn() },
+  assignment: { findMany: vi.fn() },
+  groupMembership: { findMany: vi.fn() },
+  assignmentProblemGrade: { findMany: vi.fn() },
+  submission: { findMany: vi.fn() },
+}));
+
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
+
+import { getCourseStatistics } from './course-statistics-service';
+
+const DUE = new Date('2026-09-10T23:59:00.000Z');
+const GRADED_AT = new Date('2026-09-11T09:00:00.000Z');
+
+const rosterRow = (
+  userId: string,
+  over: { status?: 'ENROLLED' | 'DROPPED'; inactive?: boolean } = {},
+) => ({
+  userId,
+  status: over.status ?? 'ENROLLED',
+  user: { inactive: over.inactive ?? false },
+});
+
+const problem = (problemId: string, maxPoints = 10, type: string | null = 'FA') => ({
+  problemId,
+  maxPoints,
+  problem: { type },
+});
+
+const assignment = (over: Record<string, unknown> = {}) => ({
+  id: 'a1',
+  title: 'Homework 1',
+  dueDate: DUE,
+  isPublished: true,
+  assignedToEveryone: true,
+  groupSetId: null,
+  assignees: [] as { userId: string | null; groupId: string | null }[],
+  problems: [problem('p1')],
+  ...over,
+});
+
+const grade = (studentId: string, problemId: string, value: number, assignmentId = 'a1') => ({
+  studentId,
+  assignmentId,
+  problemId,
+  grade: value,
+  updatedAt: GRADED_AT,
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  prismaMock.course.findUnique.mockResolvedValue({
+    id: 'c1',
+    name: 'Theory of Computation',
+    timezone: 'America/New_York',
+  });
+  prismaMock.roster.findMany.mockResolvedValue([]);
+  prismaMock.assignment.findMany.mockResolvedValue([]);
+  prismaMock.groupMembership.findMany.mockResolvedValue([]);
+  prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  prismaMock.submission.findMany.mockResolvedValue([]);
+});
+
+describe('getCourseStatistics', () => {
+  it('returns null for a course that is not there', async () => {
+    prismaMock.course.findUnique.mockResolvedValue(null);
+    expect(await getCourseStatistics('nope')).toBeNull();
+  });
+
+  it('counts enrolled students with working accounts, and says who it left out', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([
+      rosterRow('s1'),
+      rosterRow('s2', { status: 'DROPPED' }),
+      rosterRow('s3', { inactive: true }),
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    expect(stats.studentCount).toBe(1);
+    expect(stats.exclusions).toEqual([
+      { reason: 'dropped', count: 1 },
+      { reason: 'inactive', count: 1 },
+    ]);
+  });
+
+  it('computes the course average the way the Grades tab does', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1'), rosterRow('s2')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'a1' }),
+      assignment({ id: 'a2', title: 'Homework 2' }),
+    ]);
+    // s1 is marked on both; s2 only on the first, and the second is set but unmarked.
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      grade('s1', 'p1', 10, 'a1'),
+      grade('s1', 'p1', 8, 'a2'),
+      grade('s2', 'p1', 10, 'a1'),
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    // s1 is 18 of 20, s2 is 10 of 20: ungraded work reads as unearned, which is the number
+    // the Grades tab shows in its Average column.
+    expect(stats.distribution.includedCount).toBe(2);
+    expect(stats.distribution.mean).toBeCloseTo(70, 5);
+    // The other reading measures each student against what has been marked for them.
+    expect(stats.distributionGradedOnly.mean).toBeCloseTo(95, 5);
+    expect(stats.distribution.assignmentsCounted).toBe(2);
+    expect(stats.distribution.assignmentsWithGrades).toBe(2);
+  });
+
+  it('leaves an unpublished draft out of everybody denominator', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'a1' }),
+      assignment({ id: 'draft', title: 'Not out yet', isPublished: false }),
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([grade('s1', 'p1', 10, 'a1')]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    // Full marks on everything the class can see. Counting the draft would report 50%.
+    expect(stats.distribution.mean).toBe(100);
+    expect(stats.distribution.assignmentsCounted).toBe(1);
+  });
+
+  it('measures a group assignment in teams, not in the students inside them', async () => {
+    prismaMock.roster.findMany.mockResolvedValue(
+      ['u1', 'u2', 'u3'].map((userId) => rosterRow(userId)),
+    );
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'team', title: 'Group work', groupSetId: 'gs1' }),
+    ]);
+    prismaMock.groupMembership.findMany.mockResolvedValue([
+      { userId: 'u1', groupId: 'g1', group: { groupSetId: 'gs1' } },
+      { userId: 'u2', groupId: 'g1', group: { groupSetId: 'gs1' } },
+      { userId: 'u3', groupId: 'g2', group: { groupSetId: 'gs1' } },
+    ]);
+    // The autograder fans one grade out to every member, so g1 has two identical rows.
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      grade('u1', 'p1', 10, 'team'),
+      grade('u2', 'p1', 10, 'team'),
+      grade('u3', 'p1', 5, 'team'),
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+    const row = stats.assignments.find((a) => a.id === 'team')!;
+
+    // Two teams. Counted per student, the bigger team would have outweighed the smaller one
+    // in a chart that looks like it is about difficulty.
+    expect(row.unit).toBe('group');
+    expect(row.gradedCount).toBe(2);
+    expect(row.boxplot?.median).toBe(75);
+    // Each student still carries the group's grade into their own course average.
+    expect(stats.distribution.includedCount).toBe(3);
+  });
+
+  it('counts a problem set twice as two performances', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'a1', problems: [problem('shared', 10, 'CFG')] }),
+      // The same problem again on the midterm: a second occasion, not a repeat of the first.
+      assignment({ id: 'midterm', title: 'Midterm', problems: [problem('shared', 10, 'CFG')] }),
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      grade('s1', 'shared', 10, 'a1'),
+      grade('s1', 'shared', 4, 'midterm'),
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+    const cfg = stats.problemTypes.find((t) => t.type === 'CFG')!;
+
+    expect(cfg.totalCount).toBe(2);
+    expect(cfg.gradedCount).toBe(2);
+    expect(cfg.boxplot?.median).toBe(70);
+  });
+
+  it('gives an untyped problem a bucket of its own', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ problems: [problem('p1', 10, null)] }),
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([grade('s1', 'p1', 7)]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    expect(stats.problemTypes.map((t) => t.type)).toEqual(['untyped']);
+  });
+
+  it('counts the grading queue in pieces of work', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1'), rosterRow('s2')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ problems: [problem('p1'), problem('p2')] }),
+    ]);
+    // s1's first problem is marked; everything else is not.
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([grade('s1', 'p1', 10)]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        studentId: 's1',
+        studentGroupId: null,
+        assignmentId: 'a1',
+        problemId: 'p2',
+        submittedAt: new Date('2026-09-09T10:00:00Z'),
+      },
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+    const row = stats.workload[0]!;
+    const states = Object.fromEntries(row.states.map((s) => [s.key, s.count]));
+
+    // Two students times two problems: four pieces of work, not two students.
+    expect(row.total).toBe(4);
+    expect(states.graded).toBe(1);
+    expect(states['ungraded-submitted']).toBe(1);
+    expect(states['ungraded-missing']).toBe(2);
+  });
+
+  it('marks every published deadline on the timeline', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'a1' }),
+      assignment({ id: 'a2', title: 'Homework 2', dueDate: new Date('2026-09-24T23:59:00Z') }),
+      assignment({ id: 'draft', isPublished: false }),
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        studentId: 's1',
+        studentGroupId: null,
+        assignmentId: 'a1',
+        problemId: 'p1',
+        submittedAt: new Date('2026-09-09T10:00:00Z'),
+      },
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    expect(stats.dueDates.map((d) => d.id)).toEqual(['a1', 'a2']);
+    expect(stats.timeline.reduce((n, p) => n + p.count, 0)).toBe(1);
+  });
+
+  it('ignores submissions from students it does not count', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([
+      rosterRow('s1'),
+      rosterRow('gone', { status: 'DROPPED' }),
+    ]);
+    prismaMock.assignment.findMany.mockResolvedValue([assignment()]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        studentId: 'gone',
+        studentGroupId: null,
+        assignmentId: 'a1',
+        problemId: 'p1',
+        submittedAt: new Date('2026-09-09T10:00:00Z'),
+      },
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    // Their work is kept and stays reviewable; it is the figures about the current class
+    // that they are not part of.
+    expect(stats.timeline).toEqual([]);
+  });
+
+  it('holds up in the first week of a course, with nothing in it', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    expect(stats.assignments).toEqual([]);
+    expect(stats.problemTypes).toEqual([]);
+    expect(stats.distribution.includedCount).toBe(0);
+    expect(stats.atRisk).toEqual({ belowThreshold: 0, threshold: 60, missingTwoOrMore: 0 });
+  });
+});
