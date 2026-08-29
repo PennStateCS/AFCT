@@ -259,6 +259,28 @@ describe('AssignmentSimilarityPanel', () => {
     expect(screen.getAllByRole('button', { name: /Compare/ })).toHaveLength(3);
   });
 
+  it('offers filters only for the kinds it can actually show', async () => {
+    getMock.mockResolvedValue([
+      group({ matchId: 'exact', submissions: pairOf('a', 'b') }),
+      // Set aside: a common answer, and the instructor's own solution.
+      group({ matchId: 'common', studentCount: 42, identicalStudentCount: 42, submissions: pairOf('c', 'd') }),
+      group({ matchId: 'posted', matchesAnswerFile: true, submissions: pairOf('e', 'f') }),
+    ]);
+
+    renderPanel();
+    await screen.findAllByRole('article');
+
+    // A button that narrowed the page to a set-aside kind and then left the review list where
+    // it was would be worse than no button; those two have their own section instead.
+    expect(screen.queryByRole('button', { name: /Common answer/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Instructor reference solution/ }),
+    ).not.toBeInTheDocument();
+    // And All counts what All can show: one review card, not three groups.
+    expect(screen.getByRole('button', { name: 'All1' })).toBeInTheDocument();
+    expect(screen.getByText('Set aside (2)')).toBeInTheDocument();
+  });
+
   it('filters to one kind of match, and says which is selected', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([
@@ -430,6 +452,40 @@ describe('AssignmentSimilarityPanel', () => {
     expect(within(rows[0] as HTMLElement).getByText('Submitted by Alice Student')).toBeInTheDocument();
     expect(within(rows[2] as HTMLElement).getByText('Group 4')).toBeInTheDocument();
     expect(within(rows[2] as HTMLElement).getByText('Submitted by Bob Student')).toBeInTheDocument();
+  });
+
+  it('judges a common answer by teams on a group assignment, not by their members', async () => {
+    // Nine teams submitted; two of them share work, and between them they hold eight of the
+    // twenty-eight students. That is 29% of the students and 22% of the teams, so counting
+    // students would file this away as the expected answer and nobody would read it.
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'teams',
+        studentCount: 8,
+        problemStudentCount: 28,
+        groupCount: 2,
+        problemGroupCount: 9,
+        submissions: [
+          submission({
+            id: 'sub-g4',
+            student: student('alice', 'Alice'),
+            studentGroup: { id: 'g4', name: 'Group 4' },
+          }),
+          submission({
+            id: 'sub-g7',
+            student: student('david', 'David'),
+            studentGroup: { id: 'g7', name: 'Group 7' },
+          }),
+        ],
+      }),
+    ]);
+
+    renderPanel({ groupAssignment: true });
+
+    expect(await screen.findByRole('heading', { name: /2 of 9 groups/ })).toBeInTheDocument();
+    // Worth reviewing, not set aside.
+    expect(screen.getByText('1 match group worth reviewing across 1 problem.')).toBeInTheDocument();
+    expect(screen.queryByText(/Set aside \(/)).not.toBeInTheDocument();
   });
 
   it('falls back to counting students when a group assignment has no groups on the work', async () => {

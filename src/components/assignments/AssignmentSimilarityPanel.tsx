@@ -112,24 +112,29 @@ export function AssignmentSimilarityPanel({
   };
   const formatFull = (iso: string) => `${formatDay(iso)} ${formatTime(iso)}`.trim();
 
-  const clusters = useMemo(() => clusterMatches(data ?? [], commonShare), [data, commonShare]);
+  const clusters = useMemo(
+    () => clusterMatches(data ?? [], commonShare, subject),
+    [data, commonShare, subject],
+  );
 
   // Set aside rather than reviewed: what the class as a whole answered, and what the
   // instructor handed out. Both explain a match instead of raising one.
   const worthReviewing = clusters.filter((cluster) => !isSetAside(cluster.type));
   const setAside = clusters.filter((cluster) => isSetAside(cluster.type));
   const summary = summarise(clusters);
-  const counts = countByType(clusters);
+  // Counted over what the filters can actually show, so "All 6" and six cards agree.
+  const counts = countByType(worthReviewing);
 
   // Grouped under their problem, with the strongest evidence first inside each, and the
   // problem holding the strongest first on the page.
   const sections = useMemo(() => {
-    // The set-aside kinds have their own section below, so choosing one of those filters
-    // leaves the review list as it was rather than emptying the page.
+    // Only the review kinds are offered as filters; the set-aside ones have their own
+    // section below, with their own count and their own control.
+    // Derived from `clusters` rather than from the list above, so this memo depends only on
+    // values it can see change.
+    const reviewable = clusters.filter((cluster) => !isSetAside(cluster.type));
     const shown =
-      filter === 'all' || isSetAside(filter as MatchCluster['type'])
-        ? worthReviewing
-        : worthReviewing.filter((cluster) => cluster.type === filter);
+      filter === 'all' ? reviewable : reviewable.filter((cluster) => cluster.type === filter);
 
     const byProblem = new Map<
       string,
@@ -149,7 +154,7 @@ export function AssignmentSimilarityPanel({
       byProblem.set(cluster.problem.id, section);
     }
     return [...byProblem.entries()];
-  }, [worthReviewing, filter]);
+  }, [clusters, filter]);
 
   const compare = (students: MatchSubmission[], problem: MatchCluster['problem']) =>
     setComparing({
@@ -315,6 +320,7 @@ export function AssignmentSimilarityPanel({
       ) : null}
 
       <CompareSubmissionsDialog
+        subject={subject}
         open={comparing !== null}
         onOpenChange={(open) => !open && setComparing(null)}
         submissions={comparing?.submissions ?? null}

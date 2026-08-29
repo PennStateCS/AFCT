@@ -6,7 +6,14 @@ import { MATCH_LABEL, type MatchType } from '@/lib/similarity/evidence';
 
 export type MatchFilter = MatchType | 'all';
 
-const ORDER: MatchFilter[] = ['all', 'exact', 'same-machine', 'structural', 'reference', 'common'];
+/**
+ * The kinds worth reviewing, and nothing else.
+ *
+ * Common answers and the instructor's own solution are not filters: they are set aside at
+ * the foot of the page, with their own count and their own control. A button that claimed to
+ * narrow the page to them and then left the review list where it was is worse than no button.
+ */
+const ORDER: MatchFilter[] = ['all', 'exact', 'same-machine', 'structural'];
 
 const LABEL: Record<MatchFilter, string> = {
   all: 'All',
@@ -15,6 +22,7 @@ const LABEL: Record<MatchFilter, string> = {
   structural: MATCH_LABEL.structural,
   reference: MATCH_LABEL.reference,
   common: MATCH_LABEL.common,
+  // Present for the type, never rendered: see ORDER above.
 };
 
 /**
