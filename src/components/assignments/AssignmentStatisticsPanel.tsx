@@ -3,10 +3,25 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { BarChart3, ChevronDown, TriangleAlert } from 'lucide-react';
+import { BarChart3, ChevronDown, Maximize2, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import LoadingSpinner from '@/components/ui/loading-spinner';
@@ -32,6 +47,18 @@ type StatisticsPayload = AssignmentStatistics & {
   timezone: string;
 };
 
+/**
+ * One chart, with a way to see it bigger.
+ *
+ * These charts are read at a glance and then squinted at: a box plot of eleven problems or a
+ * week of submissions is legible in a column and not much more than legible. The dialog is
+ * the same card's contents at the width of the window, which is also what somebody does when
+ * they want to show a class or a colleague what happened.
+ *
+ * The children are rendered again inside the dialog rather than moved into it. Each chart
+ * measures the box it is in and draws to fit, so the second copy simply comes out bigger;
+ * nothing is mounted until the dialog is opened.
+ */
 function StatCard({
   title,
   description,
@@ -43,6 +70,8 @@ function StatCard({
   className?: string;
   children: ReactNode;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
     <Card className={className}>
       <CardHeader>
@@ -50,9 +79,66 @@ function StatCard({
           {title}
         </CardTitle>
         <CardDescription>{description}</CardDescription>
+        <CardAction>
+          <ExpandButton title={title} onClick={() => setExpanded(true)} />
+        </CardAction>
       </CardHeader>
       <CardContent>{children}</CardContent>
+      <ExpandedChart
+        title={title}
+        description={description}
+        open={expanded}
+        onOpenChange={setExpanded}
+      >
+        {children}
+      </ExpandedChart>
     </Card>
+  );
+}
+
+/** The control that opens one. Named for its card, so a screen reader hears which. */
+function ExpandButton({ title, onClick }: { title: string; onClick: () => void }) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="text-muted-foreground size-7"
+      aria-label={`View ${title} full screen`}
+      onClick={onClick}
+    >
+      <Maximize2 className="size-4" aria-hidden="true" />
+    </Button>
+  );
+}
+
+/** The same chart, at the size of the window. */
+function ExpandedChart({
+  title,
+  description,
+  open,
+  onOpenChange,
+  children,
+}: {
+  title: string;
+  description: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Wider and taller than the default dialog, because the point of it is the size. The
+          body scrolls on its own so a long list of problems cannot push the heading off. */}
+      <DialogContent className="max-h-[90vh] w-[95vw] max-w-[95vw] gap-4 sm:max-w-[95vw]">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <div tabIndex={0} className="max-h-[75vh] overflow-auto">
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -68,6 +154,7 @@ export function AssignmentStatisticsPanel() {
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { hour12 } = useEffectiveTimezone();
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [expandHeatmap, setExpandHeatmap] = useState(false);
   // Off by default, and deliberately not remembered: whether a missing submission is a zero
   // is a decision about a moment in the term, not a preference.
   const [countMissingAsZero, setCountMissingAsZero] = useState(false);
@@ -286,194 +373,150 @@ export function AssignmentStatisticsPanel() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <StatCard
-          className="lg:col-span-8"
-          title="Assignment score distribution"
-          description={`How final assignment percentages are spread across the graded ${unitPlural}.`}
-        >
-          {scores.includedCount > 0 ? (
-            <>
-              <ScoreHistogramChart
-                bins={scores.bins}
-                mean={scores.mean}
-                median={scores.median}
-                includedCount={scores.includedCount}
-                unitPlural={unitPlural}
-              />
-              <p className="text-muted-foreground mt-2 text-xs">{scoreSummary}</p>
-              {exclusionNote && (
-                <p className="text-muted-foreground mt-1 text-xs">{exclusionNote}</p>
-              )}
-              {missingToggle}
-            </>
-          ) : (
-            <EmptyChart
-              message={
-                scores.noPossiblePoints
-                  ? 'This assignment has no points to award, so there is no score to chart.'
-                  : (exclusionNote ?? `No fully graded ${unitPlural} yet.`)
-              }
-            />
-          )}
-        </StatCard>
+      {/*
+        Two columns rather than a run of rows.
 
-        <StatCard
-          className="lg:col-span-4"
-          title="Grading progress"
-          description={
-            handGradedText
-              ? `What is graded and what is waiting, per problem. ${handGradedText}`
-              : 'What is graded and what is waiting, per problem.'
-          }
-        >
-          {statusTotal > 0 && stats.problems.length > 0 ? (
-            <>
-              <GradingProgressBar
-                series={stats.problems.map((p) => ({
-                  id: p.id,
-                  label: p.title,
-                  grading: p.grading,
-                }))}
-                total={statusTotal}
-                unitPlural={unitPlural}
-              />
-              {failed > 0 && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  {failed} submission{failed === 1 ? '' : 's'} could not be evaluated and can be run
-                  again from the Submissions tab.
-                </p>
-              )}
-            </>
-          ) : (
-            <EmptyChart
-              message={
-                statusTotal === 0
-                  ? `No ${unitPlural} are assigned yet.`
-                  : 'This assignment has no problems yet.'
-              }
-            />
-          )}
-        </StatCard>
+        The left one is the reading: how the class did, problem by problem, and when the work
+        came in. The right one is the work still to do: what is waiting on a grader, and who
+        has not turned in. They are different questions asked by the same person at different
+        moments, and stacking them into shared rows tied the height of a chart to whatever
+        happened to sit beside it. Each column now runs on its own.
 
-        {/* The queue, only while something is actually in it. A permanent card here reported
-            the autograder's plumbing as if it were the class's progress. */}
-        {inFlight > 0 && (
-          <StatCard
-            className="lg:col-span-4"
-            title="In the evaluation queue"
-            description={`${inFlight} submission${inFlight === 1 ? '' : 's'} waiting on or running through the autograder.`}
-          >
-            <SubmissionStatusBar
-              series={stats.problems.map((p) => ({ id: p.id, label: p.title, status: p.status }))}
-              total={statusTotal}
-              unitPlural={unitPlural}
-            />
-          </StatCard>
-        )}
-
-        <StatCard
-          className="lg:col-span-8"
-          title="Turn-in status"
-          description={`Whether each of the ${statusTotal} ${unitPlural} met their own due date, per problem.`}
-        >
-          {statusTotal > 0 && stats.problems.length > 0 ? (
-            <>
-              <TurnInStatusBar
-                series={stats.problems.map((p) => ({ id: p.id, label: p.title, turnIn: p.turnIn }))}
-                total={statusTotal}
-                unitPlural={unitPlural}
-              />
-              {stats.exceptionCount > 0 && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  {stats.exceptionCount} {stats.exceptionCount === 1 ? 'is' : 'are'} measured
-                  against a different due date.
-                </p>
-              )}
-            </>
-          ) : (
-            <EmptyChart
-              message={
-                statusTotal === 0
-                  ? `No ${unitPlural} are assigned yet.`
-                  : 'This assignment has no problems yet.'
-              }
-            />
-          )}
-        </StatCard>
-
-        <StatCard
-          className="lg:col-span-8"
-          title="Problem performance"
-          description={`Score distribution for each problem, on a shared 0-100% scale (${unitPlural}).`}
-        >
-          {stats.problems.length > 0 ? (
-            <ProblemBoxPlotChart problems={stats.problems} unitPlural={unitPlural} />
-          ) : (
-            <EmptyChart message="This assignment has no problems yet." />
-          )}
-        </StatCard>
-
-        <StatCard
-          className="lg:col-span-4"
-          title="Submissions over time"
-          description={`Submissions per day for ${unitPlural}, with the due date marked.`}
-        >
-          {stats.timeline.length > 0 ? (
-            <SubmissionTimelineChart
-              timeline={stats.timeline}
-              dueDate={stats.baseDueDate}
-              timeZone={stats.timezone}
-              unitPlural={unitPlural}
-            />
-          ) : (
-            <EmptyChart message="No submissions yet." />
-          )}
-        </StatCard>
-
-        <StatCard
-          className="lg:col-span-8"
-          title="Attempts to solve"
-          description={`How many submissions ${unitPlural} needed before their first correct one, per problem, with the share who got it right straight away.`}
-        >
-          {stats.problems.some((p) => p.attempts.solvedCount + p.attempts.unsolvedCount > 0) ? (
-            <AttemptsPerProblemChart
-              problems={stats.problems.map((p) => ({
-                id: p.id,
-                title: p.title,
-                attempts: p.attempts,
-                firstTry: { correct: p.firstAttemptCorrect, submitted: p.firstAttemptSubmitted },
-              }))}
-              unitPlural={unitPlural}
-            />
-          ) : (
-            <EmptyChart message="No submissions yet." />
-          )}
-        </StatCard>
-
-        {/* Folded away by default. When the class works is worth knowing and worth keeping,
-            but it is not a decision anybody makes on this screen, and open it cost a
-            screenful above the charts that are. */}
-        <Card className="lg:col-span-8">
-          <Collapsible open={showHeatmap} onOpenChange={setShowHeatmap}>
-            <CardHeader>
-              <CardTitle aria-level={3} className="text-base">
-                <CollapsibleTrigger className="focus-visible:ring-ring flex w-full items-center gap-2 text-start focus-visible:ring-2 focus-visible:outline-none">
-                  <ChevronDown
-                    className={`text-muted-foreground size-4 shrink-0 transition-transform ${
-                      showHeatmap ? 'rotate-180' : ''
-                    }`}
-                    aria-hidden="true"
+        Split on the width of THIS BLOCK rather than the window: the page sits inside a global
+        sidebar and an assignment rail, so a 1280px window can leave it under 700px, and a
+        viewport breakpoint would put a 215px column of bar charts on screen and call it a
+        layout.
+      */}
+      <div className="@container/stats">
+        <div className="grid grid-cols-1 gap-6 @[52rem]/stats:grid-cols-3">
+          <div className="space-y-6 @[52rem]/stats:col-span-2">
+            <StatCard
+              title="Assignment score distribution"
+              description={`How final assignment percentages are spread across the graded ${unitPlural}.`}
+            >
+              {scores.includedCount > 0 ? (
+                <>
+                  <ScoreHistogramChart
+                    bins={scores.bins}
+                    mean={scores.mean}
+                    median={scores.median}
+                    includedCount={scores.includedCount}
+                    unitPlural={unitPlural}
                   />
-                  When submissions happen
-                </CollapsibleTrigger>
-              </CardTitle>
-              <CardDescription>
-                Submission attempts by day of week and hour, in the course time zone.
-              </CardDescription>
-            </CardHeader>
-            <CollapsibleContent>
-              <CardContent>
+                  <p className="text-muted-foreground mt-2 text-xs">{scoreSummary}</p>
+                  {exclusionNote && (
+                    <p className="text-muted-foreground mt-1 text-xs">{exclusionNote}</p>
+                  )}
+                  {missingToggle}
+                </>
+              ) : (
+                <EmptyChart
+                  message={
+                    scores.noPossiblePoints
+                      ? 'This assignment has no points to award, so there is no score to chart.'
+                      : (exclusionNote ?? `No fully graded ${unitPlural} yet.`)
+                  }
+                />
+              )}
+            </StatCard>
+            <StatCard
+              title="Problem performance"
+              description={`Score distribution for each problem, on a shared 0-100% scale (${unitPlural}).`}
+            >
+              {stats.problems.length > 0 ? (
+                <ProblemBoxPlotChart problems={stats.problems} unitPlural={unitPlural} />
+              ) : (
+                <EmptyChart message="This assignment has no problems yet." />
+              )}
+            </StatCard>
+            <StatCard
+              title="Submissions over time"
+              description={`Submissions per day for ${unitPlural}, with the due date marked.`}
+            >
+              {stats.timeline.length > 0 ? (
+                <SubmissionTimelineChart
+                  timeline={stats.timeline}
+                  dueDate={stats.baseDueDate}
+                  timeZone={stats.timezone}
+                  unitPlural={unitPlural}
+                />
+              ) : (
+                <EmptyChart message="No submissions yet." />
+              )}
+            </StatCard>
+            <StatCard
+              title="Attempts to solve"
+              description={`How many submissions ${unitPlural} needed before their first correct one, per problem, with the share who got it right straight away.`}
+            >
+              {stats.problems.some((p) => p.attempts.solvedCount + p.attempts.unsolvedCount > 0) ? (
+                <AttemptsPerProblemChart
+                  problems={stats.problems.map((p) => ({
+                    id: p.id,
+                    title: p.title,
+                    attempts: p.attempts,
+                    firstTry: {
+                      correct: p.firstAttemptCorrect,
+                      submitted: p.firstAttemptSubmitted,
+                    },
+                  }))}
+                  unitPlural={unitPlural}
+                />
+              ) : (
+                <EmptyChart message="No submissions yet." />
+              )}
+            </StatCard>
+            {/* Folded away by default. When the class works is worth knowing and worth keeping,
+              but it is not a decision anybody makes on this screen, and open it cost a
+              screenful above the charts that are. */}
+            <Card>
+              <Collapsible open={showHeatmap} onOpenChange={setShowHeatmap}>
+                <CardHeader>
+                  <CardTitle aria-level={3} className="text-base">
+                    <CollapsibleTrigger className="focus-visible:ring-ring flex w-full items-center gap-2 text-start focus-visible:ring-2 focus-visible:outline-none">
+                      <ChevronDown
+                        className={`text-muted-foreground size-4 shrink-0 transition-transform ${
+                          showHeatmap ? 'rotate-180' : ''
+                        }`}
+                        aria-hidden="true"
+                      />
+                      When submissions happen
+                    </CollapsibleTrigger>
+                  </CardTitle>
+                  <CardDescription>
+                    Submission attempts by day of week and hour, in the course time zone.
+                  </CardDescription>
+                  <CardAction>
+                    {/* Opening it full screen opens the card too, so the control can never
+                        show a dialog of something the page has folded away. */}
+                    <ExpandButton
+                      title="When submissions happen"
+                      onClick={() => {
+                        setShowHeatmap(true);
+                        setExpandHeatmap(true);
+                      }}
+                    />
+                  </CardAction>
+                </CardHeader>
+                <CollapsibleContent>
+                  <CardContent>
+                    {stats.heatmap.max > 0 ? (
+                      <ActivityHeatmapChart
+                        matrix={stats.heatmap.matrix}
+                        max={stats.heatmap.max}
+                        unitPlural={unitPlural}
+                      />
+                    ) : (
+                      <EmptyChart message="No submissions yet." />
+                    )}
+                  </CardContent>
+                </CollapsibleContent>
+              </Collapsible>
+              <ExpandedChart
+                title="When submissions happen"
+                description="Submission attempts by day of week and hour, in the course time zone."
+                open={expandHeatmap}
+                onOpenChange={setExpandHeatmap}
+              >
                 {stats.heatmap.max > 0 ? (
                   <ActivityHeatmapChart
                     matrix={stats.heatmap.matrix}
@@ -483,10 +526,99 @@ export function AssignmentStatisticsPanel() {
                 ) : (
                   <EmptyChart message="No submissions yet." />
                 )}
-              </CardContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </Card>
+              </ExpandedChart>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <StatCard
+              title="Grading progress"
+              description={
+                handGradedText
+                  ? `What is graded and what is waiting, per problem. ${handGradedText}`
+                  : 'What is graded and what is waiting, per problem.'
+              }
+            >
+              {statusTotal > 0 && stats.problems.length > 0 ? (
+                <>
+                  <GradingProgressBar
+                    series={stats.problems.map((p) => ({
+                      id: p.id,
+                      label: p.title,
+                      grading: p.grading,
+                    }))}
+                    total={statusTotal}
+                    unitPlural={unitPlural}
+                  />
+                  {failed > 0 && (
+                    <p className="text-muted-foreground mt-2 text-xs">
+                      {failed} submission{failed === 1 ? '' : 's'} could not be evaluated and can be
+                      run again from the Submissions tab.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <EmptyChart
+                  message={
+                    statusTotal === 0
+                      ? `No ${unitPlural} are assigned yet.`
+                      : 'This assignment has no problems yet.'
+                  }
+                />
+              )}
+            </StatCard>
+            {/* The queue, only while something is actually in it. A permanent card here reported
+              the autograder's plumbing as if it were the class's progress. */}
+            {inFlight > 0 && (
+              <StatCard
+                title="In the evaluation queue"
+                description={`${inFlight} submission${inFlight === 1 ? '' : 's'} waiting on or running through the autograder.`}
+              >
+                <SubmissionStatusBar
+                  series={stats.problems.map((p) => ({
+                    id: p.id,
+                    label: p.title,
+                    status: p.status,
+                  }))}
+                  total={statusTotal}
+                  unitPlural={unitPlural}
+                />
+              </StatCard>
+            )}
+            <StatCard
+              title="Turn-in status"
+              description={`Whether each of the ${statusTotal} ${unitPlural} met their own due date, per problem.`}
+            >
+              {statusTotal > 0 && stats.problems.length > 0 ? (
+                <>
+                  <TurnInStatusBar
+                    series={stats.problems.map((p) => ({
+                      id: p.id,
+                      label: p.title,
+                      turnIn: p.turnIn,
+                    }))}
+                    total={statusTotal}
+                    unitPlural={unitPlural}
+                  />
+                  {stats.exceptionCount > 0 && (
+                    <p className="text-muted-foreground mt-2 text-xs">
+                      {stats.exceptionCount} {stats.exceptionCount === 1 ? 'is' : 'are'} measured
+                      against a different due date.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <EmptyChart
+                  message={
+                    statusTotal === 0
+                      ? `No ${unitPlural} are assigned yet.`
+                      : 'This assignment has no problems yet.'
+                  }
+                />
+              )}
+            </StatCard>
+          </div>
+        </div>
       </div>
     </div>
   );

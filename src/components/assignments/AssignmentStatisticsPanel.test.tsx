@@ -278,6 +278,35 @@ describe('AssignmentStatisticsPanel', () => {
     ).toBeInTheDocument();
   });
 
+  it('opens any card full screen, and opens the heatmap before showing it', async () => {
+    const person = (await import('@testing-library/user-event')).default.setup();
+    serve(payload({ heatmap: { matrix: [], max: 4 } }));
+
+    renderPanel();
+
+    // Every chart card offers it, named for the card so one button is not five.
+    await person.click(
+      await screen.findByRole('button', { name: 'View Grading progress full screen' }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Grading progress' })).toBeInTheDocument();
+    await person.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    // The folded card is a special case: expanding it must not show a dialog of something
+    // the page is hiding.
+    const disclosure = screen.getByRole('button', { name: 'When submissions happen' });
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+
+    await person.click(
+      screen.getByRole('button', { name: 'View When submissions happen full screen' }),
+    );
+
+    expect(
+      await screen.findByRole('dialog', { name: 'When submissions happen' }),
+    ).toBeInTheDocument();
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('offers to count missing work as zero, and never does it unasked', async () => {
     const person = (await import('@testing-library/user-event')).default.setup();
     serve(
@@ -327,7 +356,9 @@ describe('AssignmentStatisticsPanel', () => {
     const person = (await import('@testing-library/user-event')).default.setup();
     renderPanel();
 
-    const trigger = await screen.findByRole('button', { name: /When submissions happen/ });
+    // Two controls carry that name now: the disclosure, and the one that opens it full
+    // screen. This case is about the disclosure.
+    const trigger = await screen.findByRole('button', { name: 'When submissions happen' });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
     await person.click(trigger);

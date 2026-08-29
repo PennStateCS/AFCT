@@ -4,7 +4,7 @@ The **Statistics** tab gives you an at-a-glance read on how the class is doing o
 
 Near the heading it shows the normal due date, how many participants are held to a different one, and who the figures are about: students who are **enrolled, whose account is active, and who were assigned this work**. Anybody else is named as a count with a reason, so this tab and the gradebook (which deliberately keeps showing dropped students) can be reconciled by reading rather than by counting. On a group assignment the same line reports groups with no active members left, and students who are in no group and therefore cannot submit at all.
 
-Below that are several charts:
+Below that the page is in two columns on a wide screen: the reading on the left (how the class did, problem by problem, and when work arrived) and the work still to do on the right (what is waiting on a grader, and who turned in late). On a narrower one they stack. Every card has an icon to open that chart full screen, which is also the way to read a crowded one or show it to somebody else.
 
 - **Assignment score distribution** - a histogram of final assignment percentages (total earned points over total possible), in 10-point ranges, with the mean and median marked and a summary line giving the count, mean, median and range. Only fully graded work is included, and the card says what the rest is short of rather than only how many were left out, since one unmarked problem can empty the whole chart. It separates the two reasons, because they are different jobs: "2 waiting on Regular expressions" is work sitting in a grading queue, "13 did not submit Three Consecutive 1s" is work that never arrived.
 
