@@ -25,11 +25,14 @@ const sub = (
   problemId: string,
   iso: string,
   correct = false,
+  // Evaluated unless a case is about a run that never produced a verdict.
+  status: StatsSubmission['status'] = 'COMPLETED',
 ): StatsSubmission => ({
   participantId,
   problemId,
   submittedAt: new Date(iso).getTime(),
   correct,
+  status,
 });
 
 describe('assignmentPercentage', () => {
@@ -145,13 +148,14 @@ describe('queueStatusKey', () => {
 
 describe('buildAssignmentStatistics', () => {
   const problems: StatsProblem[] = [
-    { id: 'p1', title: 'Problem 1', order: 0, maxPoints: 10 },
-    { id: 'p2', title: 'Problem 2', order: 1, maxPoints: 10 },
+    { id: 'p1', title: 'Problem 1', order: 0, maxPoints: 10, autograderEnabled: true },
+    { id: 'p2', title: 'Problem 2', order: 1, maxPoints: 10, autograderEnabled: true },
   ];
 
   const mkParticipant = (over: Partial<StatsParticipant> & { id: string }): StatsParticipant => ({
     hasException: false,
     problemGrades: {},
+    gradedAtByProblem: {},
     latestStatusByProblem: {},
     ...over,
   });
@@ -173,7 +177,13 @@ describe('buildAssignmentStatistics', () => {
       // nothing graded -> excluded
       mkParticipant({ id: 's4' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants,
+      submissions: [],
+      timeZone: 'UTC',
+    });
     expect(stats.histogram.includedCount).toBe(2);
     expect(stats.histogram.excludedCount).toBe(2);
     // s1 -> 100% (last bin), s2 -> 0% (first bin)
@@ -188,7 +198,13 @@ describe('buildAssignmentStatistics', () => {
       mkParticipant({ id: 's2', problemGrades: { p1: 0 } }), // p1 0%, p2 ungraded
       mkParticipant({ id: 's3' }), // nothing graded
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants,
+      submissions: [],
+      timeZone: 'UTC',
+    });
     const p1 = stats.problems.find((p) => p.id === 'p1')!;
     const p2 = stats.problems.find((p) => p.id === 'p2')!;
     expect(p1.gradedCount).toBe(2);
@@ -201,8 +217,8 @@ describe('buildAssignmentStatistics', () => {
 
   it('keeps problems in assignment order', () => {
     const unordered: StatsProblem[] = [
-      { id: 'b', title: 'B', order: 1, maxPoints: 10 },
-      { id: 'a', title: 'A', order: 0, maxPoints: 10 },
+      { id: 'b', title: 'B', order: 1, maxPoints: 10, autograderEnabled: true },
+      { id: 'a', title: 'A', order: 0, maxPoints: 10, autograderEnabled: true },
     ];
     const stats = buildAssignmentStatistics({
       unit: 'student',
@@ -223,7 +239,13 @@ describe('buildAssignmentStatistics', () => {
       // nothing submitted at all -> both missing
       mkParticipant({ id: 'c' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants,
+      submissions: [],
+      timeZone: 'UTC',
+    });
 
     for (const p of stats.problems) {
       expect(p.status.map((s) => s.key)).toEqual([...STATUS_ORDER]);
@@ -245,7 +267,13 @@ describe('buildAssignmentStatistics', () => {
     const participants = [
       mkParticipant({ id: 's1', latestStatusByProblem: { p1: 'FAILED' } }), // p1 failed, p2 missing
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants,
+      submissions: [],
+      timeZone: 'UTC',
+    });
     expect(statusOf(stats, 'p1')['failed']).toBe(1);
     expect(statusOf(stats, 'p1')['missing']).toBe(0);
     expect(statusOf(stats, 'p2')['missing']).toBe(1);
@@ -254,7 +282,13 @@ describe('buildAssignmentStatistics', () => {
   it('status is independent of grades (a graded problem with no submission is missing)', () => {
     // A manual grade does not create a submission, so the queue status stays "missing".
     const participants = [mkParticipant({ id: 'manual', problemGrades: { p1: 10, p2: 10 } })];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants,
+      submissions: [],
+      timeZone: 'UTC',
+    });
     expect(statusOf(stats, 'p1')['missing']).toBe(1);
     expect(statusOf(stats, 'p1')['completed']).toBe(0);
     // ...but the grade still lands in the histogram.
@@ -267,7 +301,13 @@ describe('buildAssignmentStatistics', () => {
       mkParticipant({ id: 's2', hasException: true }),
       mkParticipant({ id: 's3' }),
     ];
-    const stats = buildAssignmentStatistics({ unit: 'student', problems, participants, submissions: [], timeZone: 'UTC' });
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants,
+      submissions: [],
+      timeZone: 'UTC',
+    });
     expect(stats.exceptionCount).toBe(2);
     expect(stats.participantCount).toBe(3);
   });
@@ -360,7 +400,10 @@ describe('computeSubmissionTimeline', () => {
 describe('computeActivityHeatmap', () => {
   it('buckets by local day-of-week and hour', () => {
     // 2026-08-03 is a Monday; 14:00 UTC.
-    const { matrix, max } = computeActivityHeatmap([sub('s1', 'p1', '2026-08-03T14:00:00Z')], 'UTC');
+    const { matrix, max } = computeActivityHeatmap(
+      [sub('s1', 'p1', '2026-08-03T14:00:00Z')],
+      'UTC',
+    );
     expect(matrix[1]![14]).toBe(1); // Monday, 14:00
     expect(max).toBe(1);
     expect(matrix[0]![0]).toBe(0);

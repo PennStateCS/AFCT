@@ -13,6 +13,7 @@ import { formatDateTimeInTimeZone, zoneAbbrev } from '@/lib/date-format';
 import type { AssignmentStatistics } from '@/lib/assignment-statistics';
 import { ScoreHistogramChart } from './charts/ScoreHistogramChart';
 import { SubmissionStatusBar } from './charts/SubmissionStatusBar';
+import { GradingProgressBar } from './charts/GradingProgressBar';
 import { ProblemBoxPlotChart } from './charts/ProblemBoxPlotChart';
 import { AttemptsPerProblemChart } from './charts/AttemptsPerProblemChart';
 import { FirstAttemptChart } from './charts/FirstAttemptChart';
@@ -137,6 +138,51 @@ export function AssignmentStatisticsPanel() {
     )}`.trim();
   const exceptionText = `${stats.exceptionCount} due-date exception${stats.exceptionCount === 1 ? '' : 's'}`;
 
+  /**
+   * Who these figures are about, in the reader's words.
+   *
+   * Every number on this page has the same denominator, and it is not "everybody on the
+   * roster": a student who dropped, a disabled account, a team with nobody left in it and a
+   * student who was never put in a group are all left out, for four different reasons. Said
+   * plainly here, the tab and the gradebook can be reconciled by reading rather than by
+   * counting; unsaid, the gap looks like a bug in whichever screen is read second.
+   */
+  const EXCLUSION_TEXT: Record<(typeof stats.exclusions)[number]['reason'], (n: number) => string> =
+    {
+      dropped: (n) => `${n} dropped student${n === 1 ? '' : 's'}`,
+      inactive: (n) => `${n} disabled account${n === 1 ? '' : 's'}`,
+      'no-group': (n) => `${n} student${n === 1 ? ' is' : 's are'} in no group and cannot submit`,
+      'empty-group': (n) => `${n} group${n === 1 ? ' has' : 's have'} no active members left`,
+    };
+  const exclusionText = stats.exclusions.map((e) => EXCLUSION_TEXT[e.reason](e.count));
+
+  // The queue is worth showing while work is moving through it. A FAILED evaluation is not
+  // movement, it is a job to do, so it is reported with grading progress instead and never
+  // keeps this bar on screen for the rest of term.
+  const inFlight = stats.problems.reduce(
+    (total, problem) =>
+      total +
+      problem.status
+        .filter((s) => s.key === 'pending' || s.key === 'processing')
+        .reduce((n, s) => n + s.count, 0),
+    0,
+  );
+  const failed = stats.problems.reduce(
+    (total, problem) => total + (problem.status.find((s) => s.key === 'failed')?.count ?? 0),
+    0,
+  );
+  // How much of this assignment a person has to mark, said the way somebody would say it.
+  const handGraded = stats.problems.filter((p) => !p.autograderEnabled).length;
+  const problemCount = stats.problems.length;
+  const handGradedText =
+    handGraded === 0
+      ? null
+      : handGraded === problemCount
+        ? problemCount === 1
+          ? 'This problem is graded by hand.'
+          : `All ${problemCount} problems are graded by hand.`
+        : `${handGraded} of ${problemCount} problems ${handGraded === 1 ? 'is' : 'are'} graded by hand.`;
+
   return (
     <div className="space-y-4">
       {heading}
@@ -144,13 +190,19 @@ export function AssignmentStatisticsPanel() {
 
       {/* Context line: unit count, the normal due date, and how many participants have an
           exception. Uses the app's existing timezone-aware formatting. */}
-      <p className="text-muted-foreground text-sm">
-        <span className="text-foreground font-medium">
-          {stats.participantCount}{' '}
-          {stats.participantCount === 1 ? unitPlural.slice(0, -1) : unitPlural}
-        </span>{' '}
-        &middot; Due {dueText} &middot; {exceptionText}
-      </p>
+      <div className="text-muted-foreground space-y-1 text-sm">
+        <p>
+          <span className="text-foreground font-medium">
+            {stats.participantCount}{' '}
+            {stats.participantCount === 1 ? unitPlural.slice(0, -1) : unitPlural}
+          </span>{' '}
+          &middot; Due {dueText} &middot; {exceptionText}
+        </p>
+        <p>
+          Counted: enrolled, active, and assigned this work.
+          {exclusionText.length > 0 ? ` Not counted: ${exclusionText.join(', ')}.` : ''}
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <StatCard
@@ -182,15 +234,31 @@ export function AssignmentStatisticsPanel() {
 
         <StatCard
           className="lg:col-span-4"
-          title="Submission status"
-          description={`For each problem, the evaluation state of each of the ${statusTotal} ${unitPlural}' latest submission.`}
+          title="Grading progress"
+          description={
+            handGradedText
+              ? `What is graded and what is waiting, per problem. ${handGradedText}`
+              : 'What is graded and what is waiting, per problem.'
+          }
         >
           {statusTotal > 0 && stats.problems.length > 0 ? (
-            <SubmissionStatusBar
-              series={stats.problems.map((p) => ({ id: p.id, label: p.title, status: p.status }))}
-              total={statusTotal}
-              unitPlural={unitPlural}
-            />
+            <>
+              <GradingProgressBar
+                series={stats.problems.map((p) => ({
+                  id: p.id,
+                  label: p.title,
+                  grading: p.grading,
+                }))}
+                total={statusTotal}
+                unitPlural={unitPlural}
+              />
+              {failed > 0 && (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  {failed} submission{failed === 1 ? '' : 's'} could not be evaluated and can be run
+                  again from the Submissions tab.
+                </p>
+              )}
+            </>
           ) : (
             <EmptyChart
               message={
@@ -201,6 +269,22 @@ export function AssignmentStatisticsPanel() {
             />
           )}
         </StatCard>
+
+        {/* The queue, only while something is actually in it. A permanent card here reported
+            the autograder's plumbing as if it were the class's progress. */}
+        {inFlight > 0 && (
+          <StatCard
+            className="lg:col-span-4"
+            title="In the evaluation queue"
+            description={`${inFlight} submission${inFlight === 1 ? '' : 's'} waiting on or running through the autograder.`}
+          >
+            <SubmissionStatusBar
+              series={stats.problems.map((p) => ({ id: p.id, label: p.title, status: p.status }))}
+              total={statusTotal}
+              unitPlural={unitPlural}
+            />
+          </StatCard>
+        )}
 
         <StatCard
           className="lg:col-span-8"
