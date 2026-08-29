@@ -473,19 +473,26 @@ export function summarise(clusters: MatchCluster[]): string[] {
   return lines;
 }
 
-/** How many clusters each filter would show, for the filter row's counts. */
-export function countByType(clusters: MatchCluster[]): Record<MatchType | 'all', number> {
+/**
+ * How many clusters each filter would show, for the filter row's counts.
+ *
+ * Counted by what each card is LABELLED, so the number on a button and the cards behind it
+ * are the same set. A group badged byte-for-byte identical is not also counted as an exact
+ * artifact: the reader picked the button that matches what they saw.
+ */
+export function countByType(clusters: MatchCluster[]): Record<DisplayMatchType | 'all', number> {
   const counts = {
     all: 0,
+    'byte-identical': 0,
     exact: 0,
     'same-machine': 0,
     structural: 0,
     reference: 0,
     common: 0,
-  } as Record<MatchType | 'all', number>;
+  } as Record<DisplayMatchType | 'all', number>;
   for (const cluster of clusters) {
     counts.all += 1;
-    counts[cluster.type] += 1;
+    counts[cluster.displayType] += 1;
   }
   return counts;
 }

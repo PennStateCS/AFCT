@@ -18,6 +18,22 @@ import { subjectCountsOf, type ReviewSubject } from '@/lib/similarity/rarity';
 // answer: the words on the card and the threshold it is judged by have to agree.
 export type { ReviewSubject };
 
+/**
+ * How each kind is named inside a sentence, for the filter row's answer when a kind is
+ * chosen and the assignment has none of it.
+ *
+ * Shorter than the badge labels because they are read as part of a sentence rather than as a
+ * heading: "no exact artifact matches", not "no Exact JFLAP artifact matches".
+ */
+export const FILTER_NOUN: Record<DisplayMatchType, string> = {
+  'byte-identical': 'byte-for-byte identical',
+  exact: 'exact artifact',
+  'same-machine': 'same-machine',
+  structural: 'structurally similar',
+  reference: 'instructor reference solution',
+  common: 'common answer',
+};
+
 /** "Attempt 3", or "Attempt unknown" when the numbering could not be worked out. */
 export function attemptLabel(attempt: number | null): string {
   return attempt === null ? 'Attempt unknown' : `Attempt ${attempt}`;

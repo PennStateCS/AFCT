@@ -618,7 +618,7 @@ describe('AssignmentSimilarityPanel', () => {
   it('filters to one kind of match, and says which is selected', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([
-      group({ matchId: 'exact', submissions: pairOf('a', 'b') }),
+      group({ matchId: 'exact', submissions: pairOf('a', 'b', ['b1', 'b2']) }),
       group({
         matchId: 'near',
         kind: 'near',
@@ -638,6 +638,45 @@ describe('AssignmentSimilarityPanel', () => {
     expect(exactFilter).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
     expect(screen.queryByRole('heading', { name: 'Structurally similar' })).not.toBeInTheDocument();
+  });
+
+  it('offers every kind it looks for, including the ones this assignment has none of', async () => {
+    const person = userEvent.setup();
+    getMock.mockResolvedValue([
+      group({ matchId: 'sm', studentCount: 3, identicalStudentCount: 2 }),
+      // Set aside, so it is in neither the filter row nor the All count.
+      group({ matchId: 'common', studentCount: 42, identicalStudentCount: 42 }),
+    ]);
+
+    renderPanel();
+
+    const row = await screen.findByRole('group', { name: 'Filter matches' });
+    const names = within(row)
+      .getAllByRole('button')
+      .map((button) => button.textContent);
+
+    // A zero says AFCT looked and found none, which an absent button cannot say.
+    expect(names).toHaveLength(5);
+    expect(names[0]).toMatch(/^All1$/);
+    expect(names[1]).toMatch(/^Byte-for-byte0$/);
+    expect(names[2]).toMatch(/^Exact artifact0$/);
+    expect(names[3]).toMatch(/^Same machine1$/);
+    expect(names[4]).toMatch(/^Structurally similar0$/);
+    // The set-aside kinds have their own section and are never filters.
+    expect(within(row).queryByRole('button', { name: /Common answer/ })).toBeNull();
+    expect(within(row).queryByRole('button', { name: /reference solution/i })).toBeNull();
+
+    const empty = within(row).getByRole('button', { name: /Byte-for-byte/ });
+    expect(empty).not.toBeDisabled();
+
+    await person.click(empty);
+
+    expect(empty).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryAllByRole('article')).toHaveLength(0);
+    expect(
+      screen.getByText('No byte-for-byte identical matches were found for this assignment.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Showing 0 byte-for-byte identical matches.')).toBeInTheDocument();
   });
 
   it('collapses common answers, and renders none of them until asked', async () => {

@@ -91,7 +91,7 @@ Members of one team matching each other is the feature working, not a finding, s
 
 ### Filtering
 
-The row of filters at the top narrows the page to one kind of match, each with its count: useful on a large assignment where you want to read every exact artifact first and come back to the rest. The filter changes what is shown and nothing else, and **All** counts what it can show, so the number on it and the number of cards below always agree. Set-aside work is not in the filter row; it has its own section at the foot of the page.
+The row of filters at the top narrows the page to one kind of match, each with its count: useful on a large assignment where you want to read every exact artifact first and come back to the rest. Every kind AFCT looks for is listed, including the ones this assignment has none of, because a zero is an answer; choosing one says so in a sentence rather than showing an empty page. The filter changes what is shown and nothing else, and **All** counts what it can show, so the number on it and the number of cards below always agree. Set-aside work is not in the filter row; it has its own section at the foot of the page.
 
 ### Statuses
 

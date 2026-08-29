@@ -25,7 +25,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
 import { COMMON_SHARE } from '@/lib/similarity/rarity';
-import type { ReviewSubject } from '@/components/assignments/similarity-format';
+import { FILTER_NOUN, type ReviewSubject } from '@/components/assignments/similarity-format';
 import {
   formatDateInTimeZone,
   formatTimeInTimeZone,
@@ -136,8 +136,12 @@ export function AssignmentSimilarityPanel({
     // Derived from `clusters` rather than from the list above, so this memo depends only on
     // values it can see change.
     const reviewable = clusters.filter((cluster) => !isSetAside(cluster.type));
+    // Matched against what each card is LABELLED, so the cards behind a button are exactly
+    // the ones carrying that badge.
     const shown =
-      filter === 'all' ? reviewable : reviewable.filter((cluster) => cluster.type === filter);
+      filter === 'all'
+        ? reviewable
+        : reviewable.filter((cluster) => cluster.displayType === filter);
 
     const byProblem = new Map<
       string,
@@ -218,7 +222,7 @@ export function AssignmentSimilarityPanel({
               {filter === 'all'
                 ? ''
                 : `Showing ${sections.reduce((n, [, section]) => n + section.clusters.length, 0)} ${
-                    filter === 'common' ? 'common' : filter
+                    FILTER_NOUN[filter]
                   } matches.`}
             </span>
 
@@ -335,13 +339,22 @@ export function AssignmentSimilarityPanel({
         );
       })}
 
+      {/* Choosing a kind with nothing in it is a question, and it deserves an answer rather
+          than a page that appears to have lost its contents. */}
+      {filter !== 'all' && sections.length === 0 ? (
+        <p className="bg-card text-muted-foreground rounded-lg border p-4 text-sm">
+          No {FILTER_NOUN[filter]} matches were found for this assignment.
+        </p>
+      ) : null}
+
       {setAside.length > 0 ? (
         <Collapsible open={showCommon} onOpenChange={setShowCommon} asChild>
-          {/* The same card as a problem, one step quieter: these groups are shown for
-              completeness, and a reader who opens one is checking rather than reviewing. */}
-          <section className="bg-muted/40 overflow-hidden rounded-lg border">
+          {/* The same card as a problem. It was a shade darker to mark it as the section
+              read last, but on a page of white cards one grey one reads as disabled rather
+              than as quieter, and its heading already says what it holds. */}
+          <section className="bg-card overflow-hidden rounded-lg border">
             <h3 className="text-base font-semibold">
-              <CollapsibleTrigger className="hover:bg-muted/70 focus-visible:ring-ring flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 p-4 text-start focus-visible:ring-2 focus-visible:outline-none">
+              <CollapsibleTrigger className="hover:bg-muted/60 focus-visible:ring-ring flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 p-4 text-start focus-visible:ring-2 focus-visible:outline-none">
                 <ChevronDown
                   className={`text-muted-foreground size-5 shrink-0 self-center transition-transform ${
                     showCommon ? 'rotate-180' : ''
