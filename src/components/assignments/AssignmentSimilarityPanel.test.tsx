@@ -22,7 +22,8 @@ vi.mock('@/components/assignments/CompareSubmissionsDialog', () => ({
   }: {
     open: boolean;
     submissions: { id: string }[] | null;
-  }) => (open ? <div data-testid="compare">{submissions?.map((s) => s.id).join(' vs ')}</div> : null),
+  }) =>
+    open ? <div data-testid="compare">{submissions?.map((s) => s.id).join(' vs ')}</div> : null,
 }));
 
 import { AssignmentSimilarityPanel } from './AssignmentSimilarityPanel';
@@ -87,6 +88,19 @@ const renderPanel = (props: { groupAssignment?: boolean } = {}) => {
   );
 };
 
+/**
+ * The page opens with every problem closed, so a test that reads a card opens it first.
+ * Named by the counts in the header ("… · 2 match groups"), which is what the trigger says.
+ */
+const openProblems = async () => {
+  await waitFor(() =>
+    expect(screen.queryAllByRole('button', { name: /match group/i }).length).toBeGreaterThan(0),
+  );
+  for (const header of screen.queryAllByRole('button', { name: /match group/i })) {
+    fireEvent.click(header);
+  }
+};
+
 beforeEach(() => {
   getMock.mockReset();
   getMock.mockResolvedValue([]);
@@ -108,7 +122,9 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    expect(await screen.findByText('1 match group worth reviewing across 1 problem.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('1 match group worth reviewing across 1 problem.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('1 contains an exact artifact match.')).toBeInTheDocument();
     expect(
       screen.getByText('2 similarity relationships are contained in these groups.'),
@@ -119,6 +135,8 @@ describe('AssignmentSimilarityPanel', () => {
     getMock.mockResolvedValue([group()]);
 
     renderPanel();
+
+    await openProblems();
 
     const card = await screen.findByRole('article');
     expect(within(card).getByText('Very strong')).toBeInTheDocument();
@@ -143,9 +161,13 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
+    await openProblems();
+
     const card = await screen.findByRole('article');
     expect(
-      within(card).getByRole('heading', { name: '2 of 84 students submitted the same saved grammar' }),
+      within(card).getByRole('heading', {
+        name: '2 of 84 students submitted the same saved grammar',
+      }),
     ).toBeInTheDocument();
     expect(
       within(card).getByText('The contents are identical once formatting is set aside.'),
@@ -159,6 +181,8 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
+    await openProblems();
+
     const card = await screen.findByRole('article');
     expect(within(card).getByText('Strong')).toBeInTheDocument();
     expect(within(card).getByText('Same machine')).toBeInTheDocument();
@@ -170,11 +194,16 @@ describe('AssignmentSimilarityPanel', () => {
       group({
         kind: 'near',
         identicalStudentCount: 1,
-        evidence: ['9 of 13 pieces of local structure are the same', 'They differ by 2 transitions'],
+        evidence: [
+          '9 of 13 pieces of local structure are the same',
+          'They differ by 2 transitions',
+        ],
       }),
     ]);
 
     renderPanel();
+
+    await openProblems();
 
     const card = await screen.findByRole('article');
     expect(within(card).getByText('Possible')).toBeInTheDocument();
@@ -187,6 +216,8 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
+    await openProblems();
+
     // Both are present, and reuse is a badge beside the match type rather than in place of it.
     const card = await screen.findByRole('article');
     expect(within(card).getByText('Exact JFLAP artifact')).toBeInTheDocument();
@@ -197,6 +228,7 @@ describe('AssignmentSimilarityPanel', () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([group()]);
     renderPanel();
+    await openProblems();
     await screen.findByRole('button', { name: 'Explain exact jflap artifact match' });
 
     await person.click(screen.getByRole('button', { name: 'Explain exact jflap artifact match' }));
@@ -222,17 +254,21 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
+    await openProblems();
+
     const cards = await screen.findAllByRole('article');
     expect(cards).toHaveLength(1);
     // Neutral, because a group is held together by shared students rather than by everyone
     // sharing the same thing. What it is made of is spelled out underneath.
     expect(
-      screen.getByRole('heading', { name: '3 of 84 students are connected by 3 similarity relationships' }),
+      screen.getByRole('heading', {
+        name: '3 of 84 students are connected by 3 similarity relationships',
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText(/3 exact jflap artifact relationships/i)).toBeInTheDocument();
   });
 
-  it('keeps a group\'s relationships behind one control', async () => {
+  it("keeps a group's relationships behind one control", async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([
       group({ matchId: 'ab', submissions: pairOf('a', 'b') }),
@@ -240,6 +276,8 @@ describe('AssignmentSimilarityPanel', () => {
     ]);
 
     renderPanel();
+
+    await openProblems();
     const toggle = await screen.findByRole('button', { name: /Review the 2 relationships/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
@@ -259,15 +297,51 @@ describe('AssignmentSimilarityPanel', () => {
     expect(screen.getAllByRole('button', { name: /Compare/ })).toHaveLength(3);
   });
 
+  it('opens as a list of problems, with each one closed until it is asked for', async () => {
+    const person = userEvent.setup();
+    getMock.mockResolvedValue([
+      group({ matchId: 'ab', submissions: pairOf('a', 'b') }),
+      group({
+        matchId: 'other-problem',
+        problem: { id: 'p2', title: 'a^n b^n', type: 'CFG' },
+        submissions: pairOf('c', 'd'),
+      }),
+    ]);
+
+    renderPanel();
+
+    // Both problems are named, and nothing inside either is drawn: a reader arriving asks
+    // which problem needs them, not which student.
+    const first = await screen.findByRole('button', { name: /Strings ending in 01/ });
+    const second = screen.getByRole('button', { name: /a\^n b\^n/ });
+    expect(first).toHaveAttribute('aria-expanded', 'false');
+    expect(second).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryAllByRole('article')).toHaveLength(0);
+
+    await person.click(first);
+
+    expect(first).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findAllByRole('article')).toHaveLength(1);
+    // Opening one problem leaves the other where it was.
+    expect(second).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('offers filters only for the kinds it can actually show', async () => {
     getMock.mockResolvedValue([
       group({ matchId: 'exact', submissions: pairOf('a', 'b') }),
       // Set aside: a common answer, and the instructor's own solution.
-      group({ matchId: 'common', studentCount: 42, identicalStudentCount: 42, submissions: pairOf('c', 'd') }),
+      group({
+        matchId: 'common',
+        studentCount: 42,
+        identicalStudentCount: 42,
+        submissions: pairOf('c', 'd'),
+      }),
       group({ matchId: 'posted', matchesAnswerFile: true, submissions: pairOf('e', 'f') }),
     ]);
 
     renderPanel();
+
+    await openProblems();
     await screen.findAllByRole('article');
 
     // A button that narrowed the page to a set-aside kind and then left the review list where
@@ -294,6 +368,8 @@ describe('AssignmentSimilarityPanel', () => {
     ]);
 
     renderPanel();
+
+    await openProblems();
     await screen.findAllByRole('article');
 
     const exactFilter = screen.getByRole('button', { name: /Exact artifact/ });
@@ -326,9 +402,7 @@ describe('AssignmentSimilarityPanel', () => {
 
     const card = await screen.findByRole('article');
     // Named by its kind, and by the problem it belongs to, since this list is not grouped.
-    expect(
-      within(card).getByRole('heading', { name: /Strings ending in 01/ }),
-    ).toBeInTheDocument();
+    expect(within(card).getByRole('heading', { name: /Strings ending in 01/ })).toBeInTheDocument();
   });
 
   it('lists the students in order, with times, results and the gap from the first', async () => {
@@ -336,7 +410,11 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel();
 
-    const chronology = await screen.findByRole('list', { name: 'Matching attempts, earliest first' });
+    await openProblems();
+
+    const chronology = await screen.findByRole('list', {
+      name: 'Matching attempts, earliest first',
+    });
     const rows = within(chronology).getAllByRole('listitem');
 
     expect(within(rows[0] as HTMLElement).getByText('sarah Student')).toBeInTheDocument();
@@ -349,10 +427,19 @@ describe('AssignmentSimilarityPanel', () => {
     getMock.mockResolvedValue([group({ reusedAfterPass: true })]);
 
     const { container } = renderPanel();
+
+    await openProblems();
     await screen.findByRole('article');
 
     const text = container.textContent?.toLowerCase() ?? '';
-    for (const word of ['suspicious', 'plagiar', 'cheat', 'guilty', 'misconduct', 'likely copied']) {
+    for (const word of [
+      'suspicious',
+      'plagiar',
+      'cheat',
+      'guilty',
+      'misconduct',
+      'likely copied',
+    ]) {
       expect(text).not.toContain(word);
     }
     expect(text).not.toContain('hash');
@@ -388,6 +475,8 @@ describe('AssignmentSimilarityPanel', () => {
     ]);
 
     renderPanel();
+
+    await openProblems();
 
     const attempts = await screen.findByRole('list', { name: 'Matching attempts, earliest first' });
     const rows = within(attempts).getAllByRole('listitem');
@@ -437,10 +526,10 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel({ groupAssignment: true });
 
+    await openProblems();
+
     // Two groups, not three students, and counted against the groups who submitted.
-    expect(
-      await screen.findByRole('heading', { name: /2 of 9 groups/ }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /2 of 9 groups/ })).toBeInTheDocument();
     expect(screen.getByText('9 groups submitted · 1 match group')).toBeInTheDocument();
 
     const attempts = screen.getByRole('list', { name: 'Matching attempts, earliest first' });
@@ -449,9 +538,13 @@ describe('AssignmentSimilarityPanel', () => {
     // The team leads; the member who pressed submit is kept as secondary detail, because any
     // member may submit and the work is not theirs alone.
     expect(within(rows[0] as HTMLElement).getByText('Group 4')).toBeInTheDocument();
-    expect(within(rows[0] as HTMLElement).getByText('Submitted by Alice Student')).toBeInTheDocument();
+    expect(
+      within(rows[0] as HTMLElement).getByText('Submitted by Alice Student'),
+    ).toBeInTheDocument();
     expect(within(rows[2] as HTMLElement).getByText('Group 4')).toBeInTheDocument();
-    expect(within(rows[2] as HTMLElement).getByText('Submitted by Bob Student')).toBeInTheDocument();
+    expect(
+      within(rows[2] as HTMLElement).getByText('Submitted by Bob Student'),
+    ).toBeInTheDocument();
   });
 
   it('judges a common answer by teams on a group assignment, not by their members', async () => {
@@ -482,6 +575,8 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel({ groupAssignment: true });
 
+    await openProblems();
+
     expect(await screen.findByRole('heading', { name: /2 of 9 groups/ })).toBeInTheDocument();
     // Worth reviewing, not set aside.
     expect(screen.getByText('1 match group worth reviewing across 1 problem.')).toBeInTheDocument();
@@ -495,6 +590,8 @@ describe('AssignmentSimilarityPanel', () => {
 
     renderPanel({ groupAssignment: true });
 
+    await openProblems();
+
     expect(await screen.findByRole('heading', { name: /2 of 84 students/ })).toBeInTheDocument();
     expect(screen.getByText('84 students submitted · 1 match group')).toBeInTheDocument();
   });
@@ -503,6 +600,7 @@ describe('AssignmentSimilarityPanel', () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([group()]);
     renderPanel();
+    await openProblems();
     await screen.findByRole('article');
 
     await person.click(screen.getByRole('button', { name: /Compare submissions/ }));
@@ -517,6 +615,8 @@ describe('AssignmentSimilarityPanel', () => {
     getMock.mockResolvedValue([group({ studentCount: 20, identicalStudentCount: 20 })]);
 
     renderPanel();
+
+    await openProblems();
     await screen.findByRole('article');
 
     await person.click(screen.getByRole('button', { name: /Adjust/ }));
@@ -526,7 +626,9 @@ describe('AssignmentSimilarityPanel', () => {
 
     // Past a fifth of the class it reads as the expected answer instead.
     await waitFor(() =>
-      expect(screen.queryByRole('heading', { name: 'Exact JFLAP artifact' })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole('heading', { name: 'Exact JFLAP artifact' }),
+      ).not.toBeInTheDocument(),
     );
     expect(window.localStorage.getItem('afct.similarityCommonShare')).toBe('0.2');
   });

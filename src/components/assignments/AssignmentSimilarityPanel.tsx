@@ -69,6 +69,8 @@ export function AssignmentSimilarityPanel({
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { timezone } = useEffectiveTimezone();
   const [showCommon, setShowCommon] = useState(false);
+  // Which problems the reader has opened. Closed is the starting point for all of them.
+  const [openProblems, setOpenProblems] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<MatchFilter>('all');
   const [comparing, setComparing] = useState<{
     submissions: MatchSubmission[];
@@ -164,7 +166,7 @@ export function AssignmentSimilarityPanel({
     });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* The triage block: what is here, how to narrow it, and where the line between a
           finding and an expected answer currently sits. One block, not three cards. */}
       <div className="space-y-3 border-b pb-4">
@@ -255,38 +257,70 @@ export function AssignmentSimilarityPanel({
         ) : null}
       </div>
 
-      {sections.map(([problemId, section], index) => (
-        <section key={problemId} className="space-y-3">
-          {/* The problem is the anchor a reader scans by, so it gets a line of its own and a
-              number: "the second problem on this assignment" is how they hold the page. */}
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h3 className="text-lg font-semibold">
-              <span className="text-muted-foreground font-normal">Problem {index + 1}</span>
-              <span className="text-muted-foreground font-normal"> — </span>
-              {section.title ?? 'Unknown problem'}
-            </h3>
-            <p className="text-muted-foreground ms-auto text-sm">
-              {groupAssignment && section.groups > 0
-                ? `${section.groups} group${section.groups === 1 ? '' : 's'} submitted`
-                : `${section.students} student${section.students === 1 ? '' : 's'} submitted`}{' '}
-              · {section.clusters.length} match group
-              {section.clusters.length === 1 ? '' : 's'}
-            </p>
-          </div>
+      {/*
+        One card per problem, closed to start.
+        
+        A reader arrives asking which problem needs them, not which student: the closed list
+        answers that in a screen, and opening one is the decision to read it. Each card holds
+        its own match cards rather than the page holding a flat run of them, so a problem with
+        nine groups cannot bury the next problem underneath it.
+      */}
+      {sections.map(([problemId, section], index) => {
+        const isOpen = openProblems[problemId] ?? false;
+        const submitted =
+          groupAssignment && section.groups > 0
+            ? `${section.groups} group${section.groups === 1 ? '' : 's'} submitted`
+            : `${section.students} student${section.students === 1 ? '' : 's'} submitted`;
 
-          {section.clusters.map((cluster) => (
-            <SimilarityMatchCard
-              key={cluster.id}
-              cluster={cluster}
-              subject={subject}
-              commonShare={commonShare}
-              onCompare={(submissions) => compare(submissions, cluster.problem)}
-              formatDay={formatDay}
-              formatTime={formatTime}
-            />
-          ))}
-        </section>
-      ))}
+        return (
+          <Collapsible
+            key={problemId}
+            open={isOpen}
+            onOpenChange={(open) =>
+              setOpenProblems((previous) => ({ ...previous, [problemId]: open }))
+            }
+            asChild
+          >
+            <section className="bg-card overflow-hidden rounded-lg border">
+              {/* The button is inside the heading, which is what makes the closed page read
+                  as a list of problems to a screen reader rather than a list of buttons. */}
+              <h3 className="text-lg font-semibold">
+                <CollapsibleTrigger className="hover:bg-muted/60 focus-visible:ring-ring flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 p-4 text-start focus-visible:ring-2 focus-visible:outline-none">
+                  <ChevronDown
+                    className={`text-muted-foreground size-5 shrink-0 self-center transition-transform ${
+                      isOpen ? 'rotate-180' : ''
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="text-muted-foreground font-normal">Problem {index + 1}</span>
+                  <span className="text-muted-foreground font-normal">—</span>
+                  <span>{section.title ?? 'Unknown problem'}</span>
+                  <span className="text-muted-foreground ms-auto text-sm font-normal">
+                    {submitted} · {section.clusters.length} match group
+                    {section.clusters.length === 1 ? '' : 's'}
+                  </span>
+                </CollapsibleTrigger>
+              </h3>
+
+              {/* Nothing inside is drawn until it is asked for: a problem can hold thirty
+                  students' attempts, and this page is read one problem at a time. */}
+              <CollapsibleContent className="bg-muted/30 space-y-3 border-t p-4">
+                {section.clusters.map((cluster) => (
+                  <SimilarityMatchCard
+                    key={cluster.id}
+                    cluster={cluster}
+                    subject={subject}
+                    commonShare={commonShare}
+                    onCompare={(submissions) => compare(submissions, cluster.problem)}
+                    formatDay={formatDay}
+                    formatTime={formatTime}
+                  />
+                ))}
+              </CollapsibleContent>
+            </section>
+          </Collapsible>
+        );
+      })}
 
       {setAside.length > 0 ? (
         <Collapsible open={showCommon} onOpenChange={setShowCommon} className="space-y-3">
