@@ -8,24 +8,20 @@ import type { MatchSubmission } from '@/lib/similarity/matches';
 import {
   SimilarityEvidenceBadge,
   ReusedAfterPassBadge,
+  RelatedSubmissionsBadge,
   ACCENT_BORDER,
-  MATCH_ICON,
 } from './SimilarityEvidenceBadge';
 import { SimilarityInfoPopover } from './SimilarityInfoPopover';
 import { SimilarityTimeline } from './SimilarityTimeline';
+import { STRENGTH_OF, matchTypeOf, type MatchCluster } from '@/lib/similarity/evidence';
 import {
-  MATCH_LABEL,
-  STRENGTH_LABEL,
-  STRENGTH_OF,
-  matchTypeOf,
-  type MatchCluster,
-} from '@/lib/similarity/evidence';
-import {
+  attemptLabel,
   clusterDetails,
+  listOf,
   clusterFacts,
   clusterHeadline,
-  relationshipAttempts,
-  relationshipParties,
+  relationshipDetails,
+  relationshipParticipants,
   sizeLabel,
   studentName,
   type ReviewSubject,
@@ -68,7 +64,7 @@ export function SimilarityMatchCard({
   const [open, setOpen] = useState(false);
   const headingId = `match-${cluster.id}-heading`;
   const size = sizeLabel(cluster);
-  const details = clusterDetails(cluster);
+  const details = clusterDetails(cluster, subject);
   const isGroup = cluster.relationships.length > 1;
 
   return (
@@ -83,14 +79,20 @@ export function SimilarityMatchCard({
        * rather than over a card came out within a percent or two of no fill at all, so the one
        * thing the tint had to do, tell a set-aside group from a live one, it did not do.
        */
-      className={`rounded-lg border p-4 sm:p-5 ${ACCENT_BORDER[cluster.type]} ${
-        STRENGTH_OF[cluster.type] === 'none' ? 'bg-muted' : 'bg-card'
-      }`}
+      className={`rounded-lg border p-4 sm:p-5 ${
+        // A mixed group takes the neutral edge: the colour of its strongest relationship
+        // would be colouring the whole card by something true of part of it.
+        cluster.homogeneous ? ACCENT_BORDER[cluster.type] : ACCENT_BORDER.common
+      } ${STRENGTH_OF[cluster.type] === 'none' ? 'bg-muted' : 'bg-card'}`}
     >
       {/* Kind and size on one line: what this is, and how big the work is, before anything
           else. Everything below is read in order after them. */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <SimilarityEvidenceBadge type={cluster.type} />
+        {cluster.homogeneous ? (
+          <SimilarityEvidenceBadge type={cluster.type} />
+        ) : (
+          <RelatedSubmissionsBadge count={cluster.relationships.length} />
+        )}
         {cluster.reusedAfterPass ? <ReusedAfterPassBadge /> : null}
         {size ? (
           <span className="text-muted-foreground ms-auto text-sm tabular-nums">{size}</span>
@@ -149,7 +151,7 @@ export function SimilarityMatchCard({
                   Compare all
                   <span className="sr-only">
                     {' '}
-                    {cluster.attempts.map((s) => studentName(s.student)).join(' and ')}
+                    {listOf([...new Set(cluster.attempts.map((s) => studentName(s.student)))])}
                   </span>
                 </Button>
               </div>
@@ -160,46 +162,65 @@ export function SimilarityMatchCard({
                   straight to the files a given claim is about rather than guessing from a
                   group of six. Quieter than the card that holds them: same information, one
                   level down. */}
-              <ul className="space-y-2">
+              <ul aria-label="Relationships in this group" className="space-y-2">
                 {cluster.relationships.map((relationship) => {
                   const type = matchTypeOf(relationship, commonShare);
-                  const strength = STRENGTH_OF[type];
-                  const attempts = relationshipAttempts(relationship);
-                  const Icon = MATCH_ICON[type];
+                  const participants = relationshipParticipants(relationship, subject);
                   return (
                     <li
                       key={relationship.matchId}
-                      className="bg-background/60 flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                      className="bg-background/60 space-y-2 rounded-md border px-3 py-2.5 text-sm"
                     >
-                      <div className="flex min-w-0 items-start gap-2">
-                        <Icon
-                          className="text-muted-foreground mt-0.5 size-4 shrink-0"
-                          aria-hidden="true"
-                        />
-                        <div className="min-w-0">
-                          <p className="font-medium">
-                            {relationshipParties(relationship, subject)}
-                          </p>
-                          <p className="text-muted-foreground text-xs">
-                            {strength === 'none'
-                              ? MATCH_LABEL[type]
-                              : `${STRENGTH_LABEL[strength]} · ${MATCH_LABEL[type]}`}
-                            {attempts ? ` · ${attempts}` : ''}
-                          </p>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 space-y-1.5">
+                          <SimilarityEvidenceBadge type={type} />
+
+                          {/* Each participant with the attempts of theirs that are IN this
+                              relationship. "Attempts 1 and 2" over three names leaves whose
+                              unanswered, which is the question a reader actually has. */}
+                          <ul className="space-y-0.5">
+                            {participants.map((participant) => (
+                              <li key={participant.id} className="flex flex-wrap gap-x-2">
+                                <span className="font-medium">{participant.name}</span>
+                                <span className="text-muted-foreground">
+                                  {participant.attempts
+                                    .map((attempt) => attemptLabel(attempt.attempt))
+                                    .join(', ')}
+                                </span>
+                                {subject === 'group' && participant.attempts[0]?.studentGroup ? (
+                                  <span className="text-muted-foreground text-xs">
+                                    submitted by{' '}
+                                    {participant.attempts
+                                      .map((attempt) => studentName(attempt.student))
+                                      .join(', ')}
+                                  </span>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
                         </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onCompare(relationship.submissions)}
+                        >
+                          <Columns2 />
+                          Compare
+                          <span className="sr-only">
+                            {' '}
+                            {listOf(participants.map((participant) => participant.name))}
+                          </span>
+                        </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onCompare(relationship.submissions)}
-                      >
-                        <Columns2 />
-                        Compare
-                        <span className="sr-only">
-                          {' '}
-                          {relationshipParties(relationship, subject)}
-                        </span>
-                      </Button>
+
+                      {/* What THIS relationship can say for itself, which is not always what
+                          the card above it says. */}
+                      <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-xs">
+                        {relationshipDetails(relationship, subject).map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
                     </li>
                   );
                 })}
@@ -218,7 +239,7 @@ export function SimilarityMatchCard({
               Compare submissions
               <span className="sr-only">
                 {' '}
-                for {cluster.attempts.map((s) => studentName(s.student)).join(' and ')}
+                for {listOf([...new Set(cluster.attempts.map((s) => studentName(s.student)))])}
               </span>
             </Button>
           </>

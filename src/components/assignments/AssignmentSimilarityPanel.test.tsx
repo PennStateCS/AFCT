@@ -47,6 +47,9 @@ const submission = (over: Record<string, unknown> = {}) => ({
   fileName: 'stored-1.jff',
   originalFileName: 'mine.jff',
   contentKey: 'aaaa1111',
+  // Which set of byte-identical files this submission is in, as the API labels them. Every
+  // fixture is one set unless a case says otherwise.
+  byteKey: 'b1',
   student: student('s1', 'Sarah'),
   studentGroup: null,
   ...over,
@@ -92,6 +95,9 @@ const renderPanel = (props: { groupAssignment?: boolean } = {}) => {
  * The page opens with every problem closed, so a test that reads a card opens it first.
  * Named by the counts in the header ("… · 2 match groups"), which is what the trigger says.
  */
+/** A fresh user-event session. Each test that clicks sets one up. */
+const person = () => userEvent.setup();
+
 const openProblems = async () => {
   await waitFor(() =>
     expect(screen.queryAllByRole('button', { name: /match group/i }).length).toBeGreaterThan(0),
@@ -284,17 +290,24 @@ describe('AssignmentSimilarityPanel', () => {
     await person.click(toggle);
 
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    // One Compare per relationship, each naming who it is between, so a reader opening one
-    // knows which two files they are about to see.
-    // Each relationship says who it is between and what kind it is, and carries its own
-    // Compare: the evidence belongs to those two files, not to the whole component.
-    // Named twice on purpose: once in the row, once inside the button, so a reader moving
-    // between buttons hears which relationship each Compare belongs to.
-    expect(await screen.findAllByText('a Student and b Student')).toHaveLength(2);
-    expect(screen.getAllByText('a Student and c Student')).toHaveLength(2);
-    expect(screen.getAllByText(/Very strong · Exact JFLAP artifact/)).toHaveLength(2);
-    // Two relationship compares, plus the secondary whole-group one.
-    expect(screen.getAllByRole('button', { name: /Compare/ })).toHaveLength(3);
+
+    // Each relationship names its own participants, one per line with their own attempt, and
+    // carries its own Compare: the evidence belongs to those files, not to everybody the
+    // component happens to connect.
+    const list = await screen.findByRole('list', { name: 'Relationships in this group' });
+    const rows = within(list).getAllByRole('listitem', { hidden: false });
+    const ab = rows.find((row) => row.textContent?.includes('b Student'));
+    expect(within(ab as HTMLElement).getByText('a Student')).toBeInTheDocument();
+    expect(within(ab as HTMLElement).getAllByText('Attempt 1').length).toBeGreaterThan(0);
+    // Each relationship carries its own evidence badge rather than borrowing the card's.
+    expect(screen.getAllByText(/Exact JFLAP artifact/).length).toBeGreaterThanOrEqual(2);
+    // Two relationship compares, plus the secondary whole-group one, each named for who it
+    // is between so a reader moving between buttons knows which files they will see.
+    const compares = screen.getAllByRole('button', { name: /Compare/ });
+    expect(compares).toHaveLength(3);
+    expect(
+      compares.some((button) => /a Student and b Student/.test(button.textContent ?? '')),
+    ).toBe(true);
   });
 
   it('opens as a list of problems, with each one closed until it is asked for', async () => {
@@ -324,6 +337,159 @@ describe('AssignmentSimilarityPanel', () => {
     expect(await screen.findAllByRole('article')).toHaveLength(1);
     // Opening one problem leaves the other where it was.
     expect(second).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('says which students share which evidence, not just how many', async () => {
+    // Stephen is in both relationships, with a different attempt in each. The card must not
+    // leave a reader working out whose attempt 2 it was.
+    const attempt = (id: string, name: string, n: number, byteKey: string | null, at: string) =>
+      submission({
+        id: `sub-${id}-${n}`,
+        student: student(id, name),
+        attempt: n,
+        byteKey,
+        submittedAt: at,
+      });
+
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'st',
+        studentCount: 2,
+        submissions: [
+          attempt('stephen', 'Stephen', 1, 'b1', '2026-08-17T10:47:00.000Z'),
+          attempt('thor', 'Thor', 1, 'b1', '2026-08-17T07:26:00.000Z'),
+        ],
+      }),
+      group({
+        matchId: 'sms',
+        studentCount: 3,
+        submissions: [
+          attempt('stephen', 'Stephen', 2, 'b2', '2026-08-17T13:10:00.000Z'),
+          attempt('miles', 'Miles', 1, 'b2', '2026-08-14T09:22:00.000Z'),
+          attempt('sam', 'Sam', 1, 'b2', '2026-08-10T07:33:00.000Z'),
+        ],
+      }),
+    ]);
+
+    renderPanel();
+    await openProblems();
+
+    // The cluster keeps only what is true of all four, and says nothing vague about bytes.
+    expect(
+      await screen.findByRole('heading', { name: /4 of 84 students are connected by 2/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/of them submitted byte-for-byte identical files/)).toBeNull();
+
+    await person().click(screen.getByRole('button', { name: /Review the 2 relationships/ }));
+
+    const rows = within(
+      await screen.findByRole('list', { name: 'Relationships in this group' }),
+    ).getAllByRole('listitem');
+
+    const withThor = rows.find((row) => row.textContent?.includes('Thor Student'))!;
+    expect(within(withThor).getByText('Stephen Student')).toBeInTheDocument();
+    // Stephen's FIRST attempt is the one in this relationship.
+    expect(within(withThor).getAllByText('Attempt 1')).toHaveLength(2);
+    expect(within(withThor).getByText('Files are byte-for-byte identical.')).toBeInTheDocument();
+
+    const withSam = rows.find((row) => row.textContent?.includes('Sam Student'))!;
+    expect(within(withSam).getByText('Attempt 2')).toBeInTheDocument();
+    expect(
+      within(withSam).getByText('All 3 submitted files are byte-for-byte identical.'),
+    ).toBeInTheDocument();
+  });
+
+  it('stays neutral about a group of two different kinds of relationship', async () => {
+    getMock.mockResolvedValue([
+      group({ matchId: 'ab', submissions: pairOf('alice', 'bob') }),
+      group({
+        matchId: 'bc',
+        kind: 'near',
+        identicalStudentCount: 1,
+        evidence: ['They differ by 1 transition'],
+        submissions: pairOf('bob', 'carol'),
+      }),
+    ]);
+
+    renderPanel();
+    await openProblems();
+
+    // The card says what it is, not what its strongest part is.
+    expect(await screen.findByText('2 similarity relationships')).toBeInTheDocument();
+    const card = screen.getByRole('article');
+    expect(within(card).queryByText(/VERY STRONG/i)).toBeNull();
+
+    await person().click(screen.getByRole('button', { name: /Review the 2 relationships/ }));
+
+    // The badges belong to the relationships, one each.
+    const rows = within(
+      await screen.findByRole('list', { name: 'Relationships in this group' }),
+    ).getAllByRole('listitem');
+    const exact = rows.find((row) => row.textContent?.includes('Exact JFLAP artifact'))!;
+    const structural = rows.find((row) => row.textContent?.includes('Structurally similar'))!;
+    expect(within(exact).getByText(/Very strong/i)).toBeInTheDocument();
+    expect(within(structural).getByText(/Possible/i)).toBeInTheDocument();
+    expect(within(structural).getByText('They differ by 1 transition')).toBeInTheDocument();
+  });
+
+  it('names the teams in a relationship, with the member who sent each attempt', async () => {
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'teams-a',
+        groupCount: 2,
+        problemGroupCount: 9,
+        submissions: [
+          submission({
+            id: 'sub-g4',
+            student: student('alice', 'Alice'),
+            studentGroup: { id: 'g4', name: 'Group 4' },
+            attempt: 2,
+          }),
+          submission({
+            id: 'sub-g7',
+            student: student('david', 'David'),
+            studentGroup: { id: 'g7', name: 'Group 7' },
+            attempt: 1,
+          }),
+        ],
+      }),
+      group({
+        matchId: 'teams-b',
+        groupCount: 2,
+        problemGroupCount: 9,
+        submissions: [
+          submission({
+            id: 'sub-g7-2',
+            student: student('david', 'David'),
+            studentGroup: { id: 'g7', name: 'Group 7' },
+            attempt: 2,
+          }),
+          submission({
+            id: 'sub-g9',
+            student: student('erin', 'Erin'),
+            studentGroup: { id: 'g9', name: 'Group 9' },
+            attempt: 1,
+          }),
+        ],
+      }),
+    ]);
+
+    renderPanel({ groupAssignment: true });
+    await openProblems();
+
+    await person().click(await screen.findByRole('button', { name: /Review the 2 relationships/ }));
+
+    const rows = within(
+      await screen.findByRole('list', { name: 'Relationships in this group' }),
+    ).getAllByRole('listitem');
+    const first = rows.find((row) => row.textContent?.includes('Group 4'))!;
+
+    // The team is the participant; who pressed submit is detail hanging off the attempt.
+    expect(within(first).getByText('Group 4')).toBeInTheDocument();
+    expect(within(first).getByText(/submitted by Alice Student/)).toBeInTheDocument();
+    expect(within(first).getByText('Attempt 2')).toBeInTheDocument();
+    // The byte sentence names teams, never the members who happened to send the files.
+    expect(within(first).getByText('Files are byte-for-byte identical.')).toBeInTheDocument();
   });
 
   it('offers filters only for the kinds it can actually show', async () => {

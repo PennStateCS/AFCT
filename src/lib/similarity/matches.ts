@@ -53,6 +53,18 @@ export type MatchSubmission = {
    * group as a whole by `byteIdenticalStudentCount`.
    */
   contentKey: string;
+  /**
+   * Which set of byte-identical files this submission belongs to, within its own match:
+   * `b1`, `b2`, and so on. Two submissions in a match sharing this were the same file to the
+   * byte; two that differ were not.
+   *
+   * Null when the raw file was never hashed, which is every submission stored before that
+   * column existed, and which means "not known" rather than "different".
+   *
+   * A label made up for the response rather than the hash itself: the page needs to know
+   * which submissions go together, and nothing else, so nothing else is sent.
+   */
+  byteKey: string | null;
   student: MatchStudent;
   studentGroup: { id: string; name: string } | null;
 };
@@ -253,35 +265,38 @@ export async function findSubmissionMatches(
     else sharedShapes.push(value);
   }
 
-  const submissions = sharedKeys.length === 0 ? [] : await prisma.submission.findMany({
-    where: {
-      assignmentId,
-      problemId: { in: problemIds },
-      OR: [
-        ...(sharedShapes.length ? [{ shapeHash: { in: sharedShapes } }] : []),
-        ...(sharedContents.length ? [{ contentHash: { in: sharedContents } }] : []),
-      ],
-    },
-    orderBy: { submittedAt: 'desc' },
-    select: {
-      id: true,
-      problemId: true,
-      contentHash: true,
-      shapeHash: true,
-      byteHash: true,
-      assignmentId: true,
-      submittedAt: true,
-      correct: true,
-      evaluatedAt: true,
-      fileName: true,
-      originalFileName: true,
-      studentId: true,
-      studentGroupId: true,
-      provenanceFeatures: true,
-      student: { select: studentSelect },
-      studentGroup: { select: { id: true, name: true } },
-    },
-  });
+  const submissions =
+    sharedKeys.length === 0
+      ? []
+      : await prisma.submission.findMany({
+          where: {
+            assignmentId,
+            problemId: { in: problemIds },
+            OR: [
+              ...(sharedShapes.length ? [{ shapeHash: { in: sharedShapes } }] : []),
+              ...(sharedContents.length ? [{ contentHash: { in: sharedContents } }] : []),
+            ],
+          },
+          orderBy: { submittedAt: 'desc' },
+          select: {
+            id: true,
+            problemId: true,
+            contentHash: true,
+            shapeHash: true,
+            byteHash: true,
+            assignmentId: true,
+            submittedAt: true,
+            correct: true,
+            evaluatedAt: true,
+            fileName: true,
+            originalFileName: true,
+            studentId: true,
+            studentGroupId: true,
+            provenanceFeatures: true,
+            student: { select: studentSelect },
+            studentGroup: { select: { id: true, name: true } },
+          },
+        });
 
   // Which attempt each matched submission was for its student. One query over the students
   // and problems already in play, so it stays proportional to the matches, not the course.
@@ -292,6 +307,9 @@ export async function findSubmissionMatches(
   const groupOwners = new Map<string, Set<string | null>>();
   const submissionTimes = new Map<string, TimedSubmission[]>();
 
+  // The raw hash of each matched submission, kept here rather than on the row it describes:
+  // the page is told which submissions agree, not what they hash to.
+  const byteHashes = new Map<string, string | null>();
   // Distinct students per exact file within a match, for the "and these two are the same
   // file" claim the group carries.
   const studentsPerContentInGroup = new Map<string, Map<string, Set<string>>>();
@@ -347,9 +365,13 @@ export async function findSubmissionMatches(
       fileName: submission.fileName,
       originalFileName: submission.originalFileName,
       contentKey: (submission.contentHash ?? '').slice(0, 8),
+      // Filled in below, once the whole group is known: the label is per match, so it cannot
+      // be worked out one row at a time.
+      byteKey: null,
       student: submission.student,
       studentGroup: submission.studentGroup,
     });
+    byteHashes.set(submission.id, submission.byteHash);
     groups.set(key, group);
 
     const perContent = studentsPerContentInGroup.get(key) ?? new Map<string, Set<string>>();
@@ -404,6 +426,7 @@ export async function findSubmissionMatches(
       1,
       ...[...(studentsPerByteInGroup.get(key)?.values() ?? [])].map((set) => set.size),
     );
+    labelByteSets(group, byteHashes);
     reportable.push(group);
   }
 
@@ -445,9 +468,7 @@ async function numberAttempts(
       // Within this assignment: "their third attempt" means their third at this problem in
       // this assignment, which is the thing the reader is looking at.
       assignmentId,
-      OR: [
-        ...new Set(matched.map((row) => `${row.problemId}:${row.studentId}`)),
-      ].map((pair) => {
+      OR: [...new Set(matched.map((row) => `${row.problemId}:${row.studentId}`))].map((pair) => {
         const [problemId, studentId] = pair.split(':') as [string, string];
         return { problemId, studentId };
       }),
@@ -464,6 +485,25 @@ async function numberAttempts(
     numbers.set(attempt.id, next);
   }
   return numbers;
+}
+
+/**
+ * Number the sets of byte-identical files inside one match, so the page can say WHICH
+ * submissions were the same file rather than how many.
+ *
+ * Numbered per match and in the order they appear, which is all the page needs: `b1` means
+ * nothing outside the group it was assigned in, and the hash it stands for never leaves the
+ * server. A submission whose file was never hashed keeps a null label, because "not known"
+ * and "different" are not the same answer.
+ */
+function labelByteSets(group: SubmissionMatchGroup, byteHashes: Map<string, string | null>): void {
+  const labels = new Map<string, string>();
+  for (const submission of group.submissions) {
+    const hash = byteHashes.get(submission.id);
+    if (!hash) continue;
+    if (!labels.has(hash)) labels.set(hash, `b${labels.size + 1}`);
+    submission.byteKey = labels.get(hash) ?? null;
+  }
 }
 
 /** The size of the work, from the description stored with it. */
@@ -536,7 +576,6 @@ function closestGap(times: TimedSubmission[]): number | null {
   return closest;
 }
 
-
 /**
  * Pairs that share uncommon structure without being equal.
  *
@@ -580,6 +619,7 @@ async function findNearMatchGroups(
       originalFileName: true,
       contentHash: true,
       shapeHash: true,
+      byteHash: true,
       provenanceFeatures: true,
       student: { select: studentSelect },
       studentGroup: { select: { id: true, name: true } },
@@ -650,9 +690,7 @@ async function findNearMatchGroups(
         // checks and never reaches this one.
         identicalStudentCount: 1,
         byteIdenticalStudentCount: 1,
-        closestGapMs: Math.abs(
-          near.a.submittedAt.getTime() - near.b.submittedAt.getTime(),
-        ),
+        closestGapMs: Math.abs(near.a.submittedAt.getTime() - near.b.submittedAt.getTime()),
         /**
          * Never claimed for a structural match, and not because the timing is unknown.
          *
@@ -679,6 +717,10 @@ async function findNearMatchGroups(
             fileName: row.fileName,
             originalFileName: row.originalFileName,
             contentKey: (row.contentHash ?? '').slice(0, 8),
+            // Two near-matched files are never the same bytes (identical bytes normalise to
+            // identical contents, which the first two checks would have grouped), so each
+            // gets its own label and the page says nothing about raw equality here.
+            byteKey: row.byteHash ? `b${row.id}` : null,
             student: row.student,
             studentGroup: row.studentGroup,
           })),

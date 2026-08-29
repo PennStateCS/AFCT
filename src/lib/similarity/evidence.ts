@@ -117,6 +117,15 @@ export type MatchCluster = {
   strength: EvidenceStrength;
   counts: Record<Exclude<MatchType, 'common'>, number>;
   /**
+   * Every relationship in this group is the same kind of match.
+   *
+   * A group of one kind can be labelled with that kind: it describes all of it. A group
+   * holding an exact match and a structural one cannot, because the strongest of them is not
+   * true of everybody in it, so the card says how many relationships there are and each one
+   * carries its own badge.
+   */
+  homogeneous: boolean;
+  /**
    * The most students anywhere in this group whose files are identical byte for byte. 1 when
    * no two are, and also 1 when nobody's file has been hashed yet, so the page says nothing
    * rather than guessing.
@@ -206,8 +215,12 @@ export function clusterMatches(
   for (const [problemId, problemGroups] of byProblem) {
     // Common answers stand alone: folding one into a cluster of real findings would hide it
     // in something it does not belong to, and the page sets them aside on purpose.
-    const commonGroups = problemGroups.filter((group) => matchTypeOf(group, commonShare, subject) === 'common');
-    const rest = problemGroups.filter((group) => matchTypeOf(group, commonShare, subject) !== 'common');
+    const commonGroups = problemGroups.filter(
+      (group) => matchTypeOf(group, commonShare, subject) === 'common',
+    );
+    const rest = problemGroups.filter(
+      (group) => matchTypeOf(group, commonShare, subject) !== 'common',
+    );
 
     // Union-find over students, so anything connected through a shared student comes out
     // together however the relationships were discovered.
@@ -228,7 +241,8 @@ export function clusterMatches(
     for (const group of rest) {
       const ids = group.submissions.map((submission) => submission.student.id);
       for (const id of ids) if (!parent.has(id)) parent.set(id, id);
-      for (let index = 1; index < ids.length; index++) union(ids[0] as string, ids[index] as string);
+      for (let index = 1; index < ids.length; index++)
+        union(ids[0] as string, ids[index] as string);
     }
 
     const members = new Map<string, SubmissionMatchGroup[]>();
@@ -256,7 +270,8 @@ function buildCluster(
 ): MatchCluster {
   const ranked = [...relationships].sort(
     (a, b) =>
-      TYPE_RANK[matchTypeOf(a, commonShare, subject)] - TYPE_RANK[matchTypeOf(b, commonShare, subject)],
+      TYPE_RANK[matchTypeOf(a, commonShare, subject)] -
+      TYPE_RANK[matchTypeOf(b, commonShare, subject)],
   );
   const first = ranked[0] as SubmissionMatchGroup;
   const type = matchTypeOf(first, commonShare, subject);
@@ -274,6 +289,8 @@ function buildCluster(
 
   const students = studentsOf(ranked);
   const attempts = attemptsOf(ranked);
+  const homogeneous =
+    new Set(ranked.map((group) => matchTypeOf(group, commonShare, subject))).size === 1;
   // One entry per group, in the order they first appear, so a group assignment can be read
   // as teams rather than as a list of whoever happened to press submit.
   const groups = [
@@ -299,9 +316,8 @@ function buildCluster(
     type,
     strength: STRENGTH_OF[type],
     counts,
-    byteIdenticalStudentCount: Math.max(
-      ...ranked.map((group) => group.byteIdenticalStudentCount),
-    ),
+    homogeneous,
+    byteIdenticalStudentCount: Math.max(...ranked.map((group) => group.byteIdenticalStudentCount)),
     problemStudentCount: first.problemStudentCount,
     problemGroupCount: first.problemGroupCount,
     reusedAfterPass: ranked.some((group) => group.reusedAfterPass),
@@ -353,9 +369,7 @@ export function summarise(clusters: MatchCluster[]): string[] {
 
   const exact = worthReviewing.filter((cluster) => cluster.type === 'exact').length;
   if (exact > 0) {
-    lines.push(
-      `${exact} contain${exact === 1 ? 's' : ''} an exact artifact match.`,
-    );
+    lines.push(`${exact} contain${exact === 1 ? 's' : ''} an exact artifact match.`);
   }
 
   const reused = worthReviewing.filter((cluster) => cluster.reusedAfterPass).length;

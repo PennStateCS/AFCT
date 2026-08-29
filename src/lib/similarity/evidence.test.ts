@@ -17,6 +17,7 @@ const submission = (studentId: string, at = '2026-08-15T12:00:00.000Z') => ({
   fileName: `${studentId}.jff`,
   originalFileName: `${studentId}.jff`,
   contentKey: 'aaaa1111',
+  byteKey: 'b1',
   student: {
     id: studentId,
     firstName: studentId,

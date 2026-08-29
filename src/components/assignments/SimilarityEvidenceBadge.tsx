@@ -1,9 +1,22 @@
 'use client';
 
-import { Fingerprint, GitBranch, ScanSearch, Users, BookCheck, History } from 'lucide-react';
+import {
+  Fingerprint,
+  GitBranch,
+  ScanSearch,
+  Users,
+  BookCheck,
+  History,
+  Share2,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { MATCH_LABEL, STRENGTH_LABEL, STRENGTH_OF, type MatchType } from '@/lib/similarity/evidence';
+import {
+  MATCH_LABEL,
+  STRENGTH_LABEL,
+  STRENGTH_OF,
+  type MatchType,
+} from '@/lib/similarity/evidence';
 
 /**
  * How strong the artifact evidence is, and what kind it is.
@@ -59,6 +72,24 @@ export function SimilarityEvidenceBadge({ type }: { type: MatchType }) {
           {MATCH_LABEL[type]}
         </>
       )}
+    </Badge>
+  );
+}
+
+/**
+ * A group of more than one kind of relationship, labelled by what it is rather than by its
+ * strongest part.
+ *
+ * "Very strong · Exact JFLAP artifact" over four students is a claim about all four, and in a
+ * group held together by a shared student it is true of two of them. The kinds are listed
+ * under the heading and each relationship carries its own badge, so nothing is lost by the
+ * card itself staying neutral.
+ */
+export function RelatedSubmissionsBadge({ count }: { count: number }) {
+  return (
+    <Badge variant="neutral" className="gap-1.5">
+      <Share2 className="size-3.5" aria-hidden="true" />
+      {count} similarity relationship{count === 1 ? '' : 's'}
     </Badge>
   );
 }

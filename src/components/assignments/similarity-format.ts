@@ -6,7 +6,12 @@
 // nor do verdicts.
 
 import type { MatchSubmission } from '@/lib/similarity/matches';
-import { MATCH_LABEL, isSetAside, type MatchCluster, type MatchType } from '@/lib/similarity/evidence';
+import {
+  MATCH_LABEL,
+  isSetAside,
+  type MatchCluster,
+  type MatchType,
+} from '@/lib/similarity/evidence';
 import { subjectCountsOf, type ReviewSubject } from '@/lib/similarity/rarity';
 
 // One definition of who a finding is about, shared with the rule that classifies a common
@@ -89,7 +94,6 @@ export function studentName(student: MatchSubmission['student']): string {
   return `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || 'Unknown student';
 }
 
-
 /** "9 states · 17 transitions", or nothing when the artifact carried no description. */
 export function sizeLabel(cluster: {
   stateCount: number | null;
@@ -104,28 +108,117 @@ export function sizeLabel(cluster: {
 }
 
 /**
- * The strongest thing the detector can say about two files, when it can say it: their bytes
- * are the same. Null when it cannot.
+ * One relationship's participants, each with the attempts of theirs that are in it.
+ *
+ * Structured rather than a sentence, because the question a reader has is "whose attempt 2?"
+ * and only the pairing answers it. A student with two attempts in the same relationship
+ * keeps both, under one name.
+ */
+export type RelationshipParticipant = {
+  id: string;
+  name: string;
+  attempts: MatchSubmission[];
+};
+
+export function relationshipParticipants(
+  relationship: MatchCluster['relationships'][number],
+  subject: ReviewSubject = 'student',
+): RelationshipParticipant[] {
+  const byParticipant = new Map<string, RelationshipParticipant>();
+
+  for (const submission of [...relationship.submissions].sort((a, b) =>
+    a.submittedAt.localeCompare(b.submittedAt),
+  )) {
+    // The team is the participant on a group assignment, and the member who sent each
+    // attempt stays with the attempt rather than becoming the name of the thing.
+    const group = subject === 'group' ? submission.studentGroup : null;
+    const id = group ? group.id : submission.student.id;
+    const held = byParticipant.get(id) ?? {
+      id,
+      name: group ? group.name : studentName(submission.student),
+      attempts: [],
+    };
+    held.attempts.push(submission);
+    byParticipant.set(id, held);
+  }
+
+  return [...byParticipant.values()];
+}
+
+/**
+ * What can be said about raw file equality inside ONE relationship, naming who it is about.
  *
  * Every other check normalises something away first, so every other line needs a qualifier
  * ("once formatting is set aside", "with cosmetic differences"). This one needs none, which
- * is the whole reason it is worth a line of its own.
+ * is the whole reason it is worth a line of its own, and why it has to name the submissions
+ * it covers: "2 of them" leaves a reader to guess which two, and guessing is the thing this
+ * page exists to avoid.
  *
- * Never said of the groups the page sets aside. On a grammar or an expression the expected
- * answer is routinely byte-identical across half the class, and everybody who was handed the
- * instructor's solution has it to the byte; putting the strongest wording on either is exactly
- * the overclaim those two categories exist to prevent. Also never said when the count is 1,
- * which covers both "no two agree" and "these were submitted before the file was hashed": the
- * page has no way to tell those apart, so it says nothing.
+ * Says nothing where the raw hash is missing, which is every submission stored before that
+ * column existed: not known is not the same as different.
+ */
+export function relationshipByteLines(
+  relationship: MatchCluster['relationships'][number],
+  subject: ReviewSubject = 'student',
+): string[] {
+  const participants = relationshipParticipants(relationship, subject);
+
+  // Which participants hold each set of identical bytes, and how many submissions that is.
+  const sets = new Map<string, { names: Set<string>; submissions: number }>();
+  for (const participant of participants) {
+    for (const submission of participant.attempts) {
+      if (!submission.byteKey) continue;
+      const set = sets.get(submission.byteKey) ?? { names: new Set<string>(), submissions: 0 };
+      set.names.add(participant.name);
+      set.submissions += 1;
+      sets.set(submission.byteKey, set);
+    }
+  }
+
+  const shared = [...sets.values()].filter((set) => set.names.size > 1);
+  if (shared.length === 0) return [];
+
+  const naming = (set: { names: Set<string>; submissions: number }) =>
+    `${listOf([...set.names])} submitted byte-for-byte identical files.`;
+
+  if (shared.length > 1) {
+    // Two separate sets inside one relationship: the same work, saved by two different
+    // hands. Say how many there are, then say who is in each.
+    return [
+      `${shared.length} sets of byte-for-byte identical files were found.`,
+      ...shared.map(naming),
+    ];
+  }
+
+  const only = shared[0]!;
+  if (only.names.size < participants.length) return [naming(only)];
+  return only.submissions === 2
+    ? ['Files are byte-for-byte identical.']
+    : [`All ${only.submissions} submitted files are byte-for-byte identical.`];
+}
+
+/**
+ * The byte claim at CLUSTER level, which is only allowed when it covers the whole cluster.
+ *
+ * A group held together by a shared student is not one set of files, so "3 of them are
+ * byte-for-byte identical" said over four students names nobody and points at nothing. Where
+ * only part of a cluster agrees, the sentence belongs to the relationship that supports it,
+ * which is where `relationshipByteLines` puts it.
+ *
+ * Never said of the groups the page sets aside either. On a grammar or an expression the
+ * expected answer is routinely byte-identical across half the class, and everybody who was
+ * handed the instructor's solution has it to the byte.
  */
 export function byteIdenticalLine(cluster: MatchCluster): string | null {
   if (isSetAside(cluster.type)) return null;
-  const identical = cluster.byteIdenticalStudentCount;
-  if (identical < 2) return null;
+  if (cluster.students.length < 2 || cluster.attempts.length < 2) return null;
 
-  return identical >= cluster.students.length
-    ? 'The files are byte-for-byte identical.'
-    : `${identical} of them submitted byte-for-byte identical files.`;
+  const keys = new Set(cluster.attempts.map((attempt) => attempt.byteKey));
+  if (keys.size !== 1) return null;
+  const [only] = [...keys];
+  if (!only) return null;
+
+  return 'The files are byte-for-byte identical.';
 }
 
 /**
@@ -188,10 +281,21 @@ export function clusterHeadline(cluster: MatchCluster, subject: ReviewSubject = 
  * is the same normalised artifact, layout and all. Nothing here claims anything the detector
  * did not compute.
  */
-export function clusterDetails(cluster: MatchCluster): string[] {
+export function clusterDetails(
+  cluster: MatchCluster,
+  subject: ReviewSubject = 'student',
+): string[] {
   const lines: string[] = [];
 
-  const byteLine = byteIdenticalLine(cluster);
+  // A cluster of one relationship IS that relationship, so it can carry the relationship's
+  // own byte sentence, which names who it covers. A cluster of several can only carry the
+  // claim that covers all of them; the rest belongs to the relationships underneath.
+  const first = cluster.relationships[0];
+  const byteLines =
+    cluster.relationships.length === 1 && first && !isSetAside(cluster.type)
+      ? relationshipByteLines(first, subject)
+      : [byteIdenticalLine(cluster)].filter((line): line is string => line !== null);
+  const byteLine = byteLines[0] ?? null;
 
   // More than one relationship means the students were gathered by being connected to
   // somebody, not by all sharing one thing, so there is no single claim to make about them.
@@ -201,9 +305,11 @@ export function clusterDetails(cluster: MatchCluster): string[] {
     lines.push(
       ...relationshipSummary(cluster).map((part) => `${part[0]!.toUpperCase()}${part.slice(1)}.`),
     );
-    if (byteLine) lines.push(byteLine);
+    lines.push(...byteLines);
     const groupGap = gapLabel(cluster.closestGapMs);
-    if (groupGap) lines.push(`Closest submissions were ${groupGap} apart.`);
+    // "Related", because it is the closest pair among submissions that matched each other,
+    // not the closest two attempts on the page.
+    if (groupGap) lines.push(`Closest related submissions were ${groupGap} apart.`);
     lines.push(...answerFileLines(cluster));
     return [...new Set(lines)];
   }
@@ -211,7 +317,7 @@ export function clusterDetails(cluster: MatchCluster): string[] {
   if (cluster.type === 'exact') {
     // Strongest first: if the bytes agree there is nothing to qualify, and the lines below
     // are the weaker version of the same statement.
-    if (byteLine) lines.push(byteLine);
+    lines.push(...byteLines);
     // A grammar or an expression has no drawing to agree on, so saying the coordinates
     // match would be describing something that does not exist.
     lines.push(
@@ -234,7 +340,7 @@ export function clusterDetails(cluster: MatchCluster): string[] {
     // The byte line replaces the content-level one rather than joining it: two adjacent
     // sentences saying nearly the same thing at different strictness is worse than either.
     if (byteLine) {
-      lines.push(byteLine);
+      lines.push(...byteLines);
     } else if (exact > 0) {
       lines.push('Some of them submitted the same file, once formatting is set aside.');
     }
@@ -255,7 +361,9 @@ export function clusterDetails(cluster: MatchCluster): string[] {
   }
 
   const gap = gapLabel(cluster.closestGapMs);
-  if (gap && cluster.type !== 'common') lines.push(`Closest submissions were ${gap} apart.`);
+  if (gap && cluster.type !== 'common') {
+    lines.push(`Closest related submissions were ${gap} apart.`);
+  }
 
   lines.push(...answerFileLines(cluster));
 
@@ -263,7 +371,7 @@ export function clusterDetails(cluster: MatchCluster): string[] {
 }
 
 /** "Alice and Bob", "Group 4, Group 7 and Group 9": a list a person reads. */
-function listOf(names: string[]): string {
+export function listOf(names: string[]): string {
   if (names.length <= 1) return names[0] ?? '';
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
@@ -297,9 +405,31 @@ export function relationshipAttempts(
     ),
   ].sort((a, b) => a - b);
   if (numbers.length === 0) return null;
-  return numbers.length === 1
-    ? `Attempt ${numbers[0]}`
-    : `Attempts ${listOf(numbers.map(String))}`;
+  return numbers.length === 1 ? `Attempt ${numbers[0]}` : `Attempts ${listOf(numbers.map(String))}`;
+}
+
+/**
+ * What one relationship can say for itself: raw equality where it holds, then the weaker
+ * statement of the same thing, then whatever the third check measured.
+ *
+ * Kept apart from the cluster's own lines because they answer different questions. The
+ * cluster explains why these people are on one card; a relationship explains what a
+ * particular set of them actually shares.
+ */
+export function relationshipDetails(
+  relationship: MatchCluster['relationships'][number],
+  subject: ReviewSubject = 'student',
+): string[] {
+  if (relationship.kind === 'near') return relationship.evidence;
+
+  const lines = relationshipByteLines(relationship, subject);
+  const participants = relationshipParticipants(relationship, subject).length;
+  lines.push(
+    relationship.identicalStudentCount >= participants
+      ? 'Contents are identical once formatting is set aside.'
+      : 'The same machine, with state names or positions differing.',
+  );
+  return lines;
 }
 
 /** What the group is made of, for a cluster holding more than one relationship. */
@@ -336,7 +466,9 @@ export function clusterFacts(cluster: MatchCluster, subject: ReviewSubject = 'st
   if (gap) facts.push(`The closest two submissions were ${gap} apart`);
 
   if (cluster.relationships.length > 1) {
-    facts.push(...relationshipSummary(cluster).map((part) => part[0]!.toUpperCase() + part.slice(1)));
+    facts.push(
+      ...relationshipSummary(cluster).map((part) => part[0]!.toUpperCase() + part.slice(1)),
+    );
   }
 
   facts.push(...answerFileLines(cluster).map((line) => line.replace(/\.$/, '')));
