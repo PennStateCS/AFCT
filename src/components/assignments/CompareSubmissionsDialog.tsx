@@ -17,22 +17,30 @@ const studentName = (student: MatchSubmission['student']) =>
   `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || 'Unknown student';
 
 /**
- * The two submissions closest together in time.
+ * The two submissions closest together in time, from two different people.
  *
  * Every file in a match holds the same work, so which two are shown is not about the
- * content: it is about which pair a reader wants to look at first, and that is the pair
- * with the least time between them.
+ * content: it is about which pair a reader wants to look at first, and that is the pair with
+ * the least time between them.
+ *
+ * Two attempts by the same student are usually the closest pair of all, and comparing
+ * somebody with themselves answers nothing, so a cross-student pair always wins. Falling
+ * back only when there is no such pair at all.
  */
 function closestPair(submissions: MatchSubmission[]): [string, string] {
   let best: [string, string] = [submissions[0]?.id ?? '', submissions[1]?.id ?? ''];
   let bestGap = Infinity;
+  let bestIsCrossStudent = false;
   for (let i = 0; i < submissions.length; i++) {
     for (let j = i + 1; j < submissions.length; j++) {
       const a = submissions[i]!;
       const b = submissions[j]!;
+      const crossStudent = a.student.id !== b.student.id;
       const gap = Math.abs(Date.parse(a.submittedAt) - Date.parse(b.submittedAt));
-      if (gap < bestGap) {
+      const better = crossStudent === bestIsCrossStudent ? gap < bestGap : crossStudent;
+      if (better) {
         bestGap = gap;
+        bestIsCrossStudent = crossStudent;
         best = [a.id, b.id];
       }
     }
@@ -156,7 +164,7 @@ export function CompareSubmissionsDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Every student in the match, one submission each. Two or more. */
+  /** The attempts to compare: every one in the match, not one per student. Two or more. */
   submissions: MatchSubmission[] | null;
   problemType: string | null;
   problemTitle: string | null;
@@ -189,7 +197,9 @@ export function CompareSubmissionsDialog({
       <DialogContent className="sm:max-w-[min(96vw,80rem)]">
         <DialogHeader>
           <DialogTitle className="leading-snug break-words">
-            {problemTitle ?? 'Submissions'}: {submissions.length} students submitted identical work
+            {/* Attempts, because that is what these are: one student can appear twice, and
+                saying "students" of a list of attempts would be a miscount. */}
+            {problemTitle ?? 'Submissions'}: comparing {submissions.length} matching attempts
           </DialogTitle>
         </DialogHeader>
 

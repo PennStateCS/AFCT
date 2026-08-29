@@ -12,40 +12,56 @@ import {
 } from './SimilarityEvidenceBadge';
 import { SimilarityInfoPopover } from './SimilarityInfoPopover';
 import { SimilarityTimeline } from './SimilarityTimeline';
-import type { MatchCluster } from '@/lib/similarity/evidence';
+import {
+  MATCH_LABEL,
+  STRENGTH_LABEL,
+  STRENGTH_OF,
+  matchTypeOf,
+  type MatchCluster,
+} from '@/lib/similarity/evidence';
 import {
   clusterDetails,
   clusterFacts,
   clusterHeadline,
-  relationshipSummary,
+  relationshipAttempts,
+  relationshipParties,
   sizeLabel,
   studentName,
+  type ReviewSubject,
 } from './similarity-format';
 
 /**
  * One group of related submissions.
  *
- * The first three lines carry the review: how strong the artifact evidence is, what kind of
- * match it is, and why that matters here. Everything after is detail for somebody who has
+ * The first lines carry the review: how strong the artifact evidence is, what kind of match
+ * it is, and why that matters here. Then the attempts themselves, because which attempt
+ * matched is the thing being reviewed. Everything after is detail for somebody who has
  * decided to look. Reuse after passing sits beside the kind rather than above it, because a
  * weaker artifact match does not become a stronger one because of when it arrived.
  *
  * A group of two is the whole card. A group of more than two keeps its relationships behind
  * one control, so a course where six students share work is one card to read rather than the
- * fifteen nearly identical ones the pairs would make.
+ * fifteen nearly identical ones the pairs would make. Compare then belongs to a relationship
+ * rather than to the whole group: the evidence is about the files in that relationship.
  */
 export function SimilarityMatchCard({
   cluster,
+  subject,
+  commonShare,
   onCompare,
   formatDay,
   formatTime,
   showProblem = false,
 }: {
   cluster: MatchCluster;
-  onCompare: (students: MatchSubmission[]) => void;
+  /** Whether this assignment is reviewed as students or as groups. */
+  subject: ReviewSubject;
+  /** The reader's commonality setting, so each relationship can name its own kind. */
+  commonShare: number;
+  onCompare: (submissions: MatchSubmission[]) => void;
   formatDay: (iso: string) => string;
   formatTime: (iso: string) => string;
-  /** Set in the common list, which is not grouped under a problem heading. */
+  /** Set in the set-aside list, which is not grouped under a problem heading. */
   showProblem?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -61,13 +77,13 @@ export function SimilarityMatchCard({
        * bg-card, like the cards everywhere else. These were transparent, which was invisible
        * while the workspace was white and left the tab reading as a list of outlines.
        *
-       * A common answer is set aside rather than acted on, so it stays quieter: bg-muted, one
-       * step off the card the others sit on. It was `bg-muted/30`, which over the page rather
-       * than over a card came out within a percent or two of no fill at all, so the one thing
-       * the tint had to do, tell a set-aside group from a live one, it did not do.
+       * A set-aside group is explained rather than acted on, so it stays quieter: bg-muted,
+       * one step off the card the others sit on. It was `bg-muted/30`, which over the page
+       * rather than over a card came out within a percent or two of no fill at all, so the one
+       * thing the tint had to do, tell a set-aside group from a live one, it did not do.
        */
       className={`space-y-3 rounded-lg border p-4 ${ACCENT_BORDER[cluster.type]} ${
-        cluster.type === 'common' ? 'bg-muted' : 'bg-card'
+        STRENGTH_OF[cluster.type] === 'none' ? 'bg-muted' : 'bg-card'
       }`}
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -75,7 +91,7 @@ export function SimilarityMatchCard({
         {cluster.reusedAfterPass ? <ReusedAfterPassBadge /> : null}
         <SimilarityInfoPopover
           type={cluster.type}
-          facts={clusterFacts(cluster)}
+          facts={clusterFacts(cluster, subject)}
           reusedAfterPass={cluster.reusedAfterPass}
         />
         {size ? <span className="text-muted-foreground ms-auto text-sm">{size}</span> : null}
@@ -85,78 +101,102 @@ export function SimilarityMatchCard({
         {/* The heading is the fact rather than the kind, because the badge above already
             says the kind and a reader who has read it once does not need it twice. */}
         <h4 id={headingId} className="font-semibold">
-          {clusterHeadline(cluster)}
+          {clusterHeadline(cluster, subject)}
           {showProblem && cluster.problem.title ? (
             <span className="text-muted-foreground font-normal"> · {cluster.problem.title}</span>
           ) : null}
         </h4>
-        {isGroup ? (
-          <p className="text-muted-foreground text-sm">
-            {relationshipSummary(cluster).join(' · ')}
-          </p>
-        ) : (
-          <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-sm">
-            {details.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        )}
+        <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-sm">
+          {details.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
       </div>
 
       <SimilarityTimeline
-        students={cluster.students}
+        attempts={cluster.attempts}
+        subject={subject}
         formatDay={formatDay}
         formatTime={formatTime}
       />
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         {isGroup ? (
-          <Collapsible open={open} onOpenChange={setOpen} className="w-full">
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <ChevronDown
-                  className={open ? 'rotate-180 transition-transform' : 'transition-transform'}
-                />
-                {open ? 'Hide' : 'Review'} the {cluster.relationships.length} relationships
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-3">
-              {/* Each relationship with its own compare, so a reader can go straight to the
-                  two files a given claim is about rather than guessing from a group of six. */}
+          <Collapsible open={open} onOpenChange={setOpen} className="w-full space-y-3">
+            <CollapsibleContent className="space-y-2">
+              {/* Each relationship with its own kind and its own compare, so a reader can go
+                  straight to the files a given claim is about rather than guessing from a
+                  group of six. */}
               <ul className="space-y-2">
-                {cluster.relationships.map((relationship) => (
-                  <li
-                    key={relationship.matchId}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm"
-                  >
-                    <span>
-                      {[
-                        ...new Set(relationship.submissions.map((s) => studentName(s.student))),
-                      ].join(' and ')}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onCompare(relationship.submissions)}
+                {cluster.relationships.map((relationship) => {
+                  const type = matchTypeOf(relationship, commonShare);
+                  const strength = STRENGTH_OF[type];
+                  const attempts = relationshipAttempts(relationship);
+                  return (
+                    <li
+                      key={relationship.matchId}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm"
                     >
-                      <Columns2 />
-                      Compare
-                    </Button>
-                  </li>
-                ))}
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {relationshipParties(relationship, subject)}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          {strength === 'none'
+                            ? MATCH_LABEL[type]
+                            : `${STRENGTH_LABEL[strength]} · ${MATCH_LABEL[type]}`}
+                          {attempts ? ` · ${attempts}` : ''}
+                        </p>
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onCompare(relationship.submissions)}
+                      >
+                        <Columns2 />
+                        Compare
+                        <span className="sr-only">
+                          {' '}
+                          {relationshipParties(relationship, subject)}
+                        </span>
+                      </Button>
+                    </li>
+                  );
+                })}
               </ul>
             </CollapsibleContent>
-          </Collapsible>
-        ) : null}
 
-        <Button variant="secondary" size="sm" onClick={() => onCompare(cluster.students)}>
-          <Columns2 />
-          Compare submissions
-          <span className="sr-only">
-            {' '}
-            for {cluster.students.map((s) => studentName(s.student)).join(' and ')}
-          </span>
-        </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <CollapsibleTrigger asChild>
+                <Button variant="secondary" size="sm">
+                  <ChevronDown
+                    className={open ? 'rotate-180 transition-transform' : 'transition-transform'}
+                  />
+                  {open ? 'Hide' : 'Review'} the {cluster.relationships.length} relationships
+                </Button>
+              </CollapsibleTrigger>
+              {/* Comparing everybody at once stays available, but secondary: in a group held
+                  together by a shared student, the evidence belongs to the relationships. */}
+              <Button variant="ghost" size="sm" onClick={() => onCompare(cluster.attempts)}>
+                <Columns2 />
+                Compare all
+                <span className="sr-only">
+                  {' '}
+                  {cluster.attempts.map((s) => studentName(s.student)).join(' and ')}
+                </span>
+              </Button>
+            </div>
+          </Collapsible>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={() => onCompare(cluster.attempts)}>
+            <Columns2 />
+            Compare submissions
+            <span className="sr-only">
+              {' '}
+              for {cluster.attempts.map((s) => studentName(s.student)).join(' and ')}
+            </span>
+          </Button>
+        )}
       </div>
     </article>
   );

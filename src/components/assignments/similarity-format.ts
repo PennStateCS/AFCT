@@ -8,6 +8,43 @@
 import type { MatchSubmission } from '@/lib/similarity/matches';
 import { MATCH_LABEL, isSetAside, type MatchCluster, type MatchType } from '@/lib/similarity/evidence';
 
+/**
+ * Who a finding is about: a student, or a team on a group assignment.
+ *
+ * Any member may submit for the team, so counting members would report two groups sharing
+ * work as four students, and would call a team submitting its own work a match. The subject
+ * comes from the assignment (it has a group set or it does not), never from guessing at the
+ * rows.
+ */
+export type ReviewSubject = 'student' | 'group';
+
+/** "Attempt 3", or "Attempt unknown" when the numbering could not be worked out. */
+export function attemptLabel(attempt: number | null): string {
+  return attempt === null ? 'Attempt unknown' : `Attempt ${attempt}`;
+}
+
+/**
+ * How many subjects a group involves, out of how many took the problem, and what to call
+ * them.
+ *
+ * A group assignment falls back to counting students when no group is recorded on the work,
+ * which is what old rows look like. Better a true sentence about students than an invented
+ * denominator about groups.
+ */
+export function subjectCounts(
+  cluster: MatchCluster,
+  subject: ReviewSubject,
+): { involved: number; total: number; noun: string } {
+  if (subject === 'group' && cluster.groups.length > 0 && cluster.problemGroupCount > 0) {
+    return { involved: cluster.groups.length, total: cluster.problemGroupCount, noun: 'group' };
+  }
+  return {
+    involved: cluster.students.length,
+    total: cluster.problemStudentCount,
+    noun: 'student',
+  };
+}
+
 /** What the students in this problem were asked to build, in the reader's words. */
 export function workNoun(problemType: string | null): string {
   if (problemType === 'CFG') return 'grammar';
@@ -126,9 +163,9 @@ function answerFileLines(cluster: MatchCluster): string[] {
  * Carol merely share structure, "3 students submitted the same saved machine" is false about
  * Carol. The kinds of relationship are listed underneath, and each one can be opened.
  */
-export function clusterHeadline(cluster: MatchCluster): string {
-  const students = cluster.students.length;
-  const of = `${students} of ${cluster.problemStudentCount} students`;
+export function clusterHeadline(cluster: MatchCluster, subject: ReviewSubject = 'student'): string {
+  const { involved, total, noun } = subjectCounts(cluster, subject);
+  const of = `${involved} of ${total} ${noun}${involved === 1 ? '' : 's'}`;
 
   if (cluster.relationships.length > 1) {
     const relationships = cluster.relationships.length;
@@ -231,6 +268,46 @@ export function clusterDetails(cluster: MatchCluster): string[] {
   return [...new Set(lines)];
 }
 
+/** "Alice and Bob", "Group 4, Group 7 and Group 9": a list a person reads. */
+function listOf(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/**
+ * Who one relationship is between, named the way the page names its subjects.
+ *
+ * Deliberately not assumed to be a pair: a same-work relationship is every submission
+ * sharing that work, which can be three students or three teams.
+ */
+export function relationshipParties(
+  relationship: MatchCluster['relationships'][number],
+  subject: ReviewSubject,
+): string {
+  const names =
+    subject === 'group'
+      ? relationship.submissions.map((s) => s.studentGroup?.name ?? studentName(s.student))
+      : relationship.submissions.map((s) => studentName(s.student));
+  return listOf([...new Set(names)]);
+}
+
+/** "Attempt 2", "Attempts 1 and 3". Null when no attempt number could be worked out. */
+export function relationshipAttempts(
+  relationship: MatchCluster['relationships'][number],
+): string | null {
+  const numbers = [
+    ...new Set(
+      relationship.submissions
+        .map((s) => s.attempt)
+        .filter((attempt): attempt is number => attempt !== null),
+    ),
+  ].sort((a, b) => a - b);
+  if (numbers.length === 0) return null;
+  return numbers.length === 1
+    ? `Attempt ${numbers[0]}`
+    : `Attempts ${listOf(numbers.map(String))}`;
+}
+
 /** What the group is made of, for a cluster holding more than one relationship. */
 export function relationshipSummary(cluster: MatchCluster): string[] {
   const parts: string[] = [];
@@ -248,8 +325,9 @@ export function relationshipSummary(cluster: MatchCluster): string[] {
 }
 
 /** The facts an info popover repeats back about this particular match. */
-export function clusterFacts(cluster: MatchCluster): string[] {
-  const facts = [`${cluster.students.length} of ${cluster.problemStudentCount} students are involved`];
+export function clusterFacts(cluster: MatchCluster, subject: ReviewSubject = 'student'): string[] {
+  const { involved, total, noun } = subjectCounts(cluster, subject);
+  const facts = [`${involved} of ${total} ${noun}${involved === 1 ? '' : 's'} are involved`];
 
   const size = sizeLabel(cluster);
   if (size) facts.push(size);
