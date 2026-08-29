@@ -24,6 +24,7 @@ import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { apiClient } from '@/lib/api/fetch-client';
 import { COMMON_SHARE } from '@/lib/similarity/rarity';
+import type { ReviewSubject } from '@/components/assignments/similarity-format';
 import {
   formatDateInTimeZone,
   formatTimeInTimeZone,
@@ -53,7 +54,18 @@ import type { SubmissionMatchGroup, MatchSubmission } from '@/lib/similarity/mat
 /** Where the reader's own commonality setting is kept, so it survives a reload. */
 const THRESHOLD_KEY = 'afct.similarityCommonShare';
 
-export function AssignmentSimilarityPanel() {
+export function AssignmentSimilarityPanel({
+  groupAssignment = false,
+}: {
+  /**
+   * Whether this assignment is submitted by groups, which the assignment page already knows
+   * from its group set. It decides who a finding is about: on a group assignment any member
+   * may submit for the team, so counting members would report two teams sharing work as four
+   * students. Passed in rather than fetched again here.
+   */
+  groupAssignment?: boolean;
+} = {}) {
+  const subject: ReviewSubject = groupAssignment ? 'group' : 'student';
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { timezone } = useEffectiveTimezone();
   const [showCommon, setShowCommon] = useState(false);
@@ -121,12 +133,16 @@ export function AssignmentSimilarityPanel() {
 
     const byProblem = new Map<
       string,
-      { title: string | null; students: number; clusters: MatchCluster[] }
+      { title: string | null; students: number; groups: number; clusters: MatchCluster[] }
     >();
     for (const cluster of shown) {
       const section = byProblem.get(cluster.problem.id) ?? {
         title: cluster.problem.title,
         students: cluster.problemStudentCount,
+        // Only counted when the work actually carries groups, so a group assignment whose
+        // older submissions have none falls back to the true student count rather than an
+        // invented team one.
+        groups: cluster.problemGroupCount,
         clusters: [],
       };
       section.clusters.push(cluster);
@@ -152,7 +168,7 @@ export function AssignmentSimilarityPanel() {
 
         {/* One live region for the state of the page, so a screen reader hears the answer
             once rather than a card at a time. */}
-        <div aria-live="polite" className="max-w-3xl">
+        <div aria-live="polite">
           {isLoading ? (
             <div className="flex items-center gap-3 text-sm">
               <Spinner />
@@ -170,7 +186,7 @@ export function AssignmentSimilarityPanel() {
         </div>
 
         {clusters.length > 0 ? (
-          <div className="flex max-w-3xl flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <SimilarityFilters counts={counts} value={filter} onChange={setFilter} />
 
             {/*
@@ -186,7 +202,7 @@ export function AssignmentSimilarityPanel() {
             </span>
 
             <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
-              <span>Common threshold: {Math.round(commonShare * 100)}%</span>
+              <span>Common-answer threshold: {Math.round(commonShare * 100)}%</span>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="ghost" size="sm">
@@ -196,11 +212,12 @@ export function AssignmentSimilarityPanel() {
                 <PopoverContent className="w-80 space-y-3">
                   <div className="space-y-1">
                     <Label htmlFor="common-share" className="text-sm font-medium">
-                      Common threshold
+                      Common-answer threshold
                     </Label>
                     <p className="text-muted-foreground text-sm">
-                      Work shared by at least this share of a problem&apos;s students is treated as
-                      the expected answer and set aside at the bottom of the page.
+                      Work shared by at least this share of a problem&apos;s{' '}
+                      {groupAssignment ? 'groups' : 'students'} is treated as the expected answer
+                      and set aside at the bottom of the page.
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -227,12 +244,14 @@ export function AssignmentSimilarityPanel() {
       </div>
 
       {sections.map(([problemId, section]) => (
-        <section key={problemId} className="max-w-3xl space-y-3">
+        <section key={problemId} className="space-y-3">
           <div>
             <h3 className="text-lg font-semibold">{section.title ?? 'Unknown problem'}</h3>
             <p className="text-muted-foreground text-sm">
-              {section.students} student{section.students === 1 ? '' : 's'} submitted ·{' '}
-              {section.clusters.length} match group
+              {groupAssignment && section.groups > 0
+                ? `${section.groups} group${section.groups === 1 ? '' : 's'} submitted`
+                : `${section.students} student${section.students === 1 ? '' : 's'} submitted`}{' '}
+              · {section.clusters.length} match group
               {section.clusters.length === 1 ? '' : 's'}
             </p>
           </div>
@@ -241,7 +260,9 @@ export function AssignmentSimilarityPanel() {
             <SimilarityMatchCard
               key={cluster.id}
               cluster={cluster}
-              onCompare={(students) => compare(students, cluster.problem)}
+              subject={subject}
+              commonShare={commonShare}
+              onCompare={(submissions) => compare(submissions, cluster.problem)}
               formatDay={formatDay}
               formatTime={formatTime}
             />
@@ -250,7 +271,7 @@ export function AssignmentSimilarityPanel() {
       ))}
 
       {setAside.length > 0 ? (
-        <Collapsible open={showCommon} onOpenChange={setShowCommon} className="max-w-3xl space-y-3">
+        <Collapsible open={showCommon} onOpenChange={setShowCommon} className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
             <div>
               <h3 className="flex items-center gap-2 text-lg font-semibold">
@@ -258,9 +279,9 @@ export function AssignmentSimilarityPanel() {
                 Set aside ({setAside.length})
               </h3>
               <p className="text-muted-foreground text-sm">
-                Work at least {Math.round(commonShare * 100)}% of a problem&apos;s students
-                submitted, and work that is the solution the instructor posted. Both explain a
-                match rather than raising one.
+                Work at least {Math.round(commonShare * 100)}% of a problem&apos;s{' '}
+                {groupAssignment ? 'groups' : 'students'} submitted, and work that is the solution
+                the instructor posted. Both explain a match rather than raising one.
               </p>
             </div>
             <CollapsibleTrigger asChild>
@@ -281,8 +302,10 @@ export function AssignmentSimilarityPanel() {
               <SimilarityMatchCard
                 key={cluster.id}
                 cluster={cluster}
+                subject={subject}
+                commonShare={commonShare}
                 showProblem
-                onCompare={(students) => compare(students, cluster.problem)}
+                onCompare={(submissions) => compare(submissions, cluster.problem)}
                 formatDay={formatDay}
                 formatTime={formatTime}
               />

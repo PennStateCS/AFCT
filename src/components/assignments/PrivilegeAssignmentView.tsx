@@ -871,7 +871,10 @@ export default function AssignmentDashboardPage({
             <AssignmentStatisticsPanel />
           </TabsContent>
           <TabsContent value="similarity">
-            <AssignmentSimilarityPanel />
+            {/* A group set means the work belongs to teams, which changes who a finding is
+                about: any member may submit for the team. The panel is told rather than
+                left to infer it from the rows. */}
+            <AssignmentSimilarityPanel groupAssignment={!!assignment.groupSetId} />
           </TabsContent>
           <TabsContent value="settings">
             {/* This tab had no heading at all: two panels appeared under the tab rail with
