@@ -25,6 +25,7 @@ import {
 import { ScoreHistogramChart } from '@/components/statistics/charts/ScoreHistogramChart';
 import { ProblemBoxPlotChart } from '@/components/statistics/charts/ProblemBoxPlotChart';
 import { GradingProgressBar } from '@/components/statistics/charts/GradingProgressBar';
+import { TurnInStatusBar } from '@/components/statistics/charts/TurnInStatusBar';
 import { SubmissionTimelineChart } from '@/components/statistics/charts/SubmissionTimelineChart';
 import { ActivityHeatmapChart } from '@/components/statistics/charts/ActivityHeatmapChart';
 import { apiPaths } from '@/lib/api-paths';
@@ -133,6 +134,8 @@ export function CourseStatisticsPanel({ courseId }: { courseId: string }) {
       ? `${e.count} dropped student${e.count === 1 ? '' : 's'}`
       : `${e.count} disabled account${e.count === 1 ? '' : 's'}`,
   );
+
+  const turnInExceptions = stats.turnIn.reduce((n, row) => n + row.exceptions, 0);
 
   const workloadTotal = stats.workload.reduce(
     (n, row) => n + (row.states.find((s) => s.key === 'ungraded-submitted')?.count ?? 0),
@@ -340,9 +343,28 @@ export function CourseStatisticsPanel({ courseId }: { courseId: string }) {
                     }))}
                   total={Math.max(...stats.workload.map((row) => row.total))}
                   unitPlural="pieces of work"
+                  rowHeader="Assignment"
                 />
               ) : (
                 <EmptyChart message="No assignments to grade yet." />
+              )}
+            </StatCard>
+
+            <StatCard
+              title="Turn-in status"
+              description={`Whether the work arrived by each participant's own deadline, assignment by assignment.${turnInExceptions > 0 ? ` ${turnInExceptions} held to a different date.` : ''}`}
+            >
+              {stats.turnIn.some((row) => row.total > 0) ? (
+                <TurnInStatusBar
+                  series={stats.turnIn
+                    .filter((row) => row.total > 0)
+                    .map((row) => ({ id: row.assignmentId, label: row.title, turnIn: row.states }))}
+                  total={Math.max(...stats.turnIn.map((row) => row.total))}
+                  unitPlural="participants"
+                  rowHeader="Assignment"
+                />
+              ) : (
+                <EmptyChart message="Nothing has been set yet." />
               )}
             </StatCard>
 

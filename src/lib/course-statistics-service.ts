@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
+import { effectiveDeadline, type OverrideRow } from '@/lib/effective-deadline';
 import {
   computeActivityHeatmap,
   computeSubmissionTimeline,
@@ -15,6 +16,7 @@ import {
 import {
   atRisk,
   compareAssignments,
+  turnInByAssignment,
   compareProblemTypes,
   courseAverages,
   problemTypeKey,
@@ -24,6 +26,8 @@ import {
   type CourseDistribution,
   type CourseGradeCell,
   type GradingWorkload,
+  type TurnInByAssignment,
+  type TurnInInput,
   type TypedGrade,
   type TypePerformance,
 } from '@/lib/course-statistics';
@@ -60,6 +64,8 @@ export type CourseStatisticsPayload = {
   assignments: AssignmentComparison[];
   problemTypes: TypePerformance[];
   workload: GradingWorkload[];
+  /** On time, revised late, late or missing, per assignment, on each participant's own date. */
+  turnIn: TurnInByAssignment[];
   atRisk: AtRisk;
   timeline: TimelinePoint[];
   heatmap: ActivityHeatmap;
@@ -68,6 +74,7 @@ export type CourseStatisticsPayload = {
 };
 
 /** Below this, a student is worth a second look. A starting point, not a policy. */
+
 const AT_RISK_THRESHOLD = 60;
 
 export async function getCourseStatistics(
@@ -105,6 +112,9 @@ export async function getCourseStatistics(
       id: true,
       title: true,
       dueDate: true,
+      unlockAt: true,
+      lateCutoff: true,
+      allowLateSubmissions: true,
       isPublished: true,
       assignedToEveryone: true,
       groupSetId: true,
@@ -137,6 +147,31 @@ export async function getCourseStatistics(
   }
 
   const assignmentIds = assignmentRows.map((a) => a.id);
+  // Every exception in the course, in one read. Which participant each one applies to is the
+  // resolver's business, not a query's.
+  const overrideRows =
+    assignmentIds.length > 0
+      ? await prisma.assignmentOverride.findMany({
+          where: { assignmentId: { in: assignmentIds } },
+          select: {
+            assignmentId: true,
+            targetType: true,
+            userId: true,
+            groupId: true,
+            unlockAt: true,
+            dueDate: true,
+            lateCutoff: true,
+            allowLateSubmissions: true,
+          },
+        })
+      : [];
+  const overridesByAssignment = new Map<string, OverrideRow[]>();
+  for (const row of overrideRows) {
+    overridesByAssignment.set(row.assignmentId, [
+      ...(overridesByAssignment.get(row.assignmentId) ?? []),
+      row,
+    ]);
+  }
   const gradeRows =
     assignmentIds.length > 0
       ? await prisma.assignmentProblemGrade.findMany({
@@ -162,6 +197,8 @@ export async function getCourseStatistics(
   }
 
   const assignments: CourseAssignment[] = [];
+  /** Who each assignment counts, in that assignment's own unit. */
+  const participantsByAssignment = new Map<string, string[]>();
   const studentCells: CourseGradeCell[] = [];
   const comparisonCells: CourseGradeCell[] = [];
   const typed: TypedGrade[] = [];
@@ -223,6 +260,8 @@ export async function getCourseStatistics(
       }
     }
 
+    participantsByAssignment.set(assignment.id, isGroup ? groupIds : assignedStudents);
+
     assignments.push({
       id: assignment.id,
       title: assignment.title,
@@ -264,6 +303,14 @@ export async function getCourseStatistics(
     assignees: (id) => assignmentRows.find((a) => a.id === id)?.assignees ?? [],
   });
 
+  const turnIn = turnInByAssignment(
+    assignments,
+    buildTurnInInputs(assignmentRows, participantsByAssignment, submissionRows, {
+      overridesByAssignment,
+      groupIdsByStudent,
+    }),
+  );
+
   const percentages = new Map<string, number>();
   for (const [participantId, pct] of participantPercentages(assignments, studentCells)) {
     percentages.set(participantId, pct);
@@ -279,6 +326,7 @@ export async function getCourseStatistics(
     assignments: compareAssignments(assignments, comparisonCells),
     problemTypes: compareProblemTypes(typed),
     workload,
+    turnIn,
     atRisk: atRisk(assignments, studentCells, percentages, AT_RISK_THRESHOLD),
     timeline: computeSubmissionTimeline(events, timeZone),
     heatmap: computeActivityHeatmap(events, timeZone),
@@ -391,6 +439,85 @@ function participantPercentages(
     out.set(id, (t.earned / t.possible) * 100);
   }
   return out;
+}
+
+/**
+ * Every participant's relationship with every deadline they are held to.
+ *
+ * The whole assignment is one span: the first thing they submitted for it and the last,
+ * across all its problems. At assignment scope that is the same question the per-problem card
+ * answers, because the latest submission for the assignment IS the latest of the per-problem
+ * latests, so the two pages cannot disagree about who was late.
+ */
+function buildTurnInInputs(
+  assignmentRows: {
+    id: string;
+    dueDate: Date;
+    unlockAt: Date | null;
+    lateCutoff: Date | null;
+    allowLateSubmissions: boolean;
+    groupSetId: string | null;
+  }[],
+  participantsByAssignment: Map<string, string[]>,
+  submissions: {
+    studentId: string;
+    studentGroupId: string | null;
+    assignmentId: string;
+    submittedAt: Date;
+  }[],
+  lookups: {
+    overridesByAssignment: Map<string, OverrideRow[]>;
+    groupIdsByStudent: Map<string, string[]>;
+  },
+): TurnInInput[] {
+  // The span of each participant's attempts at each assignment, in both units at once: a
+  // submission names a student and may also name the team it was sent for.
+  const spans = new Map<string, { first: number; latest: number }>();
+  for (const row of submissions) {
+    const at = row.submittedAt.getTime();
+    for (const participantId of [row.studentId, row.studentGroupId].filter(
+      (id): id is string => id !== null,
+    )) {
+      const key = `${row.assignmentId}:${participantId}`;
+      const held = spans.get(key);
+      if (!held) spans.set(key, { first: at, latest: at });
+      else {
+        if (at < held.first) held.first = at;
+        if (at > held.latest) held.latest = at;
+      }
+    }
+  }
+
+  const inputs: TurnInInput[] = [];
+  for (const assignment of assignmentRows) {
+    const base = {
+      unlockAt: assignment.unlockAt,
+      dueDate: assignment.dueDate,
+      lateCutoff: assignment.lateCutoff,
+      allowLateSubmissions: assignment.allowLateSubmissions,
+    };
+    const overrides = lookups.overridesByAssignment.get(assignment.id) ?? [];
+    const baseDue = assignment.dueDate.getTime();
+
+    for (const participantId of participantsByAssignment.get(assignment.id) ?? []) {
+      // A group is held to whatever a GROUP override says about it; a student to their own
+      // override, else one aimed at a group they are in, else the class's date.
+      const groupIds =
+        assignment.groupSetId != null
+          ? [participantId]
+          : (lookups.groupIdsByStudent.get(participantId) ?? []);
+      const resolved = effectiveDeadline(base, overrides, participantId, groupIds);
+      const dueAt = resolved.dueDate.getTime();
+      inputs.push({
+        assignmentId: assignment.id,
+        participantId,
+        dueAt,
+        hasException: dueAt !== baseDue,
+        span: spans.get(`${assignment.id}:${participantId}`),
+      });
+    }
+  }
+  return inputs;
 }
 
 /**
