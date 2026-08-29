@@ -15,11 +15,19 @@ import {
  * The whole list is one grid and every row dissolves into it (`sm:contents`), which is what
  * makes the columns line up down the card while each one is only as wide as it needs to be.
  *
- * Fixed column widths would align too, but they cannot shrink: on a tablet the row ran past
- * the edge of the card. Auto columns cannot, and the subject column takes whatever is left.
- * Below `sm` none of this applies and each attempt stacks into two lines.
+ * The widths are deliberate rather than automatic, because every column but the first holds
+ * something whose size is known: an attempt number, a timestamp, one of three results, an
+ * interval, a link. Letting those take what they need and giving the rest to the name
+ * produced a row with the name at one edge and everything else at the other, which reads as
+ * two lists rather than one. Only the name and the timestamp can grow now, and the name is
+ * the one that takes what is left over.
+ *
+ * Fixed widths alone would align too, but they cannot shrink: on a tablet the row ran past
+ * the edge of the card, which is what the minimums in the flexible columns are for. Below
+ * `sm` none of this applies and each attempt stacks into two lines.
  */
-const LIST_GRID = 'sm:grid sm:grid-cols-[minmax(8rem,22rem)_auto_auto_auto_auto_minmax(4rem,1fr)]';
+const LIST_GRID =
+  'sm:grid sm:grid-cols-[minmax(8rem,14rem)_auto_auto_auto_auto_auto] sm:items-start';
 
 /**
  * Each cell carries the row's rule and padding, because the row itself has no box at `sm`.
@@ -28,8 +36,18 @@ const LIST_GRID = 'sm:grid sm:grid-cols-[minmax(8rem,22rem)_auto_auto_auto_auto_
  * fills its column: an inline cell is only as wide as its text, and the rule under a short
  * "Correct" stopped short of the one beside it.
  */
-const CELL_BASE = 'sm:border-t sm:py-2 sm:pe-3 sm:whitespace-nowrap';
+const CELL_BASE = 'sm:border-t sm:py-2 sm:pe-2.5 sm:whitespace-nowrap';
 const CELL = `sm:block ${CELL_BASE}`;
+
+/**
+ * The name's cell, which is the one thing here that may wrap.
+ *
+ * A name is not a value with a known size, and the two ways of dealing with one that does
+ * not fit are to cut it off or to let it take a second line. A cut-off name is a person the
+ * reader cannot identify, on a page whose whole purpose is to say who is involved, so it
+ * wraps.
+ */
+const SUBJECT_CELL = 'sm:block sm:min-w-0 sm:border-t sm:py-2 sm:pe-2.5';
 
 /** The middle dot between facts on a phone. The desktop grid separates them by column. */
 function Dot() {
@@ -101,11 +119,11 @@ export function SimilarityTimeline({
         aria-hidden="true"
         className="text-muted-foreground hidden pb-1 text-xs font-medium sm:contents"
       >
-        <span className="sm:pe-3 sm:pb-1">{subject === 'group' ? 'Group' : 'Student'}</span>
-        <span className="sm:pe-3 sm:pb-1">Attempt</span>
-        <span className="sm:pe-3 sm:pb-1">Submitted</span>
-        <span className="sm:pe-3 sm:pb-1">Result</span>
-        <span className="sm:pe-3 sm:pb-1">Relative</span>
+        <span className="sm:pe-2.5 sm:pb-1">{subject === 'group' ? 'Group' : 'Student'}</span>
+        <span className="sm:pe-2.5 sm:pb-1">Attempt</span>
+        <span className="sm:pe-2.5 sm:pb-1">Submitted</span>
+        <span className="sm:pe-2.5 sm:pb-1">Result</span>
+        <span className="sm:pe-2.5 sm:pb-1">Relative</span>
         <span className="sm:pb-1 sm:text-right">Download</span>
       </li>
 
@@ -128,7 +146,7 @@ export function SimilarityTimeline({
              */
             className="flex flex-col gap-y-0.5 border-t py-2 sm:contents"
           >
-            <span className={`font-medium ${CELL}`}>
+            <span className={`font-medium ${SUBJECT_CELL}`}>
               {primary}
               {group ? (
                 <span className="text-muted-foreground block text-xs font-normal">
