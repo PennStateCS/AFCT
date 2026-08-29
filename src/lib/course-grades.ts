@@ -22,6 +22,14 @@ export type GradeMatrixAssignment = {
   title: string;
   dueDate: Date | null;
   maxPoints: number;
+  /**
+   * Whether students can see it.
+   *
+   * A draft stays a column, because staff set it up and grade it here, but it is kept out of
+   * the Average: work nobody can see is not work a student failed to do, and counting it made
+   * every average in a course with a draft in it read low.
+   */
+  isPublished: boolean;
 };
 
 // The table structure: who is in the gradebook and which assignments are the columns,
@@ -192,6 +200,7 @@ type AssignmentRow = {
   id: string;
   title: string;
   dueDate: Date | null;
+  isPublished: boolean;
   assignedToEveryone: boolean;
   problems: { maxPoints: number | null }[];
   assignees: { userId: string | null; groupId: string | null }[];
@@ -204,6 +213,7 @@ async function loadAssignmentRows(courseId: string): Promise<AssignmentRow[]> {
       id: true,
       title: true,
       dueDate: true,
+      isPublished: true,
       assignedToEveryone: true,
       problems: { select: { maxPoints: true } },
       assignees: { select: { userId: true, groupId: true } },
@@ -217,6 +227,7 @@ function toColumns(rows: AssignmentRow[]): GradeMatrixAssignment[] {
     id: a.id,
     title: a.title,
     dueDate: a.dueDate,
+    isPublished: a.isPublished,
     maxPoints: a.problems.reduce((sum, p) => sum + Number(p.maxPoints ?? 0), 0),
   }));
 }
@@ -294,6 +305,10 @@ async function loadGradeSums(
  * have none. The server-side twin of the gradebook's Average column: only assignments the
  * student is actually assigned count toward the denominator, so someone who is not assigned
  * everything is not measured against the full course total.
+ *
+ * Unpublished assignments are out of it too. A draft is a column here because staff build and
+ * grade one here, but a student cannot do work they cannot see, and counting it dragged every
+ * average in the course down by however much of the term was still in preparation.
  */
 function averagePct(
   assignments: GradeMatrixAssignment[],
@@ -304,6 +319,7 @@ function averagePct(
   let available = 0;
   let gradeCount = 0;
   for (const a of assignments) {
+    if (!a.isPublished) continue;
     if (assignedFlags?.[a.id] === false) continue;
     available += a.maxPoints ?? 0;
     const val = studentGrades?.[a.id];

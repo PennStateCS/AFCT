@@ -16,8 +16,26 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1' }, { userId: 's2' }]);
   prismaMock.user.findMany.mockResolvedValue([
-    { id: 's1', firstName: 'Ada', lastName: 'L', email: 'a@x.io', avatar: null, cropX: null, cropY: null, zoom: null },
-    { id: 's2', firstName: 'Alan', lastName: 'T', email: 't@x.io', avatar: null, cropX: null, cropY: null, zoom: null },
+    {
+      id: 's1',
+      firstName: 'Ada',
+      lastName: 'L',
+      email: 'a@x.io',
+      avatar: null,
+      cropX: null,
+      cropY: null,
+      zoom: null,
+    },
+    {
+      id: 's2',
+      firstName: 'Alan',
+      lastName: 'T',
+      email: 't@x.io',
+      avatar: null,
+      cropX: null,
+      cropY: null,
+      zoom: null,
+    },
   ]);
   prismaMock.groupMembership.findMany.mockResolvedValue([]);
   prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
@@ -27,12 +45,21 @@ describe('getCourseGradeMatrix: assigned map', () => {
   it('marks students assigned via everyone, individual override, and group override', async () => {
     prismaMock.assignment.findMany.mockResolvedValue([
       // Assigned to everyone: both students assigned.
-      { id: 'a1', title: 'A1', dueDate: null, assignedToEveryone: true, problems: [], assignees: [] },
+      {
+        id: 'a1',
+        title: 'A1',
+        dueDate: null,
+        isPublished: true,
+        assignedToEveryone: true,
+        problems: [],
+        assignees: [],
+      },
       // Not everyone, individual assignee for s1 only.
       {
         id: 'a2',
         title: 'A2',
         dueDate: null,
+        isPublished: true,
         assignedToEveryone: false,
         problems: [],
         assignees: [{ userId: 's1', groupId: null }],
@@ -42,6 +69,7 @@ describe('getCourseGradeMatrix: assigned map', () => {
         id: 'a3',
         title: 'A3',
         dueDate: null,
+        isPublished: true,
         assignedToEveryone: false,
         problems: [],
         assignees: [{ userId: null, groupId: 'g1' }],
@@ -78,6 +106,7 @@ describe('getCourseGradeMatrix: values', () => {
         id: 'a1',
         title: 'A1',
         dueDate: null,
+        isPublished: true,
         assignedToEveryone: true,
         problems: [{ maxPoints: 10 }],
         assignees: [],
@@ -122,6 +151,7 @@ describe('getCourseGradeMatrix: values', () => {
         id: 'a1',
         title: 'A1',
         dueDate: null,
+        isPublished: true,
         assignedToEveryone: true,
         problems: [{ maxPoints: null }, { maxPoints: 5 }],
         assignees: [],
@@ -153,6 +183,80 @@ describe('getCourseGradeMatrix: values', () => {
   });
 });
 
+describe('drafts and the Average column', () => {
+  it('leaves an unpublished assignment out of the denominator', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'live',
+        title: 'Homework 1',
+        dueDate: null,
+        isPublished: true,
+        assignedToEveryone: true,
+        problems: [{ maxPoints: 10 }],
+        assignees: [],
+      },
+      {
+        // Written but not out yet. Staff grade drafts here, so it stays a column; counting
+        // it would measure students against work they have never seen.
+        id: 'draft',
+        title: 'Homework 2',
+        dueDate: null,
+        isPublished: false,
+        assignedToEveryone: true,
+        problems: [{ maxPoints: 10 }],
+        assignees: [],
+      },
+    ]);
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 'ada', status: 'ENROLLED' },
+      { userId: 'bob', status: 'ENROLLED' },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([
+      {
+        id: 'ada',
+        firstName: 'Ada',
+        lastName: 'A',
+        email: 'ada@example.com',
+        avatar: null,
+        cropX: null,
+        cropY: null,
+        zoom: null,
+      },
+      {
+        id: 'bob',
+        firstName: 'Bob',
+        lastName: 'B',
+        email: 'bob@example.com',
+        avatar: null,
+        cropX: null,
+        cropY: null,
+        zoom: null,
+      },
+    ]);
+    prismaMock.groupMembership.findMany.mockResolvedValue([]);
+    // Ada aced the work that is out. Bob half did it and has full marks on the draft, which
+    // nobody could have attempted. Counting the draft would rank Bob (75%) above Ada (50%);
+    // ignoring it ranks Ada (100%) above Bob (50%), which is the truth about the course.
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
+      { studentId: 'ada', assignmentId: 'live', _sum: { grade: 10 } },
+      { studentId: 'bob', assignmentId: 'live', _sum: { grade: 5 } },
+      { studentId: 'bob', assignmentId: 'draft', _sum: { grade: 10 } },
+    ]);
+
+    prismaMock.roster.count.mockResolvedValue(2);
+
+    const page = await getCourseGradePage({
+      courseId: 'c1',
+      skip: 0,
+      take: 10,
+      sortBy: 'totalGrade',
+      sortDir: 'desc',
+    });
+
+    expect(page.rows.map((r) => r.id)).toEqual(['ada', 'bob']);
+  });
+});
+
 describe('getCourseGradeColumns', () => {
   it('returns the columns and the course student total, with no student rows', async () => {
     prismaMock.assignment.findMany.mockResolvedValue([
@@ -160,6 +264,7 @@ describe('getCourseGradeColumns', () => {
         id: 'a1',
         title: 'A1',
         dueDate: null,
+        isPublished: true,
         assignedToEveryone: true,
         problems: [{ maxPoints: 10 }],
         assignees: [],
@@ -169,7 +274,9 @@ describe('getCourseGradeColumns', () => {
 
     const columns = await getCourseGradeColumns('c1');
 
-    expect(columns.assignments).toEqual([{ id: 'a1', title: 'A1', dueDate: null, maxPoints: 10 }]);
+    expect(columns.assignments).toEqual([
+      { id: 'a1', title: 'A1', dueDate: null, maxPoints: 10, isPublished: true },
+    ]);
     expect(columns.totalStudents).toBe(1200);
   });
 });
@@ -181,6 +288,7 @@ describe('getCourseGradePage', () => {
         id: 'a1',
         title: 'A1',
         dueDate: null,
+        isPublished: true,
         assignedToEveryone: true,
         problems: [{ maxPoints: 10 }],
         assignees: [],
@@ -189,6 +297,7 @@ describe('getCourseGradePage', () => {
         id: 'a2',
         title: 'A2',
         dueDate: null,
+        isPublished: true,
         assignedToEveryone: true,
         problems: [{ maxPoints: 10 }],
         assignees: [],
@@ -278,9 +387,9 @@ describe('getCourseGradePage', () => {
 
       expect(rows.map((r) => r.id)).toEqual(['s2', 's1']);
       // Scoped to the one column being sorted, not every assignment.
-      expect(prismaMock.assignmentProblemGrade.groupBy.mock.calls[0][0].where.assignmentId.in).toEqual(
-        ['a1'],
-      );
+      expect(
+        prismaMock.assignmentProblemGrade.groupBy.mock.calls[0][0].where.assignmentId.in,
+      ).toEqual(['a1']);
       // The candidate list is ordered by the server, so it must not also skip/take.
       expect(prismaMock.roster.findMany.mock.calls[0][0].skip).toBeUndefined();
     });
@@ -293,6 +402,7 @@ describe('getCourseGradePage', () => {
           id: 'a1',
           title: 'A1',
           dueDate: null,
+          isPublished: true,
           assignedToEveryone: true,
           problems: [{ maxPoints: 10 }],
           assignees: [],
@@ -301,6 +411,7 @@ describe('getCourseGradePage', () => {
           id: 'a2',
           title: 'A2',
           dueDate: null,
+          isPublished: true,
           assignedToEveryone: false,
           problems: [{ maxPoints: 10 }],
           assignees: [{ userId: 's1', groupId: null }],

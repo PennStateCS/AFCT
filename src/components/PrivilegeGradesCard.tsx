@@ -78,6 +78,8 @@ type Assignment = {
   title: string;
   dueDate?: string;
   maxPoints?: number;
+  /** Drafts stay as columns to grade in, and stay out of the Average. */
+  isPublished?: boolean;
 };
 
 const EMPTY_STUDENTS: StudentRow[] = [];
@@ -270,8 +272,11 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
       for (const a of assignments) {
         // Points available counts only assignments assigned to this student, so a
         // student who isn't assigned everything isn't measured against the full total.
+        // A draft counts for nobody: it is a column because staff grade one here, but
+        // students cannot see it, so it cannot be work they failed to do.
         // `averagePct` in lib/course-grades is the server-side twin of this, used to
         // order the whole roster when the Average column is sorted; keep them in step.
+        if (a.isPublished === false) continue;
         if (row.assigned?.[a.id] === false) continue;
         available += a.maxPoints ?? 0;
         const val = row.grades?.[a.id];
@@ -330,6 +335,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
             <span>{a.title}</span>
             <span className="text-muted-foreground text-xs font-normal">
               {a.maxPoints ?? 0} pts
+              {a.isPublished === false ? ' \u00b7 draft, not in the average' : ''}
             </span>
           </div>
         ),

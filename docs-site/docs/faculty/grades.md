@@ -8,7 +8,7 @@ An assignment cell shows the student's earned points and the assignment's availa
 
 The **Average** column is the student's earned points over the points of **everything they are assigned**, graded or not. Work you have not marked yet counts as zero until you mark it, so an average drops when you publish a new assignment and climbs back as you grade it. Read it as progress through the course, not as a standing grade.
 
-Only assignments a student is actually assigned count toward it, so somebody who is not assigned everything is not measured against the full course total.
+Only assignments a student is actually assigned count toward it, so somebody who is not assigned everything is not measured against the full course total. **Unpublished assignments do not count either**, and their column says so: a draft is a column because you build and grade one here, but students cannot see it, so it is never work they failed to do. Publishing an assignment is what puts it into everybody's average.
 
 The gradebook loads a page of students at a time, so a course with a thousand students opens as quickly as a small one. Searching and sorting apply to the whole class rather than to the students currently on screen, and the number beside the pager is the total who match:
 
