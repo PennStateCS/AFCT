@@ -27,7 +27,9 @@ function statsText(p: ProblemStats, unitPlural: string): string {
     `${p.title}. Median ${fmt1(b.median)}%, mean ${fmt1(b.mean)}%. ` +
     `Middle 50% from ${fmt1(b.q1)}% to ${fmt1(b.q3)}%. ` +
     `Whiskers ${fmt1(b.whiskerLow)}% to ${fmt1(b.whiskerHigh)}%. ` +
-    `${p.gradedCount} graded, ${p.ungradedCount} missing or ungraded.`
+    `${p.gradedCount} graded, ${p.ungradedCount} missing or ungraded. ` +
+    `Worth ${p.maxPoints} points` +
+    (p.pointsLostMean !== null ? `, ${fmt1(p.pointsLostMean)} lost on average.` : '.')
   );
 }
 
@@ -46,6 +48,14 @@ function Tooltip({ p, unitPlural }: { p: ProblemStats; unitPlural: string }) {
           <dd className="text-right tabular-nums">
             {fmt1(b.q1)}-{fmt1(b.q3)}%
           </dd>
+          <dt>Points</dt>
+          <dd className="text-right tabular-nums">{p.maxPoints}</dd>
+          {p.pointsLostMean !== null && (
+            <>
+              <dt>Average lost</dt>
+              <dd className="text-right tabular-nums">{fmt1(p.pointsLostMean)}</dd>
+            </>
+          )}
           <dt>Whiskers</dt>
           <dd className="text-right tabular-nums">
             {fmt1(b.whiskerLow)}-{fmt1(b.whiskerHigh)}%
@@ -81,15 +91,24 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
       <div className="flex w-full gap-2">
         {/* Problem labels: HTML so long names truncate cleanly; full name stays in the
             title attribute and the focusable plot's accessible name. */}
-        <div className="w-24 shrink-0 sm:w-36">
+        <div className="w-28 shrink-0 sm:w-44">
           {problems.map((p) => (
             <div
               key={p.id}
-              className="text-foreground flex items-center truncate text-xs"
+              className="flex flex-col justify-center"
               style={{ height: ROW_H }}
               title={p.title}
             >
-              {p.title}
+              <span className="text-foreground truncate text-xs">{p.title}</span>
+              {/* What it is worth, and what it cost. The plot beside it is normalised to
+                  0-100% so the problems can be compared at all, which also hides that one
+                  of them is worth eight times another. */}
+              <span className="text-muted-foreground text-2xs truncate tabular-nums">
+                {p.maxPoints} {p.maxPoints === 1 ? 'pt' : 'pts'}
+                {p.pointsLostMean !== null && p.pointsLostMean > 0
+                  ? ` \u00b7 ${fmt1(p.pointsLostMean)} lost`
+                  : ''}
+              </span>
             </div>
           ))}
           <div style={{ height: AXIS_H }} />
@@ -190,7 +209,7 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                       cx={xOf(o)}
                       cy={cy}
                       r={2.5}
-                      className="fill-none stroke-muted-foreground"
+                      className="stroke-muted-foreground fill-none"
                       strokeWidth={1.25}
                     />
                   ))}
@@ -208,7 +227,9 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                     onMouseEnter={(e) => showAtEvent(e, <Tooltip p={p} unitPlural={unitPlural} />)}
                     onMouseMove={(e) => showAtEvent(e, <Tooltip p={p} unitPlural={unitPlural} />)}
                     onMouseLeave={hide}
-                    onFocus={(e) => showAtElement(e.currentTarget, <Tooltip p={p} unitPlural={unitPlural} />)}
+                    onFocus={(e) =>
+                      showAtElement(e.currentTarget, <Tooltip p={p} unitPlural={unitPlural} />)
+                    }
                     onBlur={hide}
                   />
                 </g>
@@ -246,7 +267,13 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
         </span>
         <span className="flex items-center gap-1.5">
           <svg width="10" height="10" aria-hidden="true">
-            <circle cx="5" cy="5" r="3" className="fill-none stroke-muted-foreground" strokeWidth={1.25} />
+            <circle
+              cx="5"
+              cy="5"
+              r="3"
+              className="stroke-muted-foreground fill-none"
+              strokeWidth={1.25}
+            />
           </svg>
           Outlier
         </span>
@@ -255,11 +282,25 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
 
       <ChartDataTable
         caption={`Per-problem score distribution across the graded ${unitPlural}.`}
-        headers={['Problem', 'Median', 'Mean', 'Q1', 'Q3', 'Whisker low', 'Whisker high', 'Graded', 'Missing']}
+        headers={[
+          'Problem',
+          'Points',
+          'Average lost',
+          'Median',
+          'Mean',
+          'Q1',
+          'Q3',
+          'Whisker low',
+          'Whisker high',
+          'Graded',
+          'Missing',
+        ]}
         rows={problems.map((p) =>
           p.boxplot
             ? [
                 p.title,
+                p.maxPoints,
+                p.pointsLostMean !== null ? fmt1(p.pointsLostMean) : '-',
                 `${fmt1(p.boxplot.median)}%`,
                 `${fmt1(p.boxplot.mean)}%`,
                 `${fmt1(p.boxplot.q1)}%`,
@@ -269,7 +310,19 @@ export function ProblemBoxPlotChart({ problems, unitPlural }: Props) {
                 p.gradedCount,
                 p.ungradedCount,
               ]
-            : [p.title, '-', '-', '-', '-', '-', '-', p.gradedCount, p.ungradedCount],
+            : [
+                p.title,
+                p.maxPoints,
+                '-',
+                '-',
+                '-',
+                '-',
+                '-',
+                '-',
+                '-',
+                p.gradedCount,
+                p.ungradedCount,
+              ],
         )}
       />
       <ChartTooltip state={state} />

@@ -41,6 +41,8 @@ const problem = (over: Partial<Payload['problems'][number]> = {}) => ({
   title: 'Problem 1',
   order: 0,
   autograderEnabled: true,
+  maxPoints: 10,
+  pointsLostMean: null,
   boxplot: null,
   gradedCount: 0,
   ungradedCount: 0,

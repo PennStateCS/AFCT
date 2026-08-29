@@ -544,3 +544,60 @@ describe('counting missing work as zero', () => {
     expect(zeroed.notSubmitted).toEqual([]);
   });
 });
+
+describe('problem weight', () => {
+  it('carries what a problem is worth and what it cost', () => {
+    const problems: StatsProblem[] = [
+      // Same shape of scores, eight times the weight: the normalised box plots cannot tell
+      // these apart, which is exactly why the points travel with them.
+      { id: 'warmup', title: 'Warm-up', order: 0, maxPoints: 5, autograderEnabled: true },
+      { id: 'proof', title: 'Proof', order: 1, maxPoints: 40, autograderEnabled: true },
+    ];
+    const half = (id: string): StatsParticipant => ({
+      id,
+      hasException: false,
+      dueAt: new Date('2030-01-01T00:00:00Z').getTime(),
+      problemGrades: { warmup: 2.5, proof: 20 },
+      gradedAtByProblem: {},
+      latestStatusByProblem: {},
+    });
+
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants: [half('a'), half('b')],
+      submissions: [],
+      timeZone: 'UTC',
+    });
+
+    const warmup = stats.problems.find((p) => p.id === 'warmup')!;
+    const proof = stats.problems.find((p) => p.id === 'proof')!;
+
+    expect(warmup.boxplot?.median).toBe(proof.boxplot?.median);
+    expect(warmup.maxPoints).toBe(5);
+    expect(proof.maxPoints).toBe(40);
+    expect(warmup.pointsLostMean).toBe(2.5);
+    expect(proof.pointsLostMean).toBe(20);
+  });
+
+  it('says nothing about marks lost on an ungraded problem', () => {
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems: [{ id: 'p1', title: 'P1', order: 0, maxPoints: 10, autograderEnabled: true }],
+      participants: [
+        {
+          id: 'a',
+          hasException: false,
+          dueAt: 0,
+          problemGrades: {},
+          gradedAtByProblem: {},
+          latestStatusByProblem: {},
+        },
+      ],
+      submissions: [],
+      timeZone: 'UTC',
+    });
+
+    expect(stats.problems[0]!.pointsLostMean).toBeNull();
+  });
+});

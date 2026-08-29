@@ -623,6 +623,24 @@ export type ProblemStats = {
   ungradedCount: number;
   /** Whether the autograder marks this problem. False means a person does. */
   autograderEnabled: boolean;
+  /**
+   * What this problem is worth.
+   *
+   * The box plot below normalises every problem to 0-100% so they can be compared at all,
+   * which also hides that one of them is worth eight times another. The weight has to travel
+   * with the shape or the comparison misleads.
+   */
+  maxPoints: number;
+  /**
+   * Marks lost per graded participant, on average: the mean of (points possible - points
+   * earned) over everybody who has a grade for this problem. Null when nobody does.
+   *
+   * The number a professor decides on. A problem everyone half-solved costs the class more
+   * than one a few people failed, and neither the median nor the spread says which is which
+   * until the points are in it. Not clamped: a grade above the maximum is a bonus somebody
+   * awarded on purpose, and pretending it was zero loss would flatter the problem.
+   */
+  pointsLostMean: number | null;
   /** Submission-status breakdown for THIS problem, in fixed order; counts sum to
    *  participantCount (every assigned participant is expected to do every problem). */
   status: { key: StatusKey; count: number }[];
@@ -798,6 +816,7 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
     .sort((a, b) => a.order - b.order)
     .map((p) => {
       const values: number[] = [];
+      const lost: number[] = [];
       let gradedCount = 0;
       const statusCounts = new Map<StatusKey, number>(STATUS_ORDER.map((k) => [k, 0]));
       const gradingCounts = new Map<GradingStateKey, number>(GRADING_ORDER.map((k) => [k, 0]));
@@ -816,8 +835,11 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
         if (grade === undefined) continue;
         gradedCount += 1;
         // A problem worth zero points has no meaningful normalized score; it still counts
-        // as graded but contributes no distribution point.
-        if (p.maxPoints > 0) values.push((grade / p.maxPoints) * 100);
+        // as graded but contributes no distribution point, and nothing can be lost on it.
+        if (p.maxPoints > 0) {
+          values.push((grade / p.maxPoints) * 100);
+          lost.push(p.maxPoints - grade);
+        }
       }
       const fa = firstAttempt.get(p.id) ?? { correct: 0, submitted: 0 };
       return {
@@ -825,6 +847,8 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
         title: p.title,
         order: p.order,
         autograderEnabled: p.autograderEnabled,
+        maxPoints: p.maxPoints,
+        pointsLostMean: meanOf(lost),
         boxplot: computeBoxPlot(values),
         gradedCount,
         ungradedCount: participants.length - gradedCount,
