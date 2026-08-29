@@ -16,9 +16,11 @@ import {
   computeBoxPlot,
   computeScoreHistogram,
   meanOf,
+  TURN_IN_ORDER,
   type BoxPlotStats,
   type GradingStateKey,
   type HistogramBin,
+  type TurnInStateKey,
 } from '@/lib/assignment-statistics';
 
 /** The five kinds of work a theory course sets, plus the ones nobody has typed. */
@@ -282,6 +284,80 @@ export function compareProblemTypes(grades: TypedGrade[]): TypePerformance[] {
       totalCount: entry.total,
     };
   });
+}
+
+/** Whether each assignment came in on time, per assignment. */
+export type TurnInByAssignment = {
+  assignmentId: string;
+  title: string;
+  dueAt: number;
+  unit: 'student' | 'group';
+  states: { key: TurnInStateKey; count: number }[];
+  total: number;
+  /** Participants held to a date of their own on this assignment. */
+  exceptions: number;
+};
+
+/** One participant's relationship with one assignment's deadline. */
+export type TurnInInput = {
+  assignmentId: string;
+  participantId: string;
+  /** The date THIS participant is held to, epoch milliseconds. */
+  dueAt: number;
+  /** True when that date is not the assignment's own. */
+  hasException: boolean;
+  /** When they first and last submitted anything for this assignment. Absent if never. */
+  span?: { first: number; latest: number };
+};
+
+/**
+ * Whether the work came in on time, assignment by assignment.
+ *
+ * The rule is the assignment page's, one level up. There, timing is judged per problem on
+ * the attempt that holds the grade; across a whole assignment that is the same statement as
+ * "the last thing they submitted for it", because the latest submission over the assignment
+ * is the latest of the per-problem latests. So no new rule was invented for this card, which
+ * is the point: a professor comparing the two pages sees the same student called the same
+ * thing.
+ *
+ * Everyone is measured against their own date, so an extension reads as an extension rather
+ * than as a black mark, and the card says how many people are on a different date.
+ */
+export function turnInByAssignment(
+  assignments: CourseAssignment[],
+  inputs: TurnInInput[],
+): TurnInByAssignment[] {
+  const byAssignment = new Map<string, TurnInInput[]>();
+  for (const input of inputs) {
+    byAssignment.set(input.assignmentId, [...(byAssignment.get(input.assignmentId) ?? []), input]);
+  }
+
+  return [...assignments]
+    .sort((a, b) => a.dueAt - b.dueAt || a.title.localeCompare(b.title))
+    .map((assignment) => {
+      const rows = byAssignment.get(assignment.id) ?? [];
+      const counts = new Map<TurnInStateKey, number>(TURN_IN_ORDER.map((key) => [key, 0]));
+      for (const row of rows) {
+        const key = turnInStateFor(row);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      return {
+        assignmentId: assignment.id,
+        title: assignment.title,
+        dueAt: assignment.dueAt,
+        unit: assignment.unit,
+        states: TURN_IN_ORDER.map((key) => ({ key, count: counts.get(key) ?? 0 })),
+        total: rows.length,
+        exceptions: rows.filter((row) => row.hasException).length,
+      };
+    });
+}
+
+/** The four states, from one participant's span against their own deadline. */
+function turnInStateFor(input: TurnInInput): TurnInStateKey {
+  if (!input.span) return 'missing';
+  if (input.span.latest <= input.dueAt) return 'on-time';
+  return input.span.first <= input.dueAt ? 'revised-late' : 'late';
 }
 
 /** What is waiting on a grader, per assignment. */

@@ -17,6 +17,11 @@ type Props = {
   total: number;
   /** e.g. "students" or "groups". */
   unitPlural: string;
+  /**
+   * What one row is, for the data table's first column. Problems on an assignment page,
+   * assignments on a course one: a screen reader should hear which it is being read.
+   */
+  rowHeader?: string;
 };
 
 // On time reads as settled, a late revision as worth a look, late as the thing a late policy
@@ -35,7 +40,7 @@ const TURN_IN_STYLE: Record<TurnInStateKey, string> = {
  * with an extension is on time on their own terms. It reports what happened and when: what a
  * late submission costs is the professor's policy, and this page has no opinion about it.
  */
-export function TurnInStatusBar({ series, total, unitPlural }: Props) {
+export function TurnInStatusBar({ series, total, unitPlural, rowHeader = 'Problem' }: Props) {
   return (
     <SegmentedBarChart
       series={series.map((row) => ({ id: row.id, label: row.label, segments: row.turnIn }))}
@@ -45,8 +50,8 @@ export function TurnInStatusBar({ series, total, unitPlural }: Props) {
       labels={TURN_IN_LABELS}
       styles={TURN_IN_STYLE}
       rowLabel="Turn-in status"
-      caption={`Turn-in status per problem, across ${total} ${unitPlural}.`}
-      rowHeader="Problem"
+      caption={`Turn-in status per ${rowHeader.toLowerCase()}, across ${total} ${unitPlural}.`}
+      rowHeader={rowHeader}
     />
   );
 }

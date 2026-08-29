@@ -17,6 +17,11 @@ type Props = {
   total: number;
   /** e.g. "students" or "groups". */
   unitPlural: string;
+  /**
+   * What one row is, for the data table's first column. Problems on an assignment page,
+   * assignments on a course one: a screen reader should hear which it is being read.
+   */
+  rowHeader?: string;
 };
 
 // graded = settled, regrade needed = worth another look, awaiting grading = waiting on a
@@ -35,7 +40,7 @@ const GRADING_STYLE: Record<GradingStateKey, string> = {
  * this is the marking queue; on an autograded one it is mostly settled the moment a
  * submission lands, and anything sitting in "awaiting grading" there is worth a look.
  */
-export function GradingProgressBar({ series, total, unitPlural }: Props) {
+export function GradingProgressBar({ series, total, unitPlural, rowHeader = 'Problem' }: Props) {
   return (
     <SegmentedBarChart
       series={series.map((row) => ({ id: row.id, label: row.label, segments: row.grading }))}
@@ -45,8 +50,8 @@ export function GradingProgressBar({ series, total, unitPlural }: Props) {
       labels={GRADING_LABELS}
       styles={GRADING_STYLE}
       rowLabel="Grading progress"
-      caption={`Grading progress per problem, across ${total} ${unitPlural}.`}
-      rowHeader="Problem"
+      caption={`Grading progress per ${rowHeader.toLowerCase()}, across ${total} ${unitPlural}.`}
+      rowHeader={rowHeader}
     />
   );
 }

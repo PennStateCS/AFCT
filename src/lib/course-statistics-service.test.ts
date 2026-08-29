@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   groupMembership: { findMany: vi.fn() },
+  assignmentOverride: { findMany: vi.fn() },
   assignmentProblemGrade: { findMany: vi.fn() },
   submission: { findMany: vi.fn() },
 }));
@@ -35,6 +36,9 @@ const assignment = (over: Record<string, unknown> = {}) => ({
   id: 'a1',
   title: 'Homework 1',
   dueDate: DUE,
+  unlockAt: null,
+  lateCutoff: null,
+  allowLateSubmissions: false,
   isPublished: true,
   assignedToEveryone: true,
   groupSetId: null,
@@ -61,6 +65,7 @@ beforeEach(() => {
   prismaMock.roster.findMany.mockResolvedValue([]);
   prismaMock.assignment.findMany.mockResolvedValue([]);
   prismaMock.groupMembership.findMany.mockResolvedValue([]);
+  prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
   prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
   prismaMock.submission.findMany.mockResolvedValue([]);
 });
@@ -264,6 +269,94 @@ describe('getCourseStatistics', () => {
     expect(stats.timeline).toEqual([]);
   });
 
+  it('judges each assignment against the date its participants are held to', async () => {
+    prismaMock.roster.findMany.mockResolvedValue(
+      ['ada', 'bob', 'cy', 'di'].map((userId) => rosterRow(userId)),
+    );
+    prismaMock.assignment.findMany.mockResolvedValue([assignment()]);
+    // Di has an extension into the following week.
+    prismaMock.assignmentOverride.findMany.mockResolvedValue([
+      {
+        assignmentId: 'a1',
+        targetType: 'STUDENT',
+        userId: 'di',
+        groupId: null,
+        unlockAt: null,
+        dueDate: new Date('2026-09-17T23:59:00.000Z'),
+        lateCutoff: null,
+        allowLateSubmissions: null,
+      },
+    ]);
+    const sent = (studentId: string, at: string) => ({
+      studentId,
+      studentGroupId: null,
+      assignmentId: 'a1',
+      problemId: 'p1',
+      submittedAt: new Date(at),
+    });
+    prismaMock.submission.findMany.mockResolvedValue([
+      sent('ada', '2026-09-09T10:00:00Z'),
+      // In on time, then revised after the deadline: the later attempt is the one that holds
+      // the grade, so this is neither simply on time nor simply late.
+      sent('bob', '2026-09-09T10:00:00Z'),
+      sent('bob', '2026-09-12T10:00:00Z'),
+      sent('cy', '2026-09-12T09:00:00Z'),
+      // Same moment as Cy, but Di has until the 17th.
+      sent('di', '2026-09-12T09:00:00Z'),
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+    const row = stats.turnIn[0]!;
+    const states = Object.fromEntries(row.states.map((s) => [s.key, s.count]));
+
+    expect(states).toEqual({
+      'on-time': 2, // Ada, and Di on her own date
+      'revised-late': 1, // Bob
+      late: 1, // Cy
+      missing: 0,
+    });
+    expect(row.exceptions).toBe(1);
+  });
+
+  it('counts a whole group assignment against the group deadline', async () => {
+    prismaMock.roster.findMany.mockResolvedValue(['u1', 'u2'].map((userId) => rosterRow(userId)));
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'team', title: 'Group work', groupSetId: 'gs1' }),
+    ]);
+    prismaMock.groupMembership.findMany.mockResolvedValue([
+      { userId: 'u1', groupId: 'g1', group: { groupSetId: 'gs1' } },
+      { userId: 'u2', groupId: 'g2', group: { groupSetId: 'gs1' } },
+    ]);
+    prismaMock.assignmentOverride.findMany.mockResolvedValue([
+      {
+        assignmentId: 'team',
+        targetType: 'GROUP',
+        userId: null,
+        groupId: 'g2',
+        unlockAt: null,
+        dueDate: new Date('2026-09-17T23:59:00.000Z'),
+        lateCutoff: null,
+        allowLateSubmissions: null,
+      },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue(
+      ['g1', 'g2'].map((groupId, i) => ({
+        studentId: i === 0 ? 'u1' : 'u2',
+        studentGroupId: groupId,
+        assignmentId: 'team',
+        problemId: 'p1',
+        submittedAt: new Date('2026-09-12T09:00:00Z'),
+      })),
+    );
+
+    const stats = (await getCourseStatistics('c1'))!;
+    const states = Object.fromEntries(stats.turnIn[0]!.states.map((s) => [s.key, s.count]));
+
+    // Same moment for both teams; only the one with the extension was on time.
+    expect(states['on-time']).toBe(1);
+    expect(states.late).toBe(1);
+  });
+
   it('holds up in the first week of a course, with nothing in it', async () => {
     prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
 
@@ -273,5 +366,6 @@ describe('getCourseStatistics', () => {
     expect(stats.problemTypes).toEqual([]);
     expect(stats.distribution.includedCount).toBe(0);
     expect(stats.atRisk).toEqual({ belowThreshold: 0, threshold: 60, missingTwoOrMore: 0 });
+    expect(stats.turnIn).toEqual([]);
   });
 });
