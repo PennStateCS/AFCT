@@ -106,7 +106,7 @@ export function SimilarityTimeline({
         <span className="sm:pe-3 sm:pb-1">Submitted</span>
         <span className="sm:pe-3 sm:pb-1">Result</span>
         <span className="sm:pe-3 sm:pb-1">Relative</span>
-        <span className="sm:pb-1 sm:text-right">Open</span>
+        <span className="sm:pb-1 sm:text-right">Download</span>
       </li>
 
       {attempts.map((submission, index) => {
@@ -173,7 +173,7 @@ export function SimilarityTimeline({
                       download={submission.originalFileName ?? 'submission'}
                     >
                       <FileDown className="size-3.5 shrink-0" aria-hidden="true" />
-                      Open
+                      Download
                       <span className="sr-only">
                         {' '}
                         {primary}&apos;s {attemptLabel(submission.attempt).toLowerCase()}
