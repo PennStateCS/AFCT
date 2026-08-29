@@ -13,13 +13,17 @@
  */
 
 import {
+  computeAttemptsToSolveByProblem,
   computeBoxPlot,
+  computeFirstAttemptSuccess,
   computeScoreHistogram,
   meanOf,
   TURN_IN_ORDER,
   type BoxPlotStats,
   type GradingStateKey,
+  type AttemptsToSolve,
   type HistogramBin,
+  type StatsSubmission,
   type TurnInStateKey,
 } from '@/lib/assignment-statistics';
 
@@ -284,6 +288,39 @@ export function compareProblemTypes(grades: TypedGrade[]): TypePerformance[] {
       totalCount: entry.total,
     };
   });
+}
+
+/** How many tries a kind of problem takes. */
+export type AttemptsByType = {
+  type: ProblemTypeKey;
+  title: string;
+  attempts: AttemptsToSolve;
+  /** Got it right first time, out of those who submitted it at all. */
+  firstTry: { correct: number; submitted: number };
+};
+
+/**
+ * How many attempts each kind of problem takes before it comes right.
+ *
+ * The score cards say how well the class did on a topic; this says how hard they had to work
+ * to get there, which is a different fact and sometimes the more useful one: a topic
+ * everybody eventually solves on the fifth attempt is not a topic anybody has understood.
+ *
+ * The caller keys each series by the OCCASION, not the problem: a participant meeting the
+ * same problem again on a midterm is starting over, and merging the two would report a run of
+ * attempts nobody actually made. Failed evaluations are already excluded by the shared
+ * attempt rule, because a run of ours that produced no verdict is not a try of theirs.
+ */
+export function attemptsByProblemType(submissions: StatsSubmission[]): AttemptsByType[] {
+  const attempts = computeAttemptsToSolveByProblem(submissions);
+  const firstAttempt = computeFirstAttemptSuccess(submissions);
+
+  return PROBLEM_TYPE_ORDER.filter((type) => attempts.has(type)).map((type) => ({
+    type,
+    title: PROBLEM_TYPE_LABELS[type],
+    attempts: attempts.get(type)!,
+    firstTry: firstAttempt.get(type) ?? { correct: 0, submitted: 0 },
+  }));
 }
 
 /** Whether each assignment came in on time, per assignment. */

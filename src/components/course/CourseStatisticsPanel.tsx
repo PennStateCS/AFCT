@@ -26,6 +26,7 @@ import { ScoreHistogramChart } from '@/components/statistics/charts/ScoreHistogr
 import { ProblemBoxPlotChart } from '@/components/statistics/charts/ProblemBoxPlotChart';
 import { GradingProgressBar } from '@/components/statistics/charts/GradingProgressBar';
 import { TurnInStatusBar } from '@/components/statistics/charts/TurnInStatusBar';
+import { AttemptsPerProblemChart } from '@/components/statistics/charts/AttemptsPerProblemChart';
 import { SubmissionTimelineChart } from '@/components/statistics/charts/SubmissionTimelineChart';
 import { ActivityHeatmapChart } from '@/components/statistics/charts/ActivityHeatmapChart';
 import { apiPaths } from '@/lib/api-paths';
@@ -244,6 +245,26 @@ export function CourseStatisticsPanel({ courseId }: { courseId: string }) {
                 />
               ) : (
                 <EmptyChart message="Nothing of any type is graded yet." />
+              )}
+            </StatCard>
+
+            <StatCard
+              title="Attempts by problem type"
+              description="How many submissions each kind of problem takes before it comes right, with the share solved straight away."
+            >
+              {stats.attemptsByType.length > 0 ? (
+                <AttemptsPerProblemChart
+                  problems={stats.attemptsByType.map((row) => ({
+                    id: row.type,
+                    title: row.title,
+                    attempts: row.attempts,
+                    firstTry: row.firstTry,
+                  }))}
+                  unitPlural="attempts at a problem"
+                  rowHeader="Problem type"
+                />
+              ) : (
+                <EmptyChart message="No submissions yet." />
               )}
             </StatCard>
 

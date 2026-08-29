@@ -20,6 +20,11 @@ type Props = {
   problems: AttemptsRow[];
   /** e.g. "students" or "groups". */
   unitPlural: string;
+  /**
+   * What one row is, for the data table's first column. Problems on an assignment page,
+   * kinds of problem on a course one.
+   */
+  rowHeader?: string;
 };
 
 // The shared sequential scale, low to high: 1 attempt (easy) is the lightest step, 5+
@@ -58,7 +63,7 @@ function segmentsFor(a: AttemptsToSolve): { segments: Segment[]; total: number }
   return { segments, total: a.solvedCount + a.unsolvedCount };
 }
 
-export function AttemptsPerProblemChart({ problems, unitPlural }: Props) {
+export function AttemptsPerProblemChart({ problems, unitPlural, rowHeader = 'Problem' }: Props) {
   const { state, showAtEvent, showAtElement, hide } = useChartTooltip();
 
   return (
@@ -150,8 +155,8 @@ export function AttemptsPerProblemChart({ problems, unitPlural }: Props) {
       </ul>
 
       <ChartDataTable
-        caption={`Attempts to solve each problem, across the ${unitPlural} who submitted.`}
-        headers={['Problem', '1', '2', '3', '4', '5+', 'Not solved', 'First try']}
+        caption={`Attempts to solve, by ${rowHeader.toLowerCase()}, across the ${unitPlural} who submitted.`}
+        headers={[rowHeader, '1', '2', '3', '4', '5+', 'Not solved', 'First try']}
         rows={problems.map((p) => [
           p.title,
           ...p.attempts.buckets.map((b) => b.count),

@@ -357,6 +357,72 @@ describe('getCourseStatistics', () => {
     expect(states.late).toBe(1);
   });
 
+  it('counts attempts by topic, starting again when a problem is met a second time', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'a1', problems: [problem('shared', 10, 'CFG')] }),
+      assignment({ id: 'midterm', title: 'Midterm', problems: [problem('shared', 10, 'CFG')] }),
+    ]);
+    const try_ = (assignmentId: string, at: string, correct: boolean, status = 'COMPLETED') => ({
+      studentId: 's1',
+      studentGroupId: null,
+      assignmentId,
+      problemId: 'shared',
+      submittedAt: new Date(at),
+      correct,
+      status,
+    });
+    prismaMock.submission.findMany.mockResolvedValue([
+      // First time round: wrong, then right. Two attempts.
+      try_('a1', '2026-09-01T10:00:00Z', false),
+      try_('a1', '2026-09-01T11:00:00Z', true),
+      // The same problem on the midterm is a fresh run, not a third attempt at the first one.
+      try_('midterm', '2026-10-01T10:00:00Z', true),
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+    const cfg = stats.attemptsByType.find((row) => row.type === 'CFG')!;
+    const buckets = Object.fromEntries(cfg.attempts.buckets.map((b) => [b.label, b.count]));
+
+    expect(cfg.attempts.solvedCount).toBe(2);
+    expect(buckets['1']).toBe(1); // the midterm run
+    expect(buckets['2']).toBe(1); // the first run
+    expect(cfg.firstTry).toEqual({ correct: 1, submitted: 2 });
+  });
+
+  it('does not count an evaluation that failed as a try', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ problems: [problem('p1', 10, 'FA')] }),
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        studentId: 's1',
+        studentGroupId: null,
+        assignmentId: 'a1',
+        problemId: 'p1',
+        submittedAt: new Date('2026-09-01T10:00:00Z'),
+        correct: false,
+        status: 'FAILED',
+      },
+      {
+        studentId: 's1',
+        studentGroupId: null,
+        assignmentId: 'a1',
+        problemId: 'p1',
+        submittedAt: new Date('2026-09-01T11:00:00Z'),
+        correct: true,
+        status: 'COMPLETED',
+      },
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+    const fa = stats.attemptsByType.find((row) => row.type === 'FA')!;
+
+    // Solved on their first real try: our broken run is not a mistake of theirs.
+    expect(fa.attempts.buckets.find((b) => b.label === '1')!.count).toBe(1);
+  });
+
   it('holds up in the first week of a course, with nothing in it', async () => {
     prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
 
@@ -367,5 +433,6 @@ describe('getCourseStatistics', () => {
     expect(stats.distribution.includedCount).toBe(0);
     expect(stats.atRisk).toEqual({ belowThreshold: 0, threshold: 60, missingTwoOrMore: 0 });
     expect(stats.turnIn).toEqual([]);
+    expect(stats.attemptsByType).toEqual([]);
   });
 });

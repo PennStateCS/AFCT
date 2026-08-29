@@ -35,6 +35,8 @@ The course's own **Statistics** tab sits beside Grades and covers the whole term
 
 - **Turn-in status** - whether the work arrived by the deadline, assignment by assignment: on time, revised late (in on time and then submitted again after it), late, or nothing submitted. Everyone is measured against the date they are actually held to, so an extension reads as an extension, and the card says how many are on a different date. Lateness is judged on the attempt that holds the grade, which across a whole assignment is the last thing submitted for it, so this card and the assignment tab's version of it can never disagree about who was late.
 
+- **Attempts by problem type** - how many submissions each kind of problem takes before it comes right, with the share solved straight away. The score cards say how well the class did on a topic; this says how hard they had to work to get there, and a topic everybody eventually solves on the fifth attempt is not a topic anybody has understood. A problem met again on a later assignment starts a fresh run rather than extending the first one, and an evaluation that failed is never counted as a try.
+
 - **Grading workload** - what is waiting on a grader, per assignment, counted in pieces of work (one participant's one problem), which is what somebody marking actually works through.
 
 - **Worth a second look** - two counts, not names: how many students are below 60% on the reading currently shown, and how many have two or more assignments with nothing handed in. Those are different worries, and the second is the one you can still do something about. Who they are is in the Grades tab, which is the screen built to name them.
