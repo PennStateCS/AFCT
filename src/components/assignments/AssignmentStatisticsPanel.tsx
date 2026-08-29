@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { BarChart3, TriangleAlert } from 'lucide-react';
+import { BarChart3, ChevronDown, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
@@ -17,7 +19,6 @@ import { GradingProgressBar } from './charts/GradingProgressBar';
 import { TurnInStatusBar } from './charts/TurnInStatusBar';
 import { ProblemBoxPlotChart } from './charts/ProblemBoxPlotChart';
 import { AttemptsPerProblemChart } from './charts/AttemptsPerProblemChart';
-import { FirstAttemptChart } from './charts/FirstAttemptChart';
 import { SubmissionTimelineChart } from './charts/SubmissionTimelineChart';
 import { ActivityHeatmapChart } from './charts/ActivityHeatmapChart';
 
@@ -64,6 +65,7 @@ function EmptyChart({ message }: { message: string }) {
 export function AssignmentStatisticsPanel() {
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { hour12 } = useEffectiveTimezone();
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   const query = useQuery({
     queryKey: queryKeys.assignment.statistics(courseId, assignmentId),
@@ -173,6 +175,36 @@ export function AssignmentStatisticsPanel() {
     0,
   );
   // How much of this assignment a person has to mark, said the way somebody would say it.
+  /** The figures the histogram already computes, said once in words. */
+  const pct = (n: number) => `${Math.round(n)}%`;
+  const scoreSummary = [
+    `${stats.histogram.includedCount} graded`,
+    stats.histogram.mean !== null ? `mean ${pct(stats.histogram.mean)}` : null,
+    stats.histogram.median !== null ? `median ${pct(stats.histogram.median)}` : null,
+    stats.histogram.low !== null && stats.histogram.high !== null
+      ? `range ${pct(stats.histogram.low)} to ${pct(stats.histogram.high)}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' \u00b7 ');
+
+  /**
+   * Why work was left out, rather than only how much.
+   *
+   * A histogram counts a participant only once every problem of theirs is graded, so one
+   * unmarked problem can empty the whole chart. "14 excluded" reads as a fault in the page;
+   * naming what they are waiting on reads as a job.
+   */
+  const waitingOn = stats.histogram.waitingOn.slice(0, 2);
+  const exclusionNote = stats.histogram.noPossiblePoints
+    ? 'This assignment has no points to award, so there is no score to chart.'
+    : stats.histogram.excludedCount === 0
+      ? null
+      : `${stats.histogram.excludedCount} ${stats.histogram.excludedCount === 1 ? 'was' : 'were'} left out as not yet fully graded` +
+        (waitingOn.length > 0
+          ? `: ${waitingOn.map((w) => `${w.count} waiting on ${w.title}`).join(', ')}.`
+          : '.');
+
   const handGraded = stats.problems.filter((p) => !p.autograderEnabled).length;
   const problemCount = stats.problems.length;
   const handGradedText =
@@ -220,16 +252,19 @@ export function AssignmentStatisticsPanel() {
                 includedCount={stats.histogram.includedCount}
                 unitPlural={unitPlural}
               />
-              {stats.histogram.excludedCount > 0 && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  {stats.histogram.excludedCount}{' '}
-                  {stats.histogram.excludedCount === 1 ? 'was' : 'were'} excluded as incomplete or
-                  ungraded.
-                </p>
+              <p className="text-muted-foreground mt-2 text-xs">{scoreSummary}</p>
+              {exclusionNote && (
+                <p className="text-muted-foreground mt-1 text-xs">{exclusionNote}</p>
               )}
             </>
           ) : (
-            <EmptyChart message={`No fully graded ${unitPlural} yet.`} />
+            <EmptyChart
+              message={
+                stats.histogram.noPossiblePoints
+                  ? 'This assignment has no points to award, so there is no score to chart.'
+                  : (exclusionNote ?? `No fully graded ${unitPlural} yet.`)
+              }
+            />
           )}
         </StatCard>
 
@@ -349,7 +384,7 @@ export function AssignmentStatisticsPanel() {
         <StatCard
           className="lg:col-span-8"
           title="Attempts to solve"
-          description={`How many submissions ${unitPlural} needed before their first correct one, per problem.`}
+          description={`How many submissions ${unitPlural} needed before their first correct one, per problem, with the share who got it right straight away.`}
         >
           {stats.problems.some((p) => p.attempts.solvedCount + p.attempts.unsolvedCount > 0) ? (
             <AttemptsPerProblemChart
@@ -357,6 +392,7 @@ export function AssignmentStatisticsPanel() {
                 id: p.id,
                 title: p.title,
                 attempts: p.attempts,
+                firstTry: { correct: p.firstAttemptCorrect, submitted: p.firstAttemptSubmitted },
               }))}
               unitPlural={unitPlural}
             />
@@ -365,41 +401,42 @@ export function AssignmentStatisticsPanel() {
           )}
         </StatCard>
 
-        <StatCard
-          className="lg:col-span-4"
-          title="First-attempt success"
-          description={`Share of ${unitPlural} who got each problem right on their first submission.`}
-        >
-          {stats.problems.length > 0 ? (
-            <FirstAttemptChart
-              problems={stats.problems.map((p) => ({
-                id: p.id,
-                title: p.title,
-                correct: p.firstAttemptCorrect,
-                submitted: p.firstAttemptSubmitted,
-              }))}
-              unitPlural={unitPlural}
-            />
-          ) : (
-            <EmptyChart message="This assignment has no problems yet." />
-          )}
-        </StatCard>
-
-        <StatCard
-          className="lg:col-span-8"
-          title="When submissions happen"
-          description="Submission attempts by day of week and hour, in the course time zone."
-        >
-          {stats.heatmap.max > 0 ? (
-            <ActivityHeatmapChart
-              matrix={stats.heatmap.matrix}
-              max={stats.heatmap.max}
-              unitPlural={unitPlural}
-            />
-          ) : (
-            <EmptyChart message="No submissions yet." />
-          )}
-        </StatCard>
+        {/* Folded away by default. When the class works is worth knowing and worth keeping,
+            but it is not a decision anybody makes on this screen, and open it cost a
+            screenful above the charts that are. */}
+        <Card className="lg:col-span-8">
+          <Collapsible open={showHeatmap} onOpenChange={setShowHeatmap}>
+            <CardHeader>
+              <CardTitle aria-level={3} className="text-base">
+                <CollapsibleTrigger className="focus-visible:ring-ring flex w-full items-center gap-2 text-start focus-visible:ring-2 focus-visible:outline-none">
+                  <ChevronDown
+                    className={`text-muted-foreground size-4 shrink-0 transition-transform ${
+                      showHeatmap ? 'rotate-180' : ''
+                    }`}
+                    aria-hidden="true"
+                  />
+                  When submissions happen
+                </CollapsibleTrigger>
+              </CardTitle>
+              <CardDescription>
+                Submission attempts by day of week and hour, in the course time zone.
+              </CardDescription>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent>
+                {stats.heatmap.max > 0 ? (
+                  <ActivityHeatmapChart
+                    matrix={stats.heatmap.matrix}
+                    max={stats.heatmap.max}
+                    unitPlural={unitPlural}
+                  />
+                ) : (
+                  <EmptyChart message="No submissions yet." />
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </Card>
       </div>
     </div>
   );

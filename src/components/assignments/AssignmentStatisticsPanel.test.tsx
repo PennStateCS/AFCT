@@ -68,7 +68,17 @@ const payload = (over: Partial<Payload> = {}): Payload => ({
   participantCount: 2,
   exceptionCount: 0,
   exclusions: [],
-  histogram: { bins: [], includedCount: 0, excludedCount: 0, mean: null, median: null },
+  histogram: {
+    bins: [],
+    includedCount: 0,
+    excludedCount: 0,
+    mean: null,
+    median: null,
+    low: null,
+    high: null,
+    waitingOn: [],
+    noPossiblePoints: false,
+  },
   problems: [problem()],
   timeline: [],
   heatmap: { matrix: [], max: 0 },
@@ -195,6 +205,73 @@ describe('AssignmentStatisticsPanel', () => {
 
     expect(await screen.findByText('Turn-in status')).toBeInTheDocument();
     expect(screen.getByText(/2 are measured against a different due date\./)).toBeInTheDocument();
+  });
+
+  it('says what the excluded work is waiting on, not just how much there is', async () => {
+    serve(
+      payload({
+        histogram: {
+          bins: [],
+          includedCount: 4,
+          excludedCount: 12,
+          mean: 85,
+          median: 87.5,
+          low: 62,
+          high: 100,
+          waitingOn: [{ problemId: 'p3', title: 'Pumping lemma', count: 10 }],
+          noPossiblePoints: false,
+        },
+      }),
+    );
+
+    renderPanel();
+
+    expect(
+      await screen.findByText(
+        /12 were left out as not yet fully graded: 10 waiting on Pumping lemma\./,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('4 graded \u00b7 mean 85% \u00b7 median 88% \u00b7 range 62% to 100%'),
+    ).toBeInTheDocument();
+  });
+
+  it('says so plainly when there are no points to award', async () => {
+    serve(
+      payload({
+        histogram: {
+          bins: [],
+          includedCount: 0,
+          excludedCount: 2,
+          mean: null,
+          median: null,
+          low: null,
+          high: null,
+          waitingOn: [],
+          noPossiblePoints: true,
+        },
+      }),
+    );
+
+    renderPanel();
+
+    expect(
+      await screen.findByText(/no points to award, so there is no score to chart/),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the heatmap folded away until it is asked for', async () => {
+    serve(payload({ heatmap: { matrix: [], max: 3 } }));
+
+    const person = (await import('@testing-library/user-event')).default.setup();
+    renderPanel();
+
+    const trigger = await screen.findByRole('button', { name: /When submissions happen/ });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await person.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('counts groups rather than students on a group assignment', async () => {

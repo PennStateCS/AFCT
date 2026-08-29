@@ -439,3 +439,55 @@ describe('heatmapLevel', () => {
     expect(heatmapLevel(1, 1)).toBe(4);
   });
 });
+
+describe('histogram exclusions', () => {
+  const problems: StatsProblem[] = [
+    { id: 'p1', title: 'Problem 1', order: 0, maxPoints: 10, autograderEnabled: true },
+    { id: 'p2', title: 'Hand-marked proof', order: 1, maxPoints: 10, autograderEnabled: false },
+  ];
+  const participant = (id: string, grades: Record<string, number>): StatsParticipant => ({
+    id,
+    hasException: false,
+    dueAt: new Date('2030-01-01T00:00:00Z').getTime(),
+    problemGrades: grades,
+    gradedAtByProblem: {},
+    latestStatusByProblem: {},
+  });
+
+  it('names what the excluded work is waiting on', () => {
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants: [
+        participant('a', { p1: 10, p2: 9 }),
+        // Both are waiting on the same hand-marked problem, which is the sentence a
+        // professor can act on; "2 excluded" on its own is not.
+        participant('b', { p1: 8 }),
+        participant('c', { p1: 7 }),
+      ],
+      submissions: [],
+      timeZone: 'UTC',
+    });
+
+    expect(stats.histogram.includedCount).toBe(1);
+    expect(stats.histogram.excludedCount).toBe(2);
+    expect(stats.histogram.waitingOn).toEqual([
+      { problemId: 'p2', title: 'Hand-marked proof', count: 2 },
+    ]);
+    expect(stats.histogram.low).toBe(95);
+    expect(stats.histogram.high).toBe(95);
+  });
+
+  it('does not blame grading when there are no points to award', () => {
+    const stats = buildAssignmentStatistics({
+      unit: 'student',
+      problems: problems.map((p) => ({ ...p, maxPoints: 0 })),
+      participants: [participant('a', { p1: 0, p2: 0 })],
+      submissions: [],
+      timeZone: 'UTC',
+    });
+
+    expect(stats.histogram.noPossiblePoints).toBe(true);
+    expect(stats.histogram.waitingOn).toEqual([]);
+  });
+});

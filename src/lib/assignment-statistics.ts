@@ -652,6 +652,20 @@ export type AssignmentStatistics = {
     excludedCount: number;
     mean: number | null;
     median: number | null;
+    /** Lowest and highest included percentage, for the summary line. Null when none. */
+    low: number | null;
+    high: number | null;
+    /**
+     * What the excluded participants are waiting on: the problems they have no grade for,
+     * commonest first. "14 excluded" is a fact nobody can act on; "12 are waiting on
+     * Problem 3" is the same fact with the next move in it.
+     */
+    waitingOn: { problemId: string; title: string; count: number }[];
+    /**
+     * The assignment has no points to award, so no percentage exists for anybody. A
+     * different sentence from "not graded yet", and a different thing to do about it.
+     */
+    noPossiblePoints: boolean;
   };
   problems: ProblemStats[];
   timeline: TimelinePoint[];
@@ -676,11 +690,18 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
   // counted so the UI can state how many were left out.
   const includedPercentages: number[] = [];
   let excludedCount = 0;
+  // Which problem each excluded participant is still waiting on, so the count can say why.
+  const waiting = new Map<string, number>();
   for (const part of participants) {
-    const fullyGraded =
-      requiredProblemCount > 0 && problems.every((p) => part.problemGrades[p.id] !== undefined);
+    const ungraded = problems.filter((p) => part.problemGrades[p.id] === undefined);
+    const fullyGraded = requiredProblemCount > 0 && ungraded.length === 0;
     if (!fullyGraded || totalPossible <= 0) {
       excludedCount += 1;
+      // Only when there are points to score: on a zero-point assignment nobody is waiting
+      // on grading, the assignment simply has no percentage to report.
+      if (totalPossible > 0) {
+        for (const p of ungraded) waiting.set(p.id, (waiting.get(p.id) ?? 0) + 1);
+      }
       continue;
     }
     const earned = problems.reduce((sum, p) => sum + (part.problemGrades[p.id] ?? 0), 0);
@@ -750,6 +771,16 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
       excludedCount,
       mean: histogram.mean,
       median: histogram.median,
+      low: includedPercentages.length > 0 ? Math.min(...includedPercentages) : null,
+      high: includedPercentages.length > 0 ? Math.max(...includedPercentages) : null,
+      waitingOn: [...waiting.entries()]
+        .map(([problemId, count]) => ({
+          problemId,
+          title: problems.find((p) => p.id === problemId)?.title ?? '',
+          count,
+        }))
+        .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title)),
+      noPossiblePoints: totalPossible <= 0,
     },
     problems: problemStats,
     timeline: computeSubmissionTimeline(submissions, timeZone),
