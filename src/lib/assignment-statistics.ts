@@ -646,31 +646,131 @@ export type AssignmentStatistics = {
   exceptionCount: number;
   /** Who was left out of `participantCount`, and why. Empty when nobody was. */
   exclusions: CohortExclusion[];
-  histogram: {
-    bins: HistogramBin[];
-    includedCount: number;
-    excludedCount: number;
-    mean: number | null;
-    median: number | null;
-    /** Lowest and highest included percentage, for the summary line. Null when none. */
-    low: number | null;
-    high: number | null;
-    /**
-     * What the excluded participants are waiting on: the problems they have no grade for,
-     * commonest first. "14 excluded" is a fact nobody can act on; "12 are waiting on
-     * Problem 3" is the same fact with the next move in it.
-     */
-    waitingOn: { problemId: string; title: string; count: number }[];
-    /**
-     * The assignment has no points to award, so no percentage exists for anybody. A
-     * different sentence from "not graded yet", and a different thing to do about it.
-     */
-    noPossiblePoints: boolean;
-  };
+  histogram: ScoreDistribution;
+  /**
+   * The same distribution with work that was NEVER SUBMITTED counted as zero.
+   *
+   * A missing submission is not a zero until somebody decides it is: until the deadline
+   * passes, until an extension is refused, until the professor says so. So the page keeps
+   * both readings and lets them choose which they are looking at, rather than picking one
+   * and calling it the class average.
+   *
+   * Work that was submitted and not yet marked is NOT zeroed here. It is waiting on a
+   * grader, and reporting it as a zero would understate the class for as long as marking
+   * takes.
+   */
+  histogramCountingMissingAsZero: ScoreDistribution;
   problems: ProblemStats[];
   timeline: TimelinePoint[];
   heatmap: ActivityHeatmap;
 };
+
+/** One reading of the class's scores: the bars, the middle, the spread, and who is missing. */
+export type ScoreDistribution = {
+  bins: HistogramBin[];
+  includedCount: number;
+  excludedCount: number;
+  mean: number | null;
+  median: number | null;
+  /** Lowest and highest included percentage, for the summary line. Null when none. */
+  low: number | null;
+  high: number | null;
+  /**
+   * What the excluded participants are waiting on: problems they SUBMITTED and nobody has
+   * marked, commonest first. "14 excluded" is a fact nobody can act on; "12 are waiting on
+   * Problem 3" is the same fact with the next move in it.
+   */
+  waitingOn: { problemId: string; title: string; count: number }[];
+  /**
+   * Problems the excluded participants never submitted, commonest first.
+   *
+   * Kept apart from `waitingOn` because they are somebody else's job: one is a grader's
+   * queue, the other is a student who has handed in nothing, and a page that says "waiting
+   * on" about both sends the professor to mark work that does not exist.
+   */
+  notSubmitted: { problemId: string; title: string; count: number }[];
+  /**
+   * The assignment has no points to award, so no percentage exists for anybody. A
+   * different sentence from "not graded yet", and a different thing to do about it.
+   */
+  noPossiblePoints: boolean;
+};
+
+/** Turn a per-problem tally into the named, commonest-first list the page reads out. */
+function byProblem(
+  counts: Map<string, number>,
+  problems: StatsProblem[],
+): { problemId: string; title: string; count: number }[] {
+  return [...counts.entries()]
+    .map(([problemId, count]) => ({
+      problemId,
+      title: problems.find((p) => p.id === problemId)?.title ?? '',
+      count,
+    }))
+    .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title));
+}
+
+/**
+ * One reading of the score distribution.
+ *
+ * `missingAsZero` decides what to do about a problem a participant has no grade for. Off, it
+ * keeps them out of the chart entirely, because a partial score is not a score. On, a problem
+ * they never submitted counts as zero, while one they submitted and nobody has marked still
+ * keeps them out: that is a grader's queue, not a zero.
+ */
+export function buildScoreDistribution(
+  problems: StatsProblem[],
+  participants: StatsParticipant[],
+  spans: Map<string, SubmissionSpan>,
+  options: { missingAsZero: boolean } = { missingAsZero: false },
+): ScoreDistribution {
+  const totalPossible = problems.reduce((sum, p) => sum + p.maxPoints, 0);
+  const percentages: number[] = [];
+  let excludedCount = 0;
+  const waiting = new Map<string, number>();
+  const absent = new Map<string, number>();
+
+  for (const part of participants) {
+    const ungraded = problems.filter((p) => part.problemGrades[p.id] === undefined);
+    // Ungraded work that cannot be scored yet: everything with no grade, minus the pieces
+    // this reading is willing to call a zero.
+    const blocking = options.missingAsZero
+      ? ungraded.filter((p) => spans.has(`${part.id}\u0000${p.id}`))
+      : ungraded;
+
+    if (problems.length === 0 || blocking.length > 0 || totalPossible <= 0) {
+      excludedCount += 1;
+      // Only when there are points to score: on a zero-point assignment nobody is waiting
+      // on grading, the assignment simply has no percentage to report.
+      if (totalPossible > 0) {
+        for (const p of blocking) {
+          const tally = spans.has(`${part.id}\u0000${p.id}`) ? waiting : absent;
+          tally.set(p.id, (tally.get(p.id) ?? 0) + 1);
+        }
+      }
+      continue;
+    }
+
+    const earned = problems.reduce((sum, p) => sum + (part.problemGrades[p.id] ?? 0), 0);
+    const pct = assignmentPercentage(earned, totalPossible);
+    if (pct == null) excludedCount += 1;
+    else percentages.push(pct);
+  }
+
+  const histogram = computeScoreHistogram(percentages);
+  return {
+    bins: histogram.bins,
+    includedCount: percentages.length,
+    excludedCount,
+    mean: histogram.mean,
+    median: histogram.median,
+    low: percentages.length > 0 ? Math.min(...percentages) : null,
+    high: percentages.length > 0 ? Math.max(...percentages) : null,
+    waitingOn: byProblem(waiting, problems),
+    notSubmitted: byProblem(absent, problems),
+    noPossiblePoints: totalPossible <= 0,
+  };
+}
 
 /**
  * Turn already-loaded, database-agnostic participant facts into the full analytics
@@ -679,40 +779,17 @@ export type AssignmentStatistics = {
  */
 export function buildAssignmentStatistics(input: BuildStatisticsInput): AssignmentStatistics {
   const { problems, participants, unit, submissions, timeZone } = input;
-  const requiredProblemCount = problems.length;
-  const totalPossible = problems.reduce((sum, p) => sum + p.maxPoints, 0);
   const firstAttempt = computeFirstAttemptSuccess(submissions);
   const attemptsByProblem = computeAttemptsToSolveByProblem(submissions);
   const spans = submissionSpans(submissions);
 
-  // Histogram: include a participant only when EVERY problem is graded for them, so
-  // partially graded work never pollutes the distribution. Everyone else is excluded and
-  // counted so the UI can state how many were left out.
-  const includedPercentages: number[] = [];
-  let excludedCount = 0;
-  // Which problem each excluded participant is still waiting on, so the count can say why.
-  const waiting = new Map<string, number>();
-  for (const part of participants) {
-    const ungraded = problems.filter((p) => part.problemGrades[p.id] === undefined);
-    const fullyGraded = requiredProblemCount > 0 && ungraded.length === 0;
-    if (!fullyGraded || totalPossible <= 0) {
-      excludedCount += 1;
-      // Only when there are points to score: on a zero-point assignment nobody is waiting
-      // on grading, the assignment simply has no percentage to report.
-      if (totalPossible > 0) {
-        for (const p of ungraded) waiting.set(p.id, (waiting.get(p.id) ?? 0) + 1);
-      }
-      continue;
-    }
-    const earned = problems.reduce((sum, p) => sum + (part.problemGrades[p.id] ?? 0), 0);
-    const pct = assignmentPercentage(earned, totalPossible);
-    if (pct == null) {
-      excludedCount += 1;
-    } else {
-      includedPercentages.push(pct);
-    }
-  }
-  const histogram = computeScoreHistogram(includedPercentages);
+  // Two readings of the same scores: only fully graded work, and the same with work nobody
+  // submitted counted as zero. Which one is the class average is the professor's call, so
+  // the page carries both and says which it is showing.
+  const histogram = buildScoreDistribution(problems, participants, spans);
+  const histogramCountingMissingAsZero = buildScoreDistribution(problems, participants, spans, {
+    missingAsZero: true,
+  });
 
   // One entry per problem: its score box plot AND its own submission-status breakdown
   // (the queue state of each participant's latest submission for that problem, else
@@ -765,23 +842,8 @@ export function buildAssignmentStatistics(input: BuildStatisticsInput): Assignme
     participantCount: participants.length,
     exceptionCount: participants.filter((p) => p.hasException).length,
     exclusions: (input.exclusions ?? []).filter((e) => e.count > 0),
-    histogram: {
-      bins: histogram.bins,
-      includedCount: includedPercentages.length,
-      excludedCount,
-      mean: histogram.mean,
-      median: histogram.median,
-      low: includedPercentages.length > 0 ? Math.min(...includedPercentages) : null,
-      high: includedPercentages.length > 0 ? Math.max(...includedPercentages) : null,
-      waitingOn: [...waiting.entries()]
-        .map(([problemId, count]) => ({
-          problemId,
-          title: problems.find((p) => p.id === problemId)?.title ?? '',
-          count,
-        }))
-        .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title)),
-      noPossiblePoints: totalPossible <= 0,
-    },
+    histogram,
+    histogramCountingMissingAsZero,
     problems: problemStats,
     timeline: computeSubmissionTimeline(submissions, timeZone),
     heatmap: computeActivityHeatmap(submissions, timeZone),

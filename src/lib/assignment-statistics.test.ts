@@ -471,7 +471,10 @@ describe('histogram exclusions', () => {
 
     expect(stats.histogram.includedCount).toBe(1);
     expect(stats.histogram.excludedCount).toBe(2);
-    expect(stats.histogram.waitingOn).toEqual([
+    // Neither of them submitted it, so this is not a grading queue and the page must not
+    // call it one.
+    expect(stats.histogram.waitingOn).toEqual([]);
+    expect(stats.histogram.notSubmitted).toEqual([
       { problemId: 'p2', title: 'Hand-marked proof', count: 2 },
     ]);
     expect(stats.histogram.low).toBe(95);
@@ -489,5 +492,55 @@ describe('histogram exclusions', () => {
 
     expect(stats.histogram.noPossiblePoints).toBe(true);
     expect(stats.histogram.waitingOn).toEqual([]);
+    expect(stats.histogram.notSubmitted).toEqual([]);
+  });
+});
+
+describe('counting missing work as zero', () => {
+  const problems: StatsProblem[] = [
+    { id: 'p1', title: 'Problem 1', order: 0, maxPoints: 10, autograderEnabled: true },
+    { id: 'p2', title: 'Problem 2', order: 1, maxPoints: 10, autograderEnabled: true },
+  ];
+  const participant = (id: string, grades: Record<string, number>): StatsParticipant => ({
+    id,
+    hasException: false,
+    dueAt: new Date('2030-01-01T00:00:00Z').getTime(),
+    problemGrades: grades,
+    gradedAtByProblem: {},
+    latestStatusByProblem: {},
+  });
+
+  const build = () =>
+    buildAssignmentStatistics({
+      unit: 'student',
+      problems,
+      participants: [
+        // Graded throughout.
+        participant('a', { p1: 10, p2: 10 }),
+        // Nothing submitted for p2 at all: a zero if the professor says so.
+        participant('b', { p1: 10 }),
+        // Submitted p2 and nobody has marked it: a queue, not a zero, in either reading.
+        participant('c', { p1: 10 }),
+      ],
+      submissions: [sub('c', 'p2', '2026-08-01T10:00:00Z')],
+      timeZone: 'UTC',
+    });
+
+  it('leaves the default reading alone', () => {
+    const stats = build();
+    expect(stats.histogram.includedCount).toBe(1);
+    expect(stats.histogram.excludedCount).toBe(2);
+  });
+
+  it('adds only the participant who submitted nothing', () => {
+    const zeroed = build().histogramCountingMissingAsZero;
+
+    // b joins at 50%; c stays out, because work waiting on a grader is not a zero.
+    expect(zeroed.includedCount).toBe(2);
+    expect(zeroed.excludedCount).toBe(1);
+    expect(zeroed.low).toBe(50);
+    expect(zeroed.high).toBe(100);
+    expect(zeroed.waitingOn).toEqual([{ problemId: 'p2', title: 'Problem 2', count: 1 }]);
+    expect(zeroed.notSubmitted).toEqual([]);
   });
 });

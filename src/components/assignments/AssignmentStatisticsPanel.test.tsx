@@ -63,22 +63,27 @@ const problem = (over: Partial<Payload['problems'][number]> = {}) => ({
   ...over,
 });
 
+const distribution = (over: Partial<Payload['histogram']> = {}): Payload['histogram'] => ({
+  bins: [],
+  includedCount: 0,
+  excludedCount: 0,
+  mean: null,
+  median: null,
+  low: null,
+  high: null,
+  waitingOn: [],
+  notSubmitted: [],
+  noPossiblePoints: false,
+  ...over,
+});
+
 const payload = (over: Partial<Payload> = {}): Payload => ({
   unit: 'student',
   participantCount: 2,
   exceptionCount: 0,
   exclusions: [],
-  histogram: {
-    bins: [],
-    includedCount: 0,
-    excludedCount: 0,
-    mean: null,
-    median: null,
-    low: null,
-    high: null,
-    waitingOn: [],
-    noPossiblePoints: false,
-  },
+  histogram: distribution(),
+  histogramCountingMissingAsZero: distribution(),
   problems: [problem()],
   timeline: [],
   heatmap: { matrix: [], max: 0 },
@@ -210,8 +215,7 @@ describe('AssignmentStatisticsPanel', () => {
   it('says what the excluded work is waiting on, not just how much there is', async () => {
     serve(
       payload({
-        histogram: {
-          bins: [],
+        histogram: distribution({
           includedCount: 4,
           excludedCount: 12,
           mean: 85,
@@ -219,8 +223,7 @@ describe('AssignmentStatisticsPanel', () => {
           low: 62,
           high: 100,
           waitingOn: [{ problemId: 'p3', title: 'Pumping lemma', count: 10 }],
-          noPossiblePoints: false,
-        },
+        }),
       }),
     );
 
@@ -228,7 +231,7 @@ describe('AssignmentStatisticsPanel', () => {
 
     expect(
       await screen.findByText(
-        /12 were left out as not yet fully graded: 10 waiting on Pumping lemma\./,
+        /12 were left out as not yet fully scored: 10 waiting on Pumping lemma\./,
       ),
     ).toBeInTheDocument();
     expect(
@@ -236,20 +239,33 @@ describe('AssignmentStatisticsPanel', () => {
     ).toBeInTheDocument();
   });
 
+  it('does not send the professor to mark work nobody handed in', async () => {
+    serve(
+      payload({
+        histogram: distribution({
+          includedCount: 3,
+          excludedCount: 15,
+          mean: 67,
+          waitingOn: [{ problemId: 'p1', title: 'Regular expressions', count: 2 }],
+          notSubmitted: [{ problemId: 'p2', title: 'Three Consecutive 1s', count: 13 }],
+        }),
+        histogramCountingMissingAsZero: distribution({ includedCount: 16, mean: 12 }),
+      }),
+    );
+
+    renderPanel();
+
+    expect(
+      await screen.findByText(
+        /2 waiting on Regular expressions, 13 did not submit Three Consecutive 1s\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('says so plainly when there are no points to award', async () => {
     serve(
       payload({
-        histogram: {
-          bins: [],
-          includedCount: 0,
-          excludedCount: 2,
-          mean: null,
-          median: null,
-          low: null,
-          high: null,
-          waitingOn: [],
-          noPossiblePoints: true,
-        },
+        histogram: distribution({ excludedCount: 2, noPossiblePoints: true }),
       }),
     );
 
@@ -258,6 +274,49 @@ describe('AssignmentStatisticsPanel', () => {
     expect(
       await screen.findByText(/no points to award, so there is no score to chart/),
     ).toBeInTheDocument();
+  });
+
+  it('offers to count missing work as zero, and never does it unasked', async () => {
+    const person = (await import('@testing-library/user-event')).default.setup();
+    serve(
+      payload({
+        // Four handed in, two never did: the two readings differ, so the choice is real.
+        histogram: distribution({ includedCount: 4, excludedCount: 2, mean: 80, median: 80 }),
+        histogramCountingMissingAsZero: distribution({
+          includedCount: 6,
+          excludedCount: 0,
+          mean: 53,
+          median: 60,
+        }),
+      }),
+    );
+
+    renderPanel();
+
+    // Off to begin with: the page does not decide that a missing submission is a zero.
+    expect(await screen.findByText(/^4 graded/)).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: /Count work nobody submitted as zero/ });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    await person.click(toggle);
+
+    expect(screen.getByText(/^6 counted/)).toBeInTheDocument();
+    expect(screen.getByText(/mean 53%/)).toBeInTheDocument();
+  });
+
+  it('does not offer the choice when it would change nothing', async () => {
+    // Everybody handed something in, so zeroing missing work moves no number.
+    serve(
+      payload({
+        histogram: distribution({ includedCount: 5, mean: 70, median: 70 }),
+        histogramCountingMissingAsZero: distribution({ includedCount: 5, mean: 70, median: 70 }),
+      }),
+    );
+
+    renderPanel();
+
+    expect(await screen.findByText(/^5 graded/)).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('keeps the heatmap folded away until it is asked for', async () => {

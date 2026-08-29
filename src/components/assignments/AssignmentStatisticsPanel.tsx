@@ -7,6 +7,8 @@ import { BarChart3, ChevronDown, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
@@ -66,6 +68,9 @@ export function AssignmentStatisticsPanel() {
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
   const { hour12 } = useEffectiveTimezone();
   const [showHeatmap, setShowHeatmap] = useState(false);
+  // Off by default, and deliberately not remembered: whether a missing submission is a zero
+  // is a decision about a moment in the term, not a preference.
+  const [countMissingAsZero, setCountMissingAsZero] = useState(false);
 
   const query = useQuery({
     queryKey: queryKeys.assignment.statistics(courseId, assignmentId),
@@ -175,14 +180,55 @@ export function AssignmentStatisticsPanel() {
     0,
   );
   // How much of this assignment a person has to mark, said the way somebody would say it.
+  /**
+   * Which reading of the scores is on screen.
+   *
+   * The two differ only where somebody submitted nothing at all, so the switch is offered
+   * only when it would change something: on an assignment everybody handed in, a control
+   * that does nothing is a control that has to be understood for no reason.
+   */
+  const zeroed = stats.histogramCountingMissingAsZero;
+  const scores = countMissingAsZero ? zeroed : stats.histogram;
+  const canCountMissing = zeroed.includedCount > stats.histogram.includedCount;
+
+  /**
+   * The end-of-term question, asked rather than assumed.
+   *
+   * A missing submission is not a zero until somebody decides it is, so the page never makes
+   * that call on its own; it offers the other reading and says which one is on screen. Work
+   * that WAS submitted and is waiting on a grader is never zeroed either way: that is a
+   * queue, not a mark.
+   */
+  const missingToggle = canCountMissing ? (
+    <div className="mt-3 flex items-center gap-2">
+      {/* aria-labelledby as well as the label's htmlFor. Radix renders a <button
+          role="switch">, and a browser does not take a name from `for` pointing at a
+          button: the control read as unnamed in Chromium while jsdom was happy with it.
+          The `for` still widens the hit target to the words. */}
+      <Switch
+        id="count-missing-as-zero"
+        aria-labelledby="count-missing-as-zero-label"
+        checked={countMissingAsZero}
+        onCheckedChange={setCountMissingAsZero}
+      />
+      <Label
+        id="count-missing-as-zero-label"
+        htmlFor="count-missing-as-zero"
+        className="text-muted-foreground text-xs font-normal"
+      >
+        Count work nobody submitted as zero
+      </Label>
+    </div>
+  ) : null;
+
   /** The figures the histogram already computes, said once in words. */
   const pct = (n: number) => `${Math.round(n)}%`;
   const scoreSummary = [
-    `${stats.histogram.includedCount} graded`,
-    stats.histogram.mean !== null ? `mean ${pct(stats.histogram.mean)}` : null,
-    stats.histogram.median !== null ? `median ${pct(stats.histogram.median)}` : null,
-    stats.histogram.low !== null && stats.histogram.high !== null
-      ? `range ${pct(stats.histogram.low)} to ${pct(stats.histogram.high)}`
+    `${scores.includedCount} ${countMissingAsZero ? 'counted' : 'graded'}`,
+    scores.mean !== null ? `mean ${pct(scores.mean)}` : null,
+    scores.median !== null ? `median ${pct(scores.median)}` : null,
+    scores.low !== null && scores.high !== null
+      ? `range ${pct(scores.low)} to ${pct(scores.high)}`
       : null,
   ]
     .filter(Boolean)
@@ -195,15 +241,18 @@ export function AssignmentStatisticsPanel() {
    * unmarked problem can empty the whole chart. "14 excluded" reads as a fault in the page;
    * naming what they are waiting on reads as a job.
    */
-  const waitingOn = stats.histogram.waitingOn.slice(0, 2);
-  const exclusionNote = stats.histogram.noPossiblePoints
+  const reasons = [
+    ...scores.waitingOn.slice(0, 2).map((w) => `${w.count} waiting on ${w.title}`),
+    // Said differently on purpose: nobody is waiting on a grader for work that was never
+    // handed in, and telling a professor they are sends them to mark nothing.
+    ...scores.notSubmitted.slice(0, 2).map((w) => `${w.count} did not submit ${w.title}`),
+  ];
+  const exclusionNote = scores.noPossiblePoints
     ? 'This assignment has no points to award, so there is no score to chart.'
-    : stats.histogram.excludedCount === 0
+    : scores.excludedCount === 0
       ? null
-      : `${stats.histogram.excludedCount} ${stats.histogram.excludedCount === 1 ? 'was' : 'were'} left out as not yet fully graded` +
-        (waitingOn.length > 0
-          ? `: ${waitingOn.map((w) => `${w.count} waiting on ${w.title}`).join(', ')}.`
-          : '.');
+      : `${scores.excludedCount} ${scores.excludedCount === 1 ? 'was' : 'were'} left out as not yet fully scored` +
+        (reasons.length > 0 ? `: ${reasons.join(', ')}.` : '.');
 
   const handGraded = stats.problems.filter((p) => !p.autograderEnabled).length;
   const problemCount = stats.problems.length;
@@ -243,24 +292,25 @@ export function AssignmentStatisticsPanel() {
           title="Assignment score distribution"
           description={`How final assignment percentages are spread across the graded ${unitPlural}.`}
         >
-          {stats.histogram.includedCount > 0 ? (
+          {scores.includedCount > 0 ? (
             <>
               <ScoreHistogramChart
-                bins={stats.histogram.bins}
-                mean={stats.histogram.mean}
-                median={stats.histogram.median}
-                includedCount={stats.histogram.includedCount}
+                bins={scores.bins}
+                mean={scores.mean}
+                median={scores.median}
+                includedCount={scores.includedCount}
                 unitPlural={unitPlural}
               />
               <p className="text-muted-foreground mt-2 text-xs">{scoreSummary}</p>
               {exclusionNote && (
                 <p className="text-muted-foreground mt-1 text-xs">{exclusionNote}</p>
               )}
+              {missingToggle}
             </>
           ) : (
             <EmptyChart
               message={
-                stats.histogram.noPossiblePoints
+                scores.noPossiblePoints
                   ? 'This assignment has no points to award, so there is no score to chart.'
                   : (exclusionNote ?? `No fully graded ${unitPlural} yet.`)
               }
