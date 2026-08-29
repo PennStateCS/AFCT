@@ -25,6 +25,7 @@ There are three checks, from strictest to loosest.
 The tab opens with one line answering the only question worth asking at a glance:
 
 > **2 match groups worth reviewing across 1 problem.**
+> 1 contains a byte-for-byte identical match.
 > 1 contains an exact artifact match.
 > 5 similarity relationships are contained in these groups.
 
@@ -40,11 +41,14 @@ Every card leads with how strong the file evidence is, as a word and an icon:
 
 | Strength | Match type | What it means |
 | --- | --- | --- |
-| **Very strong** | Exact JFLAP artifact | Everyone in the group saved the same artifact, layout and all |
+| **Very strong** | Byte-for-byte identical | Every file in the relationship is the same file, with nothing set aside |
+| **Very strong** | Exact JFLAP artifact | Everyone saved the same artifact, layout and all, though the raw files are not known to be identical |
 | **Strong** | Same machine | The same machine, with different state names or positions |
 | **Possible** | Structurally similar | Not the same machine, but sharing structure the rest of the class does not |
 | (none) | Instructor reference solution | The work is the solution you posted for the problem |
 | (none) | Common answer | Enough of the class submitted this that it reads as the answer |
+
+The first two are the same finding stated at different strengths, and a card carries whichever is true of everybody in it. Byte-for-byte identical is the sharper of the two: the files agree before anything is normalised. Where only some of the files in a relationship agree that way, the card stays on **Exact JFLAP artifact** and names the students the stronger statement covers, because the badge speaks for the whole relationship.
 
 The last two carry no strength on purpose. Everybody holding the file you posted has the same artifact by definition, and enough of a class submitting the same right answer is what a right answer looks like, so neither is evidence about a student. Both are still shown, under **Set aside** at the foot of the page, and neither is counted on the tab's badge.
 
@@ -60,7 +64,7 @@ A group holding more than one relationship says something more careful: "3 of 38
 
 **Read the count before anything else.** Identical work proves nothing on its own: a problem with one obvious answer will have students submitting the same thing honestly, and a grammar or a regular expression has no layout to differ in, so identical files are expected there. Two students out of thirty-eight is worth reading. Fourteen out of thirty-eight is what a correct answer looks like.
 
-**"The files are byte-for-byte identical."** When it appears, this is the plainest statement the page can make: the submitted files are the same, byte for byte, with nothing set aside. Every other line allows for something incidental, whether that is formatting, state names, or where the states were dragged to. This one allows for nothing. When it covers only part of a group it names a number instead ("2 of them submitted byte-for-byte identical files"). It still is not a conclusion: on a grammar or an expression a correct answer really is one line of text, which is why the line is never shown on a **Common answer** card.
+**"The files are byte-for-byte identical."** When it appears, this is the plainest statement the page can make: the submitted files are the same, byte for byte, with nothing set aside. Every other line allows for something incidental, whether that is formatting, state names, or where the states were dragged to. This one allows for nothing. When it covers only part of a group it names the students it covers instead ("Miles Morales and Sam Wilson submitted byte-for-byte identical files"). It still is not a conclusion: on a grammar or an expression a correct answer really is one line of text, which is why the line is never shown on a **Common answer** card.
 
 The line is absent for work submitted before AFCT started recording it, which reads as "not known" rather than "not identical". If a whole assignment is missing it, ask your administrator to run the fingerprint backfill.
 
@@ -99,7 +103,9 @@ The row of filters at the top narrows the page to one kind of match, each with i
 
 ### The common threshold
 
-The **Common threshold** control at the top sets where that quarter falls. It is a starting point rather than a truth, since the right number depends on the problem and on how you teach the course: move it and watch the matches settle. The setting is yours alone, is remembered between visits, and changes only what is shown, never what is recorded.
+The **Common-answer threshold** control at the top sets where that quarter falls. It is a starting point rather than a truth, since the right number depends on the problem and on how you teach the course: move it and watch the matches settle. The setting is yours alone, is remembered between visits, and changes only what is shown, never what is recorded.
+
+Where the summary card is wide enough, the slider sits in it and can be moved without opening anything. On a narrower one, and with the sidebar or the assignment menu open it does not take a small screen to get there, the same setting is behind **Adjust**. It is one setting either way.
 
 ### Comparing the files
 
