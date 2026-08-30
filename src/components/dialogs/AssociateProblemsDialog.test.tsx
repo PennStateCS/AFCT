@@ -75,15 +75,47 @@ describe('AssociateProblemsDialog', () => {
     await user.type(screen.getByLabelText(/max submissions/i), '4');
     await user.click(screen.getByRole('button', { name: 'Add Problem' }));
 
-    expect(onAddProblems).toHaveBeenCalledWith(['p1'], [
-      {
-        problemId: 'p1',
-        maxPoints: 12,
-        maxSubmissions: 4,
-        autograderEnabled: true,
-      },
-    ]);
+    expect(onAddProblems).toHaveBeenCalledWith(
+      ['p1'],
+      [
+        {
+          problemId: 'p1',
+          maxPoints: 12,
+          maxSubmissions: 4,
+          autograderEnabled: true,
+          showFeedback: true,
+        },
+      ],
+    );
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('carries the feedback setting chosen while attaching the problem', async () => {
+    // It was missing from this dialog, so a problem attached here always started with feedback
+    // shown and the only way to change it was to reopen the problem afterwards.
+    const user = userEvent.setup();
+    const onAddProblems = vi.fn();
+    render(
+      <AssociateProblemsDialog
+        open
+        onClose={vi.fn()}
+        courseId="course-1"
+        courseIsArchived={false}
+        allProblems={[baseProblem]}
+        usedProblems={[]}
+        onAddProblems={onAddProblems}
+      />,
+    );
+
+    await user.click(await screen.findByRole('combobox', { name: 'Problem' }));
+    await user.click(await screen.findByRole('option', { name: 'Deterministic FA' }));
+    await user.click(screen.getByRole('switch', { name: 'Show Feedback to Students' }));
+    await user.click(screen.getByRole('button', { name: 'Add Problem' }));
+
+    expect(onAddProblems).toHaveBeenCalledWith(
+      [baseProblem.id],
+      [expect.objectContaining({ problemId: baseProblem.id, showFeedback: false })],
+    );
   });
 
   it('disables saving when the course is archived', async () => {

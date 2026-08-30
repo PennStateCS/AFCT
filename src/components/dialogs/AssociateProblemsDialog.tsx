@@ -27,6 +27,7 @@ type ProblemConfig = {
   maxPoints: number;
   maxSubmissions: number;
   autograderEnabled: boolean;
+  showFeedback: boolean;
 };
 
 type ProblemSettingsPayload = ProblemConfig & { problemId: string };
@@ -91,6 +92,10 @@ export function AssociateProblemsDialog({
   const [newProblemAutograderEnabled, setNewProblemAutograderEnabled] = React.useState<boolean>(
     defaultAutograderEnabled ?? true,
   );
+  // Same setting, same wording as the per-problem settings dialog. It was missing here, so a
+  // problem attached from this screen always started with feedback shown and the only way to
+  // change it was to reopen the problem afterwards.
+  const [newProblemShowFeedback, setNewProblemShowFeedback] = React.useState<boolean>(true);
   const [configError, setConfigError] = React.useState<string | null>(null);
 
   const [internalOpen, setInternalOpen] = React.useState(false);
@@ -153,7 +158,14 @@ export function AssociateProblemsDialog({
       aborted = true;
       ac.abort();
     };
-  }, [open, courseId, defaultMaxPoints, defaultMaxSubmissions, defaultAutograderEnabled, allProblems]);
+  }, [
+    open,
+    courseId,
+    defaultMaxPoints,
+    defaultMaxSubmissions,
+    defaultAutograderEnabled,
+    allProblems,
+  ]);
 
   const assignmentProblemIds = React.useMemo(
     () => new Set(usedProblems.map((p) => p.id)),
@@ -228,6 +240,7 @@ export function AssociateProblemsDialog({
         maxPoints,
         maxSubmissions,
         autograderEnabled: Boolean(newProblemAutograderEnabled),
+        showFeedback: Boolean(newProblemShowFeedback),
       },
     ];
 
@@ -235,9 +248,7 @@ export function AssociateProblemsDialog({
     // through the shared schema; it surfaces the same messages as before.
     const validation = ProblemAssociationSettingsArray.safeParse(settings);
     if (!validation.success) {
-      setConfigError(
-        validation.error.issues[0]?.message ?? 'Please review the problem settings.',
-      );
+      setConfigError(validation.error.issues[0]?.message ?? 'Please review the problem settings.');
       return;
     }
 
@@ -255,9 +266,7 @@ export function AssociateProblemsDialog({
 
   return (
     <Dialog open={internalOpen} onOpenChange={handleDialogOpenChange}>
-      <DialogContent
-        onInteractOutside={(e) => e.preventDefault()}
-      >
+      <DialogContent onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Add Existing Problem to Assignment</DialogTitle>
           <DialogDescription>Select one problem, configure it, then save.</DialogDescription>
@@ -320,13 +329,24 @@ export function AssociateProblemsDialog({
                 name="associate-autograder-enabled"
                 checked={newProblemAutograderEnabled}
                 onCheckedChange={setNewProblemAutograderEnabled}
-                description="When enabled, students are automatically awarded the maximum points when the autograder returns true."
+                description="When enabled, submissions are evaluated and graded automatically. Turn this off if you want to review and grade submissions manually."
+                descriptionPlacement="inline"
+              />
+            </div>
+
+            <div>
+              <SwitchField
+                label="Show Feedback to Students"
+                name="associate-show-feedback"
+                checked={newProblemShowFeedback}
+                onCheckedChange={setNewProblemShowFeedback}
+                description="When disabled, students see only whether their submission was correct. Feedback is still recorded and remains visible to instructors."
                 descriptionPlacement="inline"
               />
             </div>
           </div>
           {configError ? (
-            <p role="alert" className="text-xs text-destructive">
+            <p role="alert" className="text-destructive text-xs">
               {configError}
             </p>
           ) : null}
