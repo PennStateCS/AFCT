@@ -63,7 +63,7 @@ describe('getStudentCourseAssignments', () => {
     expect(result[0].problems).toHaveLength(1);
   });
 
-  it("raises maxSubmissions by the grants that apply to this student", async () => {
+  it('raises maxSubmissions by the grants that apply to this student', async () => {
     prismaMock.assignment.findMany.mockResolvedValue([
       {
         id: 'a1',
@@ -152,5 +152,86 @@ describe('getStudentCourseAssignments', () => {
 
     // a2 (Jan 10) now comes before a1 (extended to Feb 1).
     expect(result.map((a) => a.id)).toEqual(['a2', 'a1']);
+  });
+});
+
+/**
+ * This list is shared by the student's web grades page and the desktop client's assignment
+ * endpoint, so a zero shown in one and a blank in the other is a disagreement students would
+ * meet daily.
+ */
+describe('work nobody handed in', () => {
+  const overdue = (over: Record<string, unknown> = {}) => ({
+    id: 'a1',
+    title: 'A1',
+    description: 'desc',
+    groupSetId: null,
+    unlockAt: null,
+    dueDate: new Date('2026-01-10T23:59:00.000Z'),
+    allowLateSubmissions: false,
+    lateCutoff: null,
+    missingWorkIsZero: true,
+    isPublished: true,
+    course: { isArchived: false },
+    overrides: [],
+    ...over,
+  });
+
+  const problemRow = {
+    assignmentId: 'a1',
+    problemId: 'p1',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    maxPoints: 10,
+    maxSubmissions: 3,
+    autograderEnabled: true,
+    problem: {
+      id: 'p1',
+      title: 'P1',
+      description: null,
+      descriptionJson: null,
+      type: 'RE',
+      maxStates: null,
+      isDeterministic: null,
+    },
+  };
+
+  it('scores it zero and marks it, once the deadline has passed', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([overdue()]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([problemRow]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+
+    const [assignment] = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(assignment.problems[0].grade).toBe(0);
+    expect(assignment.problems[0].missing).toBe(true);
+  });
+
+  it('leaves work they handed in alone', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([overdue()]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([problemRow]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.submission.groupBy.mockResolvedValue([
+      { assignmentId: 'a1', problemId: 'p1', _count: { id: 1 } },
+    ]);
+
+    const [assignment] = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(assignment.problems[0].grade).toBeNull();
+    expect(assignment.problems[0].missing).toBe(false);
+  });
+
+  it('respects an extension that has not run out', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([
+      overdue({ overrides: [studentOverride({ dueDate: new Date('2099-01-01T00:00:00.000Z') })] }),
+    ]);
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([problemRow]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.submission.groupBy.mockResolvedValue([]);
+
+    const [assignment] = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(assignment.problems[0].grade).toBeNull();
+    expect(assignment.problems[0].missing).toBe(false);
   });
 });
