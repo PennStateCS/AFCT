@@ -82,7 +82,9 @@ function Calendar({
             : 'rounded-md pl-2 pr-1 flex items-center gap-1 text-sm h-8 [&>svg]:text-muted-foreground [&>svg]:size-3.5',
           defaultClassNames.caption_label,
         ),
-        table: 'w-full border-collapse',
+        // `table` in react-day-picker 9; the key was renamed in 10, and the element is still
+        // the month's <table>.
+        month_grid: 'w-full border-collapse',
         weekdays: cn('flex gap-0', defaultClassNames.weekdays),
         weekday: cn(
           'text-muted-foreground rounded-md flex-1 font-normal text-xs select-none',
