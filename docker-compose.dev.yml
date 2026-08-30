@@ -117,6 +117,13 @@ services:
       # The web app owns migrations + seeding; the worker must not race it.
       MIGRATE_ON_START: 'false'
       SEED_ON_START: 'false'
+      # And it owns the dependency install, for the same reason and a worse failure.
+      # Both containers share the node_modules volume, and `npm ci` empties it before
+      # repopulating, so two installs at once leave one container reading a directory the
+      # other has just deleted. With both on `restart: unless-stopped` that races for ever:
+      # the volume ends up half written, npm still reports the install as done, and the app
+      # crash-loops on a `prisma` that is not there. The worker waits instead.
+      ENSURE_DEPS: 'false'
       CFGANALYZER_BINARY: /app/bin/cfganalyzer
 
     depends_on:
