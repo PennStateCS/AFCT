@@ -37,6 +37,7 @@ type RouteCtx = { params: Promise<{ id: string; aid: string; pid: string }> };
  *           maxPoints: { type: number, minimum: 0 }
  *           maxSubmissions: { type: integer, description: "-1 for unlimited, else >= 1" }
  *           autograderEnabled: { type: boolean }
+ *           showFeedback: { type: boolean, description: "Whether students see the evaluator's feedback, or only whether they were right. Defaults to true when omitted." }
  * responses:
  *   200: { description: The updated assignment-problem settings. }
  *   400: { description: Invalid JSON or settings. }
@@ -104,6 +105,7 @@ export const PUT = withCourseAuth(
           maxPoints: true,
           maxSubmissions: true,
           autograderEnabled: true,
+          showFeedback: true,
         },
       });
 
@@ -126,11 +128,12 @@ export const PUT = withCourseAuth(
             changes: diffFields(
               link as unknown as Record<string, unknown>,
               updated as unknown as Record<string, unknown>,
-              ['maxPoints', 'maxSubmissions', 'autograderEnabled'],
+              ['maxPoints', 'maxSubmissions', 'autograderEnabled', 'showFeedback'],
             ),
             maxPoints: payload.maxPoints,
             maxSubmissions: payload.maxSubmissions,
             autograderEnabled: payload.autograderEnabled,
+            showFeedback: payload.showFeedback,
             problemTitle: link.problem.title,
           },
         });

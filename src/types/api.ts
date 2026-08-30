@@ -7959,6 +7959,8 @@ export interface operations {
                     /** @description -1 for unlimited, else >= 1 */
                     maxSubmissions: number;
                     autograderEnabled: boolean;
+                    /** @description Whether students see the evaluator's feedback, or only whether they were right. Defaults to true when omitted. */
+                    showFeedback?: boolean;
                 };
             };
         };

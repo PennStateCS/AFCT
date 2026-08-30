@@ -115,6 +115,9 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
         maxPoints: 25,
         maxSubmissions: -1,
         autograderEnabled: false,
+        // Not in the request body above. The schema defaults it to true rather than false, so
+        // an older client that knows nothing about this setting cannot switch feedback off.
+        showFeedback: true,
       },
       select: {
         assignmentId: true,
@@ -122,6 +125,7 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
         maxPoints: true,
         maxSubmissions: true,
         autograderEnabled: true,
+        showFeedback: true,
       },
     });
   });
