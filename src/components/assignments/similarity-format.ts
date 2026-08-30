@@ -382,6 +382,25 @@ export function clusterDetails(
         );
       }
     }
+
+    /**
+     * How much of the class holds this file, when that is a lot.
+     *
+     * Said as context rather than as a classification. Work this widely shared is normally
+     * set aside as the expected answer, and for anything that had to be normalised before it
+     * matched, it still is. Identical bytes are not set aside, because nothing was normalised
+     * to reach them, so the reader gets both facts and decides what they mean.
+     */
+    if (cluster.displayType === 'byte-identical' && cluster.aboveCommonShare && first) {
+      // The relationship's own counts, which are the numbers the threshold was applied to.
+      // The cluster's would be a different pair on a group held together by a shared student,
+      // and "2 of 84, which is past your threshold" contradicts itself.
+      const { sharing, total, noun } = subjectCountsOf(first, subject);
+      lines.push(
+        `Widely shared: ${sharing} of ${total} ${noun}${sharing === 1 ? '' : 's'} submitted this same file, ` +
+          'which is past your common-answer threshold.',
+      );
+    }
   }
 
   if (cluster.type === 'same-machine') {
@@ -470,12 +489,25 @@ export function relationshipAttempts(
 export function relationshipDetails(
   relationship: MatchCluster['relationships'][number],
   subject: ReviewSubject = 'student',
+  options: { widelyShared?: boolean } = {},
 ): string[] {
   if (relationship.kind === 'near') return relationship.evidence;
 
+  // How much of the class holds this file, when the caller says that is a lot. Context on a
+  // relationship the threshold would have set aside had it not been the same bytes, and the
+  // caller supplies the judgement because the dial belongs to the page, not to the wording.
+  const widelyShared: string[] = [];
+  if (options.widelyShared) {
+    const { sharing, total, noun } = subjectCountsOf(relationship, subject);
+    widelyShared.push(
+      `Widely shared: ${sharing} of ${total} ${noun}${sharing === 1 ? '' : 's'} submitted this same file, ` +
+        'which is past your common-answer threshold.',
+    );
+  }
+
   const participants = relationshipParticipants(relationship, subject);
   const bytes = byteEvidenceOf(relationship, subject);
-  const lines = [...bytes.lines];
+  const lines = [...bytes.lines, ...widelyShared];
 
   // Everyone here already agrees to the byte. Saying they also agree once formatting is set
   // aside is the same fact stated more weakly, and two sentences invite a reader to look for

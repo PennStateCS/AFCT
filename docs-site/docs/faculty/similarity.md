@@ -12,9 +12,13 @@ That restraint is deliberate. Nothing in a submitted file can distinguish two st
 
 Every submission is described on the server as the file arrives, so this covers work sent from the web app and from the AFCT client alike, and nothing about it depends on the client behaving. Comparison always happens within one assignment and one problem: a match is only ever between students answering the same question on the same assignment. A problem you reuse next term, or set for another section, is compared separately, and nothing ever reaches into another course.
 
-There are three checks, from strictest to loosest.
+There are three checks, from strictest to loosest, and they differ in what each one ignores
+before comparing:
 
-**The same file.** Formatting that carries no meaning is set aside, so a file that went through a different editor, or was saved by a different version of JFLAP, still matches its original.
+**The same bytes.** The uploaded file exactly as it arrived, with nothing parsed, normalised
+or filtered. Two files matching here are the same file.
+
+**The same saved artifact.** Formatting that carries no meaning is set aside, so a file that went through a different editor, or was saved by a different version of JFLAP, still matches its original.
 
 **The same work.** Where the states sit, what they are called, and the order things happen to be written in are all removed, leaving the machine itself. Two submissions matching here hold the same machine drawn differently, which is what a copied file looks like once somebody has dragged the states around or renamed them. A regular expression has no layout to remove, so it is compared on its contents alone.
 
@@ -100,6 +104,20 @@ The row of filters at the top narrows the page to one kind of match, each with i
 **Matches the instructor reference solution.** The work is the problem's own answer file. Anyone holding that file has this work by definition, so the match says nothing on its own, and a group that is entirely your posted solution is set aside rather than ranked as evidence. Where only part of a group is your solution, the card says how many of its relationships that covers instead of tagging everybody in it.
 
 **Common answer.** Work shared by at least a quarter of a problem's students is treated as the expected answer, collected at the bottom of the page under **Set aside** with the reference-solution groups, and collapsed. Nothing in that section is drawn until you open it. Not hidden, only set aside: less useful, not more serious.
+
+The threshold is triage, not a judgement about anybody, and it does not apply to one thing.
+**Byte-for-byte identical files are never set aside by it.** Every other check normalises
+something before comparing, so half a class matching really can be half a class independently
+writing the same right answer, especially on a grammar or a regular expression that has no
+layout to differ in. Nothing is normalised to compare raw bytes. So a byte-identical group
+stays in the review list however many students share it, and the card tells you how widely it
+is shared as context ("Widely shared: 42 of 84 students submitted this same file, which is
+past your common-answer threshold") rather than as a reason to look away. What it means is
+still yours to decide.
+
+The one exception is the work you posted yourself: a file that matches the problem's own
+answer file is set aside as the reference solution whether or not it is byte-identical,
+because everybody was handed those exact bytes.
 
 ### The common threshold
 
