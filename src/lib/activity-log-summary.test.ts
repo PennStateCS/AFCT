@@ -1173,3 +1173,15 @@ describe('the address a reader sees', () => {
     expect(displayIpAddress(undefined)).toBeNull();
   });
 });
+
+describe('the feedback switch in the log', () => {
+  it('names it as what it is rather than as a column', () => {
+    // The setting decides what a whole class sees, and RQ5 compares the two conditions, so the
+    // audit line has to be readable a year later by somebody who did not build it.
+    expect(
+      describeActivity('UPDATE_ASSIGNMENT_PROBLEM_SETTINGS', {
+        changes: { showFeedback: { from: true, to: false } },
+      }),
+    ).toContain('Feedback shown to students: true to false');
+  });
+});
