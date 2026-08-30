@@ -39,6 +39,7 @@ import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { GradeSyncCard } from '@/components/assignments/GradeSyncCard';
 import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
+import { FEEDBACK_WITHHELD_MESSAGE } from '@/lib/feedback-visibility';
 
 type Problem = {
   id: string;
@@ -215,7 +216,13 @@ export default function ProblemWorkspace({
   const latestStatus = latest
     ? `Attempt ${attemptNumbers.get(latest.id) ?? sortedSubmissions.length}: ${
         getReviewStatusChip(latest).label
-      }.${latest.feedback ? ` ${String(latest.feedback)}` : ''}`
+      }.${
+        latest.feedbackVisible === false
+          ? ` ${FEEDBACK_WITHHELD_MESSAGE}`
+          : latest.feedback
+            ? ` ${String(latest.feedback)}`
+            : ''
+      }`
     : '';
 
   const handleDownload = (submission: ProblemSubmission) => {
@@ -330,6 +337,10 @@ export default function ProblemWorkspace({
       enableSorting: false,
       cell: ({ row }) => {
         const feedback = row.original.feedback;
+        // Withheld and empty are different things, and the dash alone says the wrong one: a
+        // student would read it as the evaluator having had nothing to tell them.
+        if (row.original.feedbackVisible === false)
+          return <span className="text-muted-foreground text-xs">{FEEDBACK_WITHHELD_MESSAGE}</span>;
         if (!feedback)
           return (
             <span className="text-muted-foreground">

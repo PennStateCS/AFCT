@@ -90,6 +90,20 @@ the bank. Open a problem's settings to change them:
 - **Automatically Graded**: whether submissions go to the autograder. When it is on, a
   submission the autograder marks correct is awarded the maximum points automatically, and one
   it marks incorrect is recorded as **zero** rather than left ungraded.
+- **Show Feedback to Students**: whether students read what the evaluator said, or only whether
+  their answer was right. This changes what they are shown and nothing else. The feedback is
+  still produced, still recorded against the attempt, and still there for you and your TAs on
+  every screen where you read a student's work.
+
+  Two things stay visible with it turned off. If a submission could not be evaluated at all, the
+  student is still told why, because that is a fault to fix rather than feedback to withhold.
+  And a comment you or a TA writes on a grade is always shown: the setting is about the
+  evaluator's output, not about your own words.
+
+  You can change it partway through an assignment, and the dialog will tell you how many
+  attempts have already been made so you know what you are changing. Students who have already
+  read the feedback have read it; turning the setting off hides it from that point on rather
+  than taking back what they saw.
 
 Every assigned student or group gets the same set of problems. Removing a problem from an
 assignment does not delete it from the course.
@@ -170,7 +184,7 @@ Importing a **group** assignment converts it to individual (the wizard flags thi
 
 Its schedule (due date, available-from, and late settings) is copied from the source as a starting point and may be from another term, so review the dates before publishing.
 
-Submissions and grades are never imported. To copy an assignment *within* the same course, use Duplicate instead.
+Submissions and grades are never imported. To copy an assignment _within_ the same course, use Duplicate instead.
 
 Keep these safeguards in mind:
 

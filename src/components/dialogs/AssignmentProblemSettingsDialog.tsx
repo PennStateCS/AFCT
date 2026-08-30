@@ -25,6 +25,8 @@ export type AssignmentProblemSettings = {
   // -1 means unlimited; otherwise the accepted-submission limit (>= 1).
   maxSubmissions: number;
   autograderEnabled: boolean;
+  /** Whether students see the evaluator's feedback, or only whether they were right. */
+  showFeedback?: boolean;
 };
 
 type AssignmentProblemSettingsDialogProps = {
@@ -62,7 +64,18 @@ export function AssignmentProblemSettingsDialog({
     settings.maxSubmissions === -1 ? '' : String(settings.maxSubmissions),
   );
   const [autograderEnabled, setAutograderEnabled] = useState<boolean>(settings.autograderEnabled);
+  const [showFeedback, setShowFeedback] = useState<boolean>(settings.showFeedback !== false);
   const [saving, setSaving] = useState(false);
+  /**
+   * Attempts already made against this problem, and what the setting was when the dialog
+   * opened. Together they decide whether changing the switch needs a word of warning: students
+   * who have already submitted keep whatever they were shown, so a change partway through
+   * leaves the class split. Null until the count arrives, which is the same as "no warning".
+   */
+  const [attemptsSoFar, setAttemptsSoFar] = useState<number | null>(null);
+  const [savedShowFeedback, setSavedShowFeedback] = useState<boolean>(
+    settings.showFeedback !== false,
+  );
 
   // Re-seed from the passed settings each time the dialog opens.
   useEffect(() => {
@@ -71,8 +84,33 @@ export function AssignmentProblemSettingsDialog({
     setUnlimited(settings.maxSubmissions === -1);
     setMaxSubmissions(settings.maxSubmissions === -1 ? '' : String(settings.maxSubmissions));
     setAutograderEnabled(settings.autograderEnabled);
+    setShowFeedback(settings.showFeedback !== false);
     setSaving(false);
   }, [open, settings]);
+
+  // The count comes from the server rather than the assignment payload: nothing else on this
+  // screen needs it, and it has to be current at the moment of the decision.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void apiClient
+      .get<{ showFeedback?: boolean; submissionCount?: number }>(
+        apiPaths.assignmentProblem(courseId, assignmentId, problemId),
+      )
+      .then((data) => {
+        if (cancelled) return;
+        setAttemptsSoFar(data.submissionCount ?? 0);
+        setSavedShowFeedback(data.showFeedback !== false);
+      })
+      .catch(() => {
+        // The warning is a courtesy, not a gate. If the count cannot be read the dialog still
+        // saves; it just says nothing about attempts.
+        if (!cancelled) setAttemptsSoFar(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, courseId, assignmentId, problemId]);
 
   const pointsValue = Number(maxPoints);
   const pointsInvalid = !Number.isFinite(pointsValue) || pointsValue < 0;
@@ -80,6 +118,18 @@ export function AssignmentProblemSettingsDialog({
   const submissionsInvalid =
     !unlimited && (!Number.isInteger(submissionsValue) || submissionsValue < 1);
   const canSave = !pointsInvalid && !submissionsInvalid && !saving && !courseIsArchived;
+
+  /**
+   * Said before saving, not after: work already handed in was seen under the old setting, and
+   * a student who has read the evaluator's feedback cannot unread it. Changing this partway
+   * through is allowed, and it should be a decision rather than a surprise.
+   */
+  const feedbackChangeWarning =
+    showFeedback !== savedShowFeedback && attemptsSoFar && attemptsSoFar > 0
+      ? showFeedback
+        ? `${attemptsSoFar} ${attemptsSoFar === 1 ? 'attempt has' : 'attempts have'} already been made without feedback. Turning it on shows the feedback for those attempts too.`
+        : `${attemptsSoFar} ${attemptsSoFar === 1 ? 'attempt has' : 'attempts have'} already been made with feedback shown. Turning it off hides it from now on, including on those attempts, but anyone who has already read it has seen it.`
+      : null;
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -89,6 +139,7 @@ export function AssignmentProblemSettingsDialog({
         maxPoints: Math.max(0, pointsValue),
         maxSubmissions: unlimited ? -1 : Math.max(1, Math.floor(submissionsValue)),
         autograderEnabled,
+        showFeedback,
       });
       showToast.updated('Problem settings');
       onSaved?.();
@@ -144,6 +195,22 @@ export function AssignmentProblemSettingsDialog({
             checked={autograderEnabled}
             onCheckedChange={(checked) => setAutograderEnabled(!!checked)}
           />
+
+          <SwitchField
+            label="Show Feedback to Students"
+            name="assignment-problem-show-feedback"
+            id="assignment-problem-show-feedback"
+            checked={showFeedback}
+            onCheckedChange={(checked) => setShowFeedback(!!checked)}
+            descriptionPlacement="inline"
+            description="Off, students see only whether their answer was correct. The feedback is still recorded and still visible to you."
+          />
+
+          {feedbackChangeWarning && (
+            <p className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border px-3 py-2 text-sm">
+              {feedbackChangeWarning}
+            </p>
+          )}
         </div>
 
         <DialogFooter>

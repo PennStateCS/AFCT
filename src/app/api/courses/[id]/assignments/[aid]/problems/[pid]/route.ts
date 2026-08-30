@@ -37,6 +37,7 @@ type RouteCtx = { params: Promise<{ id: string; aid: string; pid: string }> };
  *           maxPoints: { type: number, minimum: 0 }
  *           maxSubmissions: { type: integer, description: "-1 for unlimited, else >= 1" }
  *           autograderEnabled: { type: boolean }
+ *           showFeedback: { type: boolean, description: "Whether students see the evaluator's feedback, or only whether they were right. Defaults to true when omitted." }
  * responses:
  *   200: { description: The updated assignment-problem settings. }
  *   400: { description: Invalid JSON or settings. }
@@ -104,6 +105,7 @@ export const PUT = withCourseAuth(
           maxPoints: true,
           maxSubmissions: true,
           autograderEnabled: true,
+          showFeedback: true,
         },
       });
 
@@ -126,11 +128,12 @@ export const PUT = withCourseAuth(
             changes: diffFields(
               link as unknown as Record<string, unknown>,
               updated as unknown as Record<string, unknown>,
-              ['maxPoints', 'maxSubmissions', 'autograderEnabled'],
+              ['maxPoints', 'maxSubmissions', 'autograderEnabled', 'showFeedback'],
             ),
             maxPoints: payload.maxPoints,
             maxSubmissions: payload.maxSubmissions,
             autograderEnabled: payload.autograderEnabled,
+            showFeedback: payload.showFeedback,
             problemTitle: link.problem.title,
           },
         });
@@ -161,4 +164,63 @@ export const PUT = withCourseAuth(
     deniedAction: 'ASSIGNMENT_PROBLEM_SETTINGS_UPDATE_DENIED',
     blockWhenArchived: true,
   },
+);
+
+/**
+ * The per-assignment settings for one problem, plus how many attempts have already been made
+ * against it.
+ *
+ * The count exists for one screen: turning feedback off (or back on) partway through changes
+ * what students see from that moment, and the people who already submitted keep whatever they
+ * were shown. The settings dialog says how many that is, so the change is a decision rather
+ * than a surprise. Nothing else needs it, which is why it is not on the assignment payload.
+ * @openapi
+ * summary: Get one problem's per-assignment settings
+ * parameters:
+ *   - { name: id, in: path, required: true, schema: { type: string } }
+ *   - { name: aid, in: path, required: true, schema: { type: string } }
+ *   - { name: pid, in: path, required: true, schema: { type: string } }
+ * responses:
+ *   200:
+ *     description: The settings, and the number of attempts already made.
+ *     content:
+ *       application/json:
+ *         schema:
+ *           type: object
+ *           properties:
+ *             maxPoints: { type: number }
+ *             maxSubmissions: { type: integer }
+ *             autograderEnabled: { type: boolean }
+ *             showFeedback: { type: boolean }
+ *             submissionCount: { type: integer }
+ *   401: { description: Not signed in. }
+ *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
+ *   404: { description: The problem isn't linked to this assignment/course. }
+ *   500: { description: Server error. }
+ */
+export const GET = withCourseAuth(
+  async (_req, ctx: RouteCtx) => {
+    const { aid: assignmentId, pid: problemId } = await ctx.params;
+
+    const link = await prisma.assignmentProblem.findUnique({
+      where: { assignmentId_problemId: { assignmentId, problemId } },
+      select: {
+        maxPoints: true,
+        maxSubmissions: true,
+        autograderEnabled: true,
+        showFeedback: true,
+      },
+    });
+
+    if (!link) {
+      return NextResponse.json({ error: 'Problem not found on this assignment.' }, { status: 404 });
+    }
+
+    const submissionCount = await prisma.submission.count({
+      where: { assignmentId, problemId },
+    });
+
+    return NextResponse.json({ ...link, submissionCount });
+  },
+  { access: 'manage', deniedAction: 'ASSIGNMENT_PROBLEM_SETTINGS_VIEW_DENIED' },
 );

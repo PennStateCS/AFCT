@@ -51,7 +51,11 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('returns 404 when assignment does not exist in the course', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue(null);
 
     const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
@@ -64,11 +68,18 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('returns grouped student context', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: true,
-      problems: [{ problemId: 'p1' }, { problemId: 'p2' }],
+      problems: [
+        { problemId: 'p1', showFeedback: true },
+        { problemId: 'p2', showFeedback: true },
+      ],
     });
     prismaMock.submission.findMany.mockResolvedValue([
       {
@@ -108,7 +119,11 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('returns 404 when an unpublished assignment is requested by a student', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: false,
@@ -122,7 +137,11 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('buckets submissions and comments for problems not in the assignment list', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: true,
@@ -165,7 +184,11 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
 
   it('returns 500 when a data fetch fails', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: true,
@@ -190,7 +213,10 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       isPublished: true,
-      problems: [{ problemId: 'p1' }, { problemId: 'p2' }],
+      problems: [
+        { problemId: 'p1', showFeedback: true },
+        { problemId: 'p2', showFeedback: true },
+      ],
     });
     contentGateMock.mockResolvedValue({ assigned: false, locked: true, unlockAt: null });
 
@@ -223,5 +249,89 @@ describe('GET /api/courses/[id]/assignments/[aid]/student-context', () => {
     expect(body).toMatchObject({ locked: true, submissionCount: 0, problemGrades: {} });
     // The problem ids must not come back either - they are useful keys elsewhere.
     expect(body.submissionsByProblem).toEqual({});
+  });
+});
+
+/**
+ * The switch that decides whether a student reads the evaluator's witness string.
+ *
+ * This is the route the student's problem workspace is built from, so it is the one that matters
+ * most. Staff read the same route when they look at a student's page, and must keep everything.
+ */
+describe('GET student context, feedback visibility', () => {
+  const asStudentOn = (showFeedback: boolean, submission: Record<string, unknown> = {}) => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      isPublished: true,
+      problems: [{ problemId: 'p1', showFeedback }],
+    });
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 's1',
+        submittedAt: new Date('2026-03-01T10:00:00.000Z'),
+        feedback: 'The string aab is accepted but should be rejected.',
+        correct: false,
+        status: 'COMPLETED',
+        fileName: 'f.jff',
+        originalFileName: 'orig.jff',
+        problemId: 'p1',
+        ...submission,
+      },
+    ]);
+    prismaMock.comment.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  };
+
+  const read = async () => {
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    return (await res.json()).submissionsByProblem.p1[0];
+  };
+
+  it('sends the feedback when the problem shows it', async () => {
+    asStudentOn(true);
+
+    expect(await read()).toMatchObject({
+      feedback: 'The string aab is accepted but should be rejected.',
+      feedbackVisible: true,
+    });
+  });
+
+  it('withholds it when the problem does not', async () => {
+    asStudentOn(false);
+
+    // Null, and said to be withheld. Without the flag the workspace renders "No feedback",
+    // which tells the student the evaluator had nothing to say.
+    expect(await read()).toMatchObject({ feedback: null, feedbackVisible: false });
+  });
+
+  it('still explains a run that failed', async () => {
+    asStudentOn(false, { status: 'FAILED', feedback: 'The file could not be parsed.' });
+
+    expect(await read()).toMatchObject({
+      feedback: 'The file could not be parsed.',
+      feedbackVisible: true,
+    });
+  });
+
+  it('keeps everything for staff looking at the same page', async () => {
+    asStudentOn(false);
+    // Course staff, reading a student's work. The feedback is stored for them by design.
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'FACULTY',
+      course: { isPublished: true },
+    });
+
+    expect(await read()).toMatchObject({
+      feedback: 'The string aab is accepted but should be rejected.',
+      feedbackVisible: true,
+    });
   });
 });

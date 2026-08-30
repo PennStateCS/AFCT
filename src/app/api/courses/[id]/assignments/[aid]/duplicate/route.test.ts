@@ -196,12 +196,16 @@ describe('POST /api/courses/[id]/assignments/[aid]/duplicate', () => {
     // The new link carries over the per-assignment settings.
     expect(prismaMock.assignmentProblem.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ maxPoints: 40, maxSubmissions: 3, autograderEnabled: false }),
+        data: expect.objectContaining({
+          maxPoints: 40,
+          maxSubmissions: 3,
+          autograderEnabled: false,
+        }),
       }),
     );
   });
 
-  it('duplicate mode preserves a copied problem\'s rich description verbatim', async () => {
+  it("duplicate mode preserves a copied problem's rich description verbatim", async () => {
     const res = await call({ title: 'Copy', problemMode: 'duplicate' });
     expect(res.status).toBe(201);
 

@@ -797,6 +797,16 @@ model AssignmentProblem {
   maxSubmissions    Int     @default(1)
   /// Whether attempts are graded automatically.
   autograderEnabled Boolean @default(true)
+  /// Whether students see what the evaluator said, or only whether they were right.
+  ///
+  /// A disclosure rule, not a grading rule: the evaluator runs either way, its feedback is always
+  /// stored, and staff always read it. Off withholds the witness string on a completed run only;
+  /// the reason a run FAILED, and any comment a person wrote by hand, still reach the student.
+  ///
+  /// This is a study variable (RQ5 compares the witness string being shown against not), which is
+  /// why `Submission.feedbackShown` records the value each attempt was actually graded under
+  /// rather than this being read back later as though it had never changed.
+  showFeedback      Boolean @default(true)
 
   submissions Submission[]
   grades      AssignmentProblemGrade[]
@@ -989,6 +999,13 @@ model Submission {
   id            String   @id @default(cuid())
   /// Feedback produced for this attempt.
   feedback      String?
+  /// Whether the problem was showing evaluator feedback to students when this attempt was graded.
+  ///
+  /// Stamped by the worker rather than read from `AssignmentProblem.showFeedback` at display time,
+  /// because that setting can change mid-term and this has to keep saying what the student was
+  /// actually under. Null for anything graded before the setting existed, which is honest: those
+  /// attempts predate the distinction. See RQ5 in the grant.
+  feedbackShown Boolean?
   /// Whether the attempt was judged correct. Empty until grading finishes.
   correct       Boolean?
   /// Full grader output, kept for diagnosis.

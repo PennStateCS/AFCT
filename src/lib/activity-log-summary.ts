@@ -1374,6 +1374,9 @@ type DetailRow = { label: string; value: string };
 
 /** Words for the keys that appear in metadata, so a reader is not parsing camelCase. */
 const FIELD_LABELS: Record<string, string> = {
+  // "Show feedback: true to false" reads as a database column. This is a study condition, and
+  // the log is what says which one a class was under.
+  showFeedback: 'Feedback shown to students',
   accountsCreated: 'New accounts',
   identitiesLinked: 'Sign-ins connected',
   clientId: 'Client ID',

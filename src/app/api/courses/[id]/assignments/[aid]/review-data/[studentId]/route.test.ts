@@ -101,7 +101,11 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
 
   it('allows a student to view their own review data', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'roster-1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 
@@ -111,7 +115,11 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
   it('404-masks an assignment the student is not assigned', async () => {
     // Published and their own id is not enough: they must actually be assigned it.
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'roster-1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     contentGateMock.mockResolvedValue({ assigned: false, locked: true, unlockAt: null });
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
@@ -122,7 +130,11 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
 
   it('withholds problem content before the student unlock time', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'roster-1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     contentGateMock.mockResolvedValue({
       assigned: true,
       locked: true,
@@ -157,7 +169,11 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     // Even their OWN data: a student can't read review data (problem content) for
     // an unpublished assignment.
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'roster-1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: params.aid,
       isPublished: false,
@@ -248,6 +264,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
               id: 'sub-1',
               submittedAt: submittedAt.toISOString(),
               feedback: 'ok',
+              feedbackVisible: true,
               correct: true,
               evaluationRaw: { score: 1 },
               fileName: 'sub-1.jff',
@@ -295,6 +312,7 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
         p1: {
           grade: 10,
           feedback: 'Nice',
+          feedbackVisible: true,
           updatedAt: updatedAt.toISOString(),
           // Null unless the grade came from a group grade; the workspace uses it to mark a
           // member whose grade was changed away from their group's.
@@ -320,7 +338,11 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     // Enrolled as a plain student (read access granted by the wrapper) but neither
     // the owner nor a manager -> hits the in-handler denial after the 404 check.
     authMock.mockResolvedValue({ user: { id: 'student-2', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-2', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'roster-2',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
 
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve(params) });
 
@@ -486,5 +508,88 @@ describe('GET /api/courses/[id]/[aid]/review-data/[studentId]', () => {
     const json = await res.json();
     expect(json.submissions.p1.submissions[0].evaluationRaw).toBeNull();
     expect(prismaMock.submission.findMany).toHaveBeenCalledTimes(2);
+  });
+});
+
+/** The workspace both staff and students read a student's attempts through. */
+describe('GET review data, feedback visibility', () => {
+  const readAs = async (role: 'STUDENT' | 'FACULTY', showFeedback: boolean) => {
+    // Staff status comes off the roster row here, the way the rest of this file does it.
+    authMock.mockResolvedValue({ user: { id: 'u1', role, isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role,
+      course: { isPublished: true },
+    });
+    contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
+    resolveGroupMock.mockResolvedValue(null);
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      isPublished: true,
+      dueDate: new Date('2026-12-01T00:00:00.000Z'),
+      unlockAt: null,
+      lateCutoff: null,
+      allowLateSubmissions: false,
+      groupSetId: null,
+      overrides: [],
+    });
+    prismaMock.assignmentProblem.findMany.mockImplementation((args: any) =>
+      // Two different reads of the same table: the problem list, and the caps-plus-flag row.
+      args?.select?.maxSubmissions
+        ? Promise.resolve([{ problemId: 'p1', maxSubmissions: 2, showFeedback }])
+        : Promise.resolve([
+            {
+              problemId: 'p1',
+              problem: {
+                id: 'p1',
+                title: 'P1',
+                description: null,
+                type: null,
+                maxStates: null,
+                isDeterministic: null,
+                originalFileName: null,
+              },
+            },
+          ]),
+    );
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        submittedAt: new Date('2026-03-01T10:00:00.000Z'),
+        status: 'COMPLETED',
+        feedback: 'accepts aab but should reject it',
+        correct: false,
+        evaluationRaw: null,
+        fileName: 'sub-1.jff',
+        originalFileName: 'sub-1.jff',
+        problemId: 'p1',
+        studentId: 'u1',
+        student: { firstName: 'Grace', lastName: 'Hopper' },
+      },
+    ]);
+    prismaMock.comment.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.submissionGrant.findMany.mockResolvedValue([]);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/review-data/u1'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1', studentId: 'u1' }) },
+    );
+    expect(res.status).toBe(200);
+    return (await res.json()).submissions.p1.submissions[0];
+  };
+
+  it('withholds the feedback from the student when the problem hides it', async () => {
+    expect(await readAs('STUDENT', false)).toMatchObject({
+      feedback: null,
+      feedbackVisible: false,
+    });
+  });
+
+  it('keeps it for staff', async () => {
+    expect(await readAs('FACULTY', false)).toMatchObject({
+      feedback: 'accepts aab but should reject it',
+      feedbackVisible: true,
+    });
   });
 });

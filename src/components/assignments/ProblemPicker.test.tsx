@@ -74,9 +74,7 @@ describe('ProblemPicker', () => {
   it('reports the outstanding count on the trigger', () => {
     renderPicker();
 
-    expect(
-      screen.getByRole('button', { name: /2 still need grading/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /2 still need grading/ })).toBeInTheDocument();
   });
 
   it('says so when nothing is outstanding', () => {

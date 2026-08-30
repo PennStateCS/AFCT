@@ -70,7 +70,7 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/summary', () => {
     expect(prismaMock.assignmentProblemGrade.groupBy).not.toHaveBeenCalled();
   });
 
-  it('reports each student\'s completion and what they have earned', async () => {
+  it("reports each student's completion and what they have earned", async () => {
     prismaMock.assignmentProblem.count.mockResolvedValue(3);
     prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
       { studentId: 's1', _count: { grade: 3 }, _sum: { grade: 30 } },

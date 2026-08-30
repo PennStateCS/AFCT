@@ -42,6 +42,7 @@ const submissionEvalInclude = {
       problemId: true,
       maxPoints: true,
       autograderEnabled: true,
+      showFeedback: true,
     },
   },
 } satisfies Prisma.SubmissionInclude;
@@ -506,6 +507,8 @@ export async function persistEvaluation(opts: {
   studentId: string;
   studentGroupId: string | null;
   autograderEnabled: boolean;
+  /** Whether the problem was showing feedback to students at the moment this was graded. */
+  showFeedback: boolean;
   maxPoints: number;
   /** Exactly what the evaluator returned, unchanged. */
   evaluation: SubmissionEvaluationResult;
@@ -537,6 +540,11 @@ export async function persistEvaluation(opts: {
               ? Prisma.JsonNull
               : (opts.evaluation.evaluationRaw as Prisma.InputJsonValue),
           status: opts.evaluation.status,
+          // The condition this attempt was graded under, recorded rather than looked up later.
+          // The problem's setting can be changed mid-term, and a study that compares showing the
+          // witness string against withholding it needs to know which one a given attempt got.
+          // See RQ5, and the field's comment on the schema.
+          feedbackShown: opts.showFeedback,
           // When the result became readable, stamped in the write that lands it so the two
           // can never disagree. Only the Similarity tab reads it, to say whether one
           // student's work was already marked correct when another submitted the same work.
@@ -668,6 +676,7 @@ async function evaluateSubmission(id: string, token: string | null = null) {
       studentId: submission.studentId,
       studentGroupId: submission.studentGroupId,
       autograderEnabled: submission.assignmentProblem.autograderEnabled === true,
+      showFeedback: submission.assignmentProblem.showFeedback !== false,
       maxPoints: submission.assignmentProblem.maxPoints,
       evaluation,
     });

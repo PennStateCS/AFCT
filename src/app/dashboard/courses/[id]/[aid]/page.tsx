@@ -58,6 +58,7 @@ export default async function AssignmentPage({ params }: PageProps) {
             maxPoints: true,
             maxSubmissions: true,
             autograderEnabled: true,
+            showFeedback: true,
             problem: true,
           },
         },
@@ -104,6 +105,7 @@ export default async function AssignmentPage({ params }: PageProps) {
             maxPoints: ap.maxPoints,
             maxSubmissions: ap.maxSubmissions,
             autograderEnabled: ap.autograderEnabled,
+            showFeedback: ap.showFeedback,
           })),
           course: assignment.course,
         };

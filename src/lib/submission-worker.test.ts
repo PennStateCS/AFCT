@@ -80,6 +80,7 @@ const makeSubmission = (over: Record<string, any> = {}): any => ({
     problemId: 'p-1',
     maxPoints: 10,
     autograderEnabled: true,
+    showFeedback: true,
     problem: { fileName: 'answer.txt', type: 'CFG', maxStates: null, isDeterministic: null },
   },
   ...over,
@@ -260,6 +261,47 @@ describe('evaluateSubmission', () => {
     prismaMock.submission.updateMany.mockResolvedValue({ count: 1 }); // fenced completion write wins
     prismaMock.assignmentProblemGrade.updateMany.mockResolvedValue({ count: 0 }); // no existing auto row
     prismaMock.assignmentProblemGrade.createMany.mockResolvedValue({ count: 1 });
+  });
+
+  /**
+   * The setting can be changed mid-term, so reading it back off the problem later would say
+   * whatever it says today rather than what this student was under. RQ5 compares showing the
+   * witness string against withholding it, and that comparison needs the condition each attempt
+   * was actually graded under.
+   */
+  it('records whether feedback was being shown when it graded', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue(makeSubmission());
+    executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"great"}', stderr: '' });
+
+    await evaluateSubmission('sub-1', CLAIM);
+
+    expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ feedbackShown: true }) }),
+    );
+  });
+
+  it('records the withheld condition just as explicitly', async () => {
+    prismaMock.submission.findUnique.mockResolvedValue(
+      makeSubmission({
+        assignmentProblem: {
+          assignmentId: 'a-1',
+          problemId: 'p-1',
+          maxPoints: 10,
+          autograderEnabled: true,
+          showFeedback: false,
+          problem: { fileName: 'answer.txt', type: 'CFG', maxStates: null, isDeterministic: null },
+        },
+      }),
+    );
+    executeMock.mockResolvedValue({ stdout: '{"correct":false,"feedback":"nope"}', stderr: '' });
+
+    await evaluateSubmission('sub-1', CLAIM);
+
+    // False, not absent. A missing stamp would be indistinguishable from an attempt graded
+    // before the setting existed.
+    expect(prismaMock.submission.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ feedbackShown: false }) }),
+    );
   });
 
   it('does nothing when the submission no longer exists', async () => {

@@ -53,7 +53,7 @@ Two buttons appear there, depending on the state:
 
 Releasing a score does not change who is credited with it. If you entered the score yourself, it still reads as a manual override; the line simply warns that the autograder can now replace it.
 
-Nothing appears on a problem that is not automatically graded. Re-running the evaluator there produces feedback for the student and never writes a grade, so there is nothing to protect against.
+Nothing appears on a problem that is not automatically graded. Re-running the evaluator there produces feedback and never writes a grade, so there is nothing to protect against. Whether the student reads that feedback depends on **Show Feedback to Students** for the problem; you and your TAs see it either way.
 
 ## Check a grade reached your LMS
 

@@ -3,6 +3,11 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import {
+  discloseGradeFeedback,
+  discloseSubmissionFeedback,
+  feedbackVisibilityMap,
+} from '@/lib/feedback-visibility';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logDenial } from '@/lib/api/activity';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
@@ -88,9 +93,13 @@ function submitterName(
  *         schema:
  *           type: object
  *           properties:
- *             submissions: { type: object }
+ *             submissions:
+ *               type: object
+ *               description: "Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback from students, so a null feedback can be told from one the evaluator left empty."
  *             comments: { type: array, items: { type: object } }
- *             problemGrades: { type: object }
+ *             problemGrades:
+ *               type: object
+ *               description: "Per problem. feedbackVisible is false where the problem withholds the autograder's comment; a comment a person wrote by hand is always shown."
  *             isGroup: { type: boolean, description: Whether the student submits this assignment as a group. }
  *   401: { description: Not signed in. }
  *   403: { description: "Requesting another student's data without being course staff or a system admin, or not an enrolled member of the course." }
@@ -271,7 +280,7 @@ export const GET = withCourseAuth(
       const [linkCaps, grantRows] = await Promise.all([
         prisma.assignmentProblem.findMany({
           where: { assignmentId },
-          select: { problemId: true, maxSubmissions: true },
+          select: { problemId: true, maxSubmissions: true, showFeedback: true },
         }),
         prisma.submissionGrant.findMany({
           where: {
@@ -350,9 +359,14 @@ export const GET = withCourseAuth(
             fileName: string | null;
             originalFileName: string | null;
             submittedBy: string;
+            feedbackVisible: boolean;
           }[];
         }
       > = {};
+
+      // Which problems show the evaluator's feedback. Staff reading a student's page keep it
+      // all; the student sees it only where the problem allows.
+      const visibility = feedbackVisibilityMap(linkCaps);
 
       for (const { problem } of assignmentProblems) {
         const subsForProblem = submissionsRaw.filter((s) => s.problemId === problem.id);
@@ -363,7 +377,7 @@ export const GET = withCourseAuth(
             id: s.id,
             submittedAt: s.submittedAt,
             status: s.status,
-            feedback: s.feedback,
+            ...discloseSubmissionFeedback(s, visibility, { isStaff }),
             correct: s.correct,
             evaluationRaw: s.evaluationRaw ?? null,
             fileName: s.fileName,
@@ -406,12 +420,15 @@ export const GET = withCourseAuth(
             groupGradeValue: number | null;
             gradedManually: boolean;
             gradeSource: string;
+            feedbackVisible: boolean;
           }
         >
       >((acc, record) => {
         acc[record.problemId] = {
           grade: record.grade ?? null,
-          feedback: record.feedback ?? null,
+          ...discloseGradeFeedback({ ...record, feedback: record.feedback ?? null }, visibility, {
+            isStaff,
+          }),
           updatedAt: record.updatedAt.toISOString(),
           groupGradeValue: record.groupGradeValue ?? null,
           gradedManually: record.gradedManually,
@@ -450,7 +467,11 @@ export const GET = withCourseAuth(
               id: true,
               name: true,
               memberships: {
-                select: { roster: { select: { user: { select: { id: true, firstName: true, lastName: true } } } } },
+                select: {
+                  roster: {
+                    select: { user: { select: { id: true, firstName: true, lastName: true } } },
+                  },
+                },
               },
             },
           })

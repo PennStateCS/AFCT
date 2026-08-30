@@ -236,6 +236,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
           maxPoints: 0,
           maxSubmissions: 1,
           autograderEnabled: true,
+          showFeedback: true,
         },
       ],
     });
@@ -271,6 +272,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
           maxPoints: 0,
           maxSubmissions: 1,
           autograderEnabled: true,
+          showFeedback: true,
         },
       ],
     });
@@ -291,6 +293,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
             maxPoints: 15,
             maxSubmissions: -1,
             autograderEnabled: false,
+            showFeedback: true,
           },
         ],
       }),
@@ -306,6 +309,7 @@ describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
           maxPoints: 15,
           maxSubmissions: -1,
           autograderEnabled: false,
+          showFeedback: true,
         },
       ],
     });

@@ -370,6 +370,7 @@ export const POST = withAdminAuth(
                 maxPoints: number;
                 maxSubmissions: number;
                 autograderEnabled: boolean;
+                showFeedback: boolean;
               }[] = [];
               for (const a of originalAssignments) {
                 const createdA = await tx.assignment.create({
@@ -406,6 +407,9 @@ export const POST = withAdminAuth(
                       maxPoints: ap.maxPoints,
                       maxSubmissions: ap.maxSubmissions,
                       autograderEnabled: ap.autograderEnabled,
+                      // Carried, not defaulted: this is a study condition, and a duplicated
+                      // course silently reverting to "feedback shown" would change it.
+                      showFeedback: ap.showFeedback,
                     });
                   }
                 }

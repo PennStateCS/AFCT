@@ -1513,7 +1513,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get one problem's per-assignment settings
+         * @description The per-assignment settings for one problem, plus how many attempts have already been made  against it.   The count exists for one screen: turning feedback off (or back on) partway through changes  what students see from that moment, and the people who already submitted keep whatever they  were shown. The settings dialog says how many that is, so the change is a decision rather  than a surprise. Nothing else needs it, which is why it is not on the assignment payload.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidProblemsByPid"];
         /**
          * Update an assignment problem's settings
          * @description Updates the per-assignment settings for one problem: its point value, submission  cap, and whether the autograder runs. Course staff (faculty or TAs) or a system  admin. The problem  must already be linked to the assignment, and the assignment must belong to the  course in the path.
@@ -6115,6 +6121,8 @@ export interface operations {
                         grade?: number | null;
                         /** @description The witness / counterexample */
                         feedback?: string | null;
+                        /** @description False when the problem withholds the evaluator's feedback from students. Distinguishes a withheld result from one the evaluator had nothing to say about, since feedback is null in both cases. */
+                        feedbackVisible?: boolean;
                     };
                 };
             };
@@ -6157,6 +6165,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback, so a null feedback can be told from one the evaluator left empty. */
                         submissions?: Record<string, never>[];
                     };
                 };
@@ -7232,7 +7241,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A map of problemId to { grade, feedback, updatedAt, gradedManually, gradeSource }. */
+            /** @description A map of problemId to { grade, feedback, feedbackVisible, updatedAt, gradedManually, gradeSource }. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7938,6 +7947,72 @@ export interface operations {
             };
         };
     };
+    getCoursesByIdAssignmentsByAidProblemsByPid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings, and the number of attempts already made. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        maxPoints?: number;
+                        maxSubmissions?: number;
+                        autograderEnabled?: boolean;
+                        showFeedback?: boolean;
+                        submissionCount?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The problem isn't linked to this assignment/course. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     putCoursesByIdAssignmentsByAidProblemsByPid: {
         parameters: {
             query?: never;
@@ -7956,6 +8031,8 @@ export interface operations {
                     /** @description -1 for unlimited, else >= 1 */
                     maxSubmissions: number;
                     autograderEnabled: boolean;
+                    /** @description Whether students see the evaluator's feedback, or only whether they were right. Defaults to true when omitted. */
+                    showFeedback?: boolean;
                 };
             };
         };
@@ -8034,6 +8111,8 @@ export interface operations {
                         /** @description -1 for unlimited, else >= 1 */
                         maxSubmissions: number;
                         autograderEnabled: boolean;
+                        /** @description Whether students see the evaluator's feedback. Defaults to true when omitted. */
+                        showFeedback?: boolean;
                     }[];
                 };
             };
@@ -8176,8 +8255,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback from students, so a null feedback can be told from one the evaluator left empty. */
                         submissions?: Record<string, never>;
                         comments?: Record<string, never>[];
+                        /** @description Per problem. feedbackVisible is false where the problem withholds the autograder's comment; a comment a person wrote by hand is always shown. */
                         problemGrades?: Record<string, never>;
                         /** @description Whether the student submits this assignment as a group. */
                         isGroup?: boolean;
@@ -8665,6 +8746,7 @@ export interface operations {
                         assignmentGrade?: number | null;
                         problemGrades?: Record<string, never>;
                         submissionCount?: number;
+                        /** @description Attempts per problem. Each carries feedbackVisible: false where the problem withholds the evaluator's feedback, so a null feedback can be told from one that is simply empty. */
                         submissionsByProblem?: Record<string, never>;
                         commentsByProblem?: Record<string, never>;
                         /** @description Per-problem effective submission cap for the caller (base plus any grants); max null means unlimited. */

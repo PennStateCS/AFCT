@@ -74,75 +74,75 @@ export function ProblemPicker({
         >
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            // Matches the student picker beside it: same surface, same shape, a status dot
-            // and a position readout. They are the same kind of control and should not look
-            // like two different ones.
-            className="bg-card text-foreground border-border hover:bg-accent flex min-w-0 flex-1 items-center gap-2 rounded-none border-x-0"
-            aria-label={
-              ungradedCount > 0
-                ? `Problem: ${selected?.title ?? 'none selected'}. ${ungradedCount} still need grading.`
-                : `Problem: ${selected?.title ?? 'none selected'}. All graded.`
-            }
-          >
-            {selected ? (
-              <span
-                aria-hidden="true"
-                className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 ${
-                  typeof grades[selected.id] === 'number'
-                    ? 'border-status-success-solid bg-status-success-solid'
-                    : 'border-status-danger-solid bg-transparent'
-                }`}
-              />
-            ) : null}
-            <span className="truncate">
-              {selected
-                ? `${problems.findIndex((p) => p.id === selected.id) + 1}. ${selected.title ?? ''}`
-                : 'Select problem'}
-            </span>
-            {selected && problems.length > 0 ? (
-              <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
-                {problems.findIndex((p) => p.id === selected.id) + 1} of {problems.length}
-              </span>
-            ) : null}
-            <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-72">
-          {problems.map((problem, index) => {
-            const grade = grades[problem.id];
-            const graded = typeof grade === 'number';
-            return (
-              <DropdownMenuItem
-                key={problem.id}
-                className="hover:bg-accent gap-2"
-                onClick={() => onSelect(problem.id)}
-              >
-                {/* Filled when graded, hollow when not: a shape difference as well as a
-                    colour one, so the state survives a monochrome or colour-blind reading. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              // Matches the student picker beside it: same surface, same shape, a status dot
+              // and a position readout. They are the same kind of control and should not look
+              // like two different ones.
+              className="bg-card text-foreground border-border hover:bg-accent flex min-w-0 flex-1 items-center gap-2 rounded-none border-x-0"
+              aria-label={
+                ungradedCount > 0
+                  ? `Problem: ${selected?.title ?? 'none selected'}. ${ungradedCount} still need grading.`
+                  : `Problem: ${selected?.title ?? 'none selected'}. All graded.`
+              }
+            >
+              {selected ? (
                 <span
                   aria-hidden="true"
                   className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 ${
-                    graded
+                    typeof grades[selected.id] === 'number'
                       ? 'border-status-success-solid bg-status-success-solid'
                       : 'border-status-danger-solid bg-transparent'
                   }`}
                 />
-                <span className="truncate">
-                  {index + 1}. {problem.title || `Problem ${index + 1}`}
-                </span>
+              ) : null}
+              <span className="truncate">
+                {selected
+                  ? `${problems.findIndex((p) => p.id === selected.id) + 1}. ${selected.title ?? ''}`
+                  : 'Select problem'}
+              </span>
+              {selected && problems.length > 0 ? (
                 <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
-                  {gradeLabel(grade, problem.maxPoints)}
+                  {problems.findIndex((p) => p.id === selected.id) + 1} of {problems.length}
                 </span>
-                <span className="sr-only">{graded ? 'Graded' : 'Needs grading'}</span>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+              ) : null}
+              <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-72">
+            {problems.map((problem, index) => {
+              const grade = grades[problem.id];
+              const graded = typeof grade === 'number';
+              return (
+                <DropdownMenuItem
+                  key={problem.id}
+                  className="hover:bg-accent gap-2"
+                  onClick={() => onSelect(problem.id)}
+                >
+                  {/* Filled when graded, hollow when not: a shape difference as well as a
+                    colour one, so the state survives a monochrome or colour-blind reading. */}
+                  <span
+                    aria-hidden="true"
+                    className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 ${
+                      graded
+                        ? 'border-status-success-solid bg-status-success-solid'
+                        : 'border-status-danger-solid bg-transparent'
+                    }`}
+                  />
+                  <span className="truncate">
+                    {index + 1}. {problem.title || `Problem ${index + 1}`}
+                  </span>
+                  <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
+                    {gradeLabel(grade, problem.maxPoints)}
+                  </span>
+                  <span className="sr-only">{graded ? 'Graded' : 'Needs grading'}</span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button
           variant="secondary"
           size="icon"

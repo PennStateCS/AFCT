@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { discloseSubmissionFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logDenial } from '@/lib/api/activity';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
@@ -18,6 +19,8 @@ interface Submission {
   fileName: string;
   originalFileName: string;
   problemId: string;
+  /** Not rendered. The feedback rule reads it: a run that failed still explains itself. */
+  status: string;
 }
 
 const submissionSelectWithEvaluation = {
@@ -29,6 +32,8 @@ const submissionSelectWithEvaluation = {
   fileName: true,
   originalFileName: true,
   problemId: true,
+  // Not shown, but the feedback rule needs it: a run that failed still explains itself.
+  status: true,
 } as const;
 
 const submissionSelectWithoutEvaluation = {
@@ -39,6 +44,7 @@ const submissionSelectWithoutEvaluation = {
   fileName: true,
   originalFileName: true,
   problemId: true,
+  status: true,
 } as const;
 
 /**
@@ -60,7 +66,9 @@ const submissionSelectWithoutEvaluation = {
  *     description: Submissions grouped by problem.
  *     content:
  *       application/json:
- *         schema: { type: object }
+ *         schema:
+ *           type: object
+ *           description: "Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback from students, so a null feedback can be told from one the evaluator left empty."
  *   401: { description: Not signed in. }
  *   403: { description: "Requesting another student's submissions without being course staff or a system admin, or not an enrolled member of the course." }
  *   404: { description: "Assignment not found, or it has no linked problems." }
@@ -201,9 +209,13 @@ export const GET = withCourseAuth(
             evaluationRaw?: unknown | null;
             fileName: string | null;
             originalFileName: string | null;
+            feedbackVisible: boolean;
           }[];
         }
       > = {};
+
+      // Which problems show the evaluator's feedback to students. Staff keep everything.
+      const visibility = feedbackVisibilityMap(assignmentProblems);
 
       for (const { problem } of assignmentProblems) {
         const subsForProblem = submissions.filter(
@@ -216,7 +228,7 @@ export const GET = withCourseAuth(
           submissions: subsForProblem.map((s: (typeof subsForProblem)[number]) => ({
             id: s.id,
             submittedAt: s.submittedAt,
-            feedback: s.feedback,
+            ...discloseSubmissionFeedback(s, visibility, { isStaff }),
             correct: s.correct,
             evaluationRaw: s.evaluationRaw ?? null,
             fileName: s.fileName,

@@ -143,6 +143,27 @@ export function buildProblemColumns(params: ProblemColumnsParams) {
       },
     },
     {
+      accessorKey: 'assignmentShowFeedback',
+      // Readable across the whole assignment without opening ten dialogs, which is how anyone
+      // checks that a study condition is set the way they meant.
+      header: 'Feedback',
+      cell: ({ row }: { row: { original: Problem & { assignmentShowFeedback?: boolean } } }) => {
+        const value = row.original.assignmentShowFeedback;
+        if (typeof value !== 'boolean') return null;
+        return value ? 'Shown' : 'Hidden';
+      },
+      meta: {
+        priority: 2,
+        filterVariant: 'multiselect' as const,
+        filterLabel: 'Feedback',
+        filterOptions: [
+          { label: 'Shown', value: 'true' },
+          { label: 'Hidden', value: 'false' },
+        ],
+      },
+      enableSorting: true,
+    },
+    {
       accessorKey: 'assignmentAutograderEnabled',
       header: 'Autograder',
       cell: ({

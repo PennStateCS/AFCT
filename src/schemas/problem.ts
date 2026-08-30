@@ -224,6 +224,8 @@ export const ProblemAssociationSettingsSchema = z.object({
       'Max submissions must be unlimited or an integer greater than or equal to 1.',
     ),
   autograderEnabled: z.boolean(),
+  /** Default true: a caller that says nothing about feedback must not turn it off. */
+  showFeedback: z.boolean().default(true),
 });
 
 export const ProblemAssociationSettingsArray = z.array(ProblemAssociationSettingsSchema);
@@ -244,6 +246,7 @@ export const AssignmentProblemSettingsSchema = z.object({
       message: 'Max submissions must be unlimited (-1) or at least 1.',
     }),
   autograderEnabled: z.boolean(),
+  showFeedback: z.boolean().default(true),
 });
 
 export type AssignmentProblemSettingsInput = z.infer<typeof AssignmentProblemSettingsSchema>;

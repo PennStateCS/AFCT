@@ -18,8 +18,7 @@ vi.mock('@/lib/assignment-statistics-service', () => ({ getAssignmentStatistics:
 
 import { GET } from './route';
 
-const req = () =>
-  new NextRequest('http://localhost/api/courses/c1/assignments/a1/statistics');
+const req = () => new NextRequest('http://localhost/api/courses/c1/assignments/a1/statistics');
 const ctx = { params: Promise.resolve({ id: 'c1', aid: 'a1' }) };
 
 const stats = { unit: 'student', participantCount: 12, histogram: {}, problems: [] };

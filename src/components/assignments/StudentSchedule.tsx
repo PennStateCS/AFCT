@@ -52,9 +52,7 @@ export function StudentSchedule({
 }: StudentScheduleProps) {
   if (loading) {
     return (
-      <div className={`text-muted-foreground px-4 text-sm ${className}`}>
-        Loading assignment...
-      </div>
+      <div className={`text-muted-foreground px-4 text-sm ${className}`}>Loading assignment...</div>
     );
   }
   if (!assignment) return null;
@@ -72,7 +70,9 @@ export function StudentSchedule({
   const overrideLabel = eff?.source === 'group-override' ? 'group override' : 'student override';
   const dueOverridden = isOverridden && !sameTime(eff?.dueDate, assignment.dueDate);
   const allowLateOverridden =
-    isOverridden && !!eff && eff.allowLateSubmissions !== (assignment.allowLateSubmissions ?? false);
+    isOverridden &&
+    !!eff &&
+    eff.allowLateSubmissions !== (assignment.allowLateSubmissions ?? false);
   const cutoffOverridden = isOverridden && !sameTime(eff?.lateCutoff, assignment.lateCutoff);
 
   const OverrideMark = () => (
@@ -93,43 +93,46 @@ export function StudentSchedule({
     <>
       <div className={`flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0 ${className}`}>
         <div className="flex items-center gap-2">
-        <CalendarDays className="text-primary hidden h-8 w-8 shrink-0 xl:block" aria-hidden="true" />
-        <Field label="Due">
-          {/* Date and time on separate lines: the strip has the room, and a grader scanning
+          <CalendarDays
+            className="text-primary hidden h-8 w-8 shrink-0 xl:block"
+            aria-hidden="true"
+          />
+          <Field label="Due">
+            {/* Date and time on separate lines: the strip has the room, and a grader scanning
               for "which day" should not have to read past a timestamp to find it. */}
-          {showDueDate ? (
-            <>
-              <span className="block font-medium">
-                {formatDateInTimeZone(showDueDate, timezone)}
-                {dueOverridden ? <OverrideMark /> : null}
-              </span>
-              <span className="text-muted-foreground block">
-                {formatTimeInTimeZone(showDueDate, timezone)}
-              </span>
-            </>
-          ) : (
-            <span className="font-medium">—</span>
-          )}
-        </Field>
+            {showDueDate ? (
+              <>
+                <span className="block font-medium">
+                  {formatDateInTimeZone(showDueDate, timezone)}
+                  {dueOverridden ? <OverrideMark /> : null}
+                </span>
+                <span className="text-muted-foreground block">
+                  {formatTimeInTimeZone(showDueDate, timezone)}
+                </span>
+              </>
+            ) : (
+              <span className="font-medium">—</span>
+            )}
+          </Field>
         </div>
       </div>
 
       <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
         <div className="flex items-center gap-2">
-        <Clock className="text-primary hidden h-8 w-8 shrink-0 xl:block" aria-hidden="true" />
-        <Field label="Late Policy">
-          <span className="block">
-            <span className="font-medium">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
-            {allowLateOverridden ? <OverrideMark /> : null}
-          </span>
-          <span className="block">
-            <span className="font-medium">Late Cutoff:</span>{' '}
-            {showAllowLate && showLateCutoff
-              ? formatDateTimeInTimeZone(showLateCutoff, timezone)
-              : 'Never'}
-            {cutoffOverridden ? <OverrideMark /> : null}
-          </span>
-        </Field>
+          <Clock className="text-primary hidden h-8 w-8 shrink-0 xl:block" aria-hidden="true" />
+          <Field label="Late Policy">
+            <span className="block">
+              <span className="font-medium">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
+              {allowLateOverridden ? <OverrideMark /> : null}
+            </span>
+            <span className="block">
+              <span className="font-medium">Late Cutoff:</span>{' '}
+              {showAllowLate && showLateCutoff
+                ? formatDateTimeInTimeZone(showLateCutoff, timezone)
+                : 'Never'}
+              {cutoffOverridden ? <OverrideMark /> : null}
+            </span>
+          </Field>
         </div>
       </div>
     </>

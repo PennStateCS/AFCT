@@ -4,6 +4,7 @@ import { withClientAuth } from '@/lib/api/with-client-auth';
 import { apiError } from '@/lib/api/http';
 import { canAccessCourse, canManageCourse, canViewStudentData, isAdmin } from '@/lib/permissions';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
+import { discloseSubmissionFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 
 type RouteCtx = { params: Promise<{ submissionId: string }> };
 
@@ -30,6 +31,7 @@ type RouteCtx = { params: Promise<{ submissionId: string }> };
  *             correct: { type: boolean, nullable: true }
  *             grade: { type: number, nullable: true }
  *             feedback: { type: string, nullable: true, description: The witness / counterexample }
+ *             feedbackVisible: { type: boolean, description: "False when the problem withholds the evaluator's feedback from students. Distinguishes a withheld result from one the evaluator had nothing to say about, since feedback is null in both cases." }
  *   401: { description: Missing or invalid token. }
  *   404: { description: Submission not found or not visible to the caller. }
  */
@@ -48,6 +50,7 @@ export const GET = withClientAuth(async (req, ctx: RouteCtx, { user }) => {
       status: true,
       correct: true,
       feedback: true,
+      assignmentProblem: { select: { showFeedback: true } },
     },
   });
 
@@ -107,11 +110,25 @@ export const GET = withClientAuth(async (req, ctx: RouteCtx, { user }) => {
     });
   }
 
+  // What this caller is allowed to read. Staff keep everything; a student gets the evaluator's
+  // text only where the problem shows it, plus a flag so the client can say which it is.
+  const disclosure = discloseSubmissionFeedback(
+    submission,
+    feedbackVisibilityMap([
+      {
+        problemId: submission.problemId,
+        showFeedback: submission.assignmentProblem?.showFeedback !== false,
+      },
+    ]),
+    { isStaff: staff },
+  );
+
   return NextResponse.json({
     id: submission.id,
     status: submission.status,
     correct: submission.correct,
     grade: gradeRow?.grade ?? null,
-    feedback: submission.feedback,
+    feedback: disclosure.feedback,
+    feedbackVisible: disclosure.feedbackVisible,
   });
 });

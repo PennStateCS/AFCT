@@ -71,5 +71,9 @@ export const GET = withCourseAuth(
       return NextResponse.json({ error: 'Failed to fetch grade summary' }, { status: 500 });
     }
   },
-  { access: 'manage', deniedAction: 'PROBLEM_GRADES_SUMMARY_ACCESS_DENIED', deniedCategory: 'GRADE' },
+  {
+    access: 'manage',
+    deniedAction: 'PROBLEM_GRADES_SUMMARY_ACCESS_DENIED',
+    deniedCategory: 'GRADE',
+  },
 );

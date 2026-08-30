@@ -61,7 +61,10 @@ describe('GET /api/courses/[id]/[aid]', () => {
 
   it('allows an enrolled student to view a published assignment', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       title: 'Assignment',
@@ -82,7 +85,10 @@ describe('GET /api/courses/[id]/[aid]', () => {
 
   it('locks description and problems for a student before the assignment unlocks', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       title: 'Assignment',
@@ -153,7 +159,10 @@ describe('GET /api/courses/[id]/[aid]', () => {
 
   it('withholds problem answer-key filenames from a student', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue(assignmentWithAnswerFile);
 
     const res = await GET(
@@ -184,7 +193,10 @@ describe('GET /api/courses/[id]/[aid]', () => {
 
   it('404-masks an unpublished assignment from a non-staff student', async () => {
     authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignment.findFirst.mockResolvedValue({
       id: 'a1',
       title: 'Draft',

@@ -271,6 +271,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
             maxPoints: 25,
             maxSubmissions: 5,
             autograderEnabled: false,
+            showFeedback: false,
             problem: { id: 'p1', title: 'P1' },
           },
         ],
@@ -302,6 +303,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     // What a problem is worth has to survive the copy. These fell back to the column
     // defaults before, so every problem in a duplicated course came out worth zero points,
     // capped at one submission, with autograding switched on regardless of the source.
+    //
+    // `showFeedback` is here for a sharper reason than tidiness: it is a study condition, and a
+    // duplicated course quietly reverting to "feedback shown" would change what the next
+    // cohort sees without anyone touching the setting.
     expect(tx.assignmentProblem.createMany).toHaveBeenCalledWith({
       data: [
         {
@@ -310,6 +315,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
           maxPoints: 25,
           maxSubmissions: 5,
           autograderEnabled: false,
+          showFeedback: false,
         },
       ],
     });

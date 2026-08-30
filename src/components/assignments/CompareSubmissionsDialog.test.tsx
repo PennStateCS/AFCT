@@ -66,9 +66,7 @@ const show = (
 
 /** The two files the dialog is actually showing, left then right. */
 const shownFiles = () =>
-  screen
-    .getAllByTestId(/-viewer$/)
-    .map((node) => node.textContent?.split('/').pop() ?? '');
+  screen.getAllByTestId(/-viewer$/).map((node) => node.textContent?.split('/').pop() ?? '');
 
 /** An attempt at a given minute, optionally on a team. */
 const attempt = (
@@ -183,7 +181,15 @@ describe('CompareSubmissionsDialog', () => {
   it('opens on two different students rather than one student twice', () => {
     // Alice's two attempts are the closest pair in time, and comparing somebody with
     // themselves answers nothing.
-    const alice = { id: 'student-alice', firstName: 'Alice', lastName: 'Student', avatar: null, cropX: null, cropY: null, zoom: null };
+    const alice = {
+      id: 'student-alice',
+      firstName: 'Alice',
+      lastName: 'Student',
+      avatar: null,
+      cropX: null,
+      cropY: null,
+      zoom: null,
+    };
     show('FA', [
       attempt('a1', 'Alice', 10, { student: alice }),
       attempt('a2', 'Alice', 12, { student: alice }),
@@ -236,7 +242,15 @@ describe('CompareSubmissionsDialog', () => {
   });
 
   it('falls back to different students when a group assignment has no groups on the work', () => {
-    const alice = { id: 'student-alice', firstName: 'Alice', lastName: 'Student', avatar: null, cropX: null, cropY: null, zoom: null };
+    const alice = {
+      id: 'student-alice',
+      firstName: 'Alice',
+      lastName: 'Student',
+      avatar: null,
+      cropX: null,
+      cropY: null,
+      zoom: null,
+    };
     show(
       'FA',
       [

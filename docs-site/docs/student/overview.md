@@ -40,7 +40,13 @@ A few things to know before you submit:
 
 ## Review results and comments
 
-When autograding is enabled, the result and feedback appear after evaluation finishes. A course staff member can later adjust the grade.
+When autograding is enabled, the result appears after evaluation finishes. A course staff member can later adjust the grade.
+
+Whether you also see the grader's feedback is your instructor's choice, set per problem. On a
+problem where it is turned off you are told whether your answer was correct and nothing more, and
+the screen says so rather than leaving the feedback blank. Two things you still see either way: if
+a submission could not be graded at all, you are told why, and a comment written by your
+instructor or a TA always reaches you.
 
 Comments belong to a specific assignment, problem, and student. You can add a comment and read replies in your thread. Students cannot delete comments.
 
