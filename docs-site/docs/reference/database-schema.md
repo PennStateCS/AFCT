@@ -92,6 +92,7 @@ erDiagram
   Boolean assignedToEveryone
   Boolean isPublished
   String groupSetId FK "nullable"
+  Boolean missingWorkIsZero
   Boolean allowLateSubmissions
   DateTime lateCutoff "nullable"
   DateTime createdAt
@@ -388,6 +389,7 @@ erDiagram
   Boolean assignedToEveryone
   Boolean isPublished
   String groupSetId FK "nullable"
+  Boolean missingWorkIsZero
   Boolean allowLateSubmissions
   DateTime lateCutoff "nullable"
   DateTime createdAt
@@ -942,6 +944,7 @@ erDiagram
   Boolean assignedToEveryone
   Boolean isPublished
   String groupSetId FK "nullable"
+  Boolean missingWorkIsZero
   Boolean allowLateSubmissions
   DateTime lateCutoff "nullable"
   DateTime createdAt
@@ -995,6 +998,7 @@ erDiagram
   Float maxPoints
   Int maxSubmissions
   Boolean autograderEnabled
+  DateTime createdAt
   Boolean showFeedback
 }
 "SubmissionGrant" {
@@ -1107,6 +1111,17 @@ Properties as follows:
   > groups named as assignees.
 - `isPublished`: Whether students can see the assignment.
 - `groupSetId`: The group set used, when this is a group assignment. Empty means students work individually.
+- `missingWorkIsZero`
+  > Whether work nobody submitted counts as zero once its deadline has passed.
+  >
+  > A display rule, not a stored grade: no row is ever written for a missing submission, and
+  > every surface that reports a score asks `lib/missing-work` instead. That is what lets a late
+  > submission, a retroactive extension, or this setting being turned off again simply produce a
+  > different answer next time, rather than leaving zeros behind that nobody can tell from marks
+  > a person gave.
+  >
+  > Defaults on for new assignments. The migration that added it set every assignment that
+  > already existed to false, so nothing changed behaviour on deploy.
 - `allowLateSubmissions`: Whether work is accepted after the due date. Off unless it is turned on.
 - `lateCutoff`: Latest moment late work is still accepted. Empty means there is no cutoff.
 - `createdAt`: When this record was created.
@@ -1193,6 +1208,12 @@ Properties as follows:
 - `maxPoints`: What this problem is worth on this assignment.
 - `maxSubmissions`: How many attempts a student gets. Zero or less means unlimited.
 - `autograderEnabled`: Whether attempts are graded automatically.
+- `createdAt`
+  > When this problem was attached to this assignment.
+  >
+  > Recorded so that adding a problem to an assignment whose due date has passed does not
+  > instantly mark the whole class as missing it. Without a date there is no way to tell a
+  > problem the class had all term from one added last night.
 - `showFeedback`
   > Whether students see what the evaluator said, or only whether they were right.
   >
@@ -1340,6 +1361,7 @@ erDiagram
   Boolean assignedToEveryone
   Boolean isPublished
   String groupSetId FK "nullable"
+  Boolean missingWorkIsZero
   Boolean allowLateSubmissions
   DateTime lateCutoff "nullable"
   DateTime createdAt
@@ -1370,6 +1392,7 @@ erDiagram
   Float maxPoints
   Int maxSubmissions
   Boolean autograderEnabled
+  DateTime createdAt
   Boolean showFeedback
 }
 "StudentGroup" {
@@ -1681,6 +1704,7 @@ erDiagram
   Boolean assignedToEveryone
   Boolean isPublished
   String groupSetId FK "nullable"
+  Boolean missingWorkIsZero
   Boolean allowLateSubmissions
   DateTime lateCutoff "nullable"
   DateTime createdAt

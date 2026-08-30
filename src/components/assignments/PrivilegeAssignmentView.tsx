@@ -221,6 +221,7 @@ export default function AssignmentDashboardPage({
       lateCutoff: toDate(assignment.lateCutoff),
       unlockAt: toDate(assignment.unlockAt),
       assignedToEveryone: assignment.assignedToEveryone ?? true,
+      missingWorkIsZero: assignment.missingWorkIsZero ?? false,
       // Carried through like the description fields: the settings card does not edit it, but
       // the Assignment type requires it.
       ltiAutoSync: true,

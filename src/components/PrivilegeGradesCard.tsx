@@ -16,6 +16,7 @@ import { findCanvasReservedTitleConflicts, type LmsPlatform } from '@/lib/lms-gr
 import { useSession } from 'next-auth/react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { MISSING_WORK_LABEL } from '@/lib/missing-work';
 
 /**
  * On demand: the breakdown dialog carries the form stack and was the last thing putting zod on
@@ -51,6 +52,10 @@ type StudentRow = {
   enrollmentStatus?: string;
   assigned: Record<string, boolean>;
   grades: Record<string, number | null>;
+  /** Assignment ids this student handed nothing in for, past their own deadline. */
+  missing?: string[];
+  /** Points they are accountable for per assignment: marked work plus work nobody handed in. */
+  accountable?: Record<string, number>;
   [key: string]: unknown;
 };
 
@@ -278,7 +283,18 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         // order the whole roster when the Average column is sorted; keep them in step.
         if (a.isPublished === false) continue;
         if (row.assigned?.[a.id] === false) continue;
-        available += a.maxPoints ?? 0;
+        /**
+         * What this student is accountable for, which is not the same as what the assignment is
+         * worth. Work that has been marked counts, and so does work nobody handed in once the
+         * assignment says missing work is zero; work still waiting to be marked counts toward
+         * neither half. Before this, every published assignment counted in full whether or not
+         * anyone had graded it, so a mid-term average mostly measured how much term was left.
+         *
+         * The server sends the number rather than the client deriving it, because `averagePct`
+         * in lib/course-grades orders the whole roster by this same value and the two must not
+         * disagree. Falls back to the old meaning when a row predates the field.
+         */
+        available += row.accountable ? (row.accountable[a.id] ?? 0) : (a.maxPoints ?? 0);
         const val = row.grades?.[a.id];
         if (val !== null && val !== undefined) {
           earned += Number(val);
@@ -361,6 +377,10 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           }
 
           const val = user.grades?.[a.id];
+          // Handed in nothing at all, past their own deadline, on an assignment set to score
+          // missing work zero. A partly-submitted assignment is not flagged: saying "not
+          // submitted" there would be false about the half they did.
+          const isMissing = user.missing?.includes(a.id) ?? false;
 
           const handleClick = () => {
             setSelectedStudent({ id: user.id, name: `${user.firstName} ${user.lastName}` });
@@ -374,11 +394,30 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               className="hover:bg-accent flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1"
               title="View grade breakdown"
               onClick={handleClick}
-              aria-label={`View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`}
+              aria-label={
+                isMissing
+                  ? `View breakdown for ${user.firstName} ${user.lastName} on ${a.title}. Not submitted, scored zero.`
+                  : `View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`
+              }
             >
-              <span className="text-sm">
-                {val === null || val === undefined ? '-' : Number(val).toFixed(2)}
-              </span>
+              {/*
+                A zero for work nobody handed in is not the same as a zero somebody earned by
+                getting it wrong, and a bare 0 in a gradebook cell cannot tell you which. So the
+                derived one says what it is. The dash still means "assigned, nothing recorded",
+                which is what an assignment still being marked looks like.
+              */}
+              {isMissing ? (
+                <span className="flex flex-col items-center leading-tight">
+                  <span className="text-sm">0</span>
+                  <span className="text-muted-foreground text-[0.65rem]">
+                    {MISSING_WORK_LABEL.toLowerCase()}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-sm">
+                  {val === null || val === undefined ? '-' : Number(val).toFixed(2)}
+                </span>
+              )}
             </button>
           );
         },

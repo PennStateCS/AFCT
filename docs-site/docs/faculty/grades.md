@@ -6,7 +6,11 @@ The **Grades** page gives Faculty and TAs a course-wide view of student scores. 
 
 An assignment cell shows the student's earned points and the assignment's available points. A dash means the assignment does not have a recorded grade for that student.
 
-The **Average** column is the student's earned points over the points of **everything they are assigned**, graded or not. Work you have not marked yet counts as zero until you mark it, so an average drops when you publish a new assignment and climbs back as you grade it. Read it as progress through the course, not as a standing grade.
+The **Average** column is the student's earned points over the points they are **accountable for so far**: work you have marked, plus work nobody handed in on an assignment set to count missing work as zero. Work still waiting to be marked counts toward neither half, so publishing a new assignment no longer drops the whole class's average until you get to it.
+
+This changed. It used to divide by everything assigned whether or not it had been graded, which meant an average in week eight mostly measured how much term was left rather than how anyone was doing. If a number here looks higher than you remember, that is why.
+
+A zero for work nobody submitted is labelled in its cell, so you can tell it from a zero somebody earned. Nothing is written to the gradebook for it: it is worked out when the page is drawn, so a late submission or an extension clears it by itself.
 
 Only assignments a student is actually assigned count toward it, so somebody who is not assigned everything is not measured against the full course total. **Unpublished assignments do not count either**, and their column says so: a draft is a column because you build and grade one here, but students cannot see it, so it is never work they failed to do. Publishing an assignment is what puts it into everybody's average.
 
@@ -32,18 +36,18 @@ Grades you save here are held, so re-running the autograder will not change them
 
 **Problem Setting** is how the problem is set up. It reads the same whether or not the student has been graded yet.
 
-| Badge | Meaning |
-| --- | --- |
-| **Autograder on** | The autograder grades this problem. |
+| Badge              | Meaning                                                                                                     |
+| ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| **Autograder on**  | The autograder grades this problem.                                                                         |
 | **Autograder off** | This problem is graded by hand. Re-running the evaluator gives the student feedback but never sets a score. |
 
 **Grade Source** is who produced this particular score.
 
-| Badge | Meaning |
-| --- | --- |
+| Badge          | Meaning                             |
+| -------------- | ----------------------------------- |
 | **Autograder** | The autograder produced this score. |
-| **Manual** | Someone entered this score by hand. |
-| **Not graded** | No score has been recorded yet. |
+| **Manual**     | Someone entered this score by hand. |
+| **Not graded** | No score has been recorded yet.     |
 
 **Autograder on** with a grade source of **Manual** is someone overriding the autograder, which is why that combination is highlighted.
 

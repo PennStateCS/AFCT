@@ -46,8 +46,7 @@ export const GET = withCourseAuth(
 
       // Staff surfaces (the assignment switcher) need drafts too; other callers get
       // published-only. This route is manage-gated, so no student ever sees drafts.
-      const includeUnpublished =
-        new URL(req.url).searchParams.get('includeUnpublished') === '1';
+      const includeUnpublished = new URL(req.url).searchParams.get('includeUnpublished') === '1';
 
       // Pull each assignment's problems too, to derive total/max grade below.
       const assignments = await prisma.assignment.findMany({
@@ -123,6 +122,7 @@ export const GET = withCourseAuth(
  *           dueDate: { type: string, description: Interpreted as end-of-day in the course's timezone }
  *           unlockAt: { type: string, description: Available-from date; must be on or before the due date }
  *           allowLateSubmissions: { type: boolean }
+ *           missingWorkIsZero: { type: boolean, description: "Whether unsubmitted work scores zero after the due date. Defaults true." }
  *           lateCutoff: { type: string, description: Required when allowLateSubmissions is true }
  *           isPublished: { type: boolean }
  *           assignedToEveryone: { type: boolean, description: "When false, only the assignees below are assigned" }
@@ -193,14 +193,20 @@ export const POST = withCourseAuth(
           select: { id: true },
         });
         if (!set) {
-          return NextResponse.json({ error: 'Group set not found in this course.' }, { status: 400 });
+          return NextResponse.json(
+            { error: 'Group set not found in this course.' },
+            { status: 400 },
+          );
         }
       }
 
       const assignedToEveryone = data.assignedToEveryone ?? true;
       const assigneeInputs = assignedToEveryone ? [] : (data.assignees ?? []);
-      const assigneeRows: Array<{ targetType: 'STUDENT' | 'GROUP'; userId?: string; groupId?: string }> =
-        [];
+      const assigneeRows: Array<{
+        targetType: 'STUDENT' | 'GROUP';
+        userId?: string;
+        groupId?: string;
+      }> = [];
 
       if (!assignedToEveryone) {
         if (assigneeInputs.length === 0) {
@@ -228,7 +234,8 @@ export const POST = withCourseAuth(
               { status: 400 },
             );
           }
-          for (const id of new Set(groupIds)) assigneeRows.push({ targetType: 'GROUP', groupId: id });
+          for (const id of new Set(groupIds))
+            assigneeRows.push({ targetType: 'GROUP', groupId: id });
         } else {
           const userIds = assigneeInputs.map((a) => a.userId).filter((v): v is string => !!v);
           if (userIds.length !== assigneeInputs.length) {
@@ -249,7 +256,8 @@ export const POST = withCourseAuth(
               { status: 400 },
             );
           }
-          for (const id of new Set(userIds)) assigneeRows.push({ targetType: 'STUDENT', userId: id });
+          for (const id of new Set(userIds))
+            assigneeRows.push({ targetType: 'STUDENT', userId: id });
         }
       }
 
@@ -263,6 +271,9 @@ export const POST = withCourseAuth(
             unlockAt: unlockState.unlockAt,
             assignedToEveryone,
             allowLateSubmissions,
+            // Defaults on for a new assignment; the column default agrees, so a caller that
+            // says nothing still gets it.
+            missingWorkIsZero: data.missingWorkIsZero !== false,
             lateCutoff: lateCutoffDate,
             isPublished: data.isPublished || false,
             groupSetId,

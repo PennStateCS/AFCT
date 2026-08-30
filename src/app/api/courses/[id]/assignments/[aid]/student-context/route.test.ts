@@ -335,3 +335,92 @@ describe('GET student context, feedback visibility', () => {
     });
   });
 });
+
+/**
+ * The student's own view of work they did not hand in.
+ *
+ * The number here and the cell their professor reads in the gradebook have to be the same one, so
+ * this route applies the same resolver rather than its own reading of the setting.
+ */
+describe('GET student context, missing work', () => {
+  const DUE = new Date('2026-03-01T00:00:00.000Z');
+
+  const setup = (over: Record<string, unknown> = {}, submissions: unknown[] = []) => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      isPublished: true,
+      groupSetId: null,
+      missingWorkIsZero: true,
+      dueDate: DUE,
+      unlockAt: null,
+      lateCutoff: null,
+      allowLateSubmissions: false,
+      assignedToEveryone: true,
+      course: { isArchived: false },
+      overrides: [],
+      problems: [
+        {
+          problemId: 'p1',
+          maxSubmissions: 3,
+          showFeedback: true,
+          maxPoints: 10,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+      ...over,
+    });
+    prismaMock.submission.findMany.mockResolvedValue(submissions);
+    prismaMock.comment.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  };
+
+  const read = async () => {
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    return res.json();
+  };
+
+  it('scores work they never handed in as zero, and says which', async () => {
+    setup();
+
+    const body = await read();
+    expect(body.problemGrades.p1).toBe(0);
+    expect(body.missingProblems).toEqual(['p1']);
+    // And the total agrees, which is the number their professor sees in the gradebook cell.
+    expect(body.assignmentGrade).toBe(0);
+  });
+
+  it('leaves work they handed in alone while it waits to be marked', async () => {
+    setup({}, [
+      {
+        id: 's1',
+        submittedAt: DUE,
+        feedback: null,
+        correct: null,
+        status: 'PENDING',
+        fileName: 'f.jff',
+        originalFileName: 'f.jff',
+        problemId: 'p1',
+      },
+    ]);
+
+    const body = await read();
+    expect(body.problemGrades.p1).toBeNull();
+    expect(body.missingProblems).toEqual([]);
+    expect(body.assignmentGrade).toBeNull();
+  });
+
+  it('says nothing while the assignment does not ask for it', async () => {
+    setup({ missingWorkIsZero: false });
+
+    const body = await read();
+    expect(body.problemGrades.p1).toBeNull();
+    expect(body.missingProblems).toEqual([]);
+  });
+});

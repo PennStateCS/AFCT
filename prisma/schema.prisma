@@ -599,6 +599,17 @@ model Assignment {
   /// The group set used, when this is a group assignment. Empty means students work individually.
   groupSetId String?
 
+  /// Whether work nobody submitted counts as zero once its deadline has passed.
+  ///
+  /// A display rule, not a stored grade: no row is ever written for a missing submission, and
+  /// every surface that reports a score asks `lib/missing-work` instead. That is what lets a late
+  /// submission, a retroactive extension, or this setting being turned off again simply produce a
+  /// different answer next time, rather than leaving zeros behind that nobody can tell from marks
+  /// a person gave.
+  ///
+  /// Defaults on for new assignments. The migration that added it set every assignment that
+  /// already existed to false, so nothing changed behaviour on deploy.
+  missingWorkIsZero    Boolean   @default(true)
   /// Whether work is accepted after the due date. Off unless it is turned on.
   allowLateSubmissions Boolean   @default(false)
   /// Latest moment late work is still accepted. Empty means there is no cutoff.
@@ -797,6 +808,12 @@ model AssignmentProblem {
   maxSubmissions    Int     @default(1)
   /// Whether attempts are graded automatically.
   autograderEnabled Boolean @default(true)
+  /// When this problem was attached to this assignment.
+  ///
+  /// Recorded so that adding a problem to an assignment whose due date has passed does not
+  /// instantly mark the whole class as missing it. Without a date there is no way to tell a
+  /// problem the class had all term from one added last night.
+  createdAt         DateTime @default(now())
   /// Whether students see what the evaluator said, or only whether they were right.
   ///
   /// A disclosure rule, not a grading rule: the evaluator runs either way, its feedback is always

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProblemListCard } from './ProblemListCard';
@@ -52,5 +52,24 @@ describe('ProblemListCard badges', () => {
     const { container } = show({ maxSubmissions: -1 });
 
     expect(container.textContent).toContain('unlimited allowed');
+  });
+});
+
+describe('a problem nobody handed in', () => {
+  it('says so beside the zero, rather than showing a bare zero', () => {
+    // The same number as a zero somebody earned by getting it wrong, and only one of them is
+    // something the student can still do anything about.
+    render(
+      <ProblemListCard
+        problems={[
+          { id: 'p1', title: 'Problem 1', grade: 0, maxGrade: 10, missing: true },
+          { id: 'p2', title: 'Problem 2', grade: 0, maxGrade: 10 },
+        ]}
+        selectedProblemId="p1"
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText('Not submitted')).toHaveLength(1);
   });
 });

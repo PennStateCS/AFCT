@@ -5,7 +5,8 @@ const prismaMock = vi.hoisted(() => ({
   user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
   groupMembership: { findMany: vi.fn() },
-  assignmentProblemGrade: { groupBy: vi.fn() },
+  assignmentProblemGrade: { groupBy: vi.fn(), findMany: vi.fn() },
+  submission: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -15,6 +16,10 @@ import { getCourseGradeMatrix, getCourseGradeColumns, getCourseGradePage } from 
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1' }, { userId: 's2' }]);
+  // The missing-work rule reads per-problem grades and submissions. Empty by default, so the
+  // tests that are not about it keep asserting what they always did.
+  prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  prismaMock.submission.findMany.mockResolvedValue([]);
   prismaMock.user.findMany.mockResolvedValue([
     {
       id: 's1',
@@ -404,7 +409,7 @@ describe('getCourseGradePage', () => {
           dueDate: null,
           isPublished: true,
           assignedToEveryone: true,
-          problems: [{ maxPoints: 10 }],
+          problems: [{ problemId: 'p1', maxPoints: 10, createdAt: new Date('2026-01-01') }],
           assignees: [],
         },
         {
@@ -413,13 +418,22 @@ describe('getCourseGradePage', () => {
           dueDate: null,
           isPublished: true,
           assignedToEveryone: false,
-          problems: [{ maxPoints: 10 }],
+          problems: [{ problemId: 'p2', maxPoints: 10, createdAt: new Date('2026-01-01') }],
           assignees: [{ userId: 's1', groupId: null }],
         },
       ]);
+      // s1 is marked on both of theirs and scores 8 + 2 of 20; s2 is marked on their one and
+      // scores 8 of 10. The denominator is what has been marked, so both are measured against
+      // the work that was actually assessed and s2 still leads.
       prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
         { studentId: 's1', assignmentId: 'a1', _sum: { grade: 8 } },
+        { studentId: 's1', assignmentId: 'a2', _sum: { grade: 2 } },
         { studentId: 's2', assignmentId: 'a1', _sum: { grade: 8 } },
+      ]);
+      prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+        { studentId: 's1', assignmentId: 'a1', problemId: 'p1' },
+        { studentId: 's1', assignmentId: 'a2', problemId: 'p2' },
+        { studentId: 's2', assignmentId: 'a1', problemId: 'p1' },
       ]);
 
       const { rows } = await getCourseGradePage({
@@ -436,6 +450,24 @@ describe('getCourseGradePage', () => {
     it('sorts students with no graded work last, whichever way the column points', async () => {
       prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
         { studentId: 's2', assignmentId: 'a1', _sum: { grade: 5 } },
+      ]);
+      // The base fixture's assignments carry no problems, and the denominator is now built from
+      // them, so this test needs one to have anything to order by at all.
+      prismaMock.assignment.findMany.mockResolvedValue([
+        {
+          id: 'a1',
+          title: 'A1',
+          dueDate: null,
+          isPublished: true,
+          assignedToEveryone: true,
+          problems: [{ problemId: 'p1', maxPoints: 10, createdAt: new Date('2026-01-01') }],
+          assignees: [],
+        },
+      ]);
+      // The per-problem row is what puts points in s2's denominator. s1 has neither a grade nor
+      // any missing work, so they still have nothing to be ordered by.
+      prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+        { studentId: 's2', assignmentId: 'a1', problemId: 'p1' },
       ]);
 
       const asc = await getCourseGradePage({
@@ -497,5 +529,113 @@ describe('getCourseGradePage', () => {
     expect(rows).toEqual([]);
     expect(total).toBe(0);
     expect(prismaMock.user.findMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * What the Average column means now.
+ *
+ * It used to put every published, assigned assignment's full points in the denominator whether or
+ * not anyone had marked it, so work sitting in a TA's queue read as a zero and a mid-term average
+ * mostly measured how much term was left. The denominator is now what the student is accountable
+ * for: work that has been marked, plus work nobody handed in on an assignment that scores missing
+ * work zero.
+ */
+describe('the Average denominator', () => {
+  const twoProblems = [
+    {
+      id: 'a1',
+      title: 'A1',
+      dueDate: new Date('2026-01-10T00:00:00.000Z'),
+      isPublished: true,
+      assignedToEveryone: true,
+      missingWorkIsZero: false,
+      groupSetId: null,
+      unlockAt: null,
+      lateCutoff: null,
+      allowLateSubmissions: false,
+      course: { isArchived: false },
+      overrides: [],
+      problems: [
+        { problemId: 'p1', maxPoints: 10, createdAt: new Date('2026-01-01') },
+        { problemId: 'p2', maxPoints: 10, createdAt: new Date('2026-01-01') },
+      ],
+      assignees: [],
+    },
+  ];
+
+  it('leaves work that is still waiting to be marked out of it', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue(twoProblems);
+    // Marked on one problem out of two, and scored full marks on it.
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
+      { studentId: 's1', assignmentId: 'a1', _sum: { grade: 10 } },
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      { studentId: 's1', assignmentId: 'a1', problemId: 'p1' },
+    ]);
+
+    const { rows } = await getCourseGradePage({ courseId: 'c1', skip: 0, take: 10 });
+    const s1 = rows.find((r) => r.id === 's1');
+
+    // 10 of 10, not 10 of 20. The unmarked problem is nobody's fault yet.
+    expect(s1?.accountable.a1).toBe(10);
+  });
+
+  it('counts work nobody handed in, once the assignment says so', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { ...twoProblems[0], missingWorkIsZero: true },
+    ]);
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([
+      { studentId: 's1', assignmentId: 'a1', _sum: { grade: 10 } },
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      { studentId: 's1', assignmentId: 'a1', problemId: 'p1' },
+    ]);
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 's1', status: 'ENROLLED', user: { inactive: false } },
+      { userId: 's2', status: 'ENROLLED', user: { inactive: false } },
+    ]);
+
+    const { rows } = await getCourseGradePage({ courseId: 'c1', skip: 0, take: 10 });
+    const s1 = rows.find((r) => r.id === 's1');
+
+    // Both problems now: one marked, one nobody handed in past the deadline.
+    expect(s1?.accountable.a1).toBe(20);
+    // Not flagged as an untouched assignment, because they did hand in the other half.
+    expect(s1?.missing).not.toContain('a1');
+  });
+
+  it('flags an assignment the student handed nothing in for', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { ...twoProblems[0], missingWorkIsZero: true },
+    ]);
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 's1', status: 'ENROLLED', user: { inactive: false } },
+      { userId: 's2', status: 'ENROLLED', user: { inactive: false } },
+    ]);
+
+    const { rows } = await getCourseGradePage({ courseId: 'c1', skip: 0, take: 10 });
+
+    // The cell can then say zero AND say why, rather than showing a bare zero that reads like
+    // a mark they earned.
+    expect(rows.find((r) => r.id === 's1')?.missing).toContain('a1');
+  });
+
+  it('says nothing for a dropped student', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([
+      { ...twoProblems[0], missingWorkIsZero: true },
+    ]);
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 's1', status: 'DROPPED', user: { inactive: false } },
+      { userId: 's2', status: 'ENROLLED', user: { inactive: false } },
+    ]);
+
+    const { rows } = await getCourseGradePage({ courseId: 'c1', skip: 0, take: 10 });
+
+    expect(rows.find((r) => r.id === 's1')?.missing).toEqual([]);
   });
 });

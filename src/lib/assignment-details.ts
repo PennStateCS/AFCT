@@ -51,6 +51,8 @@ export type AssignmentWithDetails = {
   groupSetId?: string | null;
   maxPoints: number;
   allowLateSubmissions?: boolean;
+  /** Whether unsubmitted work counts as zero once its deadline has passed. */
+  missingWorkIsZero?: boolean;
   lateCutoff?: string | Date | null;
   isPublished: boolean;
   createdAt?: Date;
@@ -85,6 +87,11 @@ export type StudentAssignmentContext = {
   assignmentGrade: number | null;
   submissionCount: number;
   problemGrades: Record<string, number | null>;
+  /**
+   * Problem ids whose zero is for work never handed in, rather than one that was marked. Both are
+   * the number 0 and the screen has to tell them apart.
+   */
+  missingProblems?: string[];
   submissionsByProblem: Record<string, StudentProblemSubmission[]>;
   commentsByProblem: Record<string, StudentProblemComment[]>;
   /**

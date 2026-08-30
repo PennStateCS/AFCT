@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { MISSING_WORK_LABEL } from '@/lib/missing-work';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -8,6 +9,11 @@ export type ProblemListItem = {
   title: string;
   grade?: number | null;
   maxGrade?: number | null;
+  /**
+   * True when this grade is a zero for work never handed in rather than one that was marked.
+   * The two are the same number and only one of them is something the student can still act on.
+   */
+  missing?: boolean;
   submissionsCount?: number;
   maxSubmissions?: number | null;
 };
@@ -100,8 +106,16 @@ export function ProblemListCard({
                     <span className="sr-only">Grade </span>
                     {problem.grade !== null && problem.grade !== undefined ? problem.grade : '-'}/
                     {problem.maxGrade}
+                    {problem.missing ? (
+                      <span className="sr-only">, {MISSING_WORK_LABEL.toLowerCase()}</span>
+                    ) : null}
                   </Badge>
                 ) : null;
+              const missingBadge = problem.missing ? (
+                <Badge key="missing" variant="secondary" className="font-normal">
+                  {MISSING_WORK_LABEL}
+                </Badge>
+              ) : null;
               const submissionsCount = problem.submissionsCount ?? 0;
               const hasMaxSubmissions =
                 problem.maxSubmissions !== undefined && problem.maxSubmissions !== null;
@@ -133,6 +147,7 @@ export function ProblemListCard({
               const content = badgeContent ?? (
                 <div className="flex items-center gap-1">
                   {gradeBadge}
+                  {missingBadge}
                   {usageBadge}
                 </div>
               );

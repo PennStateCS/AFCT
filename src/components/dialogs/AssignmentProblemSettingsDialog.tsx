@@ -194,6 +194,8 @@ export function AssignmentProblemSettingsDialog({
             id="assignment-problem-autograder"
             checked={autograderEnabled}
             onCheckedChange={(checked) => setAutograderEnabled(!!checked)}
+            descriptionPlacement="inline"
+            description="When enabled, submissions are evaluated and graded automatically. Turn this off if you want to review and grade submissions manually."
           />
 
           <SwitchField
@@ -203,7 +205,7 @@ export function AssignmentProblemSettingsDialog({
             checked={showFeedback}
             onCheckedChange={(checked) => setShowFeedback(!!checked)}
             descriptionPlacement="inline"
-            description="Off, students see only whether their answer was correct. The feedback is still recorded and still visible to you."
+            description="When disabled, students see only whether their submission was correct. Feedback is still recorded and remains visible to instructors."
           />
 
           {/*

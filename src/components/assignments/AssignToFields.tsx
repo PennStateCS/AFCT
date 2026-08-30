@@ -206,6 +206,21 @@ export function AssignToFields({
         )}
       />
 
+      <Controller
+        control={control}
+        name="missingWorkIsZero"
+        render={({ field }) => (
+          <SwitchField
+            label="Count missing work as zero"
+            name="missingWorkIsZero"
+            checked={field.value !== false}
+            onCheckedChange={(checked) => field.onChange(!!checked)}
+            description="After the due date, work nobody submitted is scored zero. Nothing is written to the gradebook: a late submission or an extension replaces it, and work still waiting to be marked is never counted."
+            descriptionPlacement="inline"
+          />
+        )}
+      />
+
       {baseAllowLate ? (
         <div className="space-y-1">
           <CourseDateTimeField

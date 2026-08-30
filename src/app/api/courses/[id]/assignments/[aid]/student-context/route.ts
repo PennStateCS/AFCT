@@ -4,6 +4,7 @@ import { canManageCourse } from '@/lib/permissions';
 import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 import { discloseSubmissionFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
+import { isMissingZero, submittedKey } from '@/lib/missing-work';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
@@ -51,11 +52,32 @@ export const GET = withCourseAuth(
           id: true,
           isPublished: true,
           groupSetId: true,
+          // What `lib/missing-work` needs to say whether unsubmitted work is a zero here.
+          missingWorkIsZero: true,
+          dueDate: true,
+          unlockAt: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+          assignedToEveryone: true,
+          course: { select: { isArchived: true } },
+          overrides: {
+            select: {
+              targetType: true,
+              userId: true,
+              groupId: true,
+              unlockAt: true,
+              dueDate: true,
+              lateCutoff: true,
+              allowLateSubmissions: true,
+            },
+          },
           problems: {
             select: {
               problemId: true,
               maxSubmissions: true,
               showFeedback: true,
+              maxPoints: true,
+              createdAt: true,
             },
           },
         },
@@ -214,8 +236,71 @@ export const GET = withCourseAuth(
       }
 
       const gradeMap = new Map(grades.map((grade) => [grade.problemId, grade.grade]));
+
+      /**
+       * Work nobody handed in, scored zero, when the assignment says so.
+       *
+       * The same rule the gradebook applies, from the same resolver, because the number a student
+       * reads here and the number their professor reads there have to be the same one. Reaching
+       * this code means the caller is assigned the work and past any unlock, both already checked
+       * above, so the audience and activity questions are settled by the time we get here.
+       */
+      const submittedIndex = {
+        byStudent: new Set(
+          submissions
+            .filter((s) => s.problemId)
+            .map((s) => submittedKey(userId, s.problemId as string)),
+        ),
+        byGroup: new Set(
+          myGroupId
+            ? submissions
+                .filter((s) => s.problemId)
+                .map((s) => submittedKey(myGroupId, s.problemId as string))
+            : [],
+        ),
+      };
+      const missingProblems = new Set(
+        assignment.dueDate
+          ? assignment.problems
+              .filter(
+                (p) =>
+                  !gradeMap.has(p.problemId) &&
+                  isMissingZero(
+                    {
+                      missingWorkIsZero: assignment.missingWorkIsZero,
+                      isPublished: assignment.isPublished,
+                      groupSetId: assignment.groupSetId,
+                      courseIsArchived: assignment.course?.isArchived ?? false,
+                      dueDate: assignment.dueDate,
+                      unlockAt: assignment.unlockAt,
+                      lateCutoff: assignment.lateCutoff,
+                      allowLateSubmissions: assignment.allowLateSubmissions,
+                    },
+                    {
+                      problemId: p.problemId,
+                      maxPoints: Number(p.maxPoints ?? 0),
+                      createdAt: p.createdAt,
+                    },
+                    {
+                      studentId: userId,
+                      isAssigned: true,
+                      isActive: true,
+                      groupIds: myGroupId ? [myGroupId] : [],
+                    },
+                    assignment.overrides,
+                    submittedIndex,
+                    false,
+                  ).missing,
+              )
+              .map((p) => p.problemId)
+          : [],
+      );
+
       const problemGrades = Object.fromEntries(
-        problemIds.map((problemId) => [problemId, gradeMap.get(problemId) ?? null]),
+        problemIds.map((problemId) => [
+          problemId,
+          gradeMap.get(problemId) ?? (missingProblems.has(problemId) ? 0 : null),
+        ]),
       );
       const gradesList = Object.values(problemGrades);
       const hasAnyGrade = gradesList.some((grade) => grade !== null);
@@ -226,6 +311,9 @@ export const GET = withCourseAuth(
       return NextResponse.json({
         assignmentGrade,
         problemGrades,
+        // Which of those zeros are for work never handed in, so the page can say so rather than
+        // showing a bare zero that reads like a mark.
+        missingProblems: [...missingProblems],
         problemLimits,
         submissionCount: submissions.length,
         submissionsByProblem: Object.fromEntries(

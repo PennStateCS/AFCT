@@ -42,6 +42,12 @@ A few things to know before you submit:
 
 When autograding is enabled, the result appears after evaluation finishes. A course staff member can later adjust the grade.
 
+If a problem's due date passes and you have not submitted anything, it may be recorded as zero.
+Your instructor decides that per assignment, and the page says **Not submitted** beside the zero so
+you can tell it from a zero you were marked down to. Submitting late, where late work is accepted,
+replaces it, and so does an extension. Work you have handed in that is still waiting to be marked is
+never scored zero.
+
 Whether you also see the grader's feedback is your instructor's choice, set per problem. On a
 problem where it is turned off you are told whether your answer was correct and nothing more, and
 the screen says so rather than leaving the feedback blank. Two things you still see either way: if
