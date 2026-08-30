@@ -4,6 +4,7 @@ import type { ProblemType } from '@prisma/client';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { effectiveMaxSubmissions, type SubmissionGrantRow } from '@/lib/submission-limits';
 import { assignedToStudentWhere } from '@/lib/assignment-visibility';
+import { isMissingZero, submittedKey } from '@/lib/missing-work';
 
 export type StudentAssignmentProblem = {
   id: string;
@@ -24,6 +25,11 @@ export type StudentAssignmentProblem = {
    */
   maxSubmissions: number;
   grade: number | null;
+  /**
+   * True when that grade is a zero for work never handed in rather than one that was marked.
+   * The same number either way, and only one of them is something the student can still act on.
+   */
+  missing?: boolean;
   /** Attempts used: the student's own, plus their group's on a group assignment. */
   submissionCount: number;
   /** Status of the student's most recent submission for this problem ('' if none). */
@@ -90,6 +96,11 @@ export async function getStudentCourseAssignments(
       dueDate: true,
       allowLateSubmissions: true,
       lateCutoff: true,
+      // Whether unsubmitted work counts as zero here. Read from the assignment so this list and
+      // the gradebook give the student the same number.
+      missingWorkIsZero: true,
+      isPublished: true,
+      course: { select: { isArchived: true } },
       // The overrides that apply to this student: their own STUDENT row and/or the GROUP
       // row for a group they belong to (matching create-submission's resolution).
       overrides: {
@@ -123,62 +134,64 @@ export async function getStudentCourseAssignments(
   // All the reads depend only on `assignmentIds`, so run them concurrently.
   const [problems, grades, submissionCounts, latestSubmissions, grants, memberships] =
     await Promise.all([
-    prisma.assignmentProblem.findMany({
-      where: { assignmentId: { in: assignmentIds } },
-      select: {
-        assignmentId: true,
-        maxPoints: true,
-        maxSubmissions: true,
-        // Autograding is a per-assignment setting on the link, not on the bank problem.
-        autograderEnabled: true,
-        problem: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            descriptionJson: true,
-            type: true,
-            maxStates: true,
-            isDeterministic: true,
+      prisma.assignmentProblem.findMany({
+        where: { assignmentId: { in: assignmentIds } },
+        select: {
+          assignmentId: true,
+          maxPoints: true,
+          maxSubmissions: true,
+          // Autograding is a per-assignment setting on the link, not on the bank problem.
+          autograderEnabled: true,
+          problemId: true,
+          createdAt: true,
+          problem: {
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              descriptionJson: true,
+              type: true,
+              maxStates: true,
+              isDeterministic: true,
+            },
           },
         },
-      },
-      orderBy: { assignmentId: 'asc' },
-    }),
-    prisma.assignmentProblemGrade.findMany({
-      where: { assignmentId: { in: assignmentIds }, studentId: userId },
-      select: { assignmentId: true, problemId: true, grade: true },
-    }),
-    prisma.submission.groupBy({
-      by: ['assignmentId', 'problemId'],
-      where: { assignmentId: { in: assignmentIds }, ...groupScopedWhere },
-      _count: { id: true },
-    }),
-    prisma.submission.findMany({
-      where: { assignmentId: { in: assignmentIds }, ...groupScopedWhere },
-      distinct: ['assignmentId', 'problemId'],
-      orderBy: { createdAt: 'desc' },
-      select: { assignmentId: true, problemId: true, status: true },
-    }),
-    prisma.submissionGrant.findMany({
-      where: {
-        assignmentId: { in: assignmentIds },
-        OR: [{ userId }, { studentGroup: { memberships: { some: { userId } } } }],
-      },
-      select: {
-        assignmentId: true,
-        problemId: true,
-        targetType: true,
-        userId: true,
-        groupId: true,
-        extraSubmissions: true,
-      },
-    }),
-    prisma.groupMembership.findMany({
-      where: { userId },
-      select: { groupSetId: true, groupId: true },
-    }),
-  ]);
+        orderBy: { assignmentId: 'asc' },
+      }),
+      prisma.assignmentProblemGrade.findMany({
+        where: { assignmentId: { in: assignmentIds }, studentId: userId },
+        select: { assignmentId: true, problemId: true, grade: true },
+      }),
+      prisma.submission.groupBy({
+        by: ['assignmentId', 'problemId'],
+        where: { assignmentId: { in: assignmentIds }, ...groupScopedWhere },
+        _count: { id: true },
+      }),
+      prisma.submission.findMany({
+        where: { assignmentId: { in: assignmentIds }, ...groupScopedWhere },
+        distinct: ['assignmentId', 'problemId'],
+        orderBy: { createdAt: 'desc' },
+        select: { assignmentId: true, problemId: true, status: true },
+      }),
+      prisma.submissionGrant.findMany({
+        where: {
+          assignmentId: { in: assignmentIds },
+          OR: [{ userId }, { studentGroup: { memberships: { some: { userId } } } }],
+        },
+        select: {
+          assignmentId: true,
+          problemId: true,
+          targetType: true,
+          userId: true,
+          groupId: true,
+          extraSubmissions: true,
+        },
+      }),
+      prisma.groupMembership.findMany({
+        where: { userId },
+        select: { groupSetId: true, groupId: true },
+      }),
+    ]);
 
   // The student's group per group set, for resolving GROUP-targeted grants per assignment.
   const groupBySet = new Map(memberships.map((m) => [m.groupSetId, m.groupId]));
@@ -199,6 +212,55 @@ export async function getStudentCourseAssignments(
   submissionCounts.forEach((c) => countMap.set(`${c.assignmentId}:${c.problemId}`, c._count.id));
   const statusMap = new Map<string, string>();
   latestSubmissions.forEach((s) => statusMap.set(`${s.assignmentId}:${s.problemId}`, s.status));
+
+  /**
+   * Problems this student is missing: nothing handed in, past their own deadline, on an
+   * assignment that scores missing work zero.
+   *
+   * The same resolver the gradebook uses. Reaching this code means the assignment is already
+   * filtered to the ones they are assigned and can see, so audience and publication are settled;
+   * what is left is the deadline, the submissions and any recorded grade.
+   */
+  const missingAt = new Date();
+  const missingKeys = new Set<string>();
+  for (const a of assignments) {
+    if (!a.dueDate) continue;
+    const myGroupId = groupIdByAssignment.get(a.id) ?? null;
+    const groupIds = myGroupId ? [myGroupId] : [];
+    for (const p of problems.filter((row) => row.assignmentId === a.id)) {
+      const key = `${a.id}:${p.problem.id}`;
+      if (gradeMap.has(key)) continue;
+      const submitted = {
+        byStudent: new Set(
+          (countMap.get(key) ?? 0) > 0 ? [submittedKey(userId, p.problem.id)] : [],
+        ),
+        byGroup: new Set<string>(),
+      };
+      const verdict = isMissingZero(
+        {
+          missingWorkIsZero: a.missingWorkIsZero,
+          isPublished: a.isPublished,
+          groupSetId: a.groupSetId,
+          courseIsArchived: a.course?.isArchived ?? false,
+          dueDate: a.dueDate,
+          unlockAt: a.unlockAt,
+          lateCutoff: a.lateCutoff,
+          allowLateSubmissions: a.allowLateSubmissions,
+        },
+        {
+          problemId: p.problem.id,
+          maxPoints: Number(p.maxPoints ?? 0),
+          createdAt: p.createdAt,
+        },
+        { studentId: userId, isAssigned: true, isActive: true, groupIds },
+        a.overrides,
+        submitted,
+        false,
+        missingAt,
+      );
+      if (verdict.missing) missingKeys.add(key);
+    }
+  }
 
   const byAssignment: Record<string, StudentAssignmentProblem[]> = {};
   for (const p of problems) {
@@ -222,7 +284,10 @@ export async function getStudentCourseAssignments(
       maxPoints: Number(p.maxPoints ?? 0),
       // Unlimited keeps the base sentinel so clients still read `<= 0` as unlimited.
       maxSubmissions: limit.max ?? Number(p.maxSubmissions ?? 0),
-      grade: gradeMap.get(key) ?? null,
+      grade: gradeMap.get(key) ?? (missingKeys.has(key) ? 0 : null),
+      // True where that zero is for work never handed in, so a client can say so rather than
+      // showing a bare zero. The web app and the desktop client read this same list.
+      missing: missingKeys.has(key),
       submissionCount: countMap.get(key) ?? 0,
       status: statusMap.get(key) ?? '',
     });
