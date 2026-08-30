@@ -21,9 +21,10 @@
     "jsx": "react-jsx",
     "incremental": true,
     "tsBuildInfoFile": ".next/cache/tsconfig.tsbuildinfo",
-    "baseUrl": ".",
+    // No `baseUrl`: TypeScript 7 removed it, and `paths` entries have to be relative to
+    // this file instead.
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
     "typeRoots": ["src/types", "node_modules/@types"],
     "types": ["next-auth", "node"],
