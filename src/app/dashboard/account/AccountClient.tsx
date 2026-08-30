@@ -1,19 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { KeyRound, Link2, Terminal, UserRound } from 'lucide-react';
+import { Image as ImageIcon, KeyRound, Link2, Terminal, UserRound } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { ProfileSection } from '@/components/account/ProfileSection';
+import { AvatarSection } from '@/components/account/AvatarSection';
 import { PasswordSection } from '@/components/account/PasswordSection';
 import { TokensSection } from '@/components/account/TokensSection';
 import { IdentitiesSection } from '@/components/account/IdentitiesSection';
 import { useChangePassword } from '@/hooks/use-change-password';
 import type { SessionUser } from '@/types/next-auth';
 
-export const ACCOUNT_TABS = ['profile', 'password', 'accounts', 'tokens'] as const;
+export const ACCOUNT_TABS = ['profile', 'photo', 'password', 'accounts', 'tokens'] as const;
 const TAB_KEY = 'afct.accountTab';
 
 type ProfileUser = SessionUser & { cropX?: number; cropY?: number; zoom?: number };
@@ -81,6 +82,9 @@ export default function AccountClient({
   // `md`. Both come from the shared tab components rather than being rolled here.
   const tabs = [
     { value: 'profile', label: 'Profile', Icon: UserRound },
+    // Its own tab rather than the top half of Profile: repositioning a picture and correcting
+    // your name are separate jobs, and each now has its own Save.
+    { value: 'photo', label: 'Profile photo', Icon: ImageIcon },
     { value: 'password', label: 'Password', Icon: KeyRound },
     // Only when an administrator has set institutional sign-in up. An install using local
     // accounts alone should not carry a tab whose every answer is "not available".
@@ -130,6 +134,10 @@ export default function AccountClient({
               column. Widths set here as well would be a second, competing answer. */}
           <TabsContent value="profile">
             <ProfileSection user={user} />
+          </TabsContent>
+
+          <TabsContent value="photo">
+            <AvatarSection user={user} />
           </TabsContent>
 
           <TabsContent value="password">

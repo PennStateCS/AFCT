@@ -7,7 +7,7 @@ await p.getByLabel('Email', { exact: true }).fill('faculty@example.com');
 await p.getByLabel('Password', { exact: true }).fill('password123');
 await p.click('button[type="submit"]');
 await p.waitForURL('**/dashboard**', { timeout: 30000 });
-for (const tab of ['profile', 'password', 'accounts', 'tokens']) {
+for (const tab of ['profile', 'photo', 'password', 'accounts', 'tokens']) {
   await p.goto(`http://localhost:3000/dashboard/account?tab=${tab}`);
   await p.waitForTimeout(2500);
   await p.screenshot({ path: `${dir}/acct-${tab}.png`, fullPage: true });

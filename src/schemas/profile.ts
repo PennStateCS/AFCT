@@ -2,7 +2,6 @@
 import { z } from 'zod';
 import { COMMON_TIMEZONES } from '@/lib/timezones';
 import { formBoolean } from './fields';
-import { ImageFileOptional } from './image-file';
 
 /**
  * Server body for the profile update route (POST /api/me, multipart). Validates
@@ -42,19 +41,20 @@ export const UserProfileApiSchema = z.object({
     ),
 });
 
-// The avatar field, and why it carries no size limit, live in one place now.
-
-
-export const UpdateProfileSchema = z.object({
-    firstName: z.string().trim().min(1, 'First name is required.').max(60, 'First name is too long.'),
+/**
+ * The Personal information form. The photo is edited on its own tab, with its own save, so
+ * nothing about the avatar belongs here any more.
+ */
+export const UpdateProfileSchema = z
+  .object({
+    firstName: z
+      .string()
+      .trim()
+      .min(1, 'First name is required.')
+      .max(60, 'First name is too long.'),
     lastName: z.string().trim().min(1, 'Last name is required.').max(60, 'Last name is too long.'),
-    // Email is read-only in the dialog; we don't validate it here.
-    avatarFile: ImageFileOptional, // Optional file upload
-    deleteAvatar: z.boolean().default(false), // Checkbox to delete avatar
-    cropX: z.number().min(0).max(1).default(0.5),
-    cropY: z.number().min(0).max(1).default(0.5),
-    zoom: z.number().min(0.6).max(2.6).default(1),
-  timezone: z.string().trim().optional(),
+    // Email is read-only here, so it is not validated.
+    timezone: z.string().trim().optional(),
   })
   .strict();
 
