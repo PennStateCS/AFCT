@@ -56,6 +56,7 @@ describe('buildProblemColumns', () => {
       'maxStates',
       'assignmentMaxPoints',
       'assignmentMaxSubmissions',
+      'assignmentShowFeedback',
       'assignmentAutograderEnabled',
       'isDeterministic',
       'answerFile',
@@ -231,5 +232,20 @@ describe('problem columns, wired into the table', () => {
     // Off before On from the comparator, and the unset row last: the table never passes an
     // undefined value to a custom sort, it parks those at the end by itself.
     expect(titlesOnScreen()).toEqual(['Off one', 'On one', 'Not set']);
+  });
+});
+
+describe('the feedback column', () => {
+  const feedbackCol = () => find(cols(), 'assignmentShowFeedback');
+
+  it('says whether students see the evaluator feedback', () => {
+    expect(feedbackCol().cell(arg(problem({ assignmentShowFeedback: true })))).toBe('Shown');
+    expect(feedbackCol().cell(arg(problem({ assignmentShowFeedback: false })))).toBe('Hidden');
+  });
+
+  it('renders nothing when the assignment has no value for it', () => {
+    // The per-assignment columns are blank on a problem read outside an assignment, the same
+    // way max points and the submission cap are.
+    expect(feedbackCol().cell(arg(problem({})))).toBeNull();
   });
 });

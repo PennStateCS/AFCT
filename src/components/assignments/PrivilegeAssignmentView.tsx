@@ -438,6 +438,7 @@ export default function AssignmentDashboardPage({
         assignmentMaxPoints: ap.maxPoints,
         assignmentMaxSubmissions: ap.maxSubmissions,
         assignmentAutograderEnabled: ap.autograderEnabled,
+        assignmentShowFeedback: ap.showFeedback,
       })),
     [assignment?.problems],
   );

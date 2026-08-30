@@ -79,6 +79,7 @@ const AssociateProblemsBodySchema = z
  *                 maxPoints: { type: number, minimum: 0 }
  *                 maxSubmissions: { type: integer, description: "-1 for unlimited, else >= 1" }
  *                 autograderEnabled: { type: boolean }
+ *                 showFeedback: { type: boolean, description: "Whether students see the evaluator's feedback. Defaults to true when omitted." }
  * responses:
  *   200: { description: The assignment's problem list plus a summary of what changed. }
  *   400: { description: Empty/invalid body or invalid problemSettings. }
@@ -173,6 +174,9 @@ export const POST = withAssignmentAuth(
               maxPoints: config?.maxPoints ?? 0,
               maxSubmissions: resolvedMaxSubmissions,
               autograderEnabled: config?.autograderEnabled ?? true,
+              // Shown unless a caller says otherwise, matching the column default: attaching a
+              // problem should never quietly withhold feedback.
+              showFeedback: config?.showFeedback ?? true,
             };
           }),
         });
