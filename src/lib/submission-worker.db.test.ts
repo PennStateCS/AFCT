@@ -415,6 +415,7 @@ describe('persisting an evaluation', () => {
       studentId: ids.user,
       studentGroupId: submission.studentGroupId ?? null,
       autograderEnabled: true,
+      showFeedback: true,
       maxPoints: 100,
       evaluation: OK,
       ...over,
@@ -593,6 +594,7 @@ describe('persisting an evaluation while something else happens', () => {
       studentId: ids.user,
       studentGroupId: null,
       autograderEnabled: true,
+      showFeedback: true,
       maxPoints: 100,
       evaluation: { ...OK, feedback },
     });
@@ -651,6 +653,7 @@ describe('persisting an evaluation while something else happens', () => {
           studentId: ids.user,
           studentGroupId: null,
           autograderEnabled: true,
+          showFeedback: true,
           maxPoints: 100,
           evaluation: { feedback: 'A', correct: false, evaluationRaw: null, status: 'COMPLETED' },
           // While A holds its authority decision: a newer attempt is submitted and graded.
@@ -674,6 +677,7 @@ describe('persisting an evaluation while something else happens', () => {
               studentId: ids.user,
               studentGroupId: null,
               autograderEnabled: true,
+              showFeedback: true,
               maxPoints: 100,
               evaluation: {
                 feedback: 'B',

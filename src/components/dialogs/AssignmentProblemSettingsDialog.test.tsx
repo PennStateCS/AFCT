@@ -80,9 +80,35 @@ vi.mock('@/components/ui/dialog', () => {
 const fetchMock = vi.fn();
 const originalFetch = global.fetch;
 
+/** The read the dialog does on open: current settings, plus how many attempts already exist. */
+const settingsResponse = (over: Record<string, unknown> = {}) =>
+  ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      maxPoints: 10,
+      maxSubmissions: 3,
+      autograderEnabled: true,
+      showFeedback: true,
+      submissionCount: 0,
+      ...over,
+    }),
+    text: async () =>
+      JSON.stringify({
+        maxPoints: 10,
+        maxSubmissions: 3,
+        autograderEnabled: true,
+        showFeedback: true,
+        submissionCount: 0,
+        ...over,
+      }),
+  }) as unknown as Response;
+
 beforeEach(() => {
   fetchMock.mockReset();
   global.fetch = fetchMock as unknown as typeof fetch;
+  // Default: the dialog's own GET succeeds and reports no attempts yet.
+  fetchMock.mockResolvedValue(settingsResponse());
   toastSuccessMock.mockReset();
   toastErrorMock.mockReset();
 });
@@ -131,13 +157,19 @@ describe('AssignmentProblemSettingsDialog', () => {
     await waitFor(() => expect(save).toBeEnabled());
     await user.click(save);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/courses/course-1/assignments/assignment-1/problems/problem-1',
-      expect.objectContaining({
-        method: 'PUT',
-        body: JSON.stringify({ maxPoints: 15, maxSubmissions: 5, autograderEnabled: true }),
-      }),
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/courses/course-1/assignments/assignment-1/problems/problem-1',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            maxPoints: 15,
+            maxSubmissions: 5,
+            autograderEnabled: true,
+            showFeedback: true,
+          }),
+        }),
+      ),
     );
     expect(toastMock.updated).toHaveBeenCalledWith('Problem settings');
     expect(onSaved).toHaveBeenCalled();
@@ -146,20 +178,52 @@ describe('AssignmentProblemSettingsDialog', () => {
 
   it('sends -1 for unlimited submissions', async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ success: true }),
-      text: async () => JSON.stringify({ success: true }),
-    } as unknown as Response);
 
     renderDialog();
 
     await user.click(screen.getByRole('radio', { name: 'Unlimited' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    // Picked out by method rather than by position: the dialog also reads its current settings
+    // when it opens, so the save is not the only request.
+    const put = await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        (c) => (c[1] as RequestInit | undefined)?.method === 'PUT',
+      );
+      expect(call).toBeDefined();
+      return call!;
+    });
+    const body = JSON.parse((put[1] as RequestInit).body as string);
     expect(body.maxSubmissions).toBe(-1);
+  });
+
+  /**
+   * Turning the switch when work already exists splits the class across two conditions, and a
+   * student who has read the feedback cannot unread it. Allowed, but said out loud first.
+   */
+  it('warns before changing the feedback setting on a problem with attempts', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(settingsResponse({ submissionCount: 12 }));
+
+    renderDialog();
+
+    // Nothing to warn about until the switch actually moves.
+    await waitFor(() => expect(screen.queryByText(/already been made/)).not.toBeInTheDocument());
+
+    await user.click(screen.getByLabelText('Show Feedback to Students'));
+
+    expect(
+      await screen.findByText(/12 attempts have already been made with feedback shown/),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing when no attempts exist yet', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(settingsResponse({ submissionCount: 0 }));
+
+    renderDialog();
+    await user.click(screen.getByLabelText('Show Feedback to Students'));
+
+    expect(screen.queryByText(/already been made/)).not.toBeInTheDocument();
   });
 });
