@@ -1,6 +1,7 @@
 // /src/app/api/me/route.ts
 
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import path from 'path';
@@ -37,6 +38,11 @@ async function deleteFileIfExists(filename: string) {
  * Updates the signed-in user's own profile: names, timezone, and avatar. The
  * avatar is written to disk and any previous file is removed; `deleteAvatar`
  * clears it instead. Sent as multipart/form-data because it carries a file.
+ *
+ * A partial update: only the fields the request carries are written. The account page
+ * edits your name and your photo on separate tabs, and neither should have to restate
+ * the other's values to save, since restating them means writing back whatever the page
+ * was holding rather than what is stored.
  * @openapi
  * summary: Update my profile
  * requestBody:
@@ -45,13 +51,16 @@ async function deleteFileIfExists(filename: string) {
  *     multipart/form-data:
  *       schema:
  *         type: object
- *         required: [firstName, lastName]
+ *         description: Only the fields present are updated; anything left out is untouched.
  *         properties:
  *           firstName: { type: string }
  *           lastName: { type: string }
  *           timezone: { type: string, description: One of the app's common timezones; blank clears it }
  *           avatar: { type: string, format: binary, description: New profile image }
  *           deleteAvatar: { type: string, enum: ['true'], description: Remove the current avatar }
+ *           cropX: { type: number, description: 'Horizontal focal point of the avatar, 0 to 1' }
+ *           cropY: { type: number, description: 'Vertical focal point of the avatar, 0 to 1' }
+ *           zoom: { type: number, description: 'Avatar zoom, 0.6 to 2.6' }
  * responses:
  *   200:
  *     description: The updated profile.
@@ -84,7 +93,6 @@ export async function POST(req: Request) {
     const parsed = await readFormData(req, UserProfileApiSchema);
     if (!parsed.ok) return parsed.response;
     const { firstName, lastName, deleteAvatar, cropX, cropY, zoom } = parsed.data;
-    const timezoneRaw = parsed.data.timezone ?? '';
     const avatar = parsed.form.get('avatar') as File | null;
     const uploadLimit = await getSystemUploadLimit();
 
@@ -132,25 +140,32 @@ export async function POST(req: Request) {
       avatarFileName = null;
     }
 
+    // Whether this request said anything about the photo at all.
+    const avatarTouched = Boolean(avatarBuffer) || deleteAvatar;
+
     // Write the validated bytes only now, through the traversal-safe resolver.
     if (avatarBuffer && avatarFileName) {
       // Explicitly non-executable, matching the other upload writes.
       await writeFile(resolveInsideDir(uploadDir, avatarFileName), avatarBuffer, { mode: 0o644 });
     }
 
+    // Only what was sent. `has` rather than a truthiness test, because a blank timezone
+    // is a real instruction (clear the override) and an absent one is not an instruction
+    // at all.
+    const data: Prisma.UserUpdateInput = {};
+    if (firstName !== undefined) data.firstName = firstName;
+    if (lastName !== undefined) data.lastName = lastName;
+    if (parsed.form.has('timezone')) data.timezone = parsed.data.timezone || null;
+    if (avatarTouched) data.avatar = avatarFileName;
+    if (cropX !== undefined) data.cropX = cropX;
+    if (cropY !== undefined) data.cropY = cropY;
+    if (zoom !== undefined) data.zoom = zoom;
+
     let updatedUser;
     try {
       updatedUser = await prisma.user.update({
         where: { id: session.user.id },
-        data: {
-          firstName,
-          lastName,
-          avatar: avatarFileName,
-          timezone: timezoneRaw || null,
-          cropX,
-          cropY,
-          zoom,
-        },
+        data,
         select: {
           id: true,
           email: true,
@@ -186,12 +201,15 @@ export async function POST(req: Request) {
       action: 'PROFILE_UPDATED',
       severity: 'INFO',
       category: 'USER',
+      // Read back from the row rather than from the request: a partial update leaves
+      // whatever it did not carry alone, and the log should say what the profile now is,
+      // not which half of it this request happened to mention.
       metadata: {
-        userFirstName: firstName,
-        userLastName: lastName,
+        userFirstName: updatedUser.firstName,
+        userLastName: updatedUser.lastName,
         avatarUpdated: !!(avatar && avatar.size > 0),
         avatarDeleted: !!(deleteAvatar && currentUser.avatar),
-        timezone: timezoneRaw || null,
+        timezone: updatedUser.timezone,
       },
     });
 

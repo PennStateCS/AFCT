@@ -5,6 +5,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { searchParams } = vi.hoisted(() => ({ searchParams: { current: new URLSearchParams() } }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => searchParams.current }));
+
 const updateMock = vi.hoisted(() => vi.fn());
 vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: { user: { id: 'u1' } }, update: updateMock }),
@@ -31,6 +34,7 @@ import type { SessionUser } from '@/types/next-auth';
 const user = { id: 'u1', email: 'ada@example.com' } as SessionUser;
 
 beforeEach(() => {
+  searchParams.current = new URLSearchParams();
   updateMock.mockReset();
   capturedOnChangePassword = undefined;
   localStorage.clear();
@@ -44,6 +48,23 @@ describe('AccountClient', () => {
   it('opens on the profile tab', () => {
     render(<AccountClient user={user} oidcAvailable={false} oidcLabel={null} />);
 
+    expect(screen.getByTestId('profile-section')).toBeInTheDocument();
+  });
+
+  it('opens the tab the address asks for, ahead of the remembered one', () => {
+    // The sidebar's Password item is a link to ?tab=password, and arriving from it while
+    // already on this page remounts nothing, so the query is the only signal.
+    localStorage.setItem('afct.accountTab', 'tokens');
+    searchParams.current = new URLSearchParams('tab=password');
+
+    const { rerender } = render(
+      <AccountClient user={user} oidcAvailable={false} oidcLabel={null} />,
+    );
+    expect(screen.getByTestId('password-section')).toBeInTheDocument();
+
+    // And again while the page is already open, which is what that link does from here.
+    searchParams.current = new URLSearchParams('tab=profile');
+    rerender(<AccountClient user={user} oidcAvailable={false} oidcLabel={null} />);
     expect(screen.getByTestId('profile-section')).toBeInTheDocument();
   });
 

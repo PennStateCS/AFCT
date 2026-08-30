@@ -3197,7 +3197,7 @@ export interface paths {
         put?: never;
         /**
          * Update my profile
-         * @description Updates the signed-in user's own profile: names, timezone, and avatar. The  avatar is written to disk and any previous file is removed; `deleteAvatar`  clears it instead. Sent as multipart/form-data because it carries a file.
+         * @description Updates the signed-in user's own profile: names, timezone, and avatar. The  avatar is written to disk and any previous file is removed; `deleteAvatar`  clears it instead. Sent as multipart/form-data because it carries a file.   A partial update: only the fields the request carries are written. The account page  edits your name and your photo on separate tabs, and neither should have to restate  the other's values to save, since restating them means writing back whatever the page  was holding rather than what is stored.
          *
          *     **Auth:** required
          *
@@ -13718,8 +13718,8 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": {
-                    firstName: string;
-                    lastName: string;
+                    firstName?: string;
+                    lastName?: string;
                     /** @description One of the app's common timezones; blank clears it */
                     timezone?: string;
                     /**
@@ -13732,6 +13732,12 @@ export interface operations {
                      * @enum {string}
                      */
                     deleteAvatar?: "true";
+                    /** @description Horizontal focal point of the avatar, 0 to 1 */
+                    cropX?: number;
+                    /** @description Vertical focal point of the avatar, 0 to 1 */
+                    cropY?: number;
+                    /** @description Avatar zoom, 0.6 to 2.6 */
+                    zoom?: number;
                 };
             };
         };

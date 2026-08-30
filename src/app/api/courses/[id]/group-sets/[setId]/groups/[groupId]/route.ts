@@ -13,7 +13,9 @@ import { assertGroupSetUnlocked, deleteGroupIfSetUnlocked } from '@/lib/group-se
 function findGroupInSet(courseId: string, setId: string, groupId: string) {
   return prisma.studentGroup.findFirst({
     where: { id: groupId, groupSetId: setId, groupSet: { courseId } },
-    select: { id: true, name: true },
+    // The set's name comes along for the audit entries, which name the group and the set it
+    // is in rather than leaving a bare group name to be read as a set.
+    select: { id: true, name: true, groupSet: { select: { name: true } } },
   });
 }
 
@@ -53,7 +55,11 @@ export const PATCH = withCourseAuth(
       if (!group) return NextResponse.json({ error: 'Group not found' }, { status: 404 });
 
       const clash = await prisma.studentGroup.findFirst({
-        where: { groupSetId: setId, name: { equals: name, mode: 'insensitive' }, id: { not: groupId } },
+        where: {
+          groupSetId: setId,
+          name: { equals: name, mode: 'insensitive' },
+          id: { not: groupId },
+        },
         select: { id: true },
       });
       if (clash) {
@@ -75,7 +81,15 @@ export const PATCH = withCourseAuth(
         severity: 'INFO',
         category: 'COURSE',
         courseId,
-        metadata: { courseId, groupSetId: setId, groupId, name, previousName: group.name },
+        metadata: {
+          courseId,
+          groupSetId: setId,
+          groupId,
+          name,
+          previousName: group.name,
+          groupName: name,
+          groupSetName: group.groupSet.name,
+        },
       });
 
       return NextResponse.json(updated);
@@ -136,7 +150,14 @@ export const DELETE = withCourseAuth(
         severity: 'INFO',
         category: 'COURSE',
         courseId,
-        metadata: { courseId, groupSetId: setId, groupId, deletedName: group.name },
+        metadata: {
+          courseId,
+          groupSetId: setId,
+          groupId,
+          deletedName: group.name,
+          groupName: group.name,
+          groupSetName: group.groupSet.name,
+        },
       });
 
       return NextResponse.json({ success: true });

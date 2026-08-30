@@ -67,7 +67,16 @@ export const POST = withCourseAuth(
         severity: 'INFO',
         category: 'COURSE',
         courseId,
-        metadata: { courseId, groupSetId: setId, groupId: group.id, name: group.name },
+        // `groupName` as well as `name`: the log's subject reads `name` as the set's name, so
+        // a new group used to appear on its own, with nothing saying which set it went into.
+        metadata: {
+          courseId,
+          groupSetId: setId,
+          groupId: group.id,
+          name: group.name,
+          groupName: group.name,
+          groupSetName: set.name,
+        },
       });
 
       return NextResponse.json(group, { status: 201 });

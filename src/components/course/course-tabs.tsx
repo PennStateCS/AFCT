@@ -39,9 +39,10 @@ export const COURSE_TABS: readonly CourseTabDef[] = [
   { value: 'problems', label: 'Problems', Icon: FileText },
   { value: 'roster', label: 'Roster', Icon: GraduationCap },
   { value: 'grades', label: 'Grades', Icon: Table },
-  // Beside Grades on purpose: the same numbers, read as a class rather than as a table.
-  { value: 'statistics', label: 'Statistics', Icon: BarChart3 },
   { value: 'groups', label: 'Groups', Icon: Users },
+  // Between Groups and Activity: the tabs before it are the things a course is made of, and
+  // the two after it are ways of looking back at what happened.
+  { value: 'statistics', label: 'Statistics', Icon: BarChart3 },
   { value: 'activity', label: 'Activity', Icon: Activity },
   { value: 'settings', label: 'Settings', Icon: Settings },
 ] as const;

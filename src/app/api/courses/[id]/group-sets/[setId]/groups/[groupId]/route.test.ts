@@ -54,10 +54,12 @@ beforeEach(() => {
   // clash query is the one that filters on a name.
   prismaMock.studentGroup.findFirst.mockImplementation(
     async (args: { where?: { name?: unknown } }) =>
-      args?.where?.name ? null : { id: 'g1', name: 'Team A' },
+      args?.where?.name ? null : { id: 'g1', name: 'Team A', groupSet: { name: 'Labs' } },
   );
   prismaMock.studentGroup.update.mockResolvedValue({ id: 'g1', name: 'Team B' });
-  prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof txMock) => unknown) => fn(txMock));
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof txMock) => unknown) =>
+    fn(txMock),
+  );
   txMock.groupSet.findUnique.mockResolvedValue({ lockedAt: null });
   txMock.studentGroup.delete.mockResolvedValue({ id: 'g1' });
   assertUnlockedMock.mockResolvedValue(undefined);
@@ -163,7 +165,14 @@ describe('PATCH /api/courses/[id]/group-sets/[setId]/groups/[groupId]', () => {
       expect.objectContaining({
         userId: 'u1',
         action: 'UPDATE_GROUP_SET_GROUP',
-        metadata: expect.objectContaining({ name: 'Team B', previousName: 'Team A' }),
+        // The set's name too, so the log entry says which set the group is in rather than
+        // leaving the group's name to be read as the set's.
+        metadata: expect.objectContaining({
+          name: 'Team B',
+          previousName: 'Team A',
+          groupName: 'Team B',
+          groupSetName: 'Labs',
+        }),
       }),
     );
   });
@@ -261,7 +270,11 @@ describe('DELETE /api/courses/[id]/group-sets/[setId]/groups/[groupId]', () => {
       expect.anything(),
       expect.objectContaining({
         action: 'DELETE_GROUP_SET_GROUP',
-        metadata: expect.objectContaining({ deletedName: 'Team A' }),
+        metadata: expect.objectContaining({
+          deletedName: 'Team A',
+          groupName: 'Team A',
+          groupSetName: 'Labs',
+        }),
       }),
     );
   });

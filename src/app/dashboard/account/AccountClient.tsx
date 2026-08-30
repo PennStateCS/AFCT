@@ -1,19 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { KeyRound, Link2, Terminal, UserRound } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Image as ImageIcon, KeyRound, Link2, Terminal, UserRound } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
 import { ProfileSection } from '@/components/account/ProfileSection';
+import { AvatarSection } from '@/components/account/AvatarSection';
 import { PasswordSection } from '@/components/account/PasswordSection';
 import { TokensSection } from '@/components/account/TokensSection';
 import { IdentitiesSection } from '@/components/account/IdentitiesSection';
 import { useChangePassword } from '@/hooks/use-change-password';
 import type { SessionUser } from '@/types/next-auth';
 
-export const ACCOUNT_TABS = ['profile', 'password', 'accounts', 'tokens'] as const;
+export const ACCOUNT_TABS = ['profile', 'photo', 'password', 'accounts', 'tokens'] as const;
 const TAB_KEY = 'afct.accountTab';
 
 type ProfileUser = SessionUser & { cropX?: number; cropY?: number; zoom?: number };
@@ -43,29 +45,39 @@ export default function AccountClient({
   // Same breakpoint as System Settings and the other shared-rail workspaces.
   const railNav = useIsDesktopNav(1280);
 
+  // Read through the hook rather than window.location, so a link that only changes the query
+  // still lands on the right tab. The sidebar's Password item points here, and arriving from
+  // it while already on this page is a navigation that remounts nothing.
+  const searchParams = useSearchParams();
+  const asked = searchParams.get('tab');
+  const cameBackFromProvider = searchParams.has('linked') || searchParams.has('error');
+  const restoredRef = useRef(false);
+
   // Remember the last tab, the way System Settings does, so returning after a save lands where
   // you were rather than back at the top.
   useEffect(() => {
-    // Coming back from the provider lands here with a result on the URL, so that wins over the
-    // remembered tab: the answer to what you just did should be the thing you are looking at.
-    const params = new URLSearchParams(window.location.search);
-    const asked = params.get('tab');
     if (asked && (ACCOUNT_TABS as readonly string[]).includes(asked)) {
       setTab(asked);
       return;
     }
-    if (params.has('linked') || params.has('error')) {
+    // Coming back from the provider lands here with a result on the URL, so that wins over the
+    // remembered tab: the answer to what you just did should be the thing you are looking at.
+    if (cameBackFromProvider) {
       setTab('accounts');
       return;
     }
 
+    // Only on arrival. Later it would fight the tab you just clicked, since clicking one does
+    // not touch the URL.
+    if (restoredRef.current) return;
+    restoredRef.current = true;
     try {
       const saved = window.localStorage.getItem(TAB_KEY);
       if (saved && (ACCOUNT_TABS as readonly string[]).includes(saved)) setTab(saved);
     } catch {
       // Private browsing or a blocked store: the default tab is a fine outcome.
     }
-  }, []);
+  }, [asked, cameBackFromProvider]);
 
   const onTabChange = (next: string) => {
     setTab(next);
@@ -81,6 +93,9 @@ export default function AccountClient({
   // `md`. Both come from the shared tab components rather than being rolled here.
   const tabs = [
     { value: 'profile', label: 'Profile', Icon: UserRound },
+    // Its own tab rather than the top half of Profile: repositioning a picture and correcting
+    // your name are separate jobs, and each now has its own Save.
+    { value: 'photo', label: 'Profile photo', Icon: ImageIcon },
     { value: 'password', label: 'Password', Icon: KeyRound },
     // Only when an administrator has set institutional sign-in up. An install using local
     // accounts alone should not carry a tab whose every answer is "not available".
@@ -97,12 +112,7 @@ export default function AccountClient({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
-        <p className="text-muted-foreground text-sm">
-          Your profile and how you sign in. Only you can see this page.
-        </p>
-      </div>
+      <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
 
       <Tabs
         value={tab}
@@ -130,13 +140,18 @@ export default function AccountClient({
             )
           }
         >
-          {/* Profile and Password are forms and keep a readable measure. Connected
-                accounts and App tokens are lists of rows, so they take the column. */}
-          <TabsContent value="profile" className="max-w-3xl">
+          {/* Each section carries its own measure, from the same width vocabulary System
+              Settings uses: forms sit at a comfortable form width, lists take more of the
+              column. Widths set here as well would be a second, competing answer. */}
+          <TabsContent value="profile">
             <ProfileSection user={user} />
           </TabsContent>
 
-          <TabsContent value="password" className="max-w-2xl">
+          <TabsContent value="photo">
+            <AvatarSection user={user} />
+          </TabsContent>
+
+          <TabsContent value="password">
             <PasswordSection onChangePassword={changePassword} />
           </TabsContent>
 

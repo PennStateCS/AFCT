@@ -330,6 +330,19 @@ function firstNum(meta: Metadata, ...keys: string[]): number {
 /** `n thing` / `n things`, so a count reads as English rather than as `1 students`. */
 const plural = (n: number, word: string, plural = `${word}s`) => `${n} ${n === 1 ? word : plural}`;
 
+/**
+ * "before to after", but only when the two are actually different.
+ *
+ * Saving a group's name unchanged, or reinstalling the version the server is already on, are
+ * both real events and both stay in the log. What they are not is a change, and "v0.9.1 to
+ * v0.9.1" and "Group 2 to Group 2" read as one. Null when there is nothing to compare, so each
+ * caller decides what to say instead.
+ */
+function transition(from: string | null, to: string | null): string | null {
+  if (!from || !to || from === to) return null;
+  return `${from} to ${to}`;
+}
+
 /** The records an entry points at, named rather than left as identifiers. */
 export type RelatedRecords = {
   course?: string | null;
@@ -529,6 +542,9 @@ const OBJECT_BY_ACTION: Record<
   SYSTEM_UPDATE_ROLLED_BACK: () => 'System update',
   SYSTEM_UPDATE_FAILED: () => 'System update',
   SYSTEM_DOWNGRADE_REQUESTED: () => 'System downgrade',
+  // The sidecar that performs updates, updating itself. Without a subject the row read as a
+  // bare version number with nothing to say what it belonged to.
+  SYSTEM_UPDATER_SELF_UPDATE_REQUESTED: () => 'Updater service',
   SYSTEM_BACKUP_REQUESTED: () => 'System backup',
   SYSTEM_BACKUP_DOWNLOADED: () => 'System backup',
   SYSTEM_RESTORE_POINT_DELETE_REQUESTED: () => 'Restore point',
@@ -1127,7 +1143,9 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
     case 'UPDATE_GROUP_SET_GROUP': {
       const from = str(metadata, 'previousName');
       const to = str(metadata, 'name');
-      return from && to ? `${from} to ${to}` : (to ?? null);
+      // Saved with the same name: the subject already says which group, so there is nothing
+      // left to add.
+      return transition(from, to) ?? (from ? null : to);
     }
 
     case 'DUPLICATE_GROUP_SET': {
@@ -1164,7 +1182,9 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
       const from = str(metadata, 'fromTag');
       const to = str(metadata, 'tag');
       const forced = metadata?.forced === true || metadata?.force === true;
-      const head = from && to ? `${from} to ${to}` : (to ?? null);
+      // Re-running the version already installed is a normal thing to do after a bad deploy,
+      // so it names the version once instead of claiming a move that did not happen.
+      const head = transition(from, to) ?? to;
       return head ? `${head}${forced ? ', forced' : ''}` : null;
     }
 
@@ -1184,7 +1204,8 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
         // the one it started from.
         return from ? `${to ? `${to} failed, ` : ''}back on ${from}` : 'put back as it was';
       }
-      if (from && to) return `${from} to ${to}`;
+      const moved = transition(from, to);
+      if (moved) return moved;
       return to ? `now on ${to}` : null;
     }
 
@@ -1272,8 +1293,12 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
      */
     case 'GROUP_MEMBERSHIP_ASSIGNED':
     case 'GROUP_MEMBERSHIP_REMOVED': {
-      const from = str(metadata, 'fromGroupId');
-      const to = str(metadata, 'toGroupId');
+      // Names, not identifiers. These read `fromGroupId` before the names were recorded, so a
+      // reshuffle came out as "one student, cmtf35e5j00 to cmtf35e5i00", which named nothing a
+      // person could act on. Entries written before that fix have only the ids, and those stay
+      // in the metadata for anyone who needs to resolve them; the line says what it can.
+      const from = str(metadata, 'fromGroupName');
+      const to = str(metadata, 'toGroupName');
       const move =
         from && to ? `${from} to ${to}` : to ? `into ${to}` : from ? `out of ${from}` : null;
       return ['one student', move].filter(Boolean).join(', ');

@@ -275,9 +275,12 @@ describe('POST /api/me', () => {
     authMock.mockResolvedValue({ user: { id: 'user-1' } });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: null });
 
-    const file = Object.assign(new File([new Uint8Array(1024)], 'evil.svg', { type: 'text/html' }), {
-      arrayBuffer: async () => new Uint8Array(1024).buffer,
-    });
+    const file = Object.assign(
+      new File([new Uint8Array(1024)], 'evil.svg', { type: 'text/html' }),
+      {
+        arrayBuffer: async () => new Uint8Array(1024).buffer,
+      },
+    );
     const formData = new FormData();
     formData.set('firstName', 'A');
     formData.set('lastName', 'B');
@@ -424,5 +427,63 @@ describe('POST /api/me', () => {
 
     expect(res.status).toBe(200);
     expect(mkdirMock).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Your name and your photo are saved from two different tabs, so each request speaks for
+ * half the profile. What it does not mention has to survive: a name save that also carried
+ * the crop values it happened to be holding would recentre a photo somebody had positioned.
+ */
+describe('POST /api/me, partial updates', () => {
+  const updated = {
+    id: 'user-1',
+    email: 'user@example.com',
+    firstName: 'A',
+    lastName: 'B',
+    avatar: 'old.png',
+    timezone: 'UTC',
+    cropX: 0.2,
+    cropY: 0.3,
+    zoom: 1.4,
+  };
+
+  const post = async (fields: Record<string, string>) => {
+    authMock.mockResolvedValue({ user: { id: 'user-1' } });
+    prismaMock.user.findUnique.mockResolvedValue({ id: 'user-1', avatar: 'old.png' });
+    prismaMock.user.update.mockResolvedValue(updated);
+
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(fields)) formData.set(key, value);
+
+    const res = await POST(
+      new Request('http://localhost/api/me', { method: 'POST', body: formData }),
+    );
+    expect(res.status).toBe(200);
+    return prismaMock.user.update.mock.calls[0]![0].data as Record<string, unknown>;
+  };
+
+  it('leaves the photo alone when only the name and timezone are sent', async () => {
+    const data = await post({ firstName: 'A', lastName: 'B', timezone: 'UTC' });
+
+    expect(data).toEqual({ firstName: 'A', lastName: 'B', timezone: 'UTC' });
+    expect(data).not.toHaveProperty('cropX');
+    expect(data).not.toHaveProperty('zoom');
+    expect(data).not.toHaveProperty('avatar');
+  });
+
+  it('leaves the name alone when only the crop is sent', async () => {
+    const data = await post({ cropX: '0.25', cropY: '0.75', zoom: '1.5' });
+
+    expect(data).toEqual({ cropX: 0.25, cropY: 0.75, zoom: 1.5 });
+    expect(data).not.toHaveProperty('firstName');
+    expect(data).not.toHaveProperty('timezone');
+  });
+
+  it('still clears the timezone when a blank one is sent', async () => {
+    // Absent and blank are different instructions: one is silence, the other is "Automatic".
+    const data = await post({ firstName: 'A', lastName: 'B', timezone: '' });
+
+    expect(data.timezone).toBeNull();
   });
 });

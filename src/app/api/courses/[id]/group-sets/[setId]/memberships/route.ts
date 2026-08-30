@@ -204,6 +204,27 @@ export const POST = withCourseAuth(
       ];
 
       if (perStudent.length > 0) {
+        // The names as well as the ids. The log read "one student, cmtf35e5j00 to
+        // cmtf35e5i00", which is unreadable and, once a group is renamed, no longer resolvable
+        // to what it meant at the time. The ids stay because they are what survives a rename;
+        // the names are what a person can act on. One indexed read over the groups touched.
+        const groupIds = [
+          ...new Set(
+            perStudent
+              .flatMap((row) => [row.fromGroupId, row.toGroupId])
+              .filter((id) => id !== null),
+          ),
+        ];
+        const groupNames = new Map(
+          (
+            await prisma.studentGroup.findMany({
+              where: { id: { in: groupIds } },
+              select: { id: true, name: true },
+            })
+          ).map((group) => [group.id, group.name]),
+        );
+        const nameOf = (id: string | null) => (id ? (groupNames.get(id) ?? null) : null);
+
         await prisma.activityLog.createMany({
           data: perStudent.map(({ action, targetUserId, fromGroupId, toGroupId }) => ({
             userId: user.id,
@@ -214,7 +235,14 @@ export const POST = withCourseAuth(
             courseId,
             ipAddress: ip,
             userAgent,
-            metadata: { targetUserId, groupSetId: setId, fromGroupId, toGroupId },
+            metadata: {
+              targetUserId,
+              groupSetId: setId,
+              fromGroupId,
+              toGroupId,
+              fromGroupName: nameOf(fromGroupId),
+              toGroupName: nameOf(toGroupId),
+            },
           })),
         });
       }

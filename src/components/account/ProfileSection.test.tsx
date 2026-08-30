@@ -17,8 +17,8 @@ vi.mock('@/components/ui/InputGroup', () =>
   import('@/test/mocks/ui').then((mod) => mod.inputGroupMock),
 );
 vi.mock('@/components/ui/select', () => import('@/test/mocks/ui').then((mod) => mod.selectMock));
-// The crop editor is drag/pointer-driven and irrelevant to these form tests; stub it.
-vi.mock('@/components/AvatarCrop', () => ({ AvatarCrop: () => null }));
+const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 const { updateSession } = vi.hoisted(() => ({ updateSession: vi.fn() }));
 vi.mock('next-auth/react', () => ({
@@ -106,22 +106,13 @@ describe('ProfileSection', () => {
       payload[key] = value;
     });
 
-    // The crop values are always sent so the server can persist the framing.
-    expect(payload).toMatchObject({
-      firstName: 'Ada',
-      lastName: 'Lovelace',
-      cropX: '0.5',
-      cropY: '0.5',
-      zoom: '1',
-    });
+    // Only the fields this form owns. The photo is saved from its own tab, and anything
+    // sent from here would be written over what is stored.
+    expect(payload).toEqual({ firstName: 'Ada', lastName: 'Lovelace', timezone: 'UTC' });
     expect(onSave).toHaveBeenCalledWith({
       firstName: 'Ada',
       lastName: 'Lovelace',
-      avatar: null,
       timezone: 'UTC',
-      cropX: 0.5,
-      cropY: 0.5,
-      zoom: 1,
     });
     expect(toastMock.updated).toHaveBeenCalledWith('Profile');
     // The session is refreshed so navbar/sidebar avatars update without a reload.
@@ -170,24 +161,27 @@ describe('ProfileSection', () => {
     expect(updateSession).not.toHaveBeenCalled();
   });
 
-  it('sends deleteAvatar and no file when the avatar is removed', async () => {
+  it('keeps showing the saved name rather than the one the page was given', async () => {
+    // The page is handed the session's copy of the user, and that copy cannot have caught up
+    // by the time the save returns. Resetting the form to it would put the old name back on
+    // screen a moment after saving the new one.
     const userEvents = userEvent.setup();
-    const avatarUser = { ...user, avatar: 'pic.png' };
 
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({ firstName: 'Test', lastName: 'User', avatar: null, timezone: 'UTC' }),
+      json: async () => ({ firstName: 'Ada', lastName: 'User', avatar: null, timezone: 'UTC' }),
     } as Response);
 
-    renderWithClient(<ProfileSection user={avatarUser} />);
+    renderWithClient(<ProfileSection user={user} />);
 
-    await userEvents.click(screen.getByRole('button', { name: /Delete Avatar/i }));
+    await userEvents.clear(screen.getByLabelText('First Name'));
+    await userEvents.type(screen.getByLabelText('First Name'), 'Ada');
     await userEvents.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const formData = requestInit.body as FormData;
-    expect(formData.get('deleteAvatar')).toBe('true');
-    expect(formData.get('avatar')).toBeNull();
+    await waitFor(() => expect(toastMock.updated).toHaveBeenCalledWith('Profile'));
+    expect(screen.getByLabelText('First Name')).toHaveValue('Ada');
+    // And the server page is asked for the fresh user, so leaving the tab and coming back
+    // does not show the old one either.
+    expect(refresh).toHaveBeenCalled();
   });
 });

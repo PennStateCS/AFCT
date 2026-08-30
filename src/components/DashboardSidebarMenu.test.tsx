@@ -149,6 +149,15 @@ describe('DashboardSidebarMenu', () => {
     expect(screen.queryByText('Edit Profile')).not.toBeInTheDocument();
   });
 
+  it('offers a password link that opens the account page on that tab', () => {
+    renderWithClient(<DashboardSidebarMenu />);
+
+    expect(screen.getByRole('link', { name: 'Password' })).toHaveAttribute(
+      'href',
+      '/dashboard/account?tab=password',
+    );
+  });
+
   it('renders admin navigation links for privileged users', () => {
     renderWithClient(<DashboardSidebarMenu />);
 

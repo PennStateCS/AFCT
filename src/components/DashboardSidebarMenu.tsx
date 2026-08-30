@@ -53,6 +53,7 @@ import {
   Book,
   Users,
   CircleCheckBig,
+  KeyRound,
   LogOut,
   Logs,
   UserPen,
@@ -677,6 +678,15 @@ export default function DashboardSidebarMenu() {
                   <Link href="/dashboard/account">
                     <UserPen className="h-4 w-4" />
                     Account
+                  </Link>
+                </DropdownMenuItem>
+                {/* Straight to the tab rather than to the page: changing a password is the
+                    one account errand people arrive with in mind, and it was two clicks and
+                    a hunt through the tabs away. */}
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href="/dashboard/account?tab=password">
+                    <KeyRound className="h-4 w-4" />
+                    Password
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

@@ -9,6 +9,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ChangePasswordSchema, type ChangePasswordInput } from '@/schemas/password';
 import { SetPasswordSchema, type SetPasswordInput } from '@/schemas/password';
+import { SettingsSection, SETTINGS_COMPACT } from '@/components/settings/settings-layout';
 
 const EMPTY: ChangePasswordInput = {
   oldPassword: '',
@@ -70,40 +71,42 @@ export function PasswordSection({
     void load();
   }, [load]);
 
-  if (!capability) {
-    // `role="status"` rather than a bare `aria-live`: this element is created together with its
-    // text and then replaced by the form, so it is announced on arrival at best. The region
-    // below, inside the loaded tree, is the one that carries anything afterwards.
-    return (
-      <p className="text-muted-foreground text-sm" role="status" aria-live="polite">
-        Loading…
-      </p>
-    );
-  }
-
+  // The panel is drawn whatever the answer turns out to be, so the tab does not start as
+  // bare text on the page background and then grow a card once the server replies.
   return (
-    <>
-      {loadFailed && (
-        <p className="text-muted-foreground mb-4 text-sm" role="status">
-          AFCT could not check how this account signs in, so it is showing the usual form. Reload
-          the page if it does not work.
+    <SettingsSection title="Password" className={SETTINGS_COMPACT}>
+      {!capability ? (
+        // `role="status"` rather than a bare `aria-live`: this element is created together with
+        // its text and then replaced by the form, so it is announced on arrival at best. The
+        // region below, inside the loaded tree, is the one that carries anything afterwards.
+        <p className="text-muted-foreground text-sm" role="status" aria-live="polite">
+          Loading…
         </p>
-      )}
-      {capability.hasPassword ? (
-        <ChangeForm onChangePassword={onChangePassword} />
-      ) : capability.canSetPassword ? (
-        <SetForm onChangePassword={onChangePassword} onDone={load} />
       ) : (
-        <NoPasswordAllowed />
+        <>
+          {loadFailed && (
+            <p className="text-muted-foreground text-sm" role="status">
+              AFCT could not check how this account signs in, so it is showing the usual form.
+              Reload the page if it does not work.
+            </p>
+          )}
+          {capability.hasPassword ? (
+            <ChangeForm onChangePassword={onChangePassword} />
+          ) : capability.canSetPassword ? (
+            <SetForm onChangePassword={onChangePassword} onDone={load} />
+          ) : (
+            <NoPasswordAllowed />
+          )}
+        </>
       )}
-    </>
+    </SettingsSection>
   );
 }
 
 /** The account signs in elsewhere and this site does not allow AFCT passwords on top. */
 function NoPasswordAllowed() {
   return (
-    <div className="max-w-md space-y-2 text-sm">
+    <div className="space-y-2 text-sm">
       <p>
         You sign in to AFCT through your institution or your LMS, so there is no AFCT password on
         this account.
@@ -154,7 +157,7 @@ function SetForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-md space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-2 text-sm">
         <p>
           You sign in to AFCT through your institution or your LMS, and this account has no AFCT
@@ -206,9 +209,11 @@ function SetForm({
         )}
       />
 
-      <Button type="submit" disabled={isSubmitting || !isDirty}>
-        {isSubmitting ? 'Saving...' : 'Set password'}
-      </Button>
+      <div className="flex justify-end pt-2">
+        <Button type="submit" disabled={isSubmitting || !isDirty}>
+          {isSubmitting ? 'Saving...' : 'Set password'}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -255,7 +260,7 @@ function ChangeForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-md space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {/* Real autocomplete tokens below, not "off": this is the user changing their own
           password, so a password manager should fill the current one and offer to save the new
           one. Blocking that is how people end up locked out (WCAG 2.2 SC 3.3.8). The admin
@@ -317,12 +322,14 @@ function ChangeForm({
         )}
       />
 
-      <div className="flex gap-2">
-        <Button type="submit" disabled={isSubmitting || !isDirty}>
-          {isSubmitting ? 'Saving...' : 'Change password'}
-        </Button>
+      {/* Secondary first, primary last, at the right edge: the same row the Profile and
+          Profile photo tabs end with, so the Save is always in the same place. */}
+      <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={clear} disabled={isSubmitting}>
           Clear
+        </Button>
+        <Button type="submit" disabled={isSubmitting || !isDirty}>
+          {isSubmitting ? 'Saving...' : 'Change password'}
         </Button>
       </div>
     </form>
