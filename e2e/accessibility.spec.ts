@@ -600,6 +600,83 @@ test.describe('accessibility: newer dialogs (axe, contrast excluded)', () => {
     expect(violations, summarize(violations)).toEqual([]);
   });
 
+  /**
+   * The per-problem settings dialog, and the warning it grows when the feedback switch moves.
+   *
+   * Two scans rather than one: the warning is only in the DOM after the switch is flipped, and
+   * it is the part of this dialog that is new. Scanning the dialog at rest would report clean
+   * about markup that had never rendered.
+   */
+  test('the problem settings dialog, before and after the feedback warning', async ({ page }) => {
+    // A seeded assignment that already has problems, found rather than built: creating one
+    // needs an answer file upload, and this test is about the dialog's markup, not the fixture.
+    await signIn(page, 'faculty');
+
+    const courses = await page.request.get('/api/me/manageable-courses');
+    expect(courses.ok(), `courses: ${courses.status()}`).toBe(true);
+    const courseList = (await courses.json()) as { id: string }[] | { courses: { id: string }[] };
+    const courseIds = (Array.isArray(courseList) ? courseList : courseList.courses).map(
+      (c) => c.id,
+    );
+
+    let target: { courseId: string; assignmentId: string } | null = null;
+    for (const courseId of courseIds) {
+      const res = await page.request.get(`/api/courses/${courseId}/assignments`);
+      if (!res.ok()) continue;
+      const body = (await res.json()) as { id: string }[] | { assignments: { id: string }[] };
+      const assignments = Array.isArray(body) ? body : body.assignments;
+      for (const assignment of assignments ?? []) {
+        const detail = await page.request.get(
+          `/api/courses/${courseId}/assignments/${assignment.id}`,
+        );
+        if (!detail.ok()) continue;
+        const withProblems = (await detail.json()) as { problems?: unknown[] };
+        if ((withProblems.problems?.length ?? 0) > 0) {
+          target = { courseId, assignmentId: assignment.id };
+          break;
+        }
+      }
+      if (target) break;
+    }
+
+    // Asserted, not skipped: a skip here would report clean about a dialog never opened.
+    expect(target, 'no seeded assignment with problems found').not.toBeNull();
+
+    await page.goto(`/dashboard/courses/${target!.courseId}/${target!.assignmentId}?tab=problems`);
+    await page
+      .getByRole('button', { name: /Actions for/ })
+      .first()
+      .waitFor({ timeout: 60_000 });
+
+    // The table itself first: it gained a Feedback column, and a sortable header is markup.
+    const table = await scan(page);
+    expect(table.violations, `problems table\n${summarize(table.violations)}`).toEqual([]);
+
+    await page
+      .getByRole('button', { name: /Actions for/ })
+      .first()
+      .click({ timeout: 60_000 });
+    await page
+      .getByRole('menuitem', { name: /Settings|Edit/ })
+      .first()
+      .click();
+
+    const dialog = page.getByRole('dialog', { name: 'Problem Settings' });
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+
+    const atRest = await scan(page);
+    expect(atRest.violations, `at rest\n${summarize(atRest.violations)}`).toEqual([]);
+
+    // The warning is only in the DOM once the switch moves, so scanning at rest alone would
+    // report clean about the markup this feature actually added.
+    await dialog.getByLabel('Show Feedback to Students').click();
+
+    const withWarning = await scan(page);
+    expect(withWarning.violations, `with warning\n${summarize(withWarning.violations)}`).toEqual(
+      [],
+    );
+  });
+
   /** The account page's own panels, which a student reaches to set a password or a token. */
   test('the account page tabs', async ({ page }) => {
     await signIn(page, 'student');
@@ -658,4 +735,3 @@ test.describe('accessibility: the stacked card view on a phone (axe, contrast ex
     expect(violations, summarize(violations)).toEqual([]);
   });
 });
-

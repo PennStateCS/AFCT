@@ -206,11 +206,23 @@ export function AssignmentProblemSettingsDialog({
             description="Off, students see only whether their answer was correct. The feedback is still recorded and still visible to you."
           />
 
-          {feedbackChangeWarning && (
-            <p className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border px-3 py-2 text-sm">
-              {feedbackChangeWarning}
-            </p>
-          )}
+          {/*
+            The one live region in this dialog. The warning appears in response to flipping the
+            switch, and a message that only arrives visually is no warning at all to somebody
+            using a screen reader: they would toggle the setting, hear the switch state, and be
+            told nothing about the attempts already made under the other one.
+
+            Mounted always, filled conditionally. A region inserted at the same moment as its
+            text is not reliably announced, which is the same reason the problem workspace keeps
+            its status region mounted and empty.
+          */}
+          <div role="status" aria-live="polite">
+            {feedbackChangeWarning && (
+              <p className="border-status-warning-border bg-status-warning-bg text-status-warning rounded-md border px-3 py-2 text-sm">
+                {feedbackChangeWarning}
+              </p>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
