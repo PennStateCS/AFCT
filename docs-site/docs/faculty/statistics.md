@@ -41,6 +41,8 @@ The course's own **Statistics** tab sits beside Grades and covers the whole term
 
 - **Worth a second look** - two counts, not names: how many students are below 60% on the reading currently shown, and how many have two or more assignments with nothing handed in. Those are different worries, and the second is the one you can still do something about. Who they are is in the Grades tab, which is the screen built to name them.
 
-- **Submissions over time** and **When submissions happen** - the same two charts as the assignment page, over the whole term, with every assignment's due date marked on the first. Per assignment they show one deadline's shape; across a course they show whether that is how this class always works.
+- **When the class is working** - every submission in the course adding up, with each due date drawn as a vertical line. The shape is the point: a flat stretch is a quiet week, and where a riser *starts* relative to a deadline is the difference between a class pacing itself and a class doing everything the night before. A deadline with no riser under it is an assignment nobody worked toward. It counts attempts rather than finished work, so a student going ten rounds with the autograder shows here as ten, which is deliberate: the question is when work is happening. The assignment tab keeps the daily bars instead, because over two or three weeks the bar heights are readable and the running total would be beside the point.
+
+- **When submissions happen** - the same day-by-hour heatmap as the assignment page, over a whole term, which is where it finally has enough data to show a pattern.
 
 The course figures describe students who are enrolled and whose account is active, and the line under the heading says how many were left out and why. The Grades tab deliberately keeps dropped students visible, so its student count can be higher; that difference is the exclusions line.

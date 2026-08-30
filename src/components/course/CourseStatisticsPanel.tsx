@@ -27,7 +27,7 @@ import { ProblemBoxPlotChart } from '@/components/statistics/charts/ProblemBoxPl
 import { GradingProgressBar } from '@/components/statistics/charts/GradingProgressBar';
 import { TurnInStatusBar } from '@/components/statistics/charts/TurnInStatusBar';
 import { AttemptsPerProblemChart } from '@/components/statistics/charts/AttemptsPerProblemChart';
-import { SubmissionTimelineChart } from '@/components/statistics/charts/SubmissionTimelineChart';
+import { CumulativeActivityChart } from '@/components/statistics/charts/CumulativeActivityChart';
 import { ActivityHeatmapChart } from '@/components/statistics/charts/ActivityHeatmapChart';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
@@ -269,11 +269,11 @@ export function CourseStatisticsPanel({ courseId }: { courseId: string }) {
             </StatCard>
 
             <StatCard
-              title="Submissions over time"
-              description="Every submission in the course, by day, with each assignment's due date marked."
+              title="When the class is working"
+              description="Every submission in the course adding up, with each assignment's due date marked. It counts attempts, so somebody going ten rounds with the autograder shows here as ten: the question is when work is happening, not how much of it is finished."
             >
               {stats.timeline.length > 0 ? (
-                <SubmissionTimelineChart
+                <CumulativeActivityChart
                   timeline={stats.timeline}
                   markers={stats.dueDates.map((d) => ({
                     id: d.id,
