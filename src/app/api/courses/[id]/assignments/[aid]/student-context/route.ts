@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { canManageCourse } from '@/lib/permissions';
 import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { effectiveMaxSubmissions } from '@/lib/submission-limits';
+import { discloseSubmissionFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 import { withCourseAuth } from '@/lib/api/with-auth';
 
 /**
@@ -26,7 +27,9 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *             assignmentGrade: { type: number, nullable: true }
  *             problemGrades: { type: object }
  *             submissionCount: { type: integer }
- *             submissionsByProblem: { type: object }
+ *             submissionsByProblem:
+ *               type: object
+ *               description: "Attempts per problem. Each carries feedbackVisible: false where the problem withholds the evaluator's feedback, so a null feedback can be told from one that is simply empty."
  *             commentsByProblem: { type: object }
  *             problemLimits:
  *               type: object
@@ -52,6 +55,7 @@ export const GET = withCourseAuth(
             select: {
               problemId: true,
               maxSubmissions: true,
+              showFeedback: true,
             },
           },
         },
@@ -181,13 +185,23 @@ export const GET = withCourseAuth(
         }),
       );
 
-      const submissionsByProblem: Record<string, (typeof submissions)[number][]> = {};
+      const submissionsByProblem: Record<
+        string,
+        ((typeof submissions)[number] & { feedbackVisible: boolean })[]
+      > = {};
       for (const problemId of problemIds) {
         submissionsByProblem[problemId] = [];
       }
 
+      // Feedback the caller is allowed. Staff reading a student's page keep everything; a
+      // student gets the evaluator's text only where the problem shows it, and a flag either
+      // way so the screen can tell "nothing to say" from "not shown to you".
+      const visibility = feedbackVisibilityMap(assignment.problems);
       for (const submission of submissions) {
-        (submissionsByProblem[submission.problemId] ??= []).push(submission);
+        (submissionsByProblem[submission.problemId] ??= []).push({
+          ...submission,
+          ...discloseSubmissionFeedback(submission, visibility, { isStaff }),
+        });
       }
 
       const commentsByProblem: Record<string, (typeof comments)[number][]> = {};
@@ -222,6 +236,9 @@ export const GET = withCourseAuth(
               submittedAt: submission.submittedAt.toISOString(),
               grade: gradeMap.get(submission.problemId) ?? null,
               feedback: submission.feedback,
+              // Null feedback has two meanings and the screen has to tell them apart: the
+              // evaluator had nothing to say, or this problem does not show what it said.
+              feedbackVisible: submission.feedbackVisible,
               correct: submission.correct,
               fileName: submission.fileName,
               originalFileName: submission.originalFileName,

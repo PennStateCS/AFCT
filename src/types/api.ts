@@ -8665,6 +8665,7 @@ export interface operations {
                         assignmentGrade?: number | null;
                         problemGrades?: Record<string, never>;
                         submissionCount?: number;
+                        /** @description Attempts per problem. Each carries feedbackVisible: false where the problem withholds the evaluator's feedback, so a null feedback can be told from one that is simply empty. */
                         submissionsByProblem?: Record<string, never>;
                         commentsByProblem?: Record<string, never>;
                         /** @description Per-problem effective submission cap for the caller (base plus any grants); max null means unlimited. */
