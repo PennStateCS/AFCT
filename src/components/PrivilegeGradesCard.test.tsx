@@ -116,6 +116,10 @@ const row = (over: Partial<GradePageRow> = {}): GradePageRow => ({
   enrollmentStatus: 'ENROLLED',
   assigned: { a1: true },
   grades: { a1: 8 },
+  missing: [],
+  // What the student is accountable for. Defaulted to the assignment's full value so the
+  // existing average assertions keep the meaning they were written with.
+  accountable: { a1: 10 },
   ...over,
 });
 

@@ -51,6 +51,10 @@ type StudentRow = {
   enrollmentStatus?: string;
   assigned: Record<string, boolean>;
   grades: Record<string, number | null>;
+  /** Assignment ids this student handed nothing in for, past their own deadline. */
+  missing?: string[];
+  /** Points they are accountable for per assignment: marked work plus work nobody handed in. */
+  accountable?: Record<string, number>;
   [key: string]: unknown;
 };
 
@@ -278,7 +282,18 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
         // order the whole roster when the Average column is sorted; keep them in step.
         if (a.isPublished === false) continue;
         if (row.assigned?.[a.id] === false) continue;
-        available += a.maxPoints ?? 0;
+        /**
+         * What this student is accountable for, which is not the same as what the assignment is
+         * worth. Work that has been marked counts, and so does work nobody handed in once the
+         * assignment says missing work is zero; work still waiting to be marked counts toward
+         * neither half. Before this, every published assignment counted in full whether or not
+         * anyone had graded it, so a mid-term average mostly measured how much term was left.
+         *
+         * The server sends the number rather than the client deriving it, because `averagePct`
+         * in lib/course-grades orders the whole roster by this same value and the two must not
+         * disagree. Falls back to the old meaning when a row predates the field.
+         */
+        available += row.accountable ? (row.accountable[a.id] ?? 0) : (a.maxPoints ?? 0);
         const val = row.grades?.[a.id];
         if (val !== null && val !== undefined) {
           earned += Number(val);

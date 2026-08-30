@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { isMissingZero, submittedKey } from '@/lib/missing-work';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 
 export type GradeMatrixStudent = {
@@ -180,6 +181,18 @@ export type CourseGradeColumns = {
 export type GradePageRow = GradeMatrixStudent & {
   assigned: Record<string, boolean>;
   grades: Record<string, number | null>;
+  /**
+   * Assignment ids the student handed nothing in for, past their own deadline, on an assignment
+   * set to score missing work zero. The cell shows zero for these and says why: a bare zero would
+   * be indistinguishable from one they earned by getting it wrong.
+   */
+  missing: string[];
+  /**
+   * Points this student is accountable for per assignment: marked work plus work nobody handed
+   * in. The Average's denominator, sent rather than recomputed because the client draws the
+   * column and the server orders by it, and the two must not disagree.
+   */
+  accountable: Record<string, number>;
 };
 
 export type GradePageParams = {
@@ -202,7 +215,23 @@ type AssignmentRow = {
   dueDate: Date | null;
   isPublished: boolean;
   assignedToEveryone: boolean;
-  problems: { maxPoints: number | null }[];
+  // The missing-work rule's inputs. See `buildAccountability`.
+  missingWorkIsZero: boolean;
+  groupSetId: string | null;
+  unlockAt: Date | null;
+  lateCutoff: Date | null;
+  allowLateSubmissions: boolean;
+  course: { isArchived: boolean } | null;
+  overrides: {
+    targetType: 'STUDENT' | 'GROUP';
+    userId: string | null;
+    groupId: string | null;
+    unlockAt: Date | null;
+    dueDate: Date | null;
+    lateCutoff: Date | null;
+    allowLateSubmissions: boolean | null;
+  }[];
+  problems: { problemId: string; maxPoints: number | null; createdAt: Date }[];
   assignees: { userId: string | null; groupId: string | null }[];
 };
 
@@ -215,7 +244,26 @@ async function loadAssignmentRows(courseId: string): Promise<AssignmentRow[]> {
       dueDate: true,
       isPublished: true,
       assignedToEveryone: true,
-      problems: { select: { maxPoints: true } },
+      // Everything `lib/missing-work` needs to decide whether unsubmitted work counts as zero.
+      // Loaded here rather than per cell: this is one query for the course either way.
+      missingWorkIsZero: true,
+      groupSetId: true,
+      unlockAt: true,
+      lateCutoff: true,
+      allowLateSubmissions: true,
+      course: { select: { isArchived: true } },
+      overrides: {
+        select: {
+          targetType: true,
+          userId: true,
+          groupId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+        },
+      },
+      problems: { select: { problemId: true, maxPoints: true, createdAt: true } },
       assignees: { select: { userId: true, groupId: true } },
     },
     orderBy: { dueDate: 'asc' },
@@ -301,6 +349,138 @@ async function loadGradeSums(
 }
 
 /**
+ * How many points each student is actually accountable for on each assignment, and where a cell
+ * is a zero for work nobody handed in.
+ *
+ * This is what makes the Average honest. Its denominator used to be every published, assigned
+ * assignment's full points regardless of grading, so work still sitting in a marking queue read as
+ * a zero, and a week-eight average mostly measured how much term was left. Now a problem counts
+ * toward the denominator when it has been marked, or when `lib/missing-work` says nobody handed it
+ * in; work awaiting a grade counts toward neither half.
+ *
+ * One extra query for grades per problem and one for submissions, both batched over the whole set
+ * of students being considered. No per-cell reads.
+ */
+async function buildAccountability(
+  assignmentRows: AssignmentRow[],
+  studentIds: string[],
+  assigned: Record<string, Record<string, boolean>>,
+  activeById: Map<string, boolean>,
+  groupsByStudent: Map<string, string[]>,
+  now = new Date(),
+): Promise<{
+  /** Points that count toward this student's denominator on this assignment. */
+  points: Record<string, Record<string, number>>;
+  /** Assignments where the student handed in nothing at all and it is past due. */
+  allMissing: Record<string, Set<string>>;
+}> {
+  const points: Record<string, Record<string, number>> = {};
+  const allMissing: Record<string, Set<string>> = {};
+  for (const id of studentIds) {
+    points[id] = {};
+    allMissing[id] = new Set();
+  }
+  if (assignmentRows.length === 0 || studentIds.length === 0) return { points, allMissing };
+
+  const assignmentIds = assignmentRows.map((a) => a.id);
+  const groupIds = [...new Set([...groupsByStudent.values()].flat())];
+
+  const [gradeRows, submissionRows] = await Promise.all([
+    prisma.assignmentProblemGrade.findMany({
+      where: { assignmentId: { in: assignmentIds }, studentId: { in: studentIds } },
+      select: { studentId: true, assignmentId: true, problemId: true },
+    }),
+    prisma.submission.findMany({
+      where: {
+        assignmentId: { in: assignmentIds },
+        OR: [
+          { studentId: { in: studentIds } },
+          ...(groupIds.length > 0 ? [{ studentGroupId: { in: groupIds } }] : []),
+        ],
+      },
+      select: { studentId: true, studentGroupId: true, assignmentId: true, problemId: true },
+      distinct: ['studentId', 'studentGroupId', 'assignmentId', 'problemId'],
+    }),
+  ]);
+
+  const graded = new Set(gradeRows.map((g) => `${g.studentId} ${g.assignmentId} ${g.problemId}`));
+  const submitted = {
+    byStudent: new Set(
+      submissionRows.filter((r) => r.studentId).map((r) => submittedKey(r.studentId, r.problemId)),
+    ),
+    byGroup: new Set(
+      submissionRows
+        .filter((r) => r.studentGroupId)
+        .map((r) => submittedKey(r.studentGroupId as string, r.problemId)),
+    ),
+  };
+
+  for (const a of assignmentRows) {
+    const shape = a.dueDate && {
+      missingWorkIsZero: a.missingWorkIsZero,
+      isPublished: a.isPublished,
+      groupSetId: a.groupSetId,
+      courseIsArchived: a.course?.isArchived ?? false,
+      dueDate: a.dueDate,
+      unlockAt: a.unlockAt,
+      lateCutoff: a.lateCutoff,
+      allowLateSubmissions: a.allowLateSubmissions,
+    };
+
+    for (const studentId of studentIds) {
+      if (assigned[studentId]?.[a.id] === false) continue;
+      const who = {
+        studentId,
+        isAssigned: true,
+        isActive: activeById.get(studentId) ?? true,
+        groupIds: groupsByStudent.get(studentId) ?? [],
+      };
+
+      let accountable = 0;
+      let missingCount = 0;
+      let handedInSomething = false;
+
+      for (const p of a.problems) {
+        const hasGrade = graded.has(`${studentId} ${a.id} ${p.problemId}`);
+        /**
+         * Only the missing question needs a deadline. Marked work counts toward what the student
+         * is accountable for whether or not the assignment has a due date, and an earlier version
+         * of this skipped the whole assignment when it had none, which quietly emptied the
+         * denominator for every course that leaves dates off.
+         */
+        const verdict = shape
+          ? isMissingZero(
+              shape,
+              {
+                problemId: p.problemId,
+                maxPoints: Number(p.maxPoints ?? 0),
+                createdAt: p.createdAt,
+              },
+              who,
+              a.overrides,
+              submitted,
+              hasGrade,
+              now,
+            )
+          : ({ missing: false, reason: 'not-due-yet' } as const);
+        if (hasGrade || verdict.missing) accountable += Number(p.maxPoints ?? 0);
+        if (verdict.missing) missingCount += 1;
+        if (!verdict.missing && verdict.reason === 'submitted') handedInSomething = true;
+      }
+
+      points[studentId]![a.id] = accountable;
+      // Marked only when they handed in nothing at all: a partly-submitted assignment showing
+      // "not submitted" would be a false statement about the half they did.
+      if (missingCount > 0 && missingCount === a.problems.length && !handedInSomething) {
+        allMissing[studentId]!.add(a.id);
+      }
+    }
+  }
+
+  return { points, allMissing };
+}
+
+/**
  * A student's average across their graded work, as a percentage, or undefined when they
  * have none. The server-side twin of the gradebook's Average column: only assignments the
  * student is actually assigned count toward the denominator, so someone who is not assigned
@@ -314,6 +494,7 @@ function averagePct(
   assignments: GradeMatrixAssignment[],
   assignedFlags: Record<string, boolean> | undefined,
   studentGrades: Record<string, number | null> | undefined,
+  accountable?: Record<string, number>,
 ): number | undefined {
   let earned = 0;
   let available = 0;
@@ -321,7 +502,16 @@ function averagePct(
   for (const a of assignments) {
     if (!a.isPublished) continue;
     if (assignedFlags?.[a.id] === false) continue;
-    available += a.maxPoints ?? 0;
+    /**
+     * What the student is accountable for, not the assignment's full value.
+     *
+     * Without the map this falls back to the whole assignment, which is what this column did
+     * for its entire history: every published assignment counted in full whether or not anybody
+     * had marked it, so work sitting in a TA's queue read as a zero and a mid-term average
+     * mostly measured how much term was left. With it, a problem counts once it has been marked
+     * or once nobody handed it in; work awaiting a grade counts toward neither half.
+     */
+    available += accountable ? (accountable[a.id] ?? 0) : (a.maxPoints ?? 0);
     const val = studentGrades?.[a.id];
     if (val !== null && val !== undefined) {
       earned += Number(val);
@@ -435,7 +625,34 @@ export async function getCourseGradePage(
     } else {
       assignedAll = await buildAssignedMap(assignmentRows, candidateIds);
       gradesAll = await loadGradeSums(assignmentIds, candidateIds);
-      keyOf = (id) => averagePct(assignments, assignedAll?.[id], gradesAll?.[id]);
+      // Ordering by a number the page would not show is its own kind of wrong, so the sort key
+      // is built from the same accountability the cells are.
+      const [rosterAll, membershipsAll] = await Promise.all([
+        prisma.roster.findMany({
+          where: { courseId, userId: { in: candidateIds } },
+          select: { userId: true, status: true, user: { select: { inactive: true } } },
+        }),
+        prisma.groupMembership.findMany({
+          where: { courseId, userId: { in: candidateIds } },
+          select: { userId: true, groupId: true },
+        }),
+      ]);
+      const activeAll = new Map(
+        rosterAll.map((r) => [r.userId, r.status === 'ENROLLED' && !r.user?.inactive]),
+      );
+      const groupsAll = new Map<string, string[]>();
+      for (const m of membershipsAll) {
+        groupsAll.set(m.userId, [...(groupsAll.get(m.userId) ?? []), m.groupId]);
+      }
+      const accountableAll = await buildAccountability(
+        assignmentRows,
+        candidateIds,
+        assignedAll,
+        activeAll,
+        groupsAll,
+      );
+      keyOf = (id) =>
+        averagePct(assignments, assignedAll?.[id], gradesAll?.[id], accountableAll.points[id]);
     }
 
     const ordered = [...candidateIds].sort((a, b) => {
@@ -471,6 +688,35 @@ export async function getCourseGradePage(
   const assigned = assignedAll ?? (await buildAssignedMap(assignmentRows, pageIds));
   const grades = gradesAll ?? (await loadGradeSums(assignmentIds, pageIds));
 
+  // Who is still active, and which groups they are in: both decide whether unsubmitted work is
+  // this student's to be missing. Dropped students stay in the gradebook by design, so their
+  // standing has to be read rather than assumed.
+  const [rosterRows, memberships] = await Promise.all([
+    prisma.roster.findMany({
+      where: { courseId, userId: { in: pageIds } },
+      select: { userId: true, status: true, user: { select: { inactive: true } } },
+    }),
+    prisma.groupMembership.findMany({
+      where: { courseId, userId: { in: pageIds } },
+      select: { userId: true, groupId: true },
+    }),
+  ]);
+  const activeById = new Map(
+    rosterRows.map((r) => [r.userId, r.status === 'ENROLLED' && !r.user?.inactive]),
+  );
+  const groupsByStudent = new Map<string, string[]>();
+  for (const m of memberships) {
+    groupsByStudent.set(m.userId, [...(groupsByStudent.get(m.userId) ?? []), m.groupId]);
+  }
+
+  const accountability = await buildAccountability(
+    assignmentRows,
+    pageIds,
+    assigned,
+    activeById,
+    groupsByStudent,
+  );
+
   const rows: GradePageRow[] = pageIds
     .map((id) => userMap.get(id))
     .filter((u): u is NonNullable<typeof u> => !!u)
@@ -486,6 +732,8 @@ export async function getCourseGradePage(
       enrollmentStatus: statusById.get(u.id) ?? 'ENROLLED',
       assigned: assigned[u.id] ?? {},
       grades: grades[u.id] ?? {},
+      missing: [...(accountability.allMissing[u.id] ?? [])],
+      accountable: accountability.points[u.id] ?? {},
     }));
 
   return { rows, total };
