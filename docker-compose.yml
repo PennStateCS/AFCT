@@ -13,7 +13,7 @@ services:
   app:
     # CI pins this to the exact published digest on each push to main
     # (.github/workflows/publish-ghcr.yml), so deploys are reproducible.
-    image: ghcr.io/pennstatecs/afct-dashboard@sha256:6814458563f9a609a0babc6d9f330e43604a55f4988bfc6df5023e714d806177
+    image: ghcr.io/pennstatecs/afct-dashboard@sha256:caf6cdd62f5b9477e1a2727ef3706396e19bb6e98b687ce6ea67af061674216a
     container_name: afct-app
     restart: unless-stopped
     logging: *default-logging
@@ -222,7 +222,7 @@ services:
   # grading happens (the app sets RUN_SUBMISSION_WORKER=false). CI pins this image line
   # alongside the app's (same global sed), so both track the same digest.
   worker:
-    image: ghcr.io/pennstatecs/afct-dashboard@sha256:6814458563f9a609a0babc6d9f330e43604a55f4988bfc6df5023e714d806177
+    image: ghcr.io/pennstatecs/afct-dashboard@sha256:caf6cdd62f5b9477e1a2727ef3706396e19bb6e98b687ce6ea67af061674216a
     container_name: afct-worker
     restart: unless-stopped
     logging: *default-logging
