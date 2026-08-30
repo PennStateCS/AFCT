@@ -109,8 +109,19 @@ export async function createFixtureCourse(browser: Browser): Promise<string> {
     const iso = (daysFromNow: number) => new Date(now + daysFromNow * 86_400_000).toISOString();
 
     const courseName = unique('E2E Fixture Course');
-    // Letters then digits: the code format is validated.
-    const courseCode = `TSTE ${Math.floor(Math.random() * 900 + 100)}`;
+    /**
+     * Letters then digits, because the code format is validated, and enough of them that two
+     * fixtures in one run do not collide.
+     *
+     * A course is unique on (code, semester) and every fixture uses the same semester, so the
+     * code carries all of the uniqueness. This used to be three digits: 900 possibilities, a
+     * handful of fixture courses per run, and therefore a few-percent chance per run of a 409
+     * that reads as "fixture course create failed" in whichever spec drew the short straw. Four
+     * digits and a trailing letter take it to 234,000, which is not a guarantee but is well past
+     * the point of being worth thinking about.
+     */
+    const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+    const courseCode = `TSTE ${Math.floor(Math.random() * 9000 + 1000)}${letter}`;
 
     const created = await page.request.post('/api/courses', {
       data: {
