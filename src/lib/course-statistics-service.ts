@@ -15,6 +15,7 @@ import {
 } from '@/lib/assignment-statistics';
 import {
   atRisk,
+  attemptsByProblemType,
   compareAssignments,
   turnInByAssignment,
   compareProblemTypes,
@@ -24,8 +25,10 @@ import {
   type AtRisk,
   type CourseAssignment,
   type CourseDistribution,
+  type AttemptsByType,
   type CourseGradeCell,
   type GradingWorkload,
+  type ProblemTypeKey,
   type TurnInByAssignment,
   type TurnInInput,
   type TypedGrade,
@@ -63,6 +66,8 @@ export type CourseStatisticsPayload = {
   distributionGradedOnly: CourseDistribution;
   assignments: AssignmentComparison[];
   problemTypes: TypePerformance[];
+  /** How many tries each kind of problem takes before it comes right. */
+  attemptsByType: AttemptsByType[];
   workload: GradingWorkload[];
   /** On time, revised late, late or missing, per assignment, on each participant's own date. */
   turnIn: TurnInByAssignment[];
@@ -275,7 +280,9 @@ export async function getCourseStatistics(
 
   const { everythingAssigned, gradedOnly } = courseAverages(assignments, studentCells);
 
-  // Every submission in the course, at its slimmest: the timing charts need when, not what.
+  // Every submission in the course. Slim, but not as slim as the timing charts alone would
+  // need: the attempts card asks what the evaluator made of each try, so the verdict and the
+  // queue state come along. Still no files, no feedback, no evaluation payloads.
   const submissionRows = await prisma.submission.findMany({
     where: { courseId },
     select: {
@@ -284,6 +291,8 @@ export async function getCourseStatistics(
       assignmentId: true,
       problemId: true,
       submittedAt: true,
+      correct: true,
+      status: true,
     },
     orderBy: { submittedAt: 'asc' },
   });
@@ -293,9 +302,44 @@ export async function getCourseStatistics(
       participantId: row.studentId,
       problemId: row.problemId,
       submittedAt: row.submittedAt.getTime(),
-      correct: false,
-      status: 'COMPLETED' as const,
+      correct: row.correct === true,
+      status: row.status as StatsSubmission['status'],
     }));
+
+  /**
+   * The same submissions, re-keyed for the attempts-by-topic card.
+   *
+   * The series is one participant's run at one problem ON ONE ASSIGNMENT, so meeting the same
+   * problem again later starts a new run rather than extending the old one; the bucket it
+   * lands in is the problem's kind. Group work is keyed by the team, matching every other
+   * card that measures a group assignment.
+   */
+  const typeOfProblem = new Map<string, ProblemTypeKey>();
+  const groupScoped = new Set<string>();
+  for (const assignment of assignmentRows) {
+    if (assignment.groupSetId != null) groupScoped.add(assignment.id);
+    for (const p of assignment.problems) {
+      typeOfProblem.set(`${assignment.id}:${p.problemId}`, problemTypeKey(p.problem?.type));
+    }
+  }
+  const typedEvents: StatsSubmission[] = submissionRows
+    .filter((row) => active.has(row.studentId))
+    .flatMap((row) => {
+      const type = typeOfProblem.get(`${row.assignmentId}:${row.problemId}`);
+      if (!type) return [];
+      const who = groupScoped.has(row.assignmentId)
+        ? (row.studentGroupId ?? row.studentId)
+        : row.studentId;
+      return [
+        {
+          participantId: `${row.assignmentId}:${row.problemId}:${who}`,
+          problemId: type,
+          submittedAt: row.submittedAt.getTime(),
+          correct: row.correct === true,
+          status: row.status as StatsSubmission['status'],
+        },
+      ];
+    });
 
   const workload = buildWorkload(assignmentRows, grades, submissionRows, active, {
     groupsBySet,
@@ -325,6 +369,7 @@ export async function getCourseStatistics(
     distributionGradedOnly: gradedOnly,
     assignments: compareAssignments(assignments, comparisonCells),
     problemTypes: compareProblemTypes(typed),
+    attemptsByType: attemptsByProblemType(typedEvents),
     workload,
     turnIn,
     atRisk: atRisk(assignments, studentCells, percentages, AT_RISK_THRESHOLD),
