@@ -74,7 +74,11 @@ describe('POST /api/courses/[id]/assignments/[aid]/overrides', () => {
     expect(res.status).toBe(201);
     expect(prismaMock.assignmentOverride.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ targetType: 'STUDENT', userId: 'stu-1', createdById: 'staff-1' }),
+        data: expect.objectContaining({
+          targetType: 'STUDENT',
+          userId: 'stu-1',
+          createdById: 'staff-1',
+        }),
       }),
     );
     expect(activityLogMock).toHaveBeenCalledWith(
@@ -94,7 +98,10 @@ describe('POST /api/courses/[id]/assignments/[aid]/overrides', () => {
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       expect.anything(),
-      expect.objectContaining({ action: 'ASSIGNMENT_OVERRIDE_TARGET_INVALID', severity: 'SECURITY' }),
+      expect.objectContaining({
+        action: 'ASSIGNMENT_OVERRIDE_TARGET_INVALID',
+        severity: 'SECURITY',
+      }),
     );
   });
 
@@ -184,7 +191,9 @@ describe('POST /api/courses/[id]/assignments/[aid]/overrides', () => {
 
     expect(res.status).toBe(201);
     expect(prismaMock.assignmentOverride.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ targetType: 'GROUP', groupId: 'g1' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ targetType: 'GROUP', groupId: 'g1' }),
+      }),
     );
   });
 

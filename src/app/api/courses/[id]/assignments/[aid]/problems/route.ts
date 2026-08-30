@@ -283,7 +283,10 @@ export const DELETE = withAssignmentAuth(
 
     try {
       // Parse the problemId from the request body
-      const parsed = await readJson(req, z.object({ problemId: z.string().min(1, 'Missing problemId.') }));
+      const parsed = await readJson(
+        req,
+        z.object({ problemId: z.string().min(1, 'Missing problemId.') }),
+      );
       if (!parsed.ok) return parsed.response;
       const { problemId } = parsed.data;
 

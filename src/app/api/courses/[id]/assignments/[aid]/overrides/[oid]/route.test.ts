@@ -53,7 +53,9 @@ beforeEach(() => {
   prismaMock.assignmentOverride.findFirst.mockResolvedValue(EXISTING);
   prismaMock.assignmentOverride.count.mockResolvedValue(0);
   resolveTzMock.mockResolvedValue('UTC');
-  prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(prismaMock));
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+    fn(prismaMock),
+  );
 });
 
 describe('PATCH override', () => {

@@ -58,7 +58,10 @@ export const PUT = withCourseAuth(
           select: { id: true },
         });
         if (!set) {
-          return NextResponse.json({ error: 'Group set not found in this course.' }, { status: 400 });
+          return NextResponse.json(
+            { error: 'Group set not found in this course.' },
+            { status: 400 },
+          );
         }
       }
 

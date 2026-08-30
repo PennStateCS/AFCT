@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { discloseSubmissionFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { logDenial } from '@/lib/api/activity';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
@@ -18,6 +19,8 @@ interface Submission {
   fileName: string;
   originalFileName: string;
   problemId: string;
+  /** Not rendered. The feedback rule reads it: a run that failed still explains itself. */
+  status: string;
 }
 
 const submissionSelectWithEvaluation = {
@@ -29,6 +32,8 @@ const submissionSelectWithEvaluation = {
   fileName: true,
   originalFileName: true,
   problemId: true,
+  // Not shown, but the feedback rule needs it: a run that failed still explains itself.
+  status: true,
 } as const;
 
 const submissionSelectWithoutEvaluation = {
@@ -39,6 +44,7 @@ const submissionSelectWithoutEvaluation = {
   fileName: true,
   originalFileName: true,
   problemId: true,
+  status: true,
 } as const;
 
 /**
@@ -201,9 +207,13 @@ export const GET = withCourseAuth(
             evaluationRaw?: unknown | null;
             fileName: string | null;
             originalFileName: string | null;
+            feedbackVisible: boolean;
           }[];
         }
       > = {};
+
+      // Which problems show the evaluator's feedback to students. Staff keep everything.
+      const visibility = feedbackVisibilityMap(assignmentProblems);
 
       for (const { problem } of assignmentProblems) {
         const subsForProblem = submissions.filter(
@@ -216,7 +226,7 @@ export const GET = withCourseAuth(
           submissions: subsForProblem.map((s: (typeof subsForProblem)[number]) => ({
             id: s.id,
             submittedAt: s.submittedAt,
-            feedback: s.feedback,
+            ...discloseSubmissionFeedback(s, visibility, { isStaff }),
             correct: s.correct,
             evaluationRaw: s.evaluationRaw ?? null,
             fileName: s.fileName,

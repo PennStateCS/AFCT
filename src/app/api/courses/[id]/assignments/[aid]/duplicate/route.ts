@@ -16,7 +16,6 @@ import {
 
 type RouteCtx = { params: Promise<{ id: string; aid: string }> };
 
-
 /**
  * Duplicate an assignment within the same course. The title/description come from the
  * request; the type (groupSetId), audience (AssignmentAssignee), schedule, and date

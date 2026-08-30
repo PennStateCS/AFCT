@@ -121,7 +121,11 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('widens the query to the group set for a group-assigned student', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -234,7 +238,11 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     // different student and not a manager -> hits the in-handler denial.
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
 
     const res = await GET(
       new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-b'),
@@ -253,7 +261,11 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('allows a student to view their own submissions', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       {
         problem: {
@@ -282,7 +294,11 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('404-masks an assignment the student is not assigned', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     contentGateMock.mockResolvedValue({ assigned: false, locked: true, unlockAt: null });
 
     const res = await GET(
@@ -298,7 +314,11 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('withholds problem content before the student unlock time', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
     contentGateMock.mockResolvedValue({
       assigned: true,
       locked: true,
@@ -346,7 +366,11 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
   it('404-masks an unpublished assignment for the owning student', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-a', role: 'STUDENT' } });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: false });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT', course: { isPublished: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
 
     const res = await GET(
       new Request('http://localhost/api/courses/c1/assignments/a1/submissions/student-a'),
@@ -540,5 +564,92 @@ describe('GET /api/courses/[id]/[aid]/submissions/[sid]', () => {
     expect(body.error).toBe('Failed to fetch submissions');
 
     consoleSpy.mockRestore();
+  });
+});
+
+/** A student may read their own submissions through this route, so it gates like the rest. */
+describe('GET assignment submissions, feedback visibility', () => {
+  const readAs = async (
+    role: 'STUDENT' | 'FACULTY',
+    showFeedback: boolean,
+    over: Record<string, unknown> = {},
+  ) => {
+    const isStaff = role === 'FACULTY';
+    authMock.mockResolvedValue({ user: { id: 'u1', role, isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role,
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      {
+        problemId: 'p1',
+        showFeedback,
+        problem: {
+          id: 'p1',
+          title: 'P1',
+          description: null,
+          type: null,
+          maxStates: null,
+          isDeterministic: null,
+          originalFileName: null,
+        },
+      },
+    ]);
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 's1',
+        submittedAt: new Date('2026-03-01'),
+        feedback: 'accepts aab but should reject it',
+        correct: false,
+        status: 'COMPLETED',
+        fileName: 'f1',
+        originalFileName: 'o1',
+        problemId: 'p1',
+        ...over,
+      },
+    ]);
+
+    const res = await GET(
+      new Request('http://localhost/api/courses/c1/assignments/a1/submissions/u1'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1', sid: 'u1' }) },
+    );
+    expect(res.status).toBe(200);
+    void isStaff;
+    return (await res.json()).p1.submissions[0];
+  };
+
+  it('withholds the feedback from the student when the problem hides it', async () => {
+    expect(await readAs('STUDENT', false)).toMatchObject({
+      feedback: null,
+      feedbackVisible: false,
+    });
+  });
+
+  it('shows it to the student when the problem does not hide it', async () => {
+    expect(await readAs('STUDENT', true)).toMatchObject({
+      feedback: 'accepts aab but should reject it',
+      feedbackVisible: true,
+    });
+  });
+
+  it('keeps it for staff either way', async () => {
+    expect(await readAs('FACULTY', false)).toMatchObject({
+      feedback: 'accepts aab but should reject it',
+      feedbackVisible: true,
+    });
+  });
+
+  it('still explains a failed run to the student', async () => {
+    const row = await readAs('STUDENT', false, {
+      status: 'FAILED',
+      feedback: 'The file could not be parsed.',
+    });
+
+    expect(row).toMatchObject({
+      feedback: 'The file could not be parsed.',
+      feedbackVisible: true,
+    });
   });
 });

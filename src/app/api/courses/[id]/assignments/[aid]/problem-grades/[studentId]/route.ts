@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { discloseGradeFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
@@ -85,6 +86,16 @@ export const GET = withCourseAuth(
         return new NextResponse(null, { status: 204 });
       }
 
+      // The comment on a grade row is sometimes the autograder's copy of its feedback and
+      // sometimes something a person typed. Only the first is withheld: a TA writing to a
+      // student means it to arrive.
+      const visibility = feedbackVisibilityMap(
+        await prisma.assignmentProblem.findMany({
+          where: { assignmentId },
+          select: { problemId: true, showFeedback: true },
+        }),
+      );
+
       const payload = grades.reduce<
         Record<
           string,
@@ -94,12 +105,15 @@ export const GET = withCourseAuth(
             updatedAt: string;
             gradedManually: boolean;
             gradeSource: string;
+            feedbackVisible: boolean;
           }
         >
       >((acc, record) => {
         acc[record.problemId] = {
           grade: record.grade ?? null,
-          feedback: record.feedback ?? null,
+          ...discloseGradeFeedback({ ...record, feedback: record.feedback ?? null }, visibility, {
+            isStaff,
+          }),
           updatedAt: record.updatedAt.toISOString(),
           gradedManually: record.gradedManually,
           gradeSource: record.gradeSource,

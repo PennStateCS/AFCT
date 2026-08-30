@@ -94,7 +94,10 @@ export const POST = withCourseAuth(
     try {
       const link = await loadProblemLink(courseId, aid, pid);
       if (!link) {
-        return NextResponse.json({ error: 'Problem not found in this assignment' }, { status: 404 });
+        return NextResponse.json(
+          { error: 'Problem not found in this assignment' },
+          { status: 404 },
+        );
       }
 
       const parsed = await readJson(req, SubmissionGrantCreateApiSchema);
@@ -164,7 +167,11 @@ export const POST = withCourseAuth(
         try {
           grant = await prisma.submissionGrant.upsert({
             where: {
-              assignmentId_problemId_groupId: { assignmentId: aid, problemId: pid, groupId: group.id },
+              assignmentId_problemId_groupId: {
+                assignmentId: aid,
+                problemId: pid,
+                groupId: group.id,
+              },
             },
             create: {
               targetType: 'GROUP',

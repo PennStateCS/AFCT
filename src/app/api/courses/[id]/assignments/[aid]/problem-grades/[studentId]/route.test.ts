@@ -41,6 +41,12 @@ const defaultParams = { id: 'course-1', aid: 'assignment-1', studentId: 'student
 describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The route reads the per-problem feedback setting. Default it to shown, so the tests that
+    // are not about visibility keep asserting what they always did.
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([
+      { problemId: 'p1', showFeedback: true },
+      { problemId: 'p2', showFeedback: true },
+    ]);
     canManageCourseMock.mockResolvedValue(true);
     canAccessCourseMock.mockResolvedValue(true);
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
@@ -162,12 +168,14 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
       'prob-1': {
         grade: 10,
         feedback: 'Nice work',
+        feedbackVisible: true,
         updatedAt: updatedAt.toISOString(),
         gradedManually: true,
       },
       'prob-2': {
         grade: null,
         feedback: null,
+        feedbackVisible: true,
         updatedAt: updatedAt.toISOString(),
         gradedManually: false,
       },
@@ -487,5 +495,64 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
     expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
     expect(prismaMock.assignmentProblemGrade.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A grade row's comment is not always the evaluator's: sometimes a person typed it. The switch
+ * withholds the autograder's copy and never a comment somebody wrote to the student.
+ */
+describe('GET problem grades, feedback visibility', () => {
+  const readAs = async (
+    role: 'STUDENT' | 'FACULTY',
+    showFeedback: boolean,
+    gradeSource: 'AUTOGRADER' | 'MANUAL',
+  ) => {
+    const staff = role === 'FACULTY';
+    authMock.mockResolvedValue({ user: { id: 'u1', role, isAdmin: false } });
+    canManageCourseMock.mockResolvedValue(staff);
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', isPublished: true });
+    prismaMock.assignmentProblem.findMany.mockResolvedValue([{ problemId: 'p1', showFeedback }]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
+      {
+        problemId: 'p1',
+        grade: 7,
+        feedback: 'accepts aab but should reject it',
+        updatedAt: new Date('2026-03-01T12:00:00.000Z'),
+        gradedManually: gradeSource === 'MANUAL',
+        gradeSource,
+      },
+    ]);
+
+    const res = await GET(
+      new NextRequest('http://localhost/api/courses/c1/assignments/a1/problem-grades/u1'),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1', studentId: 'u1' }) },
+    );
+    expect(res.status).toBe(200);
+    return (await res.json())['p1'];
+  };
+
+  it('withholds the autograder comment when the problem hides feedback', async () => {
+    expect(await readAs('STUDENT', false, 'AUTOGRADER')).toMatchObject({
+      feedback: null,
+      feedbackVisible: false,
+    });
+    // The number is not the feedback: the student still sees what they scored.
+    expect((await readAs('STUDENT', false, 'AUTOGRADER')).grade).toBe(7);
+  });
+
+  it('always shows a comment a person wrote', async () => {
+    expect(await readAs('STUDENT', false, 'MANUAL')).toMatchObject({
+      feedback: 'accepts aab but should reject it',
+      feedbackVisible: true,
+    });
+  });
+
+  it('keeps everything for staff', async () => {
+    expect(await readAs('FACULTY', false, 'AUTOGRADER')).toMatchObject({
+      feedback: 'accepts aab but should reject it',
+      feedbackVisible: true,
+    });
   });
 });
