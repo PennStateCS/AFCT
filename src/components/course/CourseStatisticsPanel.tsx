@@ -128,7 +128,7 @@ export function CourseStatisticsPanel({ courseId }: { courseId: string }) {
    */
   const denominatorNote = gradedOnly
     ? `Counting only work that has been graded, out of ${scores.assignmentsCounted} published assignment${scores.assignmentsCounted === 1 ? '' : 's'}.`
-    : `Counting all ${scores.assignmentsCounted} published assignment${scores.assignmentsCounted === 1 ? '' : 's'}, ${scores.assignmentsWithGrades} of which ${scores.assignmentsWithGrades === 1 ? 'has' : 'have'} any grades yet. Ungraded work counts as unearned, which is how the Grades tab computes its average too.`;
+    : `Counting work that has been graded, plus work nobody handed in where the assignment scores that as zero, across ${scores.assignmentsCounted} published assignment${scores.assignmentsCounted === 1 ? '' : 's'}. Work still waiting to be marked counts toward neither, which is how the Grades tab computes its average too.`;
 
   const exclusionText = stats.exclusions.map((e) =>
     e.reason === 'dropped'

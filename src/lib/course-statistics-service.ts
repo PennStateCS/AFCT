@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import { effectiveDeadline, type OverrideRow } from '@/lib/effective-deadline';
+import { isMissingZero, submittedKey } from '@/lib/missing-work';
 import {
   computeActivityHeatmap,
   computeSubmissionTimeline,
@@ -87,7 +88,7 @@ export async function getCourseStatistics(
 ): Promise<CourseStatisticsPayload | null> {
   const course = await prisma.course.findUnique({
     where: { id: courseId },
-    select: { id: true, name: true, timezone: true },
+    select: { id: true, name: true, timezone: true, isArchived: true },
   });
   if (!course) return null;
   const timeZone = course.timezone ?? 'UTC';
@@ -123,9 +124,17 @@ export async function getCourseStatistics(
       isPublished: true,
       assignedToEveryone: true,
       groupSetId: true,
+      // Whether unsubmitted work counts as zero on this assignment, and when each problem was
+      // attached, both for `lib/missing-work`.
+      missingWorkIsZero: true,
       assignees: { select: { userId: true, groupId: true } },
       problems: {
-        select: { problemId: true, maxPoints: true, problem: { select: { type: true } } },
+        select: {
+          problemId: true,
+          maxPoints: true,
+          createdAt: true,
+          problem: { select: { type: true } },
+        },
       },
     },
     orderBy: { dueDate: 'asc' },
@@ -278,11 +287,12 @@ export async function getCourseStatistics(
     });
   }
 
-  const { everythingAssigned, gradedOnly } = courseAverages(assignments, studentCells);
-
   // Every submission in the course. Slim, but not as slim as the timing charts alone would
   // need: the attempts card asks what the evaluator made of each try, so the verdict and the
   // queue state come along. Still no files, no feedback, no evaluation payloads.
+  //
+  // Loaded before the averages, not after, because the denominator now depends on what was
+  // handed in: work nobody submitted counts toward it and work awaiting a grade does not.
   const submissionRows = await prisma.submission.findMany({
     where: { courseId },
     select: {
@@ -296,6 +306,70 @@ export async function getCourseStatistics(
     },
     orderBy: { submittedAt: 'asc' },
   });
+  /**
+   * What each student is accountable for, per assignment.
+   *
+   * The same rule the gradebook applies, so the number on this page and the number on the Grades
+   * tab are the same one. Marked work counts; work nobody handed in counts where the assignment
+   * says so; work still waiting to be marked counts toward neither half.
+   */
+  const submittedIndex = {
+    byStudent: new Set(
+      submissionRows.filter((r) => r.studentId).map((r) => submittedKey(r.studentId, r.problemId)),
+    ),
+    byGroup: new Set(
+      submissionRows
+        .filter((r) => r.studentGroupId)
+        .map((r) => submittedKey(r.studentGroupId as string, r.problemId)),
+    ),
+  };
+  const missingNow = new Date();
+  for (const cell of studentCells) {
+    const assignment = assignmentRows.find((a) => a.id === cell.assignmentId);
+    if (!assignment) continue;
+    const byStudent = grades.get(assignment.id) ?? new Map();
+    const marked = byStudent.get(cell.participantId) ?? new Map();
+    const groupIds = groupIdsByStudent.get(cell.participantId) ?? [];
+
+    let accountable = 0;
+    for (const p of assignment.problems) {
+      const hasGrade = marked.has(p.problemId);
+      const missing =
+        assignment.dueDate &&
+        isMissingZero(
+          {
+            missingWorkIsZero: assignment.missingWorkIsZero,
+            isPublished: assignment.isPublished,
+            groupSetId: assignment.groupSetId,
+            courseIsArchived: course.isArchived,
+            dueDate: assignment.dueDate,
+            unlockAt: assignment.unlockAt,
+            lateCutoff: assignment.lateCutoff,
+            allowLateSubmissions: assignment.allowLateSubmissions,
+          },
+          {
+            problemId: p.problemId,
+            maxPoints: Number(p.maxPoints ?? 0),
+            createdAt: p.createdAt,
+          },
+          {
+            studentId: cell.participantId,
+            isAssigned: true,
+            isActive: active.has(cell.participantId),
+            groupIds,
+          },
+          overrideRows.filter((o) => o.assignmentId === assignment.id),
+          submittedIndex,
+          hasGrade,
+          missingNow,
+        ).missing;
+      if (hasGrade || missing) accountable += Number(p.maxPoints ?? 0);
+    }
+    cell.accountable = accountable;
+  }
+
+  const { everythingAssigned, gradedOnly } = courseAverages(assignments, studentCells);
+
   const events: StatsSubmission[] = submissionRows
     .filter((row) => active.has(row.studentId))
     .map((row) => ({
