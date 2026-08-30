@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { SettingsSection, SETTINGS_STANDARD } from '@/components/settings/settings-layout';
 
 type ClientToken = {
   id: string;
@@ -123,70 +124,80 @@ export function TokensSection() {
 
   return (
     <div className="space-y-6">
-      {/* This used to say the desktop client signs in with a token pasted from here. It does
-          not: its login window asks for a server, an email and a password, and gets its own
-          token from those. Saying otherwise sent people looking for a field that is not there. */}
-      <p className="text-muted-foreground max-w-prose text-sm">
-        A token lets a program reach AFCT on your behalf, through the AFCT client API, without your
-        password. Create one here, name it so you can tell your machines apart, and revoke it when
-        you stop using one.
-      </p>
-      <p className="text-muted-foreground max-w-prose text-sm">
-        The AFCT desktop client does not use these: it asks for your email and password and signs in
-        with those.
-      </p>
-
-      {justIssued ? (
-        <div
-          ref={issuedPanelRef}
-          className="border-status-info-border bg-status-info-bg space-y-3 rounded-md border p-4"
-        >
-          <p className="text-sm font-medium">Your new token</p>
-          {/* Rendered as a labelled, readonly field rather than decorative text: it has to be
+      {/* Two panels rather than one: creating a token and reviewing the ones you already have
+          are separate acts, and the second is a table. */}
+      <SettingsSection
+        title="Create a token"
+        /* This used to say the desktop client signs in with a token pasted from here. It does
+           not: its login window asks for a server, an email and a password, and gets its own
+           token from those. Saying otherwise sent people looking for a field that is not there. */
+        description={
+          <>
+            A token lets a program reach AFCT on your behalf, through the AFCT client API, without
+            your password. Name it so you can tell your machines apart, and revoke it when you stop
+            using one. The AFCT desktop client does not use these: it asks for your email and
+            password and signs in with those.
+          </>
+        }
+        className={SETTINGS_STANDARD}
+      >
+        {justIssued ? (
+          <div
+            ref={issuedPanelRef}
+            className="border-status-info-border bg-status-info-bg space-y-3 rounded-md border p-4"
+          >
+            <p className="text-sm font-medium">Your new token</p>
+            {/* Rendered as a labelled, readonly field rather than decorative text: it has to be
               reachable and selectable by keyboard, since this is the only time it exists. */}
+            <InputGroup
+              name="new-client-token"
+              label="Copy this now. It will not be shown again."
+              value={justIssued}
+              setValue={() => {}}
+              readOnly
+            />
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => void copy()}>
+                <Copy className="h-4 w-4" aria-hidden="true" />
+                Copy token
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setJustIssued(null)}>
+                Done
+              </Button>
+            </div>
+            {/* One live region for this area, so the copy result is announced once. */}
+            <p role="status" aria-live="polite" className="text-sm">
+              {copied ? 'Token copied to the clipboard.' : ''}
+            </p>
+          </div>
+        ) : null}
+
+        {/* A name is a short value, so it keeps a short field rather than stretching the
+            panel. System Settings pairs its short fields two-up for the same reason. */}
+        <div className="max-w-md space-y-3">
           <InputGroup
-            name="new-client-token"
-            label="Copy this now. It will not be shown again."
-            value={justIssued}
-            setValue={() => {}}
-            readOnly
+            name="token-label"
+            label="Name this token"
+            value={label}
+            setValue={setLabel}
+            disabled={issuing}
+            placeholder="My laptop"
+            description="Optional, but it is how you will tell your tokens apart later."
           />
-          <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => void copy()}>
-              <Copy className="h-4 w-4" aria-hidden="true" />
-              Copy token
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setJustIssued(null)}>
-              Done
+          <div>
+            <Button type="button" onClick={() => void issue()} disabled={issuing}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {issuing ? 'Creating…' : 'Create token'}
             </Button>
           </div>
-          {/* One live region for this area, so the copy result is announced once. */}
-          <p role="status" aria-live="polite" className="text-sm">
-            {copied ? 'Token copied to the clipboard.' : ''}
-          </p>
         </div>
-      ) : null}
+      </SettingsSection>
 
-      <div className="max-w-md space-y-3">
-        <InputGroup
-          name="token-label"
-          label="Name this token"
-          value={label}
-          setValue={setLabel}
-          disabled={issuing}
-          placeholder="My laptop"
-          description="Optional, but it is how you will tell your tokens apart later."
-        />
-        <Button type="button" onClick={() => void issue()} disabled={issuing}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          {issuing ? 'Creating…' : 'Create token'}
-        </Button>
-      </div>
-
-      <div>
-        <h2 ref={tokensHeadingRef} tabIndex={-1} className="mb-2 text-sm font-medium">
-          Your tokens
-        </h2>
+      <SettingsSection
+        title="Your tokens"
+        headingRef={tokensHeadingRef}
+        className={SETTINGS_STANDARD}
+      >
         {tokens === null ? (
           <p className="text-muted-foreground text-sm">Loading…</p>
         ) : tokens.length === 0 ? (
@@ -248,7 +259,7 @@ export function TokensSection() {
             </table>
           </div>
         )}
-      </div>
+      </SettingsSection>
 
       {/*
         `open={...}` rather than mounting the dialog conditionally. Unmounting an open Radix

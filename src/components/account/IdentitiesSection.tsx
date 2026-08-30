@@ -8,6 +8,10 @@ import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { showToast } from '@/lib/toast';
 import { formatDateTimeInTimeZone } from '@/lib/date-format';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
+import { SettingsSection, SETTINGS_STANDARD } from '@/components/settings/settings-layout';
+
+const IDENTITIES_DESCRIPTION =
+  'Sign in to AFCT with your institution instead of an AFCT password. You can connect one and still keep your password.';
 
 type LinkedIdentity = {
   id: string;
@@ -145,26 +149,29 @@ export function IdentitiesSection({
    */
   const headingRef = useRef<HTMLHeadingElement>(null);
 
+  // Both states are drawn in the panel, so the tab does not start as bare text on the page
+  // background and then grow a card once the list arrives.
   if (identities === null) {
     return (
-      <p role="status" aria-live="polite" className="text-muted-foreground text-sm">
-        Loading your connected accounts...
-      </p>
+      <SettingsSection
+        title="Connected accounts"
+        description={IDENTITIES_DESCRIPTION}
+        className={SETTINGS_STANDARD}
+      >
+        <p role="status" aria-live="polite" className="text-muted-foreground text-sm">
+          Loading your connected accounts...
+        </p>
+      </SettingsSection>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 ref={headingRef} tabIndex={-1} className="text-base font-semibold">
-          Connected accounts
-        </h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Sign in to AFCT with your institution instead of an AFCT password. You can connect one and
-          still keep your password.
-        </p>
-      </div>
-
+    <SettingsSection
+      title="Connected accounts"
+      description={IDENTITIES_DESCRIPTION}
+      headingRef={headingRef}
+      className={SETTINGS_STANDARD}
+    >
       {identities.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           You have not connected an institutional account.
@@ -260,6 +267,6 @@ export function IdentitiesSection({
         onConfirm={unlink}
         busy={busy}
       />
-    </div>
+    </SettingsSection>
   );
 }

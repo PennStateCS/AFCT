@@ -130,13 +130,14 @@ export default function AccountClient({
             )
           }
         >
-          {/* Profile and Password are forms and keep a readable measure. Connected
-                accounts and App tokens are lists of rows, so they take the column. */}
-          <TabsContent value="profile" className="max-w-3xl">
+          {/* Each section carries its own measure, from the same width vocabulary System
+              Settings uses: forms sit at a comfortable form width, lists take more of the
+              column. Widths set here as well would be a second, competing answer. */}
+          <TabsContent value="profile">
             <ProfileSection user={user} />
           </TabsContent>
 
-          <TabsContent value="password" className="max-w-2xl">
+          <TabsContent value="password">
             <PasswordSection onChangePassword={changePassword} />
           </TabsContent>
 

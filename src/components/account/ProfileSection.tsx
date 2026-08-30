@@ -20,6 +20,7 @@ import {
   type UpdateProfileRaw,
   type UpdateProfileInput,
 } from '@/schemas/profile';
+import { SettingsSection, SETTINGS_COMPACT } from '@/components/settings/settings-layout';
 import { COMMON_TIMEZONES, formatTimezoneLabel } from '@/lib/timezones';
 import { apiPaths } from '@/lib/api-paths';
 
@@ -202,14 +203,13 @@ export function ProfileSection({ user, onSave }: ProfileSectionProps) {
     // you are separate concerns, and the old max-w-md left both squeezed into a third of
     // the page.
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <section className="bg-card space-y-4 rounded-lg border p-5" aria-labelledby="profile-photo">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="profile-photo" className="text-base font-semibold">
-            Profile Photo
-          </h2>
-          {/* Destructive, but secondary: as a full-width red bar above the picture it was
-              the first thing on the page. It stays outline-destructive, just not dominant. */}
-          {avatarPreview && (
+      <SettingsSection
+        title="Profile photo"
+        className={SETTINGS_COMPACT}
+        /* Destructive, but secondary: as a full-width red bar above the picture it was
+           the first thing on the page. It stays outline-destructive, just not dominant. */
+        action={
+          avatarPreview ? (
             <Button
               type="button"
               variant="outline"
@@ -220,9 +220,9 @@ export function ProfileSection({ user, onSave }: ProfileSectionProps) {
               <Trash2 className="h-4 w-4" />
               Delete Avatar
             </Button>
-          )}
-        </div>
-
+          ) : null
+        }
+      >
         <div className="flex flex-col items-center gap-3">
           <Label className="sr-only">Avatar Image</Label>
           {/* No separate preview: the crop editor below shows the current image. */}
@@ -275,16 +275,9 @@ export function ProfileSection({ user, onSave }: ProfileSectionProps) {
             onZoomChange={(zoom) => setAvatarCrop((prev) => ({ ...prev, zoom }))}
           />
         ) : null}
-      </section>
+      </SettingsSection>
 
-      <section
-        className="bg-card space-y-4 rounded-lg border p-5"
-        aria-labelledby="personal-information"
-      >
-        <h2 id="personal-information" className="text-base font-semibold">
-          Personal Information
-        </h2>
-
+      <SettingsSection title="Personal information" className={SETTINGS_COMPACT}>
         {/* First + last name sit side by side to save vertical space, and stack
               on very small screens. */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -366,7 +359,7 @@ export function ProfileSection({ user, onSave }: ProfileSectionProps) {
             {isSubmitting ? 'Saving...' : 'Save changes'}
           </Button>
         </div>
-      </section>
+      </SettingsSection>
     </form>
   );
 }
