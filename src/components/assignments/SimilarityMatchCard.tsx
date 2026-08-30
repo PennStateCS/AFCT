@@ -12,6 +12,7 @@ import {
   ACCENT_BORDER,
 } from './SimilarityEvidenceBadge';
 import { SimilarityInfoPopover } from './SimilarityInfoPopover';
+import { isCommon } from '@/lib/similarity/rarity';
 import { SimilarityTimeline } from './SimilarityTimeline';
 import { DISPLAY_STRENGTH_OF, displayTypeOf, type MatchCluster } from '@/lib/similarity/evidence';
 import {
@@ -235,7 +236,12 @@ export function SimilarityMatchCard({
                       {/* What THIS relationship can say for itself, which is not always what
                           the card above it says. */}
                       <ul className="text-muted-foreground list-disc space-y-0.5 ps-5 text-xs">
-                        {relationshipDetails(relationship, subject).map((line) => (
+                        {relationshipDetails(relationship, subject, {
+                          // The dial lives on the page, so the card is what knows a
+                          // byte-identical relationship is also widely shared.
+                          widelyShared:
+                            type === 'byte-identical' && isCommon(relationship, commonShare),
+                        }).map((line) => (
                           <li key={line}>{line}</li>
                         ))}
                       </ul>

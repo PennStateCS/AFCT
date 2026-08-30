@@ -313,12 +313,12 @@ describe('AssignmentSimilarityPanel', () => {
     expect(
       await screen.findByRole('heading', { name: 'What these results mean' }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/same file to the byte/)).toBeInTheDocument();
+    expect(screen.getByText(/identical at the byte level/)).toBeInTheDocument();
     expect(screen.getByText(/filter counts can overlap/)).toBeInTheDocument();
     expect(screen.getByText(/same saved JFLAP artifact/)).toBeInTheDocument();
     // Said once: the page-level explanation and a card's own are the same strings, and only
     // one of them is open.
-    expect(screen.getAllByText(/same file to the byte/)).toHaveLength(1);
+    expect(screen.getAllByText(/identical at the byte level/)).toHaveLength(1);
     // And the standing note is still on the page, not replaced by the button.
     expect(screen.getByText(/Similarity results are informational/)).toBeInTheDocument();
 
@@ -632,7 +632,9 @@ describe('AssignmentSimilarityPanel', () => {
         matchId: 'common',
         studentCount: 42,
         identicalStudentCount: 42,
-        submissions: pairOf('c', 'd'),
+        // Alike once formatting is ignored, not the same file: identical bytes are the one
+        // thing the common-answer threshold no longer sets aside.
+        submissions: pairOf('c', 'd', ['b1', 'b2']),
       }),
       group({ matchId: 'posted', matchesAnswerFile: true, submissions: pairOf('e', 'f') }),
     ]);
@@ -684,8 +686,14 @@ describe('AssignmentSimilarityPanel', () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([
       group({ matchId: 'sm', studentCount: 3, identicalStudentCount: 2 }),
-      // Set aside, so it is in neither the filter row nor the All count.
-      group({ matchId: 'common', studentCount: 42, identicalStudentCount: 42 }),
+      // Set aside, so it is in neither the filter row nor the All count. Its files normalise
+      // alike rather than being the same file: identical bytes are never set aside.
+      group({
+        matchId: 'common',
+        studentCount: 42,
+        identicalStudentCount: 42,
+        submissions: pairOf('c', 'd', ['b1', 'b2']),
+      }),
     ]);
 
     renderPanel();
@@ -773,10 +781,89 @@ describe('AssignmentSimilarityPanel', () => {
     expect(await screen.findAllByRole('article')).toHaveLength(1);
   });
 
+  it('keeps a file half the class submitted byte for byte in the review list', async () => {
+    // 42 of 84 is past the default threshold, so every other kind of match here would be set
+    // aside as the expected answer. These are the same bytes, which nothing normalised, so
+    // the page shows the observation and says how widely it is shared beside it.
+    getMock.mockResolvedValue([
+      group({ matchId: 'shared', studentCount: 42, identicalStudentCount: 42 }),
+    ]);
+
+    renderPanel();
+    await openProblems();
+
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Byte-for-byte identical')).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        /Widely shared: 42 of 84 students submitted this same file, which is past your common-answer threshold\./,
+      ),
+    ).toBeInTheDocument();
+    // And it is not hiding at the foot of the page under Set aside.
+    expect(screen.queryByRole('button', { name: /Set aside/ })).toBeNull();
+  });
+
+  it('says a byte-identical relationship is widely shared, inside a mixed group', async () => {
+    // Two relationships connected by a shared student: one byte-identical and past the
+    // threshold, one merely the same artifact. The card stays neutral, and the context sits
+    // on the relationship it is true of rather than on all four students.
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'bytes',
+        studentCount: 42,
+        identicalStudentCount: 42,
+        submissions: pairOf('alice', 'bob'),
+      }),
+      group({
+        matchId: 'artifact',
+        submissions: pairOf('bob', 'carol', ['b3', 'b4']),
+      }),
+    ]);
+
+    renderPanel();
+    await openProblems();
+    await person().click(await screen.findByRole('button', { name: /Review the 2 relationships/ }));
+
+    const rows = within(
+      await screen.findByRole('list', { name: 'Relationships in this group' }),
+    ).getAllByRole('listitem');
+    const bytes = rows.find((row) => row.textContent?.includes('Byte-for-byte identical'))!;
+    const artifact = rows.find((row) => row.textContent?.includes('Exact JFLAP artifact'))!;
+
+    expect(within(bytes).getByText(/Widely shared: 42 of 84 students/)).toBeInTheDocument();
+    // Not said of the relationship it is not true of.
+    expect(within(artifact).queryByText(/Widely shared/)).toBeNull();
+  });
+
+  it('still sets aside the posted solution, however many students hold it', async () => {
+    // Byte-identical AND the instructor's own file: everybody was handed those exact bytes.
+    getMock.mockResolvedValue([
+      group({
+        matchId: 'posted',
+        matchesAnswerFile: true,
+        studentCount: 42,
+        identicalStudentCount: 42,
+      }),
+    ]);
+
+    renderPanel();
+
+    expect(
+      await screen.findByText(
+        'No matches worth reviewing. 1 group set aside as a common answer or the posted solution.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('collapses common answers, and renders none of them until asked', async () => {
     const person = userEvent.setup();
     getMock.mockResolvedValue([
-      group({ matchId: 'common', studentCount: 42, identicalStudentCount: 42 }),
+      group({
+        matchId: 'common',
+        studentCount: 42,
+        identicalStudentCount: 42,
+        submissions: pairOf('c', 'd', ['b1', 'b2']),
+      }),
     ]);
 
     renderPanel();

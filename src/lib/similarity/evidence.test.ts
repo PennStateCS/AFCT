@@ -3,6 +3,7 @@ import {
   clusterHasType,
   clusterMatches,
   countByType,
+  isSetAside,
   displayTypeOf,
   matchTypeOf,
   summarise,
@@ -102,10 +103,45 @@ describe('matchTypeOf', () => {
   });
 
   it('calls anything most of the class shares common, whatever the files look like', () => {
-    // An exact artifact shared by half the class is convergence, not a finding.
-    const type = matchTypeOf(group({ studentCount: 42, identicalStudentCount: 42 }), 0.25);
+    // An exact artifact shared by half the class is convergence, not a finding. Its files
+    // normalise alike without being the same file: identical BYTES are the one thing the
+    // threshold no longer explains away, and that case is below.
+    const type = matchTypeOf(
+      group({
+        studentCount: 42,
+        identicalStudentCount: 42,
+        submissions: [submission('a', undefined, 'b1'), submission('b', undefined, 'b2')],
+      }),
+      0.25,
+    );
     expect(type).toBe('common');
     expect(STRENGTH_OF[type]).toBe('none');
+  });
+
+  it('will not let the dial hide a file half the class submitted byte for byte', () => {
+    // The same 42 students, and this time they sent the same bytes. Every other check
+    // normalises something first, so "half the class" really can be convergence; nothing
+    // normalises a raw file, and a threshold the reader sets for triage must not be able to
+    // delete the observation.
+    const type = matchTypeOf(group({ studentCount: 42, identicalStudentCount: 42 }), 0.25);
+    expect(type).toBe('exact');
+    expect(isSetAside(type)).toBe(false);
+    expect(displayTypeOf(group({ studentCount: 42, identicalStudentCount: 42 }), 0.25)).toBe(
+      'byte-identical',
+    );
+  });
+
+  it('still sets aside the instructor own file, however many students hold it', () => {
+    // Byte-identical AND the posted solution: everybody was handed those exact bytes, so the
+    // match measures the handout. The strongest artifact claim on the page is still the
+    // wrong thing to say about it.
+    expect(
+      displayTypeOf(
+        group({ matchesAnswerFile: true, studentCount: 42, identicalStudentCount: 42 }),
+        0.25,
+      ),
+    ).toBe('common');
+    expect(displayTypeOf(group({ matchesAnswerFile: true }), 0.25)).toBe('reference');
   });
 });
 
@@ -154,7 +190,7 @@ describe('clusterMatches', () => {
           matchId: 'common',
           studentCount: 42,
           identicalStudentCount: 42,
-          submissions: [submission('a'), submission('z')],
+          submissions: [submission('a', undefined, 'b1'), submission('z', undefined, 'b2')],
         }),
       ],
       0.25,
@@ -261,7 +297,9 @@ describe('clusterMatches', () => {
           matchId: 'common',
           studentCount: 42,
           identicalStudentCount: 42,
-          submissions: [submission('m'), submission('n')],
+          // Alike once formatting is ignored, not the same file: a common answer is about
+          // convergence, and identical bytes are no longer something the dial can explain.
+          submissions: [submission('m', undefined, 'b1'), submission('n', undefined, 'b2')],
         }),
         group({ matchId: 'exact', submissions: [submission('a'), submission('b')] }),
         group({
@@ -362,9 +400,9 @@ describe('displayTypeOf', () => {
   });
 
   it('leaves every other kind exactly where it was', () => {
-    // Same machine, structural, the posted solution and a common answer are all unchanged by
-    // raw equality: the first two cannot be byte-equal, and the last two are explained by
-    // something other than how alike the files are.
+    // Same machine and structural cannot be byte-equal at all, so raw equality has nothing
+    // to say about them; the posted solution is explained by the handout; and a common
+    // answer whose files merely normalise alike is still a common answer.
     expect(displayTypeOf(group({ studentCount: 3, identicalStudentCount: 2 }), 0.25)).toBe(
       'same-machine',
     );
@@ -372,9 +410,95 @@ describe('displayTypeOf', () => {
       'structural',
     );
     expect(displayTypeOf(group({ matchesAnswerFile: true }), 0.25)).toBe('reference');
-    expect(displayTypeOf(group({ studentCount: 42, identicalStudentCount: 42 }), 0.25)).toBe(
-      'common',
+    expect(
+      displayTypeOf(
+        group({
+          studentCount: 42,
+          identicalStudentCount: 42,
+          submissions: [submission('a', undefined, 'b1'), submission('b', undefined, 'b2')],
+        }),
+        0.25,
+      ),
+    ).toBe('common');
+  });
+});
+
+describe('what the common-answer threshold may and may not hide', () => {
+  it('never assumes identical bytes for work stored before the column existed', () => {
+    // Null is "not known", not "the same". A course full of historical rows must not turn
+    // into a page full of byte-identical claims the moment the threshold is crossed.
+    const unhashed = group({
+      studentCount: 42,
+      identicalStudentCount: 42,
+      submissions: [submission('a', undefined, null), submission('b', undefined, null)],
+    });
+
+    expect(matchTypeOf(unhashed, 0.25)).toBe('common');
+    expect(displayTypeOf(unhashed, 0.25)).toBe('common');
+  });
+
+  it('will not promote a widely shared group on a byte-identical subset', () => {
+    // Two of the three sent the same file; the third only normalises alike. The claim covers
+    // the relationship or it is not made, so this stays a common answer, and who the stronger
+    // fact is about is said in the relationship's own details.
+    const partly = group({
+      studentCount: 42,
+      identicalStudentCount: 42,
+      submissions: [
+        submission('a', undefined, 'b1'),
+        submission('b', undefined, 'b1'),
+        submission('c', undefined, 'b2'),
+      ],
+    });
+
+    expect(displayTypeOf(partly, 0.25)).toBe('common');
+  });
+
+  it('leaves a widely shared same-machine group where it was', () => {
+    // Only some of them saved the same artifact, so there is no byte claim to make and the
+    // threshold still explains the rest.
+    const machine = group({ studentCount: 42, identicalStudentCount: 20 });
+
+    expect(displayTypeOf(machine, 0.25)).toBe('common');
+  });
+
+  it('counts a group assignment in teams when deciding all of this', () => {
+    // Three teams of the nine that submitted: a third, past the threshold in the unit the
+    // page talks in. The files are the same bytes, so it stays visible; the same three teams
+    // whose files merely normalise alike are a common answer.
+    const teams = {
+      groupCount: 3,
+      problemGroupCount: 9,
+      studentCount: 12,
+      problemStudentCount: 40,
+    };
+    expect(displayTypeOf(group({ ...teams, identicalStudentCount: 12 }), 0.25, 'group')).toBe(
+      'byte-identical',
     );
+    expect(
+      displayTypeOf(
+        group({
+          ...teams,
+          identicalStudentCount: 12,
+          submissions: [submission('a', undefined, 'b1'), submission('b', undefined, 'b2')],
+        }),
+        0.25,
+        'group',
+      ),
+    ).toBe('common');
+    // And judged as students, three teams out of nine is 12 of 40, under the same dial: the
+    // unit is what makes the threshold mean anything.
+    expect(
+      displayTypeOf(
+        group({
+          ...teams,
+          identicalStudentCount: 12,
+          submissions: [submission('a', undefined, 'b1'), submission('b', undefined, 'b2')],
+        }),
+        0.4,
+        'group',
+      ),
+    ).toBe('exact');
   });
 });
 
@@ -585,7 +709,14 @@ describe('summarise', () => {
 
   it('does not count common answers as worth reviewing', () => {
     const clusters = clusterMatches(
-      [group({ matchId: 'common', studentCount: 42, identicalStudentCount: 42 })],
+      [
+        group({
+          matchId: 'common',
+          studentCount: 42,
+          identicalStudentCount: 42,
+          submissions: [submission('a', undefined, 'b1'), submission('b', undefined, 'b2')],
+        }),
+      ],
       0.25,
     );
 

@@ -122,8 +122,21 @@ export function isSetAside(type: DisplayMatchType): boolean {
  *
  * A group where every student sent the same saved artifact is exact. One where only some did
  * is the same machine, with the exact part called out inside it. Anything the provenance
- * check found is structural. Commonality wins over all of it: at that share of a class it is
- * convergence whatever the files look like.
+ * check found is structural.
+ *
+ * Commonality explains most of that away: at a large enough share of a class, alike work is
+ * convergence. It cannot explain away two things.
+ *
+ * The first is the instructor's own file, which is why that is asked about first: everybody
+ * handed the solution has it, so the match measures the handout.
+ *
+ * The second is IDENTICAL BYTES, and this is the one the threshold used to hide. Every other
+ * check normalises something before comparing, so "half the class submitted this" really can
+ * mean half the class independently wrote the same right answer: a grammar or a regular
+ * expression has no layout to differ in. Nothing normalises a raw file. Twelve students
+ * turning in the same bytes did not each type them, and a dial the reader sets for triage
+ * must not be able to delete that observation. It stays visible and stays a fact; what it
+ * means is still the professor's to decide, and how widely it was shared is shown beside it.
  */
 export function matchTypeOf(
   group: SubmissionMatchGroup,
@@ -133,11 +146,28 @@ export function matchTypeOf(
   // Counted in the same unit the page talks in: teams on a group assignment, students
   // otherwise. A ratio of students against a denominator of groups would be a number about
   // nothing, and the threshold the reader is looking at says which one it is.
-  if (isCommon(group, commonShare, subject)) return 'common';
+  const common = isCommon(group, commonShare, subject);
+
   // The instructor posted this work. Everyone holding that file has it, so how alike the
   // artifacts are says nothing about how they got there, and calling it very strong evidence
-  // would be reporting the handout back to the person who wrote it.
-  if (group.matchesAnswerFile) return 'reference';
+  // would be reporting the handout back to the person who wrote it. A widely shared posted
+  // solution keeps reading as the common answer, which is what it is; either way the page
+  // sets it aside rather than asking anybody to review it.
+  if (group.matchesAnswerFile) return common ? 'common' : 'reference';
+
+  // Identical bytes, and not the instructor's file. `displayTypeOf` sharpens this to
+  // `byte-identical`; what matters here is that it is not `common`, because a set-aside
+  // match is one the reader never sees.
+  //
+  // Asked only of a group that is wholly one artifact, which is what identical bytes always
+  // produce: raw equality implies equal normalised contents, and a provenance match is a
+  // pair that were never equal at all. Stated rather than assumed, so nothing here can label
+  // a partly-identical group by a fact that is true of only some of it.
+  const whollyOneArtifact =
+    group.kind === 'same-work' && group.identicalStudentCount >= group.studentCount;
+  if (whollyOneArtifact && isWhollyByteIdentical(group)) return 'exact';
+
+  if (common) return 'common';
   if (group.kind === 'near') return 'structural';
   return group.identicalStudentCount >= group.studentCount ? 'exact' : 'same-machine';
 }
@@ -199,6 +229,14 @@ export type MatchCluster = {
    * rather than guessing.
    */
   byteIdenticalStudentCount: number;
+  /**
+   * This work is shared widely enough to pass the reader's common-answer threshold.
+   *
+   * For most kinds that IS the classification and the group is set aside. For byte-identical
+   * work it is context instead: the observation stands, and how much of the class shares the
+   * file is something the reader should know while judging it.
+   */
+  aboveCommonShare: boolean;
   problemStudentCount: number;
   /** How many groups submitted this problem at all. 0 for an individual assignment. */
   problemGroupCount: number;
@@ -391,6 +429,9 @@ function buildCluster(
     counts,
     homogeneous,
     byteIdenticalStudentCount: Math.max(...ranked.map((group) => group.byteIdenticalStudentCount)),
+    // Any relationship being that widely shared is worth saying, because the reader is being
+    // shown the group on the strength of one of them.
+    aboveCommonShare: ranked.some((group) => isCommon(group, commonShare, subject)),
     problemStudentCount: first.problemStudentCount,
     problemGroupCount: first.problemGroupCount,
     reusedAfterPass: ranked.some((group) => group.reusedAfterPass),
