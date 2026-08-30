@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Image as ImageIcon, KeyRound, Link2, Terminal, UserRound } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { TabBar, TabRail } from '@/components/course/course-tabs';
@@ -44,29 +45,39 @@ export default function AccountClient({
   // Same breakpoint as System Settings and the other shared-rail workspaces.
   const railNav = useIsDesktopNav(1280);
 
+  // Read through the hook rather than window.location, so a link that only changes the query
+  // still lands on the right tab. The sidebar's Password item points here, and arriving from
+  // it while already on this page is a navigation that remounts nothing.
+  const searchParams = useSearchParams();
+  const asked = searchParams.get('tab');
+  const cameBackFromProvider = searchParams.has('linked') || searchParams.has('error');
+  const restoredRef = useRef(false);
+
   // Remember the last tab, the way System Settings does, so returning after a save lands where
   // you were rather than back at the top.
   useEffect(() => {
-    // Coming back from the provider lands here with a result on the URL, so that wins over the
-    // remembered tab: the answer to what you just did should be the thing you are looking at.
-    const params = new URLSearchParams(window.location.search);
-    const asked = params.get('tab');
     if (asked && (ACCOUNT_TABS as readonly string[]).includes(asked)) {
       setTab(asked);
       return;
     }
-    if (params.has('linked') || params.has('error')) {
+    // Coming back from the provider lands here with a result on the URL, so that wins over the
+    // remembered tab: the answer to what you just did should be the thing you are looking at.
+    if (cameBackFromProvider) {
       setTab('accounts');
       return;
     }
 
+    // Only on arrival. Later it would fight the tab you just clicked, since clicking one does
+    // not touch the URL.
+    if (restoredRef.current) return;
+    restoredRef.current = true;
     try {
       const saved = window.localStorage.getItem(TAB_KEY);
       if (saved && (ACCOUNT_TABS as readonly string[]).includes(saved)) setTab(saved);
     } catch {
       // Private browsing or a blocked store: the default tab is a fine outcome.
     }
-  }, []);
+  }, [asked, cameBackFromProvider]);
 
   const onTabChange = (next: string) => {
     setTab(next);

@@ -209,9 +209,11 @@ function SetForm({
         )}
       />
 
-      <Button type="submit" disabled={isSubmitting || !isDirty}>
-        {isSubmitting ? 'Saving...' : 'Set password'}
-      </Button>
+      <div className="flex justify-end pt-2">
+        <Button type="submit" disabled={isSubmitting || !isDirty}>
+          {isSubmitting ? 'Saving...' : 'Set password'}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -320,12 +322,14 @@ function ChangeForm({
         )}
       />
 
-      <div className="flex gap-2">
-        <Button type="submit" disabled={isSubmitting || !isDirty}>
-          {isSubmitting ? 'Saving...' : 'Change password'}
-        </Button>
+      {/* Secondary first, primary last, at the right edge: the same row the Profile and
+          Profile photo tabs end with, so the Save is always in the same place. */}
+      <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={clear} disabled={isSubmitting}>
           Clear
+        </Button>
+        <Button type="submit" disabled={isSubmitting || !isDirty}>
+          {isSubmitting ? 'Saving...' : 'Change password'}
         </Button>
       </div>
     </form>
