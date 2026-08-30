@@ -25,10 +25,12 @@ type RouteCtx = { params: Promise<{ id: string; aid: string; studentId: string }
  *   - { name: studentId, in: path, required: true, schema: { type: string } }
  * responses:
  *   200:
- *     description: "A map of problemId to { grade, feedback, updatedAt, gradedManually, gradeSource }."
+ *     description: "A map of problemId to { grade, feedback, feedbackVisible, updatedAt, gradedManually, gradeSource }."
  *     content:
  *       application/json:
- *         schema: { type: object }
+ *         schema:
+ *           type: object
+ *           description: "feedbackVisible is false where the problem withholds the autograder's comment from students. A comment a person wrote by hand is always shown, so it stays true."
  *   204: { description: No grades recorded yet. }
  *   401: { description: Not signed in. }
  *   403: { description: Not the student in question and not staff. }

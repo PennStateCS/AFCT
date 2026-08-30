@@ -95,7 +95,10 @@ The **Submission History** panel lists your attempts for the selected problem, n
 - **File**: the name of the file you uploaded.
 - **Status**: where the attempt is. A new attempt is `PENDING` or `PROCESSING` while it waits in the queue, then `COMPLETED` when graded, or `FAILED` if grading could not finish.
 - **Result**: whether the attempt was correct once it completes.
-- **Feedback**: the grader's message, such as a counterexample string showing why an answer was rejected.
+- **Feedback**: the grader's message, such as a counterexample string showing why an answer was
+  rejected. Your instructor can turn this off for a problem, in which case the attempt still shows
+  its status and result and the feedback is reported as not shown. A submission that could not be
+  graded still explains why.
 
 For a group problem, an extra column shows which group member made each submission.
 

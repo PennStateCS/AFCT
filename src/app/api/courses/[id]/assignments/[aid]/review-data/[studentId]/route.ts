@@ -93,9 +93,13 @@ function submitterName(
  *         schema:
  *           type: object
  *           properties:
- *             submissions: { type: object }
+ *             submissions:
+ *               type: object
+ *               description: "Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback from students, so a null feedback can be told from one the evaluator left empty."
  *             comments: { type: array, items: { type: object } }
- *             problemGrades: { type: object }
+ *             problemGrades:
+ *               type: object
+ *               description: "Per problem. feedbackVisible is false where the problem withholds the autograder's comment; a comment a person wrote by hand is always shown."
  *             isGroup: { type: boolean, description: Whether the student submits this assignment as a group. }
  *   401: { description: Not signed in. }
  *   403: { description: "Requesting another student's data without being course staff or a system admin, or not an enrolled member of the course." }

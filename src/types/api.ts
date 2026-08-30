@@ -7241,7 +7241,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description A map of problemId to { grade, feedback, updatedAt, gradedManually, gradeSource }. */
+            /** @description A map of problemId to { grade, feedback, feedbackVisible, updatedAt, gradedManually, gradeSource }. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -8255,8 +8255,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback from students, so a null feedback can be told from one the evaluator left empty. */
                         submissions?: Record<string, never>;
                         comments?: Record<string, never>[];
+                        /** @description Per problem. feedbackVisible is false where the problem withholds the autograder's comment; a comment a person wrote by hand is always shown. */
                         problemGrades?: Record<string, never>;
                         /** @description Whether the student submits this assignment as a group. */
                         isGroup?: boolean;

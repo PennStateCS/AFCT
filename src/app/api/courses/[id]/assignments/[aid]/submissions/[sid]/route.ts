@@ -66,7 +66,9 @@ const submissionSelectWithoutEvaluation = {
  *     description: Submissions grouped by problem.
  *     content:
  *       application/json:
- *         schema: { type: object }
+ *         schema:
+ *           type: object
+ *           description: "Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback from students, so a null feedback can be told from one the evaluator left empty."
  *   401: { description: Not signed in. }
  *   403: { description: "Requesting another student's submissions without being course staff or a system admin, or not an enrolled member of the course." }
  *   404: { description: "Assignment not found, or it has no linked problems." }
