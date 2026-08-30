@@ -609,7 +609,7 @@ test.describe('accessibility: newer dialogs (axe, contrast excluded)', () => {
     });
     // Asserted rather than skipped: a `count()` guard here would let the whole test pass by
     // finding nothing, which is exactly how a scan reports clean about a page it never opened.
-    for (const tab of ['Password', 'Connected accounts', 'App tokens']) {
+    for (const tab of ['Profile photo', 'Password', 'Connected accounts', 'App tokens']) {
       const trigger = page.getByRole('tab', { name: tab });
       await expect(trigger).toBeVisible();
       await trigger.click();
