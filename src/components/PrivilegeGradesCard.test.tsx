@@ -341,3 +341,47 @@ describe('PrivilegeGradesCard', () => {
     expect(screen.getByTestId('table-rows').textContent).toBe('0');
   });
 });
+
+describe('a cell for work nobody handed in', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  it('shows zero and says why, rather than a bare zero', async () => {
+    // A zero somebody earned by getting it wrong and a zero for never handing anything in look
+    // identical as numbers, and only one of them is something the student can still fix.
+    installFetch({
+      rows: [row({ grades: { a1: null }, missing: ['a1'], accountable: { a1: 10 } })],
+      total: 1,
+    });
+
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <PrivilegeGradesCard courseId="c1" />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('not submitted')).toBeInTheDocument();
+  });
+
+  it('leaves an assignment still being marked as a dash', async () => {
+    installFetch({
+      rows: [row({ grades: { a1: null }, missing: [], accountable: { a1: 0 } })],
+      total: 1,
+    });
+
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <PrivilegeGradesCard courseId="c1" />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText(/Lovelace/);
+    expect(screen.queryByText('not submitted')).not.toBeInTheDocument();
+  });
+});

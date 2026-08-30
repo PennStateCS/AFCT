@@ -16,6 +16,7 @@ import { findCanvasReservedTitleConflicts, type LmsPlatform } from '@/lib/lms-gr
 import { useSession } from 'next-auth/react';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
+import { MISSING_WORK_LABEL } from '@/lib/missing-work';
 
 /**
  * On demand: the breakdown dialog carries the form stack and was the last thing putting zod on
@@ -376,6 +377,10 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           }
 
           const val = user.grades?.[a.id];
+          // Handed in nothing at all, past their own deadline, on an assignment set to score
+          // missing work zero. A partly-submitted assignment is not flagged: saying "not
+          // submitted" there would be false about the half they did.
+          const isMissing = user.missing?.includes(a.id) ?? false;
 
           const handleClick = () => {
             setSelectedStudent({ id: user.id, name: `${user.firstName} ${user.lastName}` });
@@ -389,11 +394,30 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
               className="hover:bg-accent flex h-full w-full cursor-pointer items-center justify-center rounded px-2 py-1"
               title="View grade breakdown"
               onClick={handleClick}
-              aria-label={`View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`}
+              aria-label={
+                isMissing
+                  ? `View breakdown for ${user.firstName} ${user.lastName} on ${a.title}. Not submitted, scored zero.`
+                  : `View breakdown for ${user.firstName} ${user.lastName} on ${a.title}`
+              }
             >
-              <span className="text-sm">
-                {val === null || val === undefined ? '-' : Number(val).toFixed(2)}
-              </span>
+              {/*
+                A zero for work nobody handed in is not the same as a zero somebody earned by
+                getting it wrong, and a bare 0 in a gradebook cell cannot tell you which. So the
+                derived one says what it is. The dash still means "assigned, nothing recorded",
+                which is what an assignment still being marked looks like.
+              */}
+              {isMissing ? (
+                <span className="flex flex-col items-center leading-tight">
+                  <span className="text-sm">0</span>
+                  <span className="text-muted-foreground text-[0.65rem]">
+                    {MISSING_WORK_LABEL.toLowerCase()}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-sm">
+                  {val === null || val === undefined ? '-' : Number(val).toFixed(2)}
+                </span>
+              )}
             </button>
           );
         },
