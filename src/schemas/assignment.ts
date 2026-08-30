@@ -86,6 +86,9 @@ const BaseAssignmentFormSchemaObject = z
     unlockAt: DateTimeLocalFormOptional,
     assignedToEveryone: z.boolean().default(true),
     allowLateSubmissions: z.boolean().default(false),
+    // Defaults true, like the column: a new assignment scores missing work zero unless somebody
+    // says otherwise. Existing assignments were switched off by the migration that added it.
+    missingWorkIsZero: z.boolean().default(true),
     lateCutoff: DateTimeLocalFormOptional,
     isPublished: z.boolean(),
     courseId: z.string().min(1, 'Course id is required.'),
@@ -160,24 +163,26 @@ const AssigneeApiItem = z
     message: 'Each assignee is exactly one of a student or a group.',
   });
 
-export const AssignmentCreateApiSchema = z.object({
-  title: z.string().min(1, 'Missing required fields').max(200, 'Title is too long.'),
-  description: z.string().max(20000, 'Description is too long.').optional(),
-  descriptionJson: descriptionJsonField,
-  dueDate: z.string().min(1, 'A due date is required.'),
-  // Nullable so callers can send null to mean "no value" (the create UI sends
-  // lateCutoff: null when late is off); the handler treats null and absent the same.
-  unlockAt: z.string().nullable().optional(),
-  assignedToEveryone: z.boolean().optional(),
-  allowLateSubmissions: z.boolean().optional(),
-  lateCutoff: z.string().nullable().optional(),
-  isPublished: z.boolean().optional(),
-  // Set for a group assignment (the group set it runs in); null/absent for individual.
-  groupSetId: z.string().nullable().optional(),
-  // The audience when assignedToEveryone is false: students (individual) or groups (group).
-  // The handler validates each target and materializes AssignmentAssignee rows.
-  assignees: z.array(AssigneeApiItem).optional(),
-})
+export const AssignmentCreateApiSchema = z
+  .object({
+    title: z.string().min(1, 'Missing required fields').max(200, 'Title is too long.'),
+    description: z.string().max(20000, 'Description is too long.').optional(),
+    descriptionJson: descriptionJsonField,
+    dueDate: z.string().min(1, 'A due date is required.'),
+    // Nullable so callers can send null to mean "no value" (the create UI sends
+    // lateCutoff: null when late is off); the handler treats null and absent the same.
+    unlockAt: z.string().nullable().optional(),
+    assignedToEveryone: z.boolean().optional(),
+    allowLateSubmissions: z.boolean().optional(),
+    missingWorkIsZero: z.boolean().optional(),
+    lateCutoff: z.string().nullable().optional(),
+    isPublished: z.boolean().optional(),
+    // Set for a group assignment (the group set it runs in); null/absent for individual.
+    groupSetId: z.string().nullable().optional(),
+    // The audience when assignedToEveryone is false: students (individual) or groups (group).
+    // The handler validates each target and materializes AssignmentAssignee rows.
+    assignees: z.array(AssigneeApiItem).optional(),
+  })
   // The same date rules the wizard applies. They used to live on the form only, so a client
   // posting straight to the API could create an assignment that unlocks after it is due, or
   // carry a cutoff with late submissions switched off. The native client talks to this API,
@@ -232,6 +237,7 @@ export const AssignmentUpdateApiSchema = z.object({
   // (assignedToEveryone + assignees) is changed only via the assignees route, and the type
   // (groupSetId) only via the type route, so those invariants stay guarded.
   allowLateSubmissions: z.boolean().optional(),
+  missingWorkIsZero: z.boolean().optional(),
   lateCutoff: z.string().nullable().optional(),
   isPublished: z.boolean().optional(),
 });

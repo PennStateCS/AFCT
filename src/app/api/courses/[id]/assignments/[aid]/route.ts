@@ -377,6 +377,7 @@ export const GET = withCourseAuth(
  *           dueDate: { type: string }
  *           unlockAt: { type: string, nullable: true, description: Available-from date; null clears it }
  *           allowLateSubmissions: { type: boolean }
+ *           missingWorkIsZero: { type: boolean, description: "Whether unsubmitted work scores zero after the due date. Left alone when omitted." }
  *           lateCutoff: { type: string, nullable: true }
  *           isPublished: { type: boolean }
  * responses:
@@ -453,6 +454,11 @@ export const PUT = withCourseAuth(
           unlockAt: unlockState.unlockAt,
           allowLateSubmissions,
           lateCutoff,
+          // Only when the caller actually sent it: an older client that knows nothing about this
+          // setting must not switch it off by omission.
+          ...(typeof data.missingWorkIsZero === 'boolean'
+            ? { missingWorkIsZero: data.missingWorkIsZero }
+            : {}),
           isPublished: data.isPublished,
         },
       });
@@ -515,6 +521,7 @@ export const PUT = withCourseAuth(
  *           dueDate: { type: string }
  *           unlockAt: { type: string, nullable: true, description: Available-from date; null clears it }
  *           allowLateSubmissions: { type: boolean }
+ *           missingWorkIsZero: { type: boolean, description: "Whether unsubmitted work scores zero after the due date. Left alone when omitted." }
  *           lateCutoff: { type: string, nullable: true }
  *           isPublished: { type: boolean }
  * responses:

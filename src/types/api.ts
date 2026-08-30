@@ -8382,6 +8382,8 @@ export interface operations {
                     /** @description Available-from date; null clears it */
                     unlockAt?: string | null;
                     allowLateSubmissions?: boolean;
+                    /** @description Whether unsubmitted work scores zero after the due date. Left alone when omitted. */
+                    missingWorkIsZero?: boolean;
                     lateCutoff?: string | null;
                     isPublished?: boolean;
                 };
@@ -8527,6 +8529,8 @@ export interface operations {
                     /** @description Available-from date; null clears it */
                     unlockAt?: string | null;
                     allowLateSubmissions?: boolean;
+                    /** @description Whether unsubmitted work scores zero after the due date. Left alone when omitted. */
+                    missingWorkIsZero?: boolean;
                     lateCutoff?: string | null;
                     isPublished?: boolean;
                 };
@@ -9132,6 +9136,8 @@ export interface operations {
                     /** @description Available-from date; must be on or before the due date */
                     unlockAt?: string;
                     allowLateSubmissions?: boolean;
+                    /** @description Whether unsubmitted work scores zero after the due date. Defaults true. */
+                    missingWorkIsZero?: boolean;
                     /** @description Required when allowLateSubmissions is true */
                     lateCutoff?: string;
                     isPublished?: boolean;
