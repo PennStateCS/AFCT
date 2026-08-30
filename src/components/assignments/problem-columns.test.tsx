@@ -2,7 +2,10 @@
 
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
+import type { ColumnDef } from '@tanstack/react-table';
+import { DataTable } from '@/components/ui/data-table';
 import { buildProblemColumns, type ProblemColumnsParams } from './problem-columns';
 
 // The columns are a heterogeneous array (accessor + display columns); loosen typing so
@@ -142,5 +145,91 @@ describe('buildProblemColumns', () => {
   it('actions cell names its menu trigger after the problem', () => {
     render(<>{find(cols(), 'actions').cell(arg(problem({ title: 'Widgets' })))}</>);
     expect(screen.getByRole('button', { name: 'Actions for Widgets' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The same sorts, but driven through the real DataTable and the DOM.
+ *
+ * The tests above call `col.sortingFn(...)` off the array literal, which proves the comparator
+ * is correct and proves nothing about whether the table ever calls it. That gap is not
+ * hypothetical: TanStack Table 9 renames the option from `sortingFn` to `sortFn`, its
+ * compatibility layer passes column options through untranslated, and `buildProblemColumns`
+ * returns an unannotated literal, so excess-property checking would not flag the stale name
+ * either. Under v9 the comparator would sit there, uncalled, with the unit tests above still
+ * green and the column silently sorting alphanumerically instead.
+ *
+ * So these render the table, click the header, and read the order off the screen. They are the
+ * tests that would go red.
+ */
+describe('problem columns, wired into the table', () => {
+  const problems = [
+    problem({ id: 'p1', title: 'Three', assignmentMaxSubmissions: 3 }),
+    problem({ id: 'p2', title: 'Unlimited', assignmentMaxSubmissions: -1 }),
+    problem({ id: 'p3', title: 'Two', assignmentMaxSubmissions: 2 }),
+  ];
+
+  const autograded = [
+    problem({ id: 'p1', title: 'Off one', assignmentAutograderEnabled: false }),
+    problem({ id: 'p2', title: 'On one', assignmentAutograderEnabled: true }),
+    problem({ id: 'p3', title: 'Not set' }),
+  ];
+
+  let view: ReturnType<typeof render>;
+
+  const renderTable = (data: Record<string, any>[]) => {
+    view = render(<DataTable columns={cols() as ColumnDef<any>[]} data={data} />);
+    return view;
+  };
+
+  /**
+   * The Title cell of every body row, top to bottom, which is how the order reads.
+   *
+   * Scoped to `tbody` on purpose: the table also renders a `thead` row and a `tfoot`
+   * pagination row, and both answer to the `row` role.
+   */
+  const titlesOnScreen = () =>
+    Array.from(view.container.querySelectorAll('tbody tr')).map(
+      (row) => row.querySelectorAll('td')[1]?.textContent ?? '',
+    );
+
+  it('puts Unlimited last when Max Submissions is sorted ascending', async () => {
+    const user = userEvent.setup();
+    renderTable(problems);
+
+    await user.click(screen.getByRole('button', { name: 'Max Submissions' }));
+
+    // Unlimited normalizes to +Infinity, so it sorts after every real number rather than
+    // before them, which is what -1 would do untouched.
+    expect(titlesOnScreen()).toEqual(['Two', 'Three', 'Unlimited']);
+  });
+
+  it('keeps Unlimited first when the same column is sorted descending', async () => {
+    const user = userEvent.setup();
+    renderTable(problems);
+
+    const header = screen.getByRole('button', { name: 'Max Submissions' });
+    await user.click(header);
+    await user.click(header);
+
+    expect(titlesOnScreen()).toEqual(['Unlimited', 'Three', 'Two']);
+  });
+
+  /**
+   * Documentation, not a tripwire, and worth saying so: booleans sort the same way with or
+   * without the custom comparator, so unlike the two above this one stays green if the table
+   * stops reading `sortingFn`. It earns its place by pinning what happens to a problem the
+   * assignment says nothing about, which is the case the comparator's own `-1` branch looks
+   * like it handles and does not.
+   */
+  it('sorts a problem with no autograder setting to the end', async () => {
+    const user = userEvent.setup();
+    renderTable(autograded);
+
+    await user.click(screen.getByRole('button', { name: 'Autograder' }));
+
+    // Off before On from the comparator, and the unset row last: the table never passes an
+    // undefined value to a custom sort, it parks those at the end by itself.
+    expect(titlesOnScreen()).toEqual(['Off one', 'On one', 'Not set']);
   });
 });
