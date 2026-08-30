@@ -39,6 +39,25 @@ if [ "${ENSURE_DEPS:-true}" = "true" ] && [ "${NODE_ENV:-}" = "development" ]; t
   else
     log "dependencies up to date"
   fi
+elif [ "${NODE_ENV:-}" = "development" ] && [ -f package-lock.json ]; then
+  # Not the installer, and it shares the volume with whoever is. Starting now would run
+  # against a node_modules the other container is part way through replacing, so wait for
+  # the marker to say the install finished and matches this lockfile.
+  #
+  # Bounded, and it starts anyway on timeout: a worker that refuses to boot because a
+  # marker never appeared is a worse outcome than one that fails loudly on a missing
+  # module, and the log line below is what points at the cause either way.
+  waited=0
+  while [ ! -f "$DEPS_MARKER" ] || ! cmp -s package-lock.json "$DEPS_MARKER"; do
+    if [ "$waited" -ge 300 ]; then
+      log "WARNING: dependencies still not ready after 300s; starting anyway"
+      break
+    fi
+    [ "$waited" = 0 ] && log "waiting for another container to finish installing dependencies"
+    sleep 2
+    waited=$((waited + 2))
+  done
+  [ "$waited" -gt 0 ] && [ "$waited" -lt 300 ] && log "dependencies ready after ${waited}s"
 fi
 
 # The app can't run without a database.
