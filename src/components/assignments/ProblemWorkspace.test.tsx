@@ -158,6 +158,25 @@ describe('what a screen reader is told about the latest attempt', () => {
     expect(region()).toHaveTextContent('Attempt 1: Incorrect. Rejected on input aab');
   });
 
+  /**
+   * A withheld result is not an empty one, and the two must not look alike. The dash the table
+   * shows for "the evaluator said nothing" would tell a student exactly the wrong thing.
+   */
+  it('says the feedback is not shown rather than showing nothing', () => {
+    render(
+      <ProblemWorkspace
+        {...baseProps}
+        submissions={[attempt({ feedback: null, feedbackVisible: false })]}
+      />,
+    );
+
+    expect(screen.getAllByText('Feedback is not shown for this problem.').length).toBeGreaterThan(
+      0,
+    );
+    // And the same words are announced, so a screen reader is not left with the verdict alone.
+    expect(region()).toHaveTextContent('Feedback is not shown for this problem.');
+  });
+
   /** The newest attempt is the one that holds the standing grade, so it is the one announced. */
   it('reports the newest attempt, not the first', () => {
     render(

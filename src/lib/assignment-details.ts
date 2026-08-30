@@ -7,6 +7,8 @@ export type AssignmentProblemLink = {
   maxPoints: number;
   maxSubmissions: number;
   autograderEnabled: boolean;
+  /** Whether students see the evaluator's feedback on this problem, or only the verdict. */
+  showFeedback: boolean;
 };
 
 export type AssignmentCourseSummary = {

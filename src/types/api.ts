@@ -1513,7 +1513,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get one problem's per-assignment settings
+         * @description The per-assignment settings for one problem, plus how many attempts have already been made  against it.   The count exists for one screen: turning feedback off (or back on) partway through changes  what students see from that moment, and the people who already submitted keep whatever they  were shown. The settings dialog says how many that is, so the change is a decision rather  than a surprise. Nothing else needs it, which is why it is not on the assignment payload.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/[pid]/route.ts)
+         */
+        get: operations["getCoursesByIdAssignmentsByAidProblemsByPid"];
         /**
          * Update an assignment problem's settings
          * @description Updates the per-assignment settings for one problem: its point value, submission  cap, and whether the autograder runs. Course staff (faculty or TAs) or a system  admin. The problem  must already be linked to the assignment, and the assignment must belong to the  course in the path.
@@ -7923,6 +7929,72 @@ export interface operations {
             };
             /** @description Some members already differ. Retry with overwrite. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCoursesByIdAssignmentsByAidProblemsByPid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aid: string;
+                pid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings, and the number of attempts already made. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        maxPoints?: number;
+                        maxSubmissions?: number;
+                        autograderEnabled?: boolean;
+                        showFeedback?: boolean;
+                        submissionCount?: number;
+                    };
+                };
+            };
+            /** @description Not signed in. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Caller is not course staff (faculty or TA) or a system admin. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The problem isn't linked to this assignment/course. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

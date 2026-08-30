@@ -36,6 +36,7 @@ interface AssignmentWithProblemsAndCourse {
     maxPoints: number;
     maxSubmissions: number;
     autograderEnabled: boolean;
+    showFeedback: boolean;
   }[];
 
   course: {
@@ -191,6 +192,7 @@ export const GET = withCourseAuth(
               maxPoints: true,
               maxSubmissions: true,
               autograderEnabled: true,
+              showFeedback: true,
               problem: {
                 select: {
                   id: true,
@@ -306,6 +308,7 @@ export const GET = withCourseAuth(
           maxPoints: ap.maxPoints,
           maxSubmissions: ap.maxSubmissions,
           autograderEnabled: ap.autograderEnabled,
+          showFeedback: ap.showFeedback,
         }),
       );
 

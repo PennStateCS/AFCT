@@ -114,9 +114,7 @@ describe('AssignmentBasicsForm', () => {
     await waitForEditor();
 
     typeInEditor('Now with formatting');
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled());
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(putMock).toHaveBeenCalledTimes(1));

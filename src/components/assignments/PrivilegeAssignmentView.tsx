@@ -519,6 +519,7 @@ export default function AssignmentDashboardPage({
         maxPoints: assignmentProblemForDialog.maxPoints,
         maxSubmissions: assignmentProblemForDialog.maxSubmissions,
         autograderEnabled: assignmentProblemForDialog.autograderEnabled,
+        showFeedback: assignmentProblemForDialog.showFeedback,
       }
     : undefined;
 
