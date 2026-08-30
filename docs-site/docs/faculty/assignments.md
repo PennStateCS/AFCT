@@ -87,6 +87,21 @@ the bank. Open a problem's settings to change them:
 - **Accepted Submissions**: a fixed number of attempts, or unlimited. On a
   [group](groups.md) assignment the limit belongs to the group rather than to each member, so a
   limit of 5 means 5 attempts between them and any member's submission spends one.
+- **Count missing work as zero**: on for new assignments. Once the due date passes, a problem
+  nobody submitted is scored zero rather than left blank, and the gradebook says so under the
+  number rather than showing a bare zero that reads like a mark.
+
+  Nothing is written to the gradebook for it. The zero is worked out each time a page is drawn,
+  which is what makes it safe to change your mind: a late submission, an extension you grant
+  afterwards, or turning the setting off simply produce a different answer next time. There is no
+  row to find and delete.
+
+  Three things it never does. It does not touch work that was handed in and is waiting to be
+  marked, whether that is waiting on you or on the autograder. It does not apply before a
+  student's own due date, so an extension you grant to one person or one group keeps their work
+  blank while everyone else's is scored. And on group work it asks whether the _group_ submitted,
+  so one member handing in covers all of them.
+
 - **Automatically Graded**: whether submissions go to the autograder. When it is on, a
   submission the autograder marks correct is awarded the maximum points automatically, and one
   it marks incorrect is recorded as **zero** rather than left ungraded.
