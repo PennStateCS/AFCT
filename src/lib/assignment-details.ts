@@ -51,6 +51,8 @@ export type AssignmentWithDetails = {
   groupSetId?: string | null;
   maxPoints: number;
   allowLateSubmissions?: boolean;
+  /** Whether unsubmitted work counts as zero once its deadline has passed. */
+  missingWorkIsZero?: boolean;
   lateCutoff?: string | Date | null;
   isPublished: boolean;
   createdAt?: Date;
