@@ -37,6 +37,8 @@ type StudentAssignmentViewProps = {
 const EMPTY_SUBMISSIONS: Record<string, StudentProblemSubmission[]> = {};
 const EMPTY_COMMENTS: Record<string, StudentProblemComment[]> = {};
 const EMPTY_GRADES: Record<string, number | null> = {};
+/** Stable identity, so the memo below is not invalidated on every render. */
+const EMPTY_MISSING: string[] = [];
 
 export default function StudentAssignmentPage({
   initialAssignment = null,
@@ -86,6 +88,8 @@ export default function StudentAssignmentPage({
   const submissions = contextQuery.data?.submissionsByProblem ?? EMPTY_SUBMISSIONS;
   const comments = contextQuery.data?.commentsByProblem ?? EMPTY_COMMENTS;
   const problemGrades = contextQuery.data?.problemGrades ?? EMPTY_GRADES;
+  // Which of those zeros are for work never handed in, so the list can say so.
+  const missingProblems: string[] = contextQuery.data?.missingProblems ?? EMPTY_MISSING;
   const assignmentGrade = contextQuery.data?.assignmentGrade ?? null;
   const problemLimits = contextQuery.data?.problemLimits;
   // The cap that applies to THIS student (base plus any extra-submission grants). An
@@ -291,11 +295,12 @@ export default function StudentAssignmentPage({
         ? limitText(assignmentProblem.problem.title, 25)
         : `Problem ${index + 1}`,
       grade: problemGrades[assignmentProblem.problem.id] ?? null,
+      missing: missingProblems.includes(assignmentProblem.problem.id),
       maxGrade: assignmentProblem.maxPoints ?? null,
       submissionsCount: submissions[assignmentProblem.problem.id]?.length ?? 0,
       maxSubmissions: effectiveMax(assignmentProblem.problem.id, assignmentProblem.maxSubmissions),
     }));
-  }, [assignment, submissions, problemGrades, effectiveMax]);
+  }, [assignment, submissions, problemGrades, missingProblems, effectiveMax]);
 
   // Both announce. On a first paint plain text would do, but this same branch renders when
   // moving between assignments client-side, where the change is otherwise silent.

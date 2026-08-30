@@ -87,6 +87,11 @@ export type StudentAssignmentContext = {
   assignmentGrade: number | null;
   submissionCount: number;
   problemGrades: Record<string, number | null>;
+  /**
+   * Problem ids whose zero is for work never handed in, rather than one that was marked. Both are
+   * the number 0 and the screen has to tell them apart.
+   */
+  missingProblems?: string[];
   submissionsByProblem: Record<string, StudentProblemSubmission[]>;
   commentsByProblem: Record<string, StudentProblemComment[]>;
   /**
