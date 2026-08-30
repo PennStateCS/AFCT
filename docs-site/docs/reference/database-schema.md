@@ -995,6 +995,7 @@ erDiagram
   Float maxPoints
   Int maxSubmissions
   Boolean autograderEnabled
+  Boolean showFeedback
 }
 "SubmissionGrant" {
   String id PK
@@ -1192,6 +1193,16 @@ Properties as follows:
 - `maxPoints`: What this problem is worth on this assignment.
 - `maxSubmissions`: How many attempts a student gets. Zero or less means unlimited.
 - `autograderEnabled`: Whether attempts are graded automatically.
+- `showFeedback`
+  > Whether students see what the evaluator said, or only whether they were right.
+  >
+  > A disclosure rule, not a grading rule: the evaluator runs either way, its feedback is always
+  > stored, and staff always read it. Off withholds the witness string on a completed run only;
+  > the reason a run FAILED, and any comment a person wrote by hand, still reach the student.
+  >
+  > This is a study variable (RQ5 compares the witness string being shown against not), which is
+  > why `Submission.feedbackShown` records the value each attempt was actually graded under
+  > rather than this being read back later as though it had never changed.
 
 ### `SubmissionGrant`
 
@@ -1222,6 +1233,7 @@ erDiagram
 "Submission" {
   String id PK
   String feedback "nullable"
+  Boolean feedbackShown "nullable"
   Boolean correct "nullable"
   Json evaluationRaw "nullable"
   String fileName "nullable"
@@ -1358,6 +1370,7 @@ erDiagram
   Float maxPoints
   Int maxSubmissions
   Boolean autograderEnabled
+  Boolean showFeedback
 }
 "StudentGroup" {
   String id PK
@@ -1397,6 +1410,13 @@ Properties as follows:
 
 - `id`: Unique identifier.
 - `feedback`: Feedback produced for this attempt.
+- `feedbackShown`
+  > Whether the problem was showing evaluator feedback to students when this attempt was graded.
+  >
+  > Stamped by the worker rather than read from `AssignmentProblem.showFeedback` at display time,
+  > because that setting can change mid-term and this has to keep saying what the student was
+  > actually under. Null for anything graded before the setting existed, which is honest: those
+  > attempts predate the distinction. See RQ5 in the grant.
 - `correct`: Whether the attempt was judged correct. Empty until grading finishes.
 - `evaluationRaw`: Full grader output, kept for diagnosis.
 - `fileName`: Stored submitted file.
@@ -1688,6 +1708,7 @@ erDiagram
 "Submission" {
   String id PK
   String feedback "nullable"
+  Boolean feedbackShown "nullable"
   Boolean correct "nullable"
   Json evaluationRaw "nullable"
   String fileName "nullable"
