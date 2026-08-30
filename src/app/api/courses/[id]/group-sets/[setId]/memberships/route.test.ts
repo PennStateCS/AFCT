@@ -52,7 +52,12 @@ beforeEach(() => {
     basis: 'x',
   });
   serviceMock.activeStudentIds.mockResolvedValue(new Set(['u1', 'u2']));
-  prismaMock.studentGroup.findMany.mockResolvedValue([{ id: 'g1' }, { id: 'g2' }]);
+  // Names as well as ids: the same query answers the "are these groups in this set" check and
+  // the lookup that puts readable names on the audit rows.
+  prismaMock.studentGroup.findMany.mockResolvedValue([
+    { id: 'g1', name: 'Group A' },
+    { id: 'g2', name: 'Group B' },
+  ]);
   // Where each affected student was before the edit, which the per-student entries record as
   // their from-group. Empty by default: nobody was in a group yet.
   prismaMock.groupMembership.findMany.mockResolvedValue([]);
@@ -154,10 +159,15 @@ describe('membership audit', () => {
     const rows = prismaMock.activityLog.createMany.mock.calls[0]?.[0]?.data ?? [];
     expect(rows).toHaveLength(1);
     expect(rows[0].action).toBe('GROUP_MEMBERSHIP_ASSIGNED');
+    // Both, on purpose: the id is what survives a rename, the name is what a person reading
+    // the log can act on. Without the names the entry read "one student, cmtf35e5j00 to
+    // cmtf35e5i00".
     expect(rows[0].metadata).toMatchObject({
       targetUserId: 'u1',
       fromGroupId: 'g1',
       toGroupId: 'g2',
+      fromGroupName: 'Group A',
+      toGroupName: 'Group B',
     });
   });
 

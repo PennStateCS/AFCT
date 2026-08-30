@@ -75,6 +75,7 @@ const NAMED: Array<[string, Meta, RelatedRecords | null, string]> = [
   ['SYSTEM_UPDATE_ROLLED_BACK', {}, null, 'System update'],
   ['SYSTEM_UPDATE_FAILED', {}, null, 'System update'],
   ['SYSTEM_DOWNGRADE_REQUESTED', {}, null, 'System downgrade'],
+  ['SYSTEM_UPDATER_SELF_UPDATE_REQUESTED', {}, null, 'Updater service'],
   ['SYSTEM_BACKUP_REQUESTED', {}, null, 'System backup'],
   ['SYSTEM_BACKUP_DOWNLOADED', {}, null, 'System backup'],
   ['SYSTEM_RESTORE_POINT_DELETE_REQUESTED', {}, null, 'Restore point'],
@@ -200,11 +201,11 @@ const DETAIL: Array<[string, Meta, string | null]> = [
   ['DUPLICATE_GROUP_SET', {}, null],
   [
     'GROUP_MEMBERSHIP_ASSIGNED',
-    { fromGroupId: 'Group A', toGroupId: 'Group B' },
+    { fromGroupName: 'Group A', toGroupName: 'Group B' },
     'one student, Group A to Group B',
   ],
-  ['GROUP_MEMBERSHIP_ASSIGNED', { toGroupId: 'Group B' }, 'one student, into Group B'],
-  ['GROUP_MEMBERSHIP_REMOVED', { fromGroupId: 'Group A' }, 'one student, out of Group A'],
+  ['GROUP_MEMBERSHIP_ASSIGNED', { toGroupName: 'Group B' }, 'one student, into Group B'],
+  ['GROUP_MEMBERSHIP_REMOVED', { fromGroupName: 'Group A' }, 'one student, out of Group A'],
   ['GROUP_MEMBERSHIP_REMOVED', {}, 'one student'],
 
   // Audience and roles.

@@ -724,12 +724,31 @@ describe('courses and their contents', () => {
       activityDetail('UPDATE_GROUP_SET_GROUP', { previousName: 'Group A', name: 'Team A' }),
     ).toBe('Group A to Team A');
   });
+
+  it('does not report a rename that kept the same name', () => {
+    // "Group 2 to Group 2" was on the live log. Saving without changing the name is a real
+    // request and stays recorded; it just is not a change.
+    expect(
+      activityDetail('UPDATE_GROUP_SET_GROUP', { previousName: 'Group 2', name: 'Group 2' }),
+    ).toBeNull();
+  });
 });
 
 describe('the system itself', () => {
   it('says which version an update was going to', () => {
     expect(activityDetail('SYSTEM_UPDATE_REQUESTED', { fromTag: 'v0.3.0', tag: 'v0.4.0' })).toBe(
       'v0.3.0 to v0.4.0',
+    );
+  });
+
+  it('names the version once when a release is reinstalled over itself', () => {
+    // Re-running the installed version is a normal way out of a bad deploy, and the log read
+    // "v0.9.1 to v0.9.1", which looked like a move that never happened.
+    expect(activityDetail('SYSTEM_UPDATE_REQUESTED', { fromTag: 'v0.9.1', tag: 'v0.9.1' })).toBe(
+      'v0.9.1',
+    );
+    expect(activityDetail('SYSTEM_UPDATE_COMPLETED', { fromTag: 'v0.9.1', toTag: 'v0.9.1' })).toBe(
+      'now on v0.9.1',
     );
   });
 
@@ -1065,10 +1084,23 @@ describe('the audit gaps that got their own entries', () => {
   it('says which group a student came out of as well as the one they went into', () => {
     expect(
       describeActivity('GROUP_MEMBERSHIP_ASSIGNED', {
-        fromGroupId: 'Group A',
-        toGroupId: 'Team B',
+        fromGroupId: 'cmtf35e5j002p3sphlrtdb8js',
+        toGroupId: 'cmtf35e5i002o3sphm1dbs8po',
+        fromGroupName: 'Group A',
+        toGroupName: 'Team B',
       }),
     ).toBe('one student, Group A to Team B');
+  });
+
+  it('does not put a group id on the line when the names were never recorded', () => {
+    // What the log did before the names were kept. The fixture used to put "Group A" in an id
+    // field, which is why nothing here noticed that the real entries read as cuids.
+    expect(
+      describeActivity('GROUP_MEMBERSHIP_ASSIGNED', {
+        fromGroupId: 'cmtf35e5j002p3sphlrtdb8js',
+        toGroupId: 'cmtf35e5i002o3sphm1dbs8po',
+      }),
+    ).toBe('one student');
   });
 
   it('reports the grade-sync switch as a change, not just an update', () => {
