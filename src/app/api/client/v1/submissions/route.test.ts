@@ -55,7 +55,10 @@ beforeEach(() => {
   canAccessMock.mockResolvedValue(true);
   canManageMock.mockResolvedValue(false);
   prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isPublished: true });
-  prismaMock.assignmentProblem.findUnique.mockResolvedValue({ assignmentId: 'a1' });
+  prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+    assignmentId: 'a1',
+    showFeedback: true,
+  });
   // Individual caller by default; the group-aware test overrides this.
   resolveGroupMock.mockResolvedValue(null);
 });
@@ -81,7 +84,11 @@ describe('POST /api/client/v1/submissions', () => {
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ submissionId: 's1', status: 'PENDING' });
     expect(createSubmissionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ user: expect.objectContaining({ id: 'u1' }), assignmentId: 'a1', problemId: 'p1' }),
+      expect.objectContaining({
+        user: expect.objectContaining({ id: 'u1' }),
+        assignmentId: 'a1',
+        problemId: 'p1',
+      }),
     );
   });
 
@@ -159,10 +166,15 @@ describe('GET /api/client/v1/submissions (history)', () => {
     expect(body.submissions[0].submittedBy).toBe('Ada Lovelace');
   });
 
-  it('widens the caller\'s attempt list to the group set when group-assigned', async () => {
+  it("widens the caller's attempt list to the group set when group-assigned", async () => {
     resolveGroupMock.mockResolvedValue('group-1');
     prismaMock.submission.findMany.mockResolvedValue([
-      { id: 'g1', status: 'COMPLETED', correct: true, submittedAt: new Date('2026-01-02T00:00:00Z') },
+      {
+        id: 'g1',
+        status: 'COMPLETED',
+        correct: true,
+        submittedAt: new Date('2026-01-02T00:00:00Z'),
+      },
     ]);
 
     const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
@@ -215,5 +227,64 @@ describe('GET /api/client/v1/submissions (history)', () => {
     const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
     expect(res.status).toBe(404);
     expect(prismaMock.submission.findMany).not.toHaveBeenCalled();
+  });
+});
+
+/** The attempt history the client shows beside the problem. Same rule as the poll route. */
+describe('GET /api/client/v1/submissions (history), feedback visibility', () => {
+  const makeGet = (query: string) =>
+    new Request(`http://localhost/api/client/v1/submissions?${query}`, {
+      headers: { authorization: 'Bearer good' },
+    });
+
+  const history = async (showFeedback: boolean, over: Record<string, unknown> = {}) => {
+    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+      assignmentId: 'a1',
+      showFeedback,
+    });
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        id: 's1',
+        status: 'COMPLETED',
+        correct: false,
+        submittedAt: new Date('2026-03-01T10:00:00.000Z'),
+        originalFileName: 'mine.jff',
+        feedback: 'accepts "01" but should reject it',
+        student: { firstName: 'Ada', lastName: 'Lovelace' },
+        ...over,
+      },
+    ]);
+
+    const res = await GET(makeGet('assignmentId=a1&problemId=p1'), ctx);
+    expect(res.status).toBe(200);
+    return (await res.json()).submissions[0];
+  };
+
+  it('sends the witness string when the problem shows feedback', async () => {
+    expect(await history(true)).toMatchObject({
+      feedback: 'accepts "01" but should reject it',
+      feedbackVisible: true,
+    });
+  });
+
+  it('withholds it when the problem does not', async () => {
+    const row = await history(false);
+
+    expect(row).toMatchObject({ feedback: null, feedbackVisible: false });
+    // Everything else about the attempt still arrives.
+    expect(row.correct).toBe(false);
+    expect(row.fileName).toBe('mine.jff');
+  });
+
+  it('still reports why a run failed', async () => {
+    const row = await history(false, {
+      status: 'FAILED',
+      feedback: 'The file could not be parsed.',
+    });
+
+    expect(row).toMatchObject({
+      feedback: 'The file could not be parsed.',
+      feedbackVisible: true,
+    });
   });
 });

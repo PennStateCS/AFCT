@@ -6115,6 +6115,8 @@ export interface operations {
                         grade?: number | null;
                         /** @description The witness / counterexample */
                         feedback?: string | null;
+                        /** @description False when the problem withholds the evaluator's feedback from students. Distinguishes a withheld result from one the evaluator had nothing to say about, since feedback is null in both cases. */
+                        feedbackVisible?: boolean;
                     };
                 };
             };
@@ -6157,6 +6159,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback, so a null feedback can be told from one the evaluator left empty. */
                         submissions?: Record<string, never>[];
                     };
                 };

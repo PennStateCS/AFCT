@@ -138,6 +138,7 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
       status: 'COMPLETED',
       correct: false,
       feedback: 'accepts "01" but should reject it',
+      assignmentProblem: { showFeedback: true },
     });
     canViewMock.mockResolvedValue(true);
     prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({ grade: 6 });
@@ -148,6 +149,7 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
       id: 's1',
       status: 'COMPLETED',
       correct: false,
+      feedbackVisible: true,
       grade: 6,
       feedback: 'accepts "01" but should reject it',
     });
@@ -295,5 +297,55 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
     expect(body.correct).toBeNull();
     expect(body.grade).toBeNull();
     expect(body.feedback).toBeNull();
+  });
+});
+
+/**
+ * The desktop client polls this the moment a student submits, so it is the first place a
+ * withheld witness string has to actually be withheld.
+ */
+describe('GET /api/client/v1/submissions/[submissionId], feedback visibility', () => {
+  const poll = async (showFeedback: boolean, over: Record<string, unknown> = {}) => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      studentId: 'u1',
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      groupId: null,
+      status: 'COMPLETED',
+      correct: false,
+      feedback: 'accepts "01" but should reject it',
+      assignmentProblem: { showFeedback },
+      ...over,
+    });
+    canViewMock.mockResolvedValue(true);
+    prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({ grade: 6 });
+
+    const res = await GET(makeReq('Bearer good'), ctx);
+    expect(res.status).toBe(200);
+    return res.json();
+  };
+
+  it('withholds the witness string when the problem hides feedback', async () => {
+    const body = await poll(false);
+
+    // The flag is why this is a new field rather than just a null: the client has to be able
+    // to say "not shown" instead of showing nothing at all.
+    expect(body.feedback).toBeNull();
+    expect(body.feedbackVisible).toBe(false);
+    // The verdict is still the student's to see. That is the whole point of the setting.
+    expect(body.correct).toBe(false);
+    expect(body.grade).toBe(6);
+  });
+
+  it('still reports why a run failed', async () => {
+    const body = await poll(false, { status: 'FAILED', feedback: 'The file could not be parsed.' });
+
+    expect(body).toMatchObject({
+      feedback: 'The file could not be parsed.',
+      feedbackVisible: true,
+    });
   });
 });

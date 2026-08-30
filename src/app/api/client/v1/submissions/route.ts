@@ -8,6 +8,7 @@ import { SubmissionCreateApiSchema } from '@/schemas/submission';
 import { createSubmission } from '@/lib/create-submission';
 import { canAccessCourse, canManageCourse } from '@/lib/permissions';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
+import { discloseSubmissionFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 
 /**
  * The caller's own submission history for one problem (attempt list), newest first,
@@ -27,7 +28,10 @@ import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
  *         schema:
  *           type: object
  *           properties:
- *             submissions: { type: array, items: { type: object } }
+ *             submissions:
+ *               type: array
+ *               description: "Each attempt carries feedbackVisible: false where the problem withholds the evaluator's feedback, so a null feedback can be told from one the evaluator left empty."
+ *               items: { type: object }
  *   400: { description: Missing assignmentId or problemId. }
  *   401: { description: Missing or invalid token. }
  *   403: { description: Not enrolled in the course. }
@@ -60,7 +64,7 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
     }
     const link = await prisma.assignmentProblem.findUnique({
       where: { assignmentId_problemId: { assignmentId, problemId } },
-      select: { assignmentId: true },
+      select: { assignmentId: true, showFeedback: true },
     });
     if (!link) return apiError(404, 'Assignment not found');
 
@@ -85,6 +89,10 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
       },
     });
 
+    // This route answers only for the caller's own work, so there is no staff branch: a
+    // member of staff reading a student's attempts does it through the web routes.
+    const visibility = feedbackVisibilityMap([{ problemId, showFeedback: link.showFeedback }]);
+
     return NextResponse.json({
       submissions: submissions.map((s) => ({
         id: s.id,
@@ -94,7 +102,7 @@ export const GET = withClientAuth(async (req, _ctx, { user }) => {
         // The name of the file the student uploaded, and the evaluator's witness /
         // counterexample string once evaluation has finished (null while queued).
         fileName: s.originalFileName,
-        feedback: s.feedback,
+        ...discloseSubmissionFeedback({ ...s, problemId }, visibility, { isStaff: false }),
         submittedBy:
           [s.student?.firstName, s.student?.lastName].filter(Boolean).join(' ').trim() || null,
       })),
