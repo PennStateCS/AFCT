@@ -120,7 +120,7 @@ afterAll(() => {
 const renderDialog = () => {
   const setOpen = vi.fn();
   const onSaved = vi.fn();
-  render(
+  const view = render(
     <AssignmentProblemSettingsDialog
       open
       setOpen={setOpen}
@@ -133,7 +133,7 @@ const renderDialog = () => {
       onSaved={onSaved}
     />,
   );
-  return { setOpen, onSaved };
+  return { setOpen, onSaved, ...view };
 };
 
 describe('AssignmentProblemSettingsDialog', () => {
@@ -215,6 +215,26 @@ describe('AssignmentProblemSettingsDialog', () => {
     expect(
       await screen.findByText(/12 attempts have already been made with feedback shown/),
     ).toBeInTheDocument();
+  });
+
+  it('announces the warning rather than only showing it', async () => {
+    // Flipping the switch is what produces the warning, so a screen reader user gets it only if
+    // it lands in a live region. Mounted up front and filled later, because a region inserted
+    // together with its first message is not reliably announced.
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(settingsResponse({ submissionCount: 3 }));
+
+    const { baseElement } = renderDialog();
+    const regions = () => baseElement.querySelectorAll('[role="status"], [aria-live]');
+
+    await waitFor(() => expect(regions()).toHaveLength(1));
+    expect(regions()[0]).toHaveTextContent('');
+
+    await user.click(screen.getByLabelText('Show Feedback to Students'));
+
+    await waitFor(() =>
+      expect(regions()[0]).toHaveTextContent(/3 attempts have already been made/),
+    );
   });
 
   it('says nothing when no attempts exist yet', async () => {
