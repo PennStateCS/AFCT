@@ -97,12 +97,7 @@ export default function AccountClient({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
-        <p className="text-muted-foreground text-sm">
-          Your profile and how you sign in. Only you can see this page.
-        </p>
-      </div>
+      <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
 
       <Tabs
         value={tab}
