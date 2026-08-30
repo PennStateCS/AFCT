@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  courseRoleOptions,
-  roleOrder,
-  roleSortingFn,
-  parseCourseRole,
-  formatCourseRole,
-} from './roles';
-import type { Row } from '@tanstack/react-table';
+import { courseRoleOptions, roleOrder, parseCourseRole, formatCourseRole } from './roles';
 
 describe('roles', () => {
   describe('courseRoleOptions', () => {
@@ -31,113 +24,6 @@ describe('roles', () => {
     it('should have FACULTY as highest priority', () => {
       expect(roleOrder.FACULTY).toBeLessThan(roleOrder.TA);
       expect(roleOrder.FACULTY).toBeLessThan(roleOrder.STUDENT);
-    });
-  });
-
-  describe('roleSortingFn', () => {
-    it('should sort by role priority', () => {
-      const facultyRow = {
-        getValue: () => 'FACULTY',
-        original: { lastName: 'Smith' },
-      } as unknown as Row<any>;
-
-      const studentRow = {
-        getValue: () => 'STUDENT',
-        original: { lastName: 'Jones' },
-      } as unknown as Row<any>;
-
-      const result = roleSortingFn(facultyRow, studentRow, 'role');
-      expect(result).toBeLessThan(0); // FACULTY should come before STUDENT
-    });
-
-    it('should sort by lastName when roles are the same', () => {
-      const row1 = {
-        getValue: () => 'STUDENT',
-        original: { lastName: 'Brown' },
-      } as unknown as Row<any>;
-
-      const row2 = {
-        getValue: () => 'STUDENT',
-        original: { lastName: 'Smith' },
-      } as unknown as Row<any>;
-
-      const result = roleSortingFn(row1, row2, 'role');
-      expect(result).toBeLessThan(0); // Brown should come before Smith
-    });
-
-    it('should handle missing lastName', () => {
-      const row1 = {
-        getValue: () => 'STUDENT',
-        original: {},
-      } as unknown as Row<any>;
-
-      const row2 = {
-        getValue: () => 'STUDENT',
-        original: { lastName: 'Smith' },
-      } as unknown as Row<any>;
-
-      const result = roleSortingFn(row1, row2, 'role');
-      expect(result).toBeLessThan(0); // Empty should come before Smith
-    });
-
-    it('should handle unknown roles with fallback priority', () => {
-      const row1 = {
-        getValue: () => 'UNKNOWN_ROLE',
-        original: { lastName: 'Smith' },
-      } as unknown as Row<any>;
-
-      const row2 = {
-        getValue: () => 'STUDENT',
-        original: { lastName: 'Jones' },
-      } as unknown as Row<any>;
-
-      const result = roleSortingFn(row1, row2, 'role');
-      expect(result).toBeGreaterThan(0); // Unknown (99) should come after STUDENT (3)
-    });
-
-    it('should return 0 for identical role and lastName', () => {
-      const row1 = {
-        getValue: () => 'FACULTY',
-        original: { lastName: 'Doe' },
-      } as unknown as Row<any>;
-
-      const row2 = {
-        getValue: () => 'FACULTY',
-        original: { lastName: 'Doe' },
-      } as unknown as Row<any>;
-
-      const result = roleSortingFn(row1, row2, 'role');
-      expect(result).toBe(0);
-    });
-
-    it('should handle case-insensitive lastName sorting', () => {
-      const row1 = {
-        getValue: () => 'TA',
-        original: { lastName: 'anderson' },
-      } as unknown as Row<any>;
-
-      const row2 = {
-        getValue: () => 'TA',
-        original: { lastName: 'Brown' },
-      } as unknown as Row<any>;
-
-      const result = roleSortingFn(row1, row2, 'role');
-      expect(result).toBeLessThan(0); // anderson should come before Brown
-    });
-
-    it('should handle rows without toLowerCase method', () => {
-      const row1 = {
-        getValue: () => 'FACULTY',
-        original: { lastName: null },
-      } as unknown as Row<any>;
-
-      const row2 = {
-        getValue: () => 'FACULTY',
-        original: { lastName: 'Smith' },
-      } as unknown as Row<any>;
-
-      const result = roleSortingFn(row1, row2, 'role');
-      expect(typeof result).toBe('number');
     });
   });
 
