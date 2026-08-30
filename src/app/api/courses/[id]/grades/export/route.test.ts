@@ -5,7 +5,8 @@ const prismaMock = vi.hoisted(() => ({
   roster: { findMany: vi.fn(), findFirst: vi.fn() },
   user: { findMany: vi.fn() },
   assignment: { findMany: vi.fn() },
-  assignmentProblemGrade: { groupBy: vi.fn() },
+  assignmentProblemGrade: { groupBy: vi.fn(), findMany: vi.fn() },
+  submission: { findMany: vi.fn() },
   groupMembership: { findMany: vi.fn() },
   course: { findUnique: vi.fn() },
 }));
@@ -43,6 +44,10 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   prismaMock.groupMembership.findMany.mockResolvedValue([]);
+  // The export applies the missing-work rule, which reads grades per problem and submissions.
+  // Empty by default, so the tests that are not about it export exactly what they always did.
+  prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  prismaMock.submission.findMany.mockResolvedValue([]);
   activityLogMock.mockResolvedValue(undefined);
 });
 
@@ -125,5 +130,49 @@ describe('GET /api/courses/[id]/grades/export', () => {
 
     const res = await GET(req('?platform=canvas&assignments=nope'), ctx);
     expect(res.status).toBe(400);
+  });
+});
+
+/**
+ * The export is how grades leave AFCT, so a blank here where the screen shows a zero is a
+ * disagreement somebody resolves by hand, in whichever direction they happen to guess.
+ */
+describe('exporting work nobody handed in', () => {
+  it('writes a zero rather than a blank', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+    prismaMock.roster.findMany.mockResolvedValue([
+      { userId: 's1', status: 'ENROLLED', user: { inactive: false } },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: 's1', firstName: 'Ada', lastName: 'L', email: 'a@x.io' },
+    ]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'A1',
+        dueDate: new Date('2026-01-10T00:00:00.000Z'),
+        isPublished: true,
+        assignedToEveryone: true,
+        missingWorkIsZero: true,
+        groupSetId: null,
+        unlockAt: null,
+        lateCutoff: null,
+        allowLateSubmissions: false,
+        course: { isArchived: false },
+        overrides: [],
+        problems: [{ problemId: 'p1', maxPoints: 10, createdAt: new Date('2026-01-01') }],
+        assignees: [],
+      },
+    ]);
+    // Nothing graded and nothing submitted: the definition of missing.
+    prismaMock.assignmentProblemGrade.groupBy.mockResolvedValue([]);
+
+    const res = await GET(req('?platform=canvas'), ctx);
+
+    expect(res.status).toBe(200);
+    const csv = await res.text();
+    // The row carries a 0 for the assignment, not an empty cell.
+    expect(csv).toMatch(/a@x\.io[^\n]*\b0\b/);
   });
 });

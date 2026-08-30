@@ -43,6 +43,13 @@ export type CourseGradeStructure = {
   // assignment (assigned to everyone, an individual override, or a group override on a
   // group they belong to). Cells where this is false render as "not assigned".
   assigned: Record<string, Record<string, boolean>>;
+  /**
+   * The groups each student belongs to, from the same lookup that built `assigned`.
+   *
+   * Carried rather than re-queried because the missing-work rule needs them too, and a group
+   * assignment's "did anybody hand this in" question is answered per group.
+   */
+  groups: Map<string, string[]>;
 };
 
 // The cell values only: grades[studentId][assignmentId] = summed points earned (problem
@@ -104,9 +111,11 @@ export async function getCourseGradeStructure(courseId: string): Promise<CourseG
   const assignmentRows = await loadAssignmentRows(courseId);
   const assignments = toColumns(assignmentRows);
   const studentIds = students.map((s) => s.id);
-  const assigned = await buildAssignedMap(assignmentRows, studentIds);
+  // Groups come back with the map: the missing-work rule in `getCourseGradeMatrix` needs the
+  // same ones, and asking again would be the same rows twice.
+  const { assigned, groups } = await buildAssignedMapWithGroups(assignmentRows, studentIds);
 
-  return { students, assignments, assigned };
+  return { students, assignments, assigned, groups };
 }
 
 /**
@@ -163,6 +172,46 @@ export async function getCourseGradeMatrix(courseId: string): Promise<CourseGrad
     getCourseGradeStructure(courseId),
     getCourseGradeValues(courseId),
   ]);
+
+  /**
+   * Work nobody handed in, as a zero rather than a blank.
+   *
+   * This matters more here than anywhere else the rule applies: the export is how grades leave
+   * AFCT for a spreadsheet or another gradebook, and a blank where the screen shows a zero is a
+   * disagreement somebody resolves by hand in whichever direction they happen to guess.
+   *
+   * Only assignments a student handed nothing in for. Where they submitted some problems and
+   * missed others, the assignment sum already counts the missed ones as nothing, and calling the
+   * whole assignment zero would say the same about work still waiting to be marked.
+   *
+   * Done here rather than inside `getCourseGradeValues` so the assigned map and the membership
+   * lookup the structure already did are reused instead of repeated.
+   */
+  const studentIds = structure.students.map((s) => s.id);
+  const assignmentRows = await loadAssignmentRows(courseId);
+  const roster = await prisma.roster.findMany({
+    where: { courseId, userId: { in: studentIds } },
+    select: { userId: true, status: true, user: { select: { inactive: true } } },
+  });
+  const activeById = new Map(
+    roster.map((r) => [r.userId, r.status === 'ENROLLED' && !r.user?.inactive]),
+  );
+  const { allMissing } = await buildAccountability(
+    assignmentRows,
+    studentIds,
+    structure.assigned,
+    activeById,
+    structure.groups,
+  );
+  for (const studentId of studentIds) {
+    for (const assignmentId of allMissing[studentId] ?? []) {
+      const studentGrades = values.grades[studentId];
+      if (studentGrades && studentGrades[assignmentId] === null) {
+        studentGrades[assignmentId] = 0;
+      }
+    }
+  }
+
   return { ...structure, ...values };
 }
 
@@ -285,17 +334,22 @@ function toColumns(rows: AssignmentRow[]): GradeMatrixAssignment[] {
  * rows and group memberships. One membership query for the whole set; no per-cell queries.
  *
  * Shared with `getCourseGradeStructure` so "who is assigned what" keeps one definition.
+ *
+ * The groups it looked up come back with it. The missing-work rule needs the same ones, and a
+ * second query for them would be the same rows again.
  */
-async function buildAssignedMap(
+async function buildAssignedMapWithGroups(
   assignmentRows: AssignmentRow[],
   studentIds: string[],
-): Promise<Record<string, Record<string, boolean>>> {
+): Promise<{ assigned: Record<string, Record<string, boolean>>; groups: Map<string, string[]> }> {
   const assigned: Record<string, Record<string, boolean>> = {};
   for (const s of studentIds) {
     assigned[s] = {};
     for (const a of assignmentRows) assigned[s][a.id] = true;
   }
-  if (assignmentRows.length === 0 || studentIds.length === 0) return assigned;
+  if (assignmentRows.length === 0 || studentIds.length === 0) {
+    return { assigned, groups: new Map() };
+  }
 
   const memberships = await prisma.groupMembership.findMany({
     where: { userId: { in: studentIds } },
@@ -321,7 +375,15 @@ async function buildAssignedMap(
       }
     }
   }
-  return assigned;
+  return { assigned, groups: groupIdsByStudent };
+}
+
+/** The map alone, for the callers that do not need the groups. */
+async function buildAssignedMap(
+  assignmentRows: AssignmentRow[],
+  studentIds: string[],
+): Promise<Record<string, Record<string, boolean>>> {
+  return (await buildAssignedMapWithGroups(assignmentRows, studentIds)).assigned;
 }
 
 /** Dense grades[studentId][assignmentId] for the given students, nulls where ungraded. */
