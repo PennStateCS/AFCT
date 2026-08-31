@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FileText } from 'lucide-react';
 import type { Submission, User } from '@prisma/client';
 import { showToast } from '@/lib/toast';
+import { isTextEntryTarget } from '@/lib/keyboard';
 import { apiPaths } from '@/lib/api-paths';
 import { rerunSubmission } from '@/app/utils/rerunSubmission';
 import type { Comment as DiscussionComment } from './DiscussionPanel';
@@ -82,13 +83,14 @@ const hasSubmissions = (obj: unknown): obj is { submissions: Submission[] } => {
   );
 };
 
-/** True when the key event originates from a text field, so the shortcuts stay dormant. */
-const isTypingTarget = (e: KeyboardEvent): boolean => {
-  if (e.altKey || e.ctrlKey || e.metaKey) return true;
-  const target = e.target as HTMLElement | null;
-  const tag = target?.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!target?.isContentEditable;
-};
+/**
+ * True when the key event originates from a text field, so the shortcuts stay dormant.
+ *
+ * These are bare letters and digits, so any modifier means the keystroke was meant for something
+ * else and this is not it. That extra rule is why this is not `isTextEntryTarget` alone.
+ */
+const isTypingTarget = (e: KeyboardEvent): boolean =>
+  e.altKey || e.ctrlKey || e.metaKey || isTextEntryTarget(e);
 
 const extractSubs = (raw?: SubmissionData): Submission[] => {
   if (!raw) return [];
