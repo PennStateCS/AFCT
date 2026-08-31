@@ -33,6 +33,38 @@ const clickNext = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(screen.getByRole('button', { name: 'Next' }));
 };
 
+/** Valid JFLAP content. jsdom's File has no text(), which the dialog calls to validate. */
+const answerFile = () => {
+  const content = '<structure><type>FA</type></structure>';
+  const file = new File([content], 'answer.jff', { type: 'text/plain' });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+  return file;
+};
+
+/** Walk the assignment flow as far as the Assignment Settings step, which only it has. */
+const walkToAssignmentSettings = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.type(screen.getByLabelText('Title'), 'DFA #1');
+  await clickNext(user); // -> Type
+  await clickNext(user); // -> Answer File
+
+  const fileInput = document.getElementById('answer-file') as HTMLInputElement;
+  await user.upload(fileInput, answerFile());
+  const nextButton = screen.getByRole('button', { name: 'Next' });
+  await waitFor(() => expect(nextButton).toBeEnabled());
+  await user.click(nextButton); // -> Assignment Settings
+};
+
+/** Every fetch answers as a successful problem create. */
+const respondCreated = () =>
+  fetchMock.mockImplementation(() =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'prob-1' }),
+      text: async () => JSON.stringify({ id: 'prob-1' }),
+    } as unknown as Response),
+  );
+
 describe('CreateProblemDialog', () => {
   beforeEach(() => {
     fetchMock.mockReset();
@@ -175,18 +207,7 @@ describe('CreateProblemDialog', () => {
     const user = userEvent.setup();
     const onCreated = vi.fn();
 
-    const fileContent = '<structure><type>FA</type></structure>';
-    const file = new File([fileContent], 'answer.jff', { type: 'text/plain' });
-    Object.defineProperty(file, 'text', { value: () => Promise.resolve(fileContent) });
-
-    fetchMock.mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({ id: 'prob-1' }),
-        text: async () => JSON.stringify({ id: 'prob-1' }),
-      } as unknown as Response),
-    );
+    respondCreated();
 
     render(
       <CreateProblemDialog
@@ -199,19 +220,12 @@ describe('CreateProblemDialog', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText('Title'), 'DFA #1');
-    await clickNext(user); // -> Type
-    await clickNext(user); // -> Answer File
-
-    const fileInput = document.getElementById('answer-file') as HTMLInputElement;
-    await user.upload(fileInput, file);
-    const nextButton = screen.getByRole('button', { name: 'Next' });
-    await waitFor(() => expect(nextButton).toBeEnabled());
-    await user.click(nextButton); // -> Assignment Settings
+    await walkToAssignmentSettings(user);
 
     // This step only exists in the assignment flow.
     fireEvent.change(screen.getByLabelText('Max Points'), { target: { value: '25' } });
     expect(screen.getByLabelText('Automatically Graded')).toBeChecked();
+    expect(screen.getByLabelText('Show Feedback to Students')).toBeChecked();
     await clickNext(user); // -> Review
 
     const createButton = screen.getByRole('button', { name: 'Create Problem' });
@@ -225,7 +239,53 @@ describe('CreateProblemDialog', () => {
     const body = JSON.parse(assocInit.body as string);
     expect(body.problemIds).toEqual(['prob-1']);
     expect(body.problemSettings).toEqual([
-      { problemId: 'prob-1', maxPoints: 25, maxSubmissions: -1, autograderEnabled: true },
+      {
+        problemId: 'prob-1',
+        maxPoints: 25,
+        maxSubmissions: -1,
+        autograderEnabled: true,
+        showFeedback: true,
+      },
     ]);
+  });
+
+  it('carries a feedback switch turned off into the association', async () => {
+    // The route defaults an omitted showFeedback to true, so a dialog that never sends the
+    // field shows feedback whatever the author picked. That was the bug: this flow creates the
+    // problem AND attaches it, so it is the attach settings that need the switch.
+    const user = userEvent.setup();
+
+    respondCreated();
+
+    render(
+      <CreateProblemDialog
+        open
+        setOpen={vi.fn()}
+        courseId="course-1"
+        courseIsArchived={false}
+        assignmentId="assignment-1"
+        onCreated={vi.fn()}
+      />,
+    );
+
+    await walkToAssignmentSettings(user);
+
+    const feedback = screen.getByLabelText('Show Feedback to Students');
+    expect(feedback).toBeChecked();
+    await user.click(feedback);
+    expect(feedback).not.toBeChecked();
+
+    await clickNext(user); // -> Review
+    // The review step is the last chance to notice, so it has to say so.
+    expect(screen.getByText('Feedback shown to students')).toBeInTheDocument();
+
+    const createButton = screen.getByRole('button', { name: 'Create Problem' });
+    await waitFor(() => expect(createButton).toBeEnabled());
+    await user.click(createButton);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const [, assocInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(assocInit.body as string);
+    expect(body.problemSettings[0].showFeedback).toBe(false);
   });
 });

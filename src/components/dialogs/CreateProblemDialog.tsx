@@ -128,11 +128,12 @@ export function CreateProblemDialog({
   // Per-assignment link settings, gathered only in the assignment flow. Kept as local state
   // (not on the strict ProblemFormSchema form) since they belong to AssignmentProblem, not
   // the bank problem. Defaults mirror the "Add existing problem" dialog: 100 points,
-  // unlimited submissions, autograder on.
+  // unlimited submissions, autograder on, feedback shown.
   const [linkMaxPoints, setLinkMaxPoints] = useState('100');
   const [linkUnlimited, setLinkUnlimited] = useState(true);
   const [linkMaxSubmissions, setLinkMaxSubmissions] = useState('1');
   const [linkAutograder, setLinkAutograder] = useState(true);
+  const [linkShowFeedback, setLinkShowFeedback] = useState(true);
 
   const linkPointsValue = Number(linkMaxPoints);
   const linkPointsInvalid = !Number.isFinite(linkPointsValue) || linkPointsValue < 0;
@@ -270,6 +271,7 @@ export function CreateProblemDialog({
                 maxPoints: Math.max(0, linkPointsValue),
                 maxSubmissions: linkUnlimited ? -1 : Math.max(1, Math.floor(linkSubmissionsValue)),
                 autograderEnabled: linkAutograder,
+                showFeedback: linkShowFeedback,
               },
             ],
           });
@@ -310,12 +312,16 @@ export function CreateProblemDialog({
 
   const review = step === LAST_STEP ? getValues() : null;
 
-  // Anything typed, picked, or uploaded counts; the four link settings live outside the form,
+  // Anything typed, picked, or uploaded counts; the five link settings live outside the form,
   // so they are compared against their defaults by hand. Escape or the X on a dirty dialog asks
   // before discarding; a successful create closes via setOpen(false) directly and is never asked.
   const linkSettingsChanged =
     inAssignment &&
-    (linkMaxPoints !== '100' || !linkUnlimited || linkMaxSubmissions !== '1' || !linkAutograder);
+    (linkMaxPoints !== '100' ||
+      !linkUnlimited ||
+      linkMaxSubmissions !== '1' ||
+      !linkAutograder ||
+      !linkShowFeedback);
   const { descriptionDirty, onDocumentReady, onDescriptionChange } = useDescriptionDirty();
   // Every changed field EXCEPT the description, which is compared by content above.
   const otherFieldsDirty = Object.keys(dirtyFields).some((k) => k !== 'descriptionJson');
@@ -575,6 +581,17 @@ export function CreateProblemDialog({
                     id="new-problem-autograder"
                     checked={linkAutograder}
                     onCheckedChange={(checked) => setLinkAutograder(!!checked)}
+                    descriptionPlacement="inline"
+                    description="When enabled, submissions are evaluated and graded automatically. Turn this off if you want to review and grade submissions manually."
+                  />
+                  <SwitchField
+                    label="Show Feedback to Students"
+                    name="new-problem-show-feedback"
+                    id="new-problem-show-feedback"
+                    checked={linkShowFeedback}
+                    onCheckedChange={(checked) => setLinkShowFeedback(!!checked)}
+                    descriptionPlacement="inline"
+                    description="When disabled, students see only whether their submission was correct. Feedback is still recorded and remains visible to instructors."
                   />
                 </div>
               )}
@@ -610,6 +627,8 @@ export function CreateProblemDialog({
                         <dd>{linkUnlimited ? 'Unlimited' : String(linkMaxSubmissions)}</dd>
                         <dt className="text-muted-foreground">Automatically graded</dt>
                         <dd>{linkAutograder ? 'Yes' : 'No'}</dd>
+                        <dt className="text-muted-foreground">Feedback shown to students</dt>
+                        <dd>{linkShowFeedback ? 'Yes' : 'No'}</dd>
                       </>
                     )}
                   </dl>
