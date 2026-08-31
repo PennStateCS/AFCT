@@ -47,6 +47,9 @@ const sourceAssignment = {
   lateCutoff: new Date('2026-03-12T00:00:00.000Z'),
   // Off in the source course: practice work kept out of the gradebook.
   ltiAutoSync: false,
+  // Deliberately off, and the column defaults to true, so a copy that drops it starts
+  // scoring zeros this assignment never scored.
+  missingWorkIsZero: false,
   problems: [
     {
       maxPoints: 40,
@@ -126,6 +129,7 @@ describe('POST /api/courses/[id]/assignments/import', () => {
           // Schedule copied from the source.
           dueDate: sourceAssignment.dueDate,
           lateCutoff: sourceAssignment.lateCutoff,
+          missingWorkIsZero: false,
         }),
       }),
     );

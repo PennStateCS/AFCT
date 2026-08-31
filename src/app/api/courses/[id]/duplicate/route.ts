@@ -387,6 +387,9 @@ export const POST = withAdminAuth(
                     allowLateSubmissions: a.allowLateSubmissions,
                     lateCutoff: a.lateCutoff,
                     ltiAutoSync: a.ltiAutoSync,
+                    // Same reasoning, and the same trap: the column defaults to true, so a
+                    // copy that omits it starts scoring zeros the original never scored.
+                    missingWorkIsZero: a.missingWorkIsZero,
                     // Always unpublished: a copied course is set up before it is opened.
                     isPublished: false,
                     courseId: newCourse.id,
