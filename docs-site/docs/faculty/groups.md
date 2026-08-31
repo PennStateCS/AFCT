@@ -56,4 +56,6 @@ Create the groups you need before configuring a group assignment. On an [assignm
 
 Membership decides which group a student submits with, so be careful when changing it after an assignment is configured. The group shares one submission set and one submission limit for each problem: any member can submit, every member sees that submission, and a limit of 5 means 5 attempts for the group rather than 5 each. The resubmit cooldown is shared the same way. A student who is in the set's course but in none of its groups submits on their own, with their own limit. Once any group in the set has submitted work or received a grade, the set is **locked**: its groups and memberships can no longer be changed, though you can still rename or duplicate it. To make a new arrangement from a locked set, duplicate it. Plan the groups before students begin submitting.
 
+Duplicating a course does not copy group sets, because a set holds the previous term's students and carrying their membership into a new course would be wrong. Group assignments therefore arrive in the copy as individual work. Create the sets you need in the new course and set those assignments back to **Group**.
+
 Archived courses are read-only. Restore the course before changing group sets, groups, or membership.
