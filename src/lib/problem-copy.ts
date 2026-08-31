@@ -140,6 +140,7 @@ export const assignmentProblemSelect = {
   maxPoints: true,
   maxSubmissions: true,
   autograderEnabled: true,
+  showFeedback: true,
   problem: {
     select: {
       id: true,
@@ -161,6 +162,7 @@ type SourceProblemLink = {
   maxPoints: number;
   maxSubmissions: number;
   autograderEnabled: boolean;
+  showFeedback: boolean;
   problem: Pick<
     Problem,
     | 'id'
@@ -224,6 +226,9 @@ export async function attachCopiedProblems(
         maxPoints: link.maxPoints,
         maxSubmissions: link.maxSubmissions,
         autograderEnabled: link.autograderEnabled,
+        // Carried, not defaulted. The column defaults to true, so omitting it here turns
+        // feedback back on for every copied problem, and this is a study condition.
+        showFeedback: link.showFeedback,
       },
     });
   }

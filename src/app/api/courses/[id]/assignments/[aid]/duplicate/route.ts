@@ -165,6 +165,9 @@ export const POST = withAssignmentAuth(
               maxPoints: l.maxPoints,
               maxSubmissions: l.maxSubmissions,
               autograderEnabled: l.autograderEnabled,
+              // Same reason as the copied-problem path: the column defaults to true, so a
+              // duplicate that omits it silently shows feedback the original withheld.
+              showFeedback: l.showFeedback,
             })),
           });
         } else if (problemMode === 'duplicate') {

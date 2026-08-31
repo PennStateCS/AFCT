@@ -70,6 +70,7 @@ const source = {
       maxPoints: 40,
       maxSubmissions: 3,
       autograderEnabled: false,
+      showFeedback: false,
       problem: {
         id: 'p1',
         title: 'Pipelining Lab',
@@ -168,6 +169,8 @@ describe('POST /api/courses/[id]/assignments/[aid]/duplicate', () => {
           maxPoints: 40,
           maxSubmissions: 3,
           autograderEnabled: false,
+          // The column defaults to true, so a copy that omits this turns feedback back on.
+          showFeedback: false,
         },
       ],
     });
@@ -200,6 +203,7 @@ describe('POST /api/courses/[id]/assignments/[aid]/duplicate', () => {
           maxPoints: 40,
           maxSubmissions: 3,
           autograderEnabled: false,
+          showFeedback: false,
         }),
       }),
     );
