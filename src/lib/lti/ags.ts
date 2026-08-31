@@ -577,7 +577,16 @@ export async function postScore(opts: {
   platform: PlatformRef;
   lineItemUrl: string;
   ltiUserId: string;
-  scoreGiven: number;
+  /**
+   * The score, or null to clear whatever the platform holds for this student.
+   *
+   * A clear is a Score post with `scoreGiven` left out entirely. The AGS spec says nothing about
+   * omitting it, so this was settled by asking the platforms: against the 1EdTech reference
+   * implementation the result went from a number to `resultScore: null`, and posting the number
+   * again put it back. Canvas accepts the same request; whether its gradebook cell empties is
+   * unverified, because Canvas has not granted AFCT the scope to read its own scores back.
+   */
+  scoreGiven: number | null;
   scoreMaximum: number;
   timestamp?: Date;
   comment?: string | null;
@@ -590,15 +599,20 @@ export async function postScore(opts: {
   const url = new URL(opts.lineItemUrl);
   url.pathname = `${url.pathname.replace(/\/$/, '')}/scores`;
 
+  const clearing = opts.scoreGiven === null;
+
   const sent = await call(url.toString(), token.token, SCORE_TYPE, {
     userId: opts.ltiUserId,
-    scoreGiven: opts.scoreGiven,
+    // Omitted entirely when clearing. Sending `scoreGiven: null` is not the same request, and
+    // sending 0 would leave a mark the student did not earn.
+    ...(clearing ? {} : { scoreGiven: opts.scoreGiven }),
     scoreMaximum: opts.scoreMaximum,
     timestamp: (opts.timestamp ?? new Date()).toISOString(),
-    // A grade exists, so the work is done and the score counts. AFCT has no notion of a
-    // partially-submitted attempt to report here.
-    activityProgress: 'Completed',
-    gradingProgress: 'FullyGraded',
+    // With a grade: the work is done and the score counts. AFCT has no notion of a
+    // partially-submitted attempt to report here. Clearing: back to having no result at all,
+    // which is the pairing the reference implementation accepted.
+    activityProgress: clearing ? 'Initialized' : 'Completed',
+    gradingProgress: clearing ? 'NotReady' : 'FullyGraded',
     ...(opts.comment ? { comment: opts.comment } : {}),
   });
   if (!sent.ok) return sent;

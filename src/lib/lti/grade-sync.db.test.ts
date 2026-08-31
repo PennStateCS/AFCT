@@ -23,6 +23,8 @@ async function destroyFixtures() {
   await prisma.assignmentProblemGrade.deleteMany({ where: { assignmentId: ASSIGNMENT } });
   await prisma.assignmentProblem.deleteMany({ where: { assignmentId: ASSIGNMENT } });
   await prisma.ltiContextLink.deleteMany({ where: { platformId: PLATFORM } });
+  await prisma.roster.deleteMany({ where: { courseId: { in: [COURSE, UNLINKED_COURSE] } } });
+  await prisma.assignmentOverride.deleteMany({ where: { assignmentId: ASSIGNMENT } });
   await prisma.assignment.deleteMany({ where: { id: ASSIGNMENT } });
   await prisma.problem.deleteMany({ where: { id: PROBLEM } });
   await prisma.ltiPlatform.deleteMany({ where: { id: PLATFORM } });
@@ -302,5 +304,119 @@ describe('queueing one student', () => {
 
   it('reports no row at all for a student who has never been graded', async () => {
     expect((await assignmentSyncState(ASSIGNMENT, STUDENT))?.student).toBeNull();
+  });
+});
+
+/**
+ * Missing work reaching the LMS.
+ *
+ * A derived zero is never written as a grade row, so a student who handed nothing in has no row
+ * for the grade totals to find. Without help they are simply absent from the LMS while AFCT shows
+ * them a zero, and the two gradebooks disagree about the number faculty act on.
+ */
+describe('missing work, and taking a score back', () => {
+  // Attached before the deadline, missed after it, and read from a clock well past both.
+  const ATTACHED = new Date('2025-12-01T00:00:00Z');
+  const DUE = new Date('2026-01-01T00:00:00Z');
+  const EXTENDED = new Date('2099-01-01T00:00:00Z');
+
+  /** Make the assignment one missing work can be scored against, and enrol both students. */
+  async function overdueAndPublished(missingWorkIsZero = true) {
+    await prisma.assignment.update({
+      where: { id: ASSIGNMENT },
+      data: { isPublished: true, dueDate: DUE, missingWorkIsZero },
+    });
+    // Left at "now" this would be a problem attached after the deadline, which is exempt, and
+    // the test would pass for entirely the wrong reason.
+    await prisma.assignmentProblem.updateMany({
+      where: { assignmentId: ASSIGNMENT },
+      data: { createdAt: ATTACHED },
+    });
+    await prisma.roster.createMany({
+      data: [
+        { courseId: COURSE, userId: STUDENT, role: 'STUDENT' },
+        { courseId: COURSE, userId: OTHER, role: 'STUDENT' },
+      ],
+    });
+  }
+
+  const rowFor = (userId: string) =>
+    prisma.ltiScoreQueue.findFirst({ where: { assignmentId: ASSIGNMENT, userId } });
+
+  it('queues a zero for a student who handed nothing in', async () => {
+    await overdueAndPublished();
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(2);
+
+    const row = await rowFor(STUDENT);
+    expect(row?.scoreGiven).toBe(0);
+    expect(row?.scoreMaximum).toBe(100);
+  });
+
+  it('says nothing about missing work when the setting is off', async () => {
+    await overdueAndPublished(false);
+
+    // Nobody has a grade row either, so there is nothing at all to send.
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(0);
+    expect(await rowFor(STUDENT)).toBeNull();
+  });
+
+  it('replaces the zero with the real score once late work is marked', async () => {
+    await overdueAndPublished();
+    await queueChangedGrades(ASSIGNMENT);
+    expect((await rowFor(STUDENT))?.scoreGiven).toBe(0);
+
+    await grade(80);
+    await queueChangedGrades(ASSIGNMENT);
+
+    // The ordinary path handles this: the total rises and a new score goes out. No clear needed,
+    // which is the thing that is easy to get wrong when reasoning about it in the abstract.
+    expect((await rowFor(STUDENT))?.scoreGiven).toBe(80);
+  });
+
+  it('takes the score back when an extension puts the deadline in the future', async () => {
+    await overdueAndPublished();
+    await queueChangedGrades(ASSIGNMENT);
+    expect((await rowFor(STUDENT))?.scoreGiven).toBe(0);
+
+    await prisma.assignmentOverride.create({
+      data: { assignmentId: ASSIGNMENT, targetType: 'STUDENT', userId: STUDENT, dueDate: EXTENDED },
+    });
+    await queueChangedGrades(ASSIGNMENT);
+
+    /**
+     * Null, not zero. This is the whole point of the column being nullable: the student is no
+     * longer accountable for anything, so their score has to leave the LMS rather than sit at
+     * nought. A zero here would be a mark they never earned, in a gradebook AFCT cannot correct
+     * later.
+     */
+    const row = await rowFor(STUDENT);
+    expect(row?.scoreGiven).toBeNull();
+    expect(row?.state).toBe('PENDING');
+
+    // Their classmate, who has no extension, keeps the zero.
+    expect((await rowFor(OTHER))?.scoreGiven).toBe(0);
+  });
+
+  it('does not try to take back a score the LMS was never told about', async () => {
+    // Everyone is exempt from the start, so nothing was ever queued and there is nothing to clear.
+    await overdueAndPublished(false);
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(0);
+    expect(await prisma.ltiScoreQueue.count({ where: { assignmentId: ASSIGNMENT } })).toBe(0);
+  });
+
+  it('clears only the named student on the per-student path', async () => {
+    await overdueAndPublished();
+    await queueChangedGrades(ASSIGNMENT);
+
+    await prisma.assignmentOverride.create({
+      data: { assignmentId: ASSIGNMENT, targetType: 'STUDENT', userId: STUDENT, dueDate: EXTENDED },
+    });
+    await queueChangedGrades(ASSIGNMENT, { userId: STUDENT });
+
+    expect((await rowFor(STUDENT))?.scoreGiven).toBeNull();
+    // Untouched: sending for one student must not rewrite anybody else's row.
+    expect((await rowFor(OTHER))?.scoreGiven).toBe(0);
   });
 });

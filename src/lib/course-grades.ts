@@ -435,14 +435,25 @@ async function buildAccountability(
   points: Record<string, Record<string, number>>;
   /** Assignments where the student handed in nothing at all and it is past due. */
   allMissing: Record<string, Set<string>>;
+  /**
+   * Assignments where the student has at least one problem scored zero for not handing it in,
+   * whether or not they handed in the rest. `allMissing` answers "did they do nothing", which is
+   * what the gradebook cell needs; this answers "are they accountable for anything they did not
+   * do", which is what deciding to send a score to the LMS needs.
+   */
+  anyMissing: Record<string, Set<string>>;
 }> {
   const points: Record<string, Record<string, number>> = {};
   const allMissing: Record<string, Set<string>> = {};
+  const anyMissing: Record<string, Set<string>> = {};
   for (const id of studentIds) {
     points[id] = {};
     allMissing[id] = new Set();
+    anyMissing[id] = new Set();
   }
-  if (assignmentRows.length === 0 || studentIds.length === 0) return { points, allMissing };
+  if (assignmentRows.length === 0 || studentIds.length === 0) {
+    return { points, allMissing, anyMissing };
+  }
 
   const assignmentIds = assignmentRows.map((a) => a.id);
   const groupIds = [...new Set([...groupsByStudent.values()].flat())];
@@ -531,6 +542,7 @@ async function buildAccountability(
       }
 
       points[studentId]![a.id] = accountable;
+      if (missingCount > 0) anyMissing[studentId]!.add(a.id);
       // Marked only when they handed in nothing at all: a partly-submitted assignment showing
       // "not submitted" would be a false statement about the half they did.
       if (missingCount > 0 && missingCount === a.problems.length && !handedInSomething) {
@@ -539,7 +551,58 @@ async function buildAccountability(
     }
   }
 
-  return { points, allMissing };
+  return { points, allMissing, anyMissing };
+}
+
+/**
+ * Students on one assignment who have at least one problem scored zero for not handing it in.
+ *
+ * The LMS sync needs this, and the gradebook already works it out, so it comes from the same
+ * place rather than a second assembly of the missing-work inputs. Two ways of deciding who is
+ * missing is how a student ends up with different answers in two places, which is the same
+ * reasoning as the comment on the grade total in `queueChangedGrades`.
+ */
+export async function studentsWithDerivedZeros(
+  assignmentId: string,
+  now = new Date(),
+): Promise<Set<string>> {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: { courseId: true, missingWorkIsZero: true },
+  });
+  // Callers gate on this as well, to avoid the loads below. A helper that answers honestly on
+  // its own is still worth more than one that trusts every caller to have checked.
+  if (!assignment || !assignment.missingWorkIsZero) return new Set();
+
+  const roster = await prisma.roster.findMany({
+    where: { courseId: assignment.courseId, role: 'STUDENT' },
+    select: { userId: true, status: true, user: { select: { inactive: true } } },
+  });
+  const studentIds = roster.map((r) => r.userId);
+  if (studentIds.length === 0) return new Set();
+
+  const rows = (await loadAssignmentRows(assignment.courseId)).filter((a) => a.id === assignmentId);
+  if (rows.length === 0) return new Set();
+
+  const { assigned, groups } = await buildAssignedMapWithGroups(rows, studentIds);
+  const activeById = new Map(
+    roster.map((r) => [r.userId, r.status === 'ENROLLED' && !r.user?.inactive]),
+  );
+
+  const { anyMissing } = await buildAccountability(
+    rows,
+    studentIds,
+    assigned,
+    activeById,
+    groups,
+    now,
+  );
+
+  const out = new Set<string>();
+  for (const studentId of studentIds) {
+    if (anyMissing[studentId]?.has(assignmentId)) out.add(studentId);
+  }
+  return out;
 }
 
 /**

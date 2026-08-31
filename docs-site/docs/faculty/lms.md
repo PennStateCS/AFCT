@@ -45,6 +45,8 @@ A few things worth knowing:
 - **Regrading replaces a queued grade** rather than sending two. The LMS sees the final figure.
 - **A student who has never opened AFCT from the LMS still gets their grade**, as long as their LMS identity is known. Running a roster sync is what connects the rest.
 - **Extra credit carries over.** A total above the assignment's points is sent as it stands, and the LMS records it against the column's maximum. If you change what an assignment is worth after linking it, AFCT updates the LMS column to match.
+- **Missing work is sent as a zero**, on assignments set to count it that way. Without this a student who handed nothing in would show a zero in AFCT and nothing at all in your LMS, and your LMS is the one people act on. See [Assignments](assignments.md) for the setting.
+- **A zero that stops applying is taken back out.** Grant an extension after the zero has gone, or turn the setting off, and AFCT removes the score from your LMS rather than leaving a nought behind. The student's cell goes back to empty, not to zero, because they have no mark rather than a bad one. A late submission needs none of this: marking it simply sends the real grade, which replaces the zero.
 
 If **Send grades automatically** is off, nothing goes to your LMS for that assignment until you send it yourself.
 
