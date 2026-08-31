@@ -68,6 +68,13 @@ export type CourseGradeCell = {
   assignmentId: string;
   earned: number | null;
   possible: number;
+  /**
+   * Points this participant is accountable for on this assignment: work that has been marked,
+   * plus work nobody handed in where the assignment scores missing work zero.
+   *
+   * Absent means "not worked out", and the reading falls back to the assignment's full value.
+   */
+  accountable?: number;
 };
 
 /** An assignment as this page compares them. */
@@ -109,19 +116,25 @@ export type CourseDistribution = {
 /**
  * The two readings of a course average, from one set of cells.
  *
- * `everythingAssigned` is the gradebook's rule (`averagePct` in `course-grades.ts`): every
- * assignment a participant is assigned puts its full points in the denominator, and only
- * recorded grades add to the numerator, so ungraded work reads as unearned. The Grades tab
- * shows exactly this number, and the two must agree.
+ * `everythingAssigned` is the gradebook's rule (`averagePct` in `course-grades.ts`), and the two
+ * must agree: the denominator is what the participant is **accountable for so far**, meaning work
+ * that has been marked plus work nobody handed in on an assignment that scores missing work zero.
+ * Work still waiting to be marked counts toward neither half.
+ *
+ * That is a change. It used to put every assigned assignment's full value in the denominator
+ * whether or not anyone had graded it, so a mid-term average mostly measured how much term was
+ * left, and both screens were wrong together.
  *
  * `gradedOnly` counts an assignment only once it is graded for that participant. Mid-term it
- * is the kinder and more accurate reading of how the class is doing; at the end of term it is
- * the one that lets somebody who has stopped submitting look fine.
+ * is the kinder reading of how the class is doing; at the end of term it is the one that lets
+ * somebody who has stopped submitting look fine. **On a course where no assignment counts
+ * missing work as zero the two readings are the same number**, because then "accountable" and
+ * "graded" describe the same work. That is honest rather than a bug: without that setting there
+ * is nothing to tell them apart.
  *
  * Both skip assignments nobody can see. An unpublished draft is not work a student failed to
  * do, and counting it against them is the difference between "your class is at 45%" and the
- * truth. (The gradebook itself does count them, which is a wart there rather than a rule to
- * copy.)
+ * truth.
  */
 export function courseAverages(
   assignments: CourseAssignment[],
@@ -163,7 +176,9 @@ function totalPercent(cells: CourseGradeCell[], options: { gradedOnly: boolean }
   let gradeCount = 0;
   for (const cell of cells) {
     if (options.gradedOnly && cell.earned === null) continue;
-    possible += cell.possible;
+    // What they are accountable for, falling back to the assignment's full value for a caller
+    // that has not worked it out.
+    possible += options.gradedOnly ? cell.possible : (cell.accountable ?? cell.possible);
     if (cell.earned !== null) {
       earned += cell.earned;
       gradeCount += 1;

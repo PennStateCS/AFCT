@@ -29,6 +29,8 @@ const rosterRow = (
 const problem = (problemId: string, maxPoints = 10, type: string | null = 'FA') => ({
   problemId,
   maxPoints,
+  // Long before any fixture deadline, so a problem is never treated as added late.
+  createdAt: new Date('2020-01-01T00:00:00.000Z'),
   problem: { type },
 });
 
@@ -42,6 +44,8 @@ const assignment = (over: Record<string, unknown> = {}) => ({
   isPublished: true,
   assignedToEveryone: true,
   groupSetId: null,
+  // Off unless a test turns it on, matching every assignment that existed before the setting.
+  missingWorkIsZero: false,
   assignees: [] as { userId: string | null; groupId: string | null }[],
   problems: [problem('p1')],
   ...over,
@@ -107,11 +111,16 @@ describe('getCourseStatistics', () => {
 
     const stats = (await getCourseStatistics('c1'))!;
 
-    // s1 is 18 of 20, s2 is 10 of 20: ungraded work reads as unearned, which is the number
-    // the Grades tab shows in its Average column.
+    /**
+     * s1 is 18 of 20, s2 is 10 of 10: each is measured against the work that has actually been
+     * marked for them, which is what the Grades tab now shows too. It used to divide s2 by 20,
+     * scoring their unmarked assignment as a zero and reporting the class at 70%.
+     *
+     * With no assignment counting missing work as zero, the two readings agree by construction:
+     * "accountable" and "graded" describe the same work until something is missing.
+     */
     expect(stats.distribution.includedCount).toBe(2);
-    expect(stats.distribution.mean).toBeCloseTo(70, 5);
-    // The other reading measures each student against what has been marked for them.
+    expect(stats.distribution.mean).toBeCloseTo(95, 5);
     expect(stats.distributionGradedOnly.mean).toBeCloseTo(95, 5);
     expect(stats.distribution.assignmentsCounted).toBe(2);
     expect(stats.distribution.assignmentsWithGrades).toBe(2);
@@ -434,5 +443,62 @@ describe('getCourseStatistics', () => {
     expect(stats.atRisk).toEqual({ belowThreshold: 0, threshold: 60, missingTwoOrMore: 0 });
     expect(stats.turnIn).toEqual([]);
     expect(stats.attemptsByType).toEqual([]);
+  });
+});
+
+/**
+ * Where the two readings come apart.
+ *
+ * Without an assignment counting missing work as zero they describe the same work and show the
+ * same number. Turn it on and the first reading starts counting what nobody handed in, which is
+ * the whole point of having two.
+ */
+describe('the course average once missing work counts', () => {
+  // The shared fixture's due date is in the future, so nothing is ever late against it. These
+  // need a deadline that has actually passed.
+  const PAST = new Date('2020-01-10T23:59:00.000Z');
+
+  it('counts unsubmitted work against the student, and the other reading does not', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'a1', missingWorkIsZero: true, dueDate: PAST }),
+      assignment({ id: 'a2', title: 'Homework 2', missingWorkIsZero: true, dueDate: PAST }),
+    ]);
+    // Marked on the first and full marks; nothing at all on the second, past its deadline.
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([grade('s1', 'p1', 10, 'a1')]);
+    prismaMock.submission.findMany.mockResolvedValue([]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    // 10 of 20: the work they did not hand in is in the denominator.
+    expect(stats.distribution.mean).toBeCloseTo(50, 5);
+    // 10 of 10: only what has been marked.
+    expect(stats.distributionGradedOnly.mean).toBeCloseTo(100, 5);
+  });
+
+  it('leaves work they handed in but nobody has marked out of both', async () => {
+    prismaMock.roster.findMany.mockResolvedValue([rosterRow('s1')]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      assignment({ id: 'a1', missingWorkIsZero: true, dueDate: PAST }),
+      assignment({ id: 'a2', title: 'Homework 2', missingWorkIsZero: true, dueDate: PAST }),
+    ]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([grade('s1', 'p1', 10, 'a1')]);
+    // They submitted the second one. It is waiting on a marker, so it is nobody's zero.
+    prismaMock.submission.findMany.mockResolvedValue([
+      {
+        studentId: 's1',
+        studentGroupId: null,
+        assignmentId: 'a2',
+        problemId: 'p1',
+        submittedAt: PAST,
+        correct: null,
+        status: 'PENDING',
+      },
+    ]);
+
+    const stats = (await getCourseStatistics('c1'))!;
+
+    expect(stats.distribution.mean).toBeCloseTo(100, 5);
+    expect(stats.distributionGradedOnly.mean).toBeCloseTo(100, 5);
   });
 });
