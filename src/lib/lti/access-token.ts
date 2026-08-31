@@ -33,6 +33,22 @@ export const AGS_SCORE_SCOPES = ['https://purl.imsglobal.org/spec/lti-ags/scope/
 /** Both, for the places that genuinely do both in one breath. */
 export const AGS_SCOPES = [...AGS_LINE_ITEM_SCOPES, ...AGS_SCORE_SCOPES] as const;
 
+/**
+ * Reading scores back, which AFCT itself never does.
+ *
+ * Deliberately outside `AGS_SCOPES`, and never passed to `getAccessToken` by the application.
+ * It is requested at registration only, so that grade passback can be diagnosed against an LMS
+ * nobody here administers: on our own test instances the platform's database can be read
+ * directly, which is better evidence, but that is not an option at another institution.
+ *
+ * Keeping it out of `AGS_SCOPES` is the load-bearing part. Per the note above, a token request
+ * naming a scope the platform did not grant is refused whole, so widening the scopes that carry
+ * grades with a merely diagnostic one would trade working passback for a convenience.
+ */
+export const AGS_RESULT_SCOPES = [
+  'https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly',
+] as const;
+
 /** How long an assertion is good for. Short: it is used once, immediately. */
 const ASSERTION_TTL_S = 60;
 

@@ -9,6 +9,11 @@ import {
   requestRegistration,
   scopesToRequest,
 } from './dynamic-registration';
+import {
+  AGS_LINE_ITEM_SCOPES,
+  AGS_SCOPES,
+  AGS_SCORE_SCOPES,
+} from '@/lib/lti/access-token';
 
 /**
  * Automatic registration, without a platform to register against.
@@ -141,6 +146,20 @@ describe('the scopes AFCT asks for', () => {
     const config = configuration({ scopes_supported: undefined }) as never;
 
     expect(scopesToRequest(config)).toEqual([...REQUESTED_SCOPES]);
+  });
+
+  it('asks for result.readonly at registration, and never on a token request', () => {
+    // The asymmetry is the point, so it is asserted rather than left to the comments. AFCT reads
+    // no scores back; the scope exists so passback can be diagnosed against an LMS whose database
+    // nobody here can read. Folding it into the scopes that carry grades would be the expensive
+    // mistake: a platform that grants everything else but not this one would refuse the whole
+    // token request, and every grade would stop sending with nothing obviously wrong.
+    const readonly = 'https://purl.imsglobal.org/spec/lti-ags/scope/result.readonly';
+
+    expect(REQUESTED_SCOPES).toContain(readonly);
+    expect(AGS_SCOPES as readonly string[]).not.toContain(readonly);
+    expect(AGS_LINE_ITEM_SCOPES as readonly string[]).not.toContain(readonly);
+    expect(AGS_SCORE_SCOPES as readonly string[]).not.toContain(readonly);
   });
 });
 
