@@ -6,6 +6,7 @@ import type { VariantProps } from 'class-variance-authority';
 import { cva } from 'class-variance-authority';
 
 import { useIsMobile } from '@/hooks/use-mobile';
+import { isTextEntryTarget } from '@/lib/keyboard';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,6 +98,10 @@ function SidebarProvider({
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+        // Ctrl/Cmd+B is bold in the rich description editor, which is a contenteditable region,
+        // so this window listener used to toggle the sidebar every time an author bolded a word
+        // (#790). Bold is the binding the docs promise, so the sidebar is the one that gives way.
+        if (isTextEntryTarget(event)) return;
         event.preventDefault();
         toggleSidebar();
       }
