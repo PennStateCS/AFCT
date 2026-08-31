@@ -27,7 +27,7 @@
  */
 
 import { z } from 'zod';
-import { AGS_SCOPES } from '@/lib/lti/access-token';
+import { AGS_RESULT_SCOPES, AGS_SCOPES } from '@/lib/lti/access-token';
 import { NRPS_SCOPES } from '@/lib/lti/nrps';
 
 /** Where the platform describes itself, inside its OpenID configuration. */
@@ -40,11 +40,21 @@ export const TOOL_CONFIGURATION_CLAIM = 'https://purl.imsglobal.org/spec/lti-too
 /**
  * What AFCT asks to be allowed to do.
  *
- * Taken from the two places that actually spend them rather than restated, so a scope added for
- * grade passback or roster reading cannot be forgotten here and then be missing from every
- * registration made this way.
+ * The first and last are taken from the places that actually spend them rather than restated, so
+ * a scope added for grade passback or roster reading cannot be forgotten here and then be missing
+ * from every registration made this way.
+ *
+ * `AGS_RESULT_SCOPES` is the exception, and is asked for although nothing in AFCT spends it. It
+ * buys the ability to read a score back from the LMS, which is how grade passback gets diagnosed
+ * against an institution's own Canvas, where reading the platform's database is not on offer.
+ * `scopesToRequest` drops it for a platform that does not advertise it, and a platform that
+ * declines it still grants the rest, so asking costs a registration nothing.
  */
-export const REQUESTED_SCOPES: readonly string[] = [...AGS_SCOPES, ...NRPS_SCOPES];
+export const REQUESTED_SCOPES: readonly string[] = [
+  ...AGS_SCOPES,
+  ...AGS_RESULT_SCOPES,
+  ...NRPS_SCOPES,
+];
 
 /** Nothing on the outside gets to make AFCT wait. */
 const REQUEST_TIMEOUT_MS = 10_000;
