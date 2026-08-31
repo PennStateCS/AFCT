@@ -265,6 +265,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
         allowLateSubmissions: true,
         lateCutoff: new Date('2026-05-01T00:00:00.000Z'),
         ltiAutoSync: false,
+        missingWorkIsZero: false,
         problems: [
           {
             problemId: 'p1',
@@ -328,6 +329,7 @@ describe('POST /api/courses/[id]/duplicate', () => {
           allowLateSubmissions: true,
           lateCutoff: new Date('2026-05-01T00:00:00.000Z'),
           ltiAutoSync: false,
+          missingWorkIsZero: false,
           isPublished: false,
         }),
       }),

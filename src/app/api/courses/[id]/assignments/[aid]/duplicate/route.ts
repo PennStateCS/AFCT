@@ -73,6 +73,7 @@ export const POST = withAssignmentAuth(
           assignedToEveryone: true,
           allowLateSubmissions: true,
           lateCutoff: true,
+          missingWorkIsZero: true,
           groupSetId: true,
           assignees: { select: { targetType: true, userId: true, groupId: true } },
           overrides: {
@@ -115,6 +116,10 @@ export const POST = withAssignmentAuth(
             assignedToEveryone: source.assignedToEveryone,
             allowLateSubmissions: source.allowLateSubmissions,
             lateCutoff: source.lateCutoff,
+            // Whether missing work scores zero is a grading policy the faculty member set on
+            // this assignment, so a copy keeps it. The column defaults to true, so leaving
+            // it out would start scoring zeros on a copy of an assignment that did not.
+            missingWorkIsZero: source.missingWorkIsZero,
             // Whether grades go to the LMS is a choice about this assignment, so the copy
             // keeps it. Left out, a copy of an assignment with sync deliberately off came
             // back with it on, and a linked course would start publishing its grades.

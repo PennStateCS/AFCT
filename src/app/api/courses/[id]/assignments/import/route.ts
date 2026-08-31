@@ -98,6 +98,7 @@ export const POST = withCourseAuth(
           unlockAt: true,
           allowLateSubmissions: true,
           lateCutoff: true,
+          missingWorkIsZero: true,
           problems: { select: assignmentProblemSelect },
         },
       });
@@ -135,6 +136,10 @@ export const POST = withCourseAuth(
             unlockAt: source.unlockAt,
             allowLateSubmissions: source.allowLateSubmissions,
             lateCutoff: source.lateCutoff,
+            // Whether missing work scores zero is a grading policy the faculty member set on
+            // this assignment, so a copy keeps it. The column defaults to true, so leaving
+            // it out would start scoring zeros on a copy of an assignment that did not.
+            missingWorkIsZero: source.missingWorkIsZero,
             // Reset for the new course: unpublished, individual, everyone. Audience,
             // group set, and overrides reference the source course and are not carried.
             // Off unless the destination course is already connected to an LMS.

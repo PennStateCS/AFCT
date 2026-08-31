@@ -51,6 +51,9 @@ const source = {
   lateCutoff: new Date('2026-03-12T00:00:00.000Z'),
   // Deliberately off: this is practice work the faculty member keeps out of the LMS gradebook.
   ltiAutoSync: false,
+  // Deliberately off, and the column defaults to true, so a copy that drops it starts
+  // scoring zeros this assignment never scored.
+  missingWorkIsZero: false,
   groupSetId: null,
   assignees: [{ targetType: 'STUDENT', userId: 'u1', groupId: null }],
   overrides: [
@@ -140,6 +143,7 @@ describe('POST /api/courses/[id]/assignments/[aid]/duplicate', () => {
           assignedToEveryone: false,
           dueDate: source.dueDate,
           lateCutoff: source.lateCutoff,
+          missingWorkIsZero: false,
           courseId: 'c1',
         }),
       }),
