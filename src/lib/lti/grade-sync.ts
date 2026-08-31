@@ -9,6 +9,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { queueScore, scoreQueueSummary, studentScoreState } from '@/lib/lti/score-queue';
+import { studentsWithDerivedZeros } from '@/lib/course-grades';
 
 /** Whether this course opens from any LMS. Nothing here does anything if it does not. */
 export async function courseIsLinked(courseId: string): Promise<boolean> {
@@ -28,6 +29,7 @@ export async function queueChangedGrades(
     where: { id: assignmentId },
     select: {
       courseId: true,
+      missingWorkIsZero: true,
       problems: { select: { maxPoints: true } },
     },
   });
@@ -55,14 +57,38 @@ export async function queueChangedGrades(
     _sum: { grade: true },
   });
 
+  /**
+   * Students carrying a zero for work nobody handed in.
+   *
+   * A derived zero adds no points, so it changes nobody's total. What it changes is who has a
+   * score at all: a student who handed in nothing has no grade rows, so the groupBy above does
+   * not mention them, and without this they would simply be missing from the LMS while AFCT
+   * showed them a zero. Gated on the setting so an assignment that does not use it pays nothing
+   * for the roster and submission reads this does.
+   */
+  const derivedZeros = assignment.missingWorkIsZero
+    ? await studentsWithDerivedZeros(assignmentId)
+    : new Set<string>();
+
+  const totalByStudent = new Map(totals.map((t) => [t.studentId, t._sum.grade ?? 0]));
+
+  /** Everyone who should hold a score in the LMS: marked work, missing work, or both. */
+  const accountable = new Set<string>(totalByStudent.keys());
+  for (const studentId of derivedZeros) {
+    // The per-student path must not quietly deliver somebody else's score, the same rule the
+    // grade totals follow above.
+    if (!opts.userId || studentId === opts.userId) accountable.add(studentId);
+  }
+
   const queued = await prisma.ltiScoreQueue.findMany({
     where: { assignmentId, ...(opts.userId ? { userId: opts.userId } : {}) },
     select: { userId: true, scoreGiven: true, scoreMaximum: true, state: true },
   });
   const known = new Map(queued.map((row) => [row.userId, row]));
 
-  let count = 0;
-  for (const total of totals) {
+  /** What each student should end up with: a number, or null to take their score away. */
+  const wanted = new Map<string, number | null>();
+  for (const studentId of accountable) {
     /**
      * Only the floor is enforced. AGS requires a scoreGiven of zero or more, so a correction
      * that leaves a total negative is sent as 0; but it also requires platforms to accept a
@@ -70,9 +96,25 @@ export async function queueChangedGrades(
      * maximum here silently reported 100/100 for a student who had earned 105, and a wrong
      * grade is the one failure this system must not produce quietly.
      */
-    const raw = total._sum.grade ?? 0;
-    const scoreGiven = Math.max(raw, 0);
-    const existing = known.get(total.studentId);
+    wanted.set(studentId, Math.max(totalByStudent.get(studentId) ?? 0, 0));
+  }
+
+  /**
+   * Anyone already sent a score who is no longer accountable for anything gets it taken back.
+   *
+   * This is what makes the missing-work zero reversible in the LMS as well as in AFCT: grant an
+   * extension after the zero went out, or turn the setting off, and the student stops being
+   * accountable, so the score has to go rather than sit at nought for ever. It also covers a
+   * grade being deleted outright, which previously left the old number in the LMS with nothing
+   * to correct it.
+   */
+  for (const userId of known.keys()) {
+    if (!wanted.has(userId)) wanted.set(userId, null);
+  }
+
+  let count = 0;
+  for (const [userId, scoreGiven] of wanted) {
+    const existing = known.get(userId);
 
     /**
      * Already queued or delivered with the same numbers: nothing to do.
@@ -86,12 +128,10 @@ export async function queueChangedGrades(
       existing && existing.scoreGiven === scoreGiven && existing.scoreMaximum === scoreMaximum;
     if (unchanged && (existing.state !== 'FAILED' || !opts.retryFailed)) continue;
 
-    await queueScore({
-      assignmentId,
-      userId: total.studentId,
-      scoreGiven,
-      scoreMaximum,
-    });
+    // Nothing to take back from a platform that was never told anything in the first place.
+    if (scoreGiven === null && !existing) continue;
+
+    await queueScore({ assignmentId, userId, scoreGiven, scoreMaximum });
     count++;
   }
 

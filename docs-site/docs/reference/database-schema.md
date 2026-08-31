@@ -278,8 +278,8 @@ erDiagram
   String id PK
   String assignmentId FK
   String userId FK
-  Float scoreGiven
   Float scoreMaximum
+  Float scoreGiven "nullable"
   LtiScoreState state
   Int attempts
   String claimToken "nullable"
@@ -585,8 +585,11 @@ Properties as follows:
 - `id`: Unique identifier.
 - `assignmentId`: The assignment being scored.
 - `userId`: The student whose grade this is.
-- `scoreGiven`: The grade, and what it is out of, captured when it was queued.
-- `scoreMaximum`:
+- `scoreMaximum`: What it is out of, captured when it was queued.
+- `scoreGiven`
+  > The grade to send, or null to clear the student's score in the LMS. Null is not zero: a
+  > zero is a mark, a clear says there is no mark, which is what an extension granted after a
+  > missing-work zero was sent has to be able to express.
 - `state`:
 - `attempts`: How many times sending has been tried. Drives the backoff and the give-up point.
 - `claimToken`

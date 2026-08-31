@@ -17,6 +17,18 @@ import type { LtiScoreState } from '@prisma/client';
 /** Give up after this many tries and leave it for somebody to look at. */
 export const MAX_ATTEMPTS = 6;
 
+/**
+ * How a queued or delivered score reads in the activity log.
+ *
+ * A clear must never be recorded as a zero. The log is the evidence of what AFCT told the LMS
+ * about a student, and "we removed their score" and "we gave them nought" are different claims.
+ */
+function scoreMetadata(scoreGiven: number | null, scoreMaximum: number) {
+  return scoreGiven === null
+    ? { cleared: true, scoreMaximum }
+    : { scoreGiven, scoreMaximum };
+}
+
 /** Backoff between attempts, in minutes: about a day in total before giving up. */
 const BACKOFF_MINUTES = [1, 5, 30, 120, 480];
 
@@ -30,7 +42,8 @@ const BACKOFF_MINUTES = [1, 5, 30, 120, 480];
 export async function queueScore(opts: {
   assignmentId: string;
   userId: string;
-  scoreGiven: number;
+  /** The grade, or null to clear the student's score in the LMS. See the schema comment. */
+  scoreGiven: number | null;
   scoreMaximum: number;
 }): Promise<void> {
   const fields = {
@@ -75,7 +88,7 @@ export async function queueScore(opts: {
       category: 'SUBMISSION',
       courseId: row.assignment?.courseId ?? null,
       assignmentId: opts.assignmentId,
-      metadata: { scoreGiven: opts.scoreGiven, scoreMaximum: opts.scoreMaximum },
+      metadata: scoreMetadata(opts.scoreGiven, opts.scoreMaximum),
     });
   } catch (err) {
     // The grade is queued either way; failing to note it must not undo that.
@@ -147,8 +160,8 @@ export async function markSent(opts: {
   id: string;
   /** The claim this send holds. A send with none is a send whose grade has been superseded. */
   claimToken: string | null;
-  /** What actually reached the LMS, which is what the log must say. */
-  scoreGiven: number;
+  /** What actually reached the LMS, which is what the log must say. Null means a clear. */
+  scoreGiven: number | null;
   scoreMaximum: number;
   now?: Date;
 }): Promise<'sent' | 'stale'> {
@@ -199,7 +212,7 @@ export async function markSent(opts: {
       assignmentId: row.assignmentId,
       // The numbers this send carried, not the ones the row holds now: they are the same
       // unless the grade changed mid-send, and that is exactly the case worth being right about.
-      metadata: { scoreGiven: opts.scoreGiven, scoreMaximum: opts.scoreMaximum },
+      metadata: scoreMetadata(opts.scoreGiven, opts.scoreMaximum),
     });
   } catch (err) {
     // The grade is delivered either way; failing to note it must not undo that.
