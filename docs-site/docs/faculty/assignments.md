@@ -80,6 +80,9 @@ Which problems make up the assignment.
 - **Create Problem** makes a new problem in the course problem bank and adds it here.
 - **Add Existing Problem** reuses one already in the bank.
 
+Both ask for the per-assignment settings below as part of the flow, so a problem can arrive with
+feedback already turned off rather than being attached and then corrected.
+
 Each problem carries its own settings on this assignment, which can differ from the defaults in
 the bank. Open a problem's settings to change them:
 
