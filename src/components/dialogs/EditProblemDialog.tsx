@@ -33,6 +33,7 @@ import { ProblemFormSchema, UpdateProblemSchema, type ProblemFormRaw } from '@/s
 import FileUploadInput from '@/components/FileUploadInput';
 import { useMaxUploadSize } from '@/hooks/use-max-upload-size';
 import { showToast } from '@/lib/toast';
+import { ANSWER_FILE_EXTENSIONS, ANSWER_FILE_HINT, answerFileRejection } from '@/lib/answer-file';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
@@ -142,13 +143,30 @@ export function EditProblemDialog({
     reValidateMode: 'onChange',
   });
 
+  /**
+   * Why the last answer file was refused, kept outside react-hook-form.
+   *
+   * Refusing a file also clears the field, and with `mode: 'onChange'` and a zod resolver that
+   * write revalidates and replaces every error, taking a manual `setError` with it before it can
+   * be read (#791). Holding the message here is what makes a rejected upload say so instead of
+   * looking like nothing happened.
+   */
+  const [answerFileError, setAnswerFileError] = useState<string | undefined>();
+
   const type = watch('type');
   const isUnlimitedStates = watch('isUnlimitedStates');
 
   const { maxMb, loading: loadingMaxSize } = useMaxUploadSize();
 
+  // A rejection naming the old type stops being true the moment the type changes, and the
+  // wizard lets you step back and change it.
+  useEffect(() => {
+    setAnswerFileError(undefined);
+  }, [type]);
+
   const resetForm = () => {
     setStep(0);
+    setAnswerFileError(undefined);
     reset(defaults, { keepDirty: false, keepTouched: false, keepErrors: false, keepValues: false });
   };
 
@@ -445,41 +463,32 @@ export function EditProblemDialog({
                         id="answer-file"
                         name="file"
                         label={currentFileName ? 'Replace Answer File (optional)' : 'Answer File'}
-                        accept=".txt,.fa,.pda,.cfg,.re,.jff"
+                        accept={ANSWER_FILE_EXTENSIONS}
                         maxSizeMb={maxMb}
                         value={value}
                         onChange={async (f) => {
                           if (f) {
-                            const text = await f.text();
-                            if (!text.trimStart().startsWith('<')) {
-                              setError('file', {
-                                type: 'manual',
-                                message: 'File must be a valid XML file (.jff, .fa, .pda, etc.)',
-                              });
-                              onChange(undefined);
-                              return;
-                            }
-                            const expectedType =
-                              type === 'CFG' ? 'GRAMMAR' : type === 'TM' ? 'TURING' : type;
-                            const typeMatch = text.match(/<type[^>]*>([\s\S]*?)<\/type>/i);
-                            const fileType = typeMatch?.[1]?.trim().toUpperCase();
-                            if (fileType && fileType !== expectedType) {
-                              setError('file', {
-                                type: 'manual',
-                                message: `File is type ${fileType} but problem type is ${type}. Please upload the correct file.`,
-                              });
+                            const rejection = answerFileRejection(await f.text(), type);
+                            if (rejection) {
+                              // Not setError: the reset below revalidates through the zod resolver, which
+                              // recomputes every error and drops a manual one before it is ever seen (#791).
+                              setAnswerFileError(rejection);
                               onChange(undefined);
                               return;
                             }
                             clearErrors('file');
                           }
+                          setAnswerFileError(undefined);
                           onChange(f);
                         }}
                         error={
-                          typeof errors.file?.message === 'string' ? errors.file.message : undefined
+                          answerFileError ??
+                          (typeof errors.file?.message === 'string'
+                            ? errors.file.message
+                            : undefined)
                         }
                         disabled={loadingMaxSize || courseIsArchived}
-                        hint="Supported formats: .txt, .fa, .pda, .cfg, .re, .jff"
+                        hint={ANSWER_FILE_HINT}
                       />
                     )}
                   />

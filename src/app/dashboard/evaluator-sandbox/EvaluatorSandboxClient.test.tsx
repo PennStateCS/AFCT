@@ -41,16 +41,25 @@ const trial = (over: Record<string, unknown> = {}) => ({
 
 const fetchMock = vi.fn();
 
-/** Put a file into one of the two upload inputs. */
-const attach = (labelText: RegExp, name: string) => {
+/**
+ * Put a file into one of the two upload inputs.
+ *
+ * The page checks the contents are a JFLAP model before accepting a file, which means reading
+ * it, so this waits for the name to appear rather than returning while that is still in flight.
+ * jsdom's File has no `text()`, so it is supplied here or every upload would be refused.
+ */
+const attach = async (labelText: RegExp, name: string) => {
   const input = screen.getByLabelText(labelText) as HTMLInputElement;
-  const file = new File(['<structure/>'], name, { type: 'text/xml' });
+  const content = '<structure/>';
+  const file = new File([content], name, { type: 'text/xml' });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
   fireEvent.change(input, { target: { files: [file] } });
+  expect(await screen.findByTitle(name)).toBeInTheDocument();
 };
 
-const attachBoth = () => {
-  attach(/answer file/i, 'answer.jff');
-  attach(/submission file/i, 'student.jff');
+const attachBoth = async () => {
+  await attach(/answer file/i, 'answer.jff');
+  await attach(/submission file/i, 'student.jff');
 };
 
 beforeEach(() => {
@@ -63,14 +72,31 @@ afterEach(() => {
 });
 
 describe('EvaluatorSandboxClient', () => {
-  it('will not run until both files are chosen', () => {
+  it('will not run until both files are chosen', async () => {
     renderPage();
 
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
-    attach(/answer file/i, 'answer.jff');
+    await attach(/answer file/i, 'answer.jff');
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
-    attach(/submission file/i, 'student.jff');
+    await attach(/submission file/i, 'student.jff');
     expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled();
+  });
+
+  it('refuses a plain text file with a reason, and will not run with it', async () => {
+    // #791. The docs promise this page applies the same rule as the problem bank, so a .txt
+    // that is not a JFLAP model has to be turned away here, and say why.
+    renderPage();
+
+    const input = screen.getByLabelText(/answer file/i) as HTMLInputElement;
+    const content = 'q0 -> q1 on a';
+    const file = new File([content], 'answer.txt', { type: 'text/plain' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(await screen.findByText(/not a JFLAP model/i)).toBeInTheDocument();
+    // The file was not kept, so the run is still gated on it.
+    expect(screen.queryByTitle('answer.txt')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
   });
 
   it('says where the output will appear before anything has been run', () => {
@@ -85,7 +111,7 @@ describe('EvaluatorSandboxClient', () => {
   it('sends the files and the FA settings the run needs', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => trial() });
     renderPage();
-    attachBoth();
+    await attachBoth();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
@@ -105,7 +131,7 @@ describe('EvaluatorSandboxClient', () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => trial({ problemType: 'CFG' }) });
     renderPage();
     fireEvent.change(screen.getByLabelText(/problem type/i), { target: { value: 'CFG' } });
-    attachBoth();
+    await attachBoth();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
@@ -118,7 +144,7 @@ describe('EvaluatorSandboxClient', () => {
   it('says what it is waiting for while the run is queued', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => trial() });
     renderPage();
-    attachBoth();
+    await attachBoth();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
@@ -144,7 +170,7 @@ describe('EvaluatorSandboxClient', () => {
         : { ok: true, json: async () => finished },
     );
     renderPage();
-    attachBoth();
+    await attachBoth();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     expect(await screen.findByText('Correct')).toBeInTheDocument();
@@ -169,7 +195,7 @@ describe('EvaluatorSandboxClient', () => {
         : { ok: true, json: async () => failed },
     );
     renderPage();
-    attachBoth();
+    await attachBoth();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
     expect(await screen.findByText('Did not run')).toBeInTheDocument();
@@ -184,7 +210,7 @@ describe('EvaluatorSandboxClient', () => {
       json: async () => ({ error: 'You already have a trial running. Wait for it to finish.' }),
     });
     renderPage();
-    attachBoth();
+    await attachBoth();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
@@ -200,7 +226,7 @@ describe('EvaluatorSandboxClient', () => {
         : { ok: true, json: async () => trial({ state: 'COMPLETED', correct: false }) },
     );
     renderPage();
-    attachBoth();
+    await attachBoth();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await screen.findByText('Not correct');
 
@@ -241,7 +267,7 @@ describe('what a screen reader is told', () => {
       json: async () => trial({ state: 'COMPLETED', correct: false }),
     });
     renderPage();
-    attachBoth();
+    await attachBoth();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
@@ -256,7 +282,7 @@ describe('what a screen reader is told', () => {
       json: async () => trial({ state: 'COMPLETED', correct: true }),
     });
     renderPage();
-    attachBoth();
+    await attachBoth();
 
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
