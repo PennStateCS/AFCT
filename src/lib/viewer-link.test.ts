@@ -72,3 +72,28 @@ describe('isViewerFileKind', () => {
     expect(isViewerFileKind(undefined)).toBe(false);
   });
 });
+
+describe('the file name carried for the tab', () => {
+  it('is sent separately from the composed title', () => {
+    // A composed title reads "answer.jff - D Flip-Flop". The tab wants the name alone, and
+    // splitting it back out would be wrong for a file name that contains the separator.
+    const href = viewerWindowHref({
+      src: '/api/files/solutions/abc.jff',
+      problemType: 'FA',
+      title: 'd - flip.jff - D Flip-Flop',
+      fileName: 'd - flip.jff',
+    });
+    const params = new URLSearchParams((href as string).split('?')[1]);
+    expect(params.get('name')).toBe('d - flip.jff');
+    expect(params.get('title')).toBe('d - flip.jff - D Flip-Flop');
+  });
+
+  it('is simply absent when the caller does not know it', () => {
+    const href = viewerWindowHref({
+      src: '/api/files/solutions/abc.jff',
+      problemType: 'FA',
+      title: 'answer.jff - Problem',
+    });
+    expect(new URLSearchParams((href as string).split('?')[1]).get('name')).toBeNull();
+  });
+});

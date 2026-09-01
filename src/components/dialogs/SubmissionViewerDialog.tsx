@@ -17,6 +17,13 @@ type SubmissionViewerDialogProps = {
   /** URL of the file to view (submission or solution). */
   src: string;
   title?: string;
+  /**
+   * The file's own name, when the caller has it.
+   *
+   * Only used to label the tab in the standalone window. Without it that tab falls back to the
+   * composed title, which is correct but longer than it needs to be.
+   */
+  fileName?: string;
   /** Empty-string symbol (ε / λ) for the JFLAP and grammar viewers. */
   epsSymbol?: string;
   width?: string;
@@ -36,6 +43,7 @@ export function SubmissionViewerDialog({
   problemType,
   src,
   title,
+  fileName,
   epsSymbol,
   width = '70vw',
   height = '70vh',
@@ -44,7 +52,7 @@ export function SubmissionViewerDialog({
   const type = problemType ?? '';
   // Null when the file is not one this viewer can build a safe link to, in which case no
   // button is offered rather than one that would fail at the far end.
-  const windowHref = viewerWindowHref({ src, problemType: type, title, epsSymbol });
+  const windowHref = viewerWindowHref({ src, problemType: type, title, fileName, epsSymbol });
 
   if (JFF_PROBLEM_TYPES.includes(type)) {
     return (

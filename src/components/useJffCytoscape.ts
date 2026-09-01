@@ -313,6 +313,12 @@ export function useJffCytoscape({
         const NOTE_BORDER = darkMode ? '#475569' : '#d6d3a8';
         const NOTE_TEXT = darkMode ? '#e2e8f0' : '#1f2937';
 
+        // The canvas behind the drawing, used to fill the start marker. Unfilled, the grid
+        // and any edge behind it showed straight through the triangle, which made it read as
+        // an outline rather than a piece of the machine. Filling it with the canvas colour
+        // keeps the shape JFLAP draws while making it opaque.
+        const CANVAS_FILL = darkMode ? '#141d33' : '#ffffff';
+
         const cy = cytoscape({
           container: containerRef.current!,
           elements,
@@ -356,7 +362,8 @@ export function useJffCytoscape({
                 'shape-polygon-points': startMarkerPolygon(),
                 width: START_MARKER_SIZE,
                 height: START_MARKER_SIZE,
-                'background-opacity': 0,
+                'background-color': CANVAS_FILL,
+                'background-opacity': 1,
                 'border-color': STROKE,
                 'border-width': 2,
                 events: 'no',

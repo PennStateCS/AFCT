@@ -260,6 +260,7 @@ export const useProblemColumns = ({
       src: answerSrc,
       problemType: openDialog.problem.type,
       title: answerTitle,
+      fileName: openDialog.problem.originalFileName || openDialog.problem.fileName || undefined,
       epsSymbol,
     });
     switch (openDialog.problem.type) {

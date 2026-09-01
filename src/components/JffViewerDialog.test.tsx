@@ -522,3 +522,30 @@ describe('the JFLAP notes toggle', () => {
     expect(h.ctor).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('the start marker', () => {
+  const startStyle = () => {
+    // The ctor mock is untyped, so its recorded arguments come back as an empty tuple.
+    const firstCall = h.ctor.mock.calls[0] as unknown as [
+      { style?: { selector: string; style: Record<string, unknown> }[] },
+    ];
+    const style = firstCall?.[0]?.style;
+    return style?.find((rule) => rule.selector === 'node.start')?.style;
+  };
+
+  it('is filled rather than see-through, so the grid does not show inside it', async () => {
+    // Unfilled, the grid lines and any edge passing behind it ran straight through the
+    // triangle, which made it read as an outline sitting on the canvas rather than as part
+    // of the machine.
+    render(<JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" darkMode={false} />);
+    await waitForEngine();
+    expect(startStyle()?.['background-opacity']).toBe(1);
+    expect(startStyle()?.['background-color']).toBe('#ffffff');
+  });
+
+  it('takes the dark canvas colour in dark mode, not white', async () => {
+    render(<JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" darkMode />);
+    await waitForEngine();
+    expect(startStyle()?.['background-color']).not.toBe('#ffffff');
+  });
+});

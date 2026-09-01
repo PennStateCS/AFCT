@@ -112,12 +112,23 @@ describe('the title tab', () => {
     signedIn();
   });
 
-  it('names the file, and keeps the full name reachable when it is truncated', async () => {
-    // These titles are a file name followed by the problem's own title, so they are long and
-    // the tab clips them. The title attribute is what makes the clipped part readable.
-    const html = await renderPage({ ...GOOD, title: 'd_flip-flop.jff - D Flip-Flop' });
-    expect(html).toContain('d_flip-flop.jff - D Flip-Flop');
+  it('shows the file name alone when it was sent', async () => {
+    const html = await renderPage({
+      ...GOOD,
+      title: 'd_flip-flop.jff - D Flip-Flop',
+      name: 'd_flip-flop.jff',
+    });
+    // The tab reads as a file name. The composed heading is still there on hover, and stays
+    // the graph's accessible name.
+    expect(html).toContain('>d_flip-flop.jff<');
     expect(html).toContain('title="d_flip-flop.jff - D Flip-Flop"');
+  });
+
+  it('falls back to the full title when no name was sent', async () => {
+    // Older links, and callers that do not have the file name to hand. Longer than ideal,
+    // never wrong.
+    const html = await renderPage({ ...GOOD, title: 'answer.jff - Problem' });
+    expect(html).toContain('answer.jff - Problem');
   });
 
   it('is open at the bottom, which is what joins it to the toolbar', async () => {

@@ -140,6 +140,7 @@ export default function ProblemDetails({
                       src: apiPaths.files.solution(encodeURIComponent(problem.fileName ?? '')),
                       problemType: problem.type,
                       title: `${problem.originalFileName || problem.fileName} - ${problem.title}`,
+                      fileName: problem.originalFileName || problem.fileName || undefined,
                       epsSymbol,
                     })}
                   />

@@ -80,6 +80,9 @@ export default async function ViewerPage({
   }
 
   const title = first('title') ?? file;
+  // The tab shows the file's own name. The composed heading stays as the accessible name for
+  // the graph, where the problem it belongs to is worth having.
+  const tabLabel = first('name') ?? title;
   const epsSymbol = first('eps');
 
   return (
@@ -98,7 +101,7 @@ export default async function ViewerPage({
           <header className="bg-card shrink-0 px-3 pt-2">
             <h1 className="bg-background inline-flex max-w-full items-center rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-semibold">
               <span className="truncate" title={title}>
-                {title}
+                {tabLabel}
               </span>
             </h1>
           </header>

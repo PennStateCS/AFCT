@@ -40,6 +40,14 @@ type ViewerLinkArgs = {
   src: string;
   problemType: string | null | undefined;
   title?: string;
+  /**
+   * The file's own name, as its author would recognise it.
+   *
+   * Separate from `title`, which is a composed heading ("answer.jff - D Flip-Flop"). The tab
+   * in the standalone window wants the name alone. Passed explicitly rather than split back
+   * out of the title, because a file name is allowed to contain the separator too.
+   */
+  fileName?: string;
   epsSymbol?: string;
 };
 
@@ -56,6 +64,7 @@ export function viewerWindowHref({
   src,
   problemType,
   title,
+  fileName,
   epsSymbol,
 }: ViewerLinkArgs): string | null {
   const type = (problemType ?? '').trim();
@@ -81,6 +90,7 @@ export function viewerWindowHref({
 
   const params = new URLSearchParams({ kind, file, type });
   if (title) params.set('title', title);
+  if (fileName) params.set('name', fileName);
   if (epsSymbol) params.set('eps', epsSymbol);
   return `${VIEWER_PATH}?${params.toString()}`;
 }
