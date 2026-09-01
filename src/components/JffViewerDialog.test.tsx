@@ -290,14 +290,16 @@ describe('JffViewerDialog — wrapper', () => {
 });
 
 describe('the graph canvas says it can be dragged', () => {
-  it('carries an open hand, and a closed one while the button is down', () => {
-    // Panning is enabled, so the pointer has to advertise it. jsdom cannot show a cursor,
-    // which is the point of asserting the classes: this is the wiring, and how it looks is
-    // a browser check.
+  it('is an ordinary pointer at rest and a closed hand while dragging', () => {
+    // jsdom cannot show a cursor, which is the point of asserting the classes: this is the
+    // wiring, and how it looks is a browser check. The open hand is deliberately absent: it
+    // would claim the whole canvas is a handle, over a diagram whose states are what a reader
+    // is actually pointing at.
     render(<JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" />);
     const canvas = screen.getByRole('img');
-    expect(canvas.className).toContain('cursor-grab');
+    expect(canvas.className).toContain('cursor-default');
     expect(canvas.className).toContain('active:cursor-grabbing');
+    expect(canvas.className).not.toContain('cursor-grab ');
   });
 });
 
