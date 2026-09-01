@@ -214,7 +214,10 @@ class FakeCy {
     this.destroyed = true;
   }
   resize() {}
-  center() {}
+  centerCalls = 0;
+  center() {
+    this.centerCalls += 1;
+  }
   animations: Array<{ zoom: number }> = [];
   animate(opts: { zoom: number }) {
     this.animations.push(opts);
@@ -287,11 +290,9 @@ function Harness(props: Parameters<typeof useJffCytoscape>[0] & { onApi?: (a: un
   return <div ref={api.containerRef} data-testid="canvas" />;
 }
 
-const renderViewer = (
-  props: Partial<Parameters<typeof useJffCytoscape>[0]> = {},
-): { api: () => ReturnType<typeof useJffCytoscape> } => {
+const renderViewer = (props: Partial<Parameters<typeof useJffCytoscape>[0]> = {}) => {
   let latest: ReturnType<typeof useJffCytoscape>;
-  render(
+  const view = render(
     <Harness
       src="/api/files/machine.jff"
       {...props}
@@ -300,7 +301,7 @@ const renderViewer = (
       }}
     />,
   );
-  return { api: () => latest };
+  return { ...view, api: () => latest };
 };
 
 const lastCy = () => instances[instances.length - 1];
@@ -854,5 +855,71 @@ describe('putting a machine back the way it opened', () => {
 
     act(() => api().resetMachine());
     await waitFor(() => expect(api().canUndo).toBe(false));
+  });
+});
+
+describe('keeping the canvas in step with its container', () => {
+  /**
+   * The global polyfill in `src/test/setup.ts` is inert, so a viewer under it never hears
+   * about a resize at all and any assertion here would pass whatever the code did. This one
+   * records its callback so the test can be the browser.
+   */
+  const observers: Array<() => void> = [];
+  const observed: Element[] = [];
+  class RecordingResizeObserver {
+    constructor(private cb: () => void) {
+      observers.push(() => this.cb());
+    }
+    observe(target: Element) {
+      observed.push(target);
+    }
+    unobserve() {}
+    disconnect() {}
+  }
+
+  beforeEach(() => {
+    observers.length = 0;
+    observed.length = 0;
+    vi.stubGlobal('ResizeObserver', RecordingResizeObserver);
+  });
+
+  const resize = async () => {
+    for (const fire of observers) fire();
+    // The handler is debounced, so nothing has happened yet.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  };
+
+  it('watches the container, not the window', async () => {
+    // A pane in the standalone viewer is half the width of one that has the window to itself,
+    // and it can change without the window changing at all. Asserted on what was observed
+    // rather than on an observer existing: building one and never pointing it at anything
+    // would satisfy that and hear nothing.
+    const { container } = renderViewer();
+    await waitFor(() => expect(observed.length).toBeGreaterThan(0));
+    expect(observed).toContain(container.querySelector('[data-testid="canvas"]'));
+  });
+
+  it('keeps the zoom the reader set', async () => {
+    // It used to refit here, so zooming in on one corner of a large machine and then dragging
+    // the window wider put the whole machine back on screen at its own scale.
+    renderViewer();
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    lastCy().zoom(2.5);
+    const fitsBefore = lastCy().fitCalls;
+
+    await resize();
+
+    expect(lastCy().zoomLevel).toBe(2.5);
+    expect(lastCy().fitCalls).toBe(fitsBefore);
+  });
+
+  it('re-centres, so a narrower pane does not cut the machine in half', async () => {
+    renderViewer();
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    lastCy().centerCalls = 0;
+
+    await resize();
+
+    expect(lastCy().centerCalls).toBeGreaterThan(0);
   });
 });

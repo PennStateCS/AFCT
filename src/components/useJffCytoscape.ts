@@ -936,10 +936,35 @@ export function useJffCytoscape({
         const rememberViewSoon = debounce(rememberView, 400);
         cy.on('viewport position', rememberViewSoon);
 
-        // keep size/zoom coherent if dialog resizes
-        const debouncedFitAndResize = debounce(() => void fitAndResize(), 160);
-        window.addEventListener('resize', debouncedFitAndResize, { passive: true });
-        (cy as any).__onResize = debouncedFitAndResize;
+        /**
+         * Keep the canvas in step with its container without touching the zoom.
+         *
+         * This used to refit on a window resize, which threw away whatever magnification the
+         * reader had set: they would zoom in on one corner of a large machine, drag the window
+         * wider, and find themselves looking at the whole thing again. It re-centres instead,
+         * so the same detail is still on screen at the same size.
+         *
+         * A `ResizeObserver` on the container rather than a listener on the window, because
+         * the container is what actually matters and it can change without the window doing
+         * anything: the standalone viewer's panes are half-width, and a dialog can be resized
+         * by things other than the window. A window resize reaches this too, since it changes
+         * the container.
+         */
+        const resizeKeepingZoom = debounce(() => {
+          const current = cyRef.current;
+          if (!current) return;
+          try {
+            current.resize();
+            current.center(current.elements());
+          } catch {
+            // A graph mid-teardown. Nothing to resize.
+          }
+        }, 160);
+        if (typeof ResizeObserver === 'function' && containerRef.current) {
+          const observer = new ResizeObserver(resizeKeepingZoom);
+          observer.observe(containerRef.current);
+          (cy as any).__resizeObserver = observer;
+        }
 
         // Adjust the layout of the transitions
         await updateEdgeLabelMargins();
@@ -1072,7 +1097,7 @@ export function useJffCytoscape({
     return () => {
       const cy = cyRef.current;
       if (cy) {
-        if ((cy as any).__onResize) window.removeEventListener('resize', (cy as any).__onResize);
+        (cy as any).__resizeObserver?.disconnect();
         cy.destroy();
         cyRef.current = null;
       }

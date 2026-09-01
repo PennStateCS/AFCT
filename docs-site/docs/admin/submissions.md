@@ -38,6 +38,8 @@ That window has a menu bar of its own:
 
 Clicking a state opens a small panel in the top right of the drawing showing its name, whether it is the initial or a final state, and every transition into and out of it. Clicking a transition does the same for it: which state it leaves and which it enters, whether it is a self-loop, and everything it reads. Where several transitions join the same pair of states they are drawn as one line, so the panel lists all of them. Click the background, or the panel's close button, to dismiss it. The same information for every state at once is under **View → Text representation**, which is also the way to read it without a mouse.
 
+Resizing the window, or splitting it, never changes the zoom you set: the machine is re-centred at the same magnification rather than fitted again, so you keep looking at the detail you were looking at. **Fit** is how you ask for the whole machine back.
+
 The toolbar keeps **Undo** and **Redo** for the arrangement, then one zoom control: a minus, the current percentage, a slider and a plus, grouped together, with **Fit** beside them to bring the whole machine back on screen. Anything the menu offers is taken off the toolbar in this window, so nothing appears twice: the grid, the layout and the export buttons all move into the menus. Zoom stays on the toolbar, because the menu has no zoom. They all act on a drawn machine, so they are unavailable for a grammar or a regular expression, which have nothing to draw.
 
 **Grade** is what that one attempt earned: the problem's full points if the evaluator found it correct, zero if it did not, and a dash while the submission is still pending, processing or failed. A student's several attempts therefore show different grades.
