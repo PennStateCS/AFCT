@@ -1069,3 +1069,35 @@ EOF
   [ "$(facts .supported)" = "false" ]
   [ -n "$(facts .checkedAt)" ]
 }
+
+# --- env-file writes: appends must not land inside the previous line ------------------- #
+
+@test "an env file with no trailing newline comes through an upgrade intact" {
+  # An env file edited by hand on the host can easily lack a final newline. This is the
+  # end-to-end property: nothing is corrupted and every key the upgrade adds is findable.
+  # Note what actually saves it here is the tag rewrite, whose awk branch re-emits every
+  # line newline-terminated; the append path is covered by the test below, which is the
+  # one that fails without the guard.
+  printf 'AFCT_APP_TAG=v1.0.0\nNEXTAUTH_SECRET=keepme' > .env.production   # no trailing newline
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"nl1","backupFirst":false}'
+  run sh updater.sh
+
+  # The pre-existing secret survives intact, on its own line.
+  run grep -qx 'NEXTAUTH_SECRET=keepme' .env.production; [ "$status" -eq 0 ]
+  # And the keys the upgrade appends are findable, which is what silently failed before.
+  run grep -qE '^AFCT_SECRET_KEY=.' .env.production; [ "$status" -eq 0 ]
+  [ "$(tag_now)" = "v1.1.0" ]
+}
+
+@test "the tag is appended on its own line when the env file has no trailing newline" {
+  # The reachable corruption: no AFCT_APP_TAG line to rewrite, so the tag is appended with
+  # cat, and without the guard it lands inside the preceding line. If that line is a
+  # password the stack stops starting, and a rollback does not repair it, because rollback
+  # only rewrites the tag line it can no longer find.
+  printf 'NODE_ENV=production\nNEXTAUTH_SECRET=keepme' > .env.production
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"nl2","backupFirst":false}'
+  run sh updater.sh
+
+  run grep -qx 'NEXTAUTH_SECRET=keepme' .env.production; [ "$status" -eq 0 ]
+  run grep -qx 'AFCT_APP_TAG=v1.1.0' .env.production; [ "$status" -eq 0 ]
+}
