@@ -425,6 +425,19 @@ current_app_tag() {
 # stale env-file path is exactly the failure this function hits.
 SET_APP_TAG_ERROR=""
 
+# Emit a trailing newline for a file that does not end in one.
+#
+# Appending to the env file with `cat` glues the new line onto the last one when the file has no
+# final newline, which an env file edited by hand on the host very easily does not. The damage is
+# silent and it is not cosmetic: the key lands inside the previous line, so the `grep` that looks
+# for it next time still fails, and whatever that line held is now wrong. If it held a password
+# the stack stops starting, and a rollback does not repair it because rollback only rewrites the
+# tag line.
+env_file_newline_gap() {
+  [ -s "$1" ] || return 1
+  [ -n "$(tail -c 1 "$1" 2>/dev/null)" ]
+}
+
 # Append a KEY=value to the env file if the key is absent, preserving everything else.
 #
 # Only used for the backup key today, and deliberately narrow: it never replaces a value and
@@ -438,7 +451,11 @@ append_env_key() {
   [ -w "$(dirname "$ENV_FILE")" ] || return 1
 
   _owner=$(stat -c '%u:%g' "$ENV_FILE" 2>/dev/null || true)
-  { cat "$ENV_FILE" && printf '%s=%s\n' "$_key" "$_val"; } > "$_tmp" || {
+  {
+    cat "$ENV_FILE" &&
+      { env_file_newline_gap "$ENV_FILE" && printf '\n' || true; } &&
+      printf '%s=%s\n' "$_key" "$_val"
+  } > "$_tmp" || {
     rm -f "$_tmp"
     return 1
   }
@@ -551,7 +568,11 @@ set_app_tag() {
         return 1
       }
   else
-    { cat "$ENV_FILE" && printf 'AFCT_APP_TAG=%s\n' "$_tag"; } > "$_tmp" || {
+    {
+      cat "$ENV_FILE" &&
+        { env_file_newline_gap "$ENV_FILE" && printf '\n' || true; } &&
+        printf 'AFCT_APP_TAG=%s\n' "$_tag"
+    } > "$_tmp" || {
       SET_APP_TAG_ERROR="could not write ${_tmp} (out of disk?)"
       rm -f "$_tmp"
       return 1
