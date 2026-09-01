@@ -39,3 +39,32 @@ describe('the standalone window is offered everywhere a viewer dialog is opened'
     expect(source).toContain('windowHref');
   });
 });
+
+/**
+ * Every dispatcher call site should also hand over the file's own name.
+ *
+ * Not a correctness rule, a completeness one: without it the standalone window's tab falls
+ * back to the composed heading ("answer.jff - Three Consecutive 1s") rather than the file
+ * name. That is not broken, so nothing fails, which is exactly why it went unnoticed on four
+ * screens until somebody opened one of them.
+ */
+describe('the standalone window is told the file name', () => {
+  const dispatcherSites = () =>
+    globSync('src/**/*.tsx', { cwd: ROOT })
+      .filter((f) => !f.includes('.test.'))
+      .filter((f) => !f.endsWith('SubmissionViewerDialog.tsx'))
+      .filter((f) => readFileSync(path.join(ROOT, f), 'utf8').includes('<SubmissionViewerDialog'));
+
+  it('finds the call sites at all', () => {
+    expect(dispatcherSites().length).toBeGreaterThan(0);
+  });
+
+  it.each(dispatcherSites())('%s passes a fileName', (file) => {
+    const source = readFileSync(path.join(ROOT, file), 'utf8');
+    // Read the element itself, so a fileName belonging to some other component nearby does
+    // not make this pass.
+    const start = source.indexOf('<SubmissionViewerDialog');
+    const element = source.slice(start, source.indexOf('/>', start));
+    expect(element).toContain('fileName=');
+  });
+});

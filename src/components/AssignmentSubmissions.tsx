@@ -711,6 +711,9 @@ export default function AssignmentSubmissions({
           problemType={visibleProblems.find((p) => p.id === selectedProblemId)?.type}
           src={apiPaths.files.submission(encodeURIComponent(openDialog.submission.fileName ?? ''))}
           title={`${openDialog.submission.originalFileName || openDialog.submission.fileName} - Submission`}
+          fileName={
+            openDialog.submission.originalFileName || openDialog.submission.fileName || undefined
+          }
           epsSymbol={epsSymbol}
           width="70vw"
           height="70vh"
