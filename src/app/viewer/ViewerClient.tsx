@@ -35,6 +35,9 @@ export function ViewerClient({
         epsSymbol={epsSymbol}
         showGridDefault
         honorPositionsDefault
+        // The window has the whole screen, so the machine opens at the size its author drew
+        // it, matching JFLAP. Fit is a click away for anything that does not fit.
+        initialZoom="actual"
       />
     );
   }

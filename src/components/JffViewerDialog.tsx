@@ -269,6 +269,7 @@ export function JffCytoscapeViewer({
   darkMode,
   showGridDefault = false,
   honorPositionsDefault = false,
+  initialZoom = 'fit',
 }: {
   src: string;
   title?: string;
@@ -286,6 +287,8 @@ export function JffCytoscapeViewer({
   darkMode?: boolean;
   showGridDefault?: boolean;
   honorPositionsDefault?: boolean;
+  /** `fit` scales to the space available; `actual` opens at 100%. See useJffCytoscape. */
+  initialZoom?: 'fit' | 'actual';
 }) {
   // `resolvedTheme` rather than `theme`: the latter is "system" for most people, which says
   // nothing about which colours are actually on screen.
@@ -317,7 +320,14 @@ export function JffCytoscapeViewer({
     copySVG,
     copyDescription,
     parsed,
-  } = useJffCytoscape({ src, title, epsSymbol, darkMode: isDark, honorPositionsDefault });
+  } = useJffCytoscape({
+    src,
+    title,
+    epsSymbol,
+    darkMode: isDark,
+    honorPositionsDefault,
+    initialZoom,
+  });
 
   // Non-visual alternative. The canvas is unreadable to a screen reader, and reading
   // automata is the point of this viewer, so the same machine is also published as text:

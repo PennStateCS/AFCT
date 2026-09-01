@@ -221,11 +221,9 @@ describe('the Edit menu', () => {
   });
 });
 
-describe('View, Layout', () => {
-  const openLayout = async (user: ReturnType<typeof userEvent.setup>) => {
-    await user.click(screen.getByRole('menuitem', { name: 'View' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Layout' }));
-  };
+describe('Machine, the layout choice', () => {
+  const openLayout = async (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'Machine' }));
 
   it('marks exactly one of the two, never both', async () => {
     // The machine is drawn one way or the other. A pair of checkboxes could show neither or
@@ -478,6 +476,14 @@ describe('the menu uses icons consistently', () => {
     const items = itemsOf('MenubarItem');
     expect(items.length).toBeGreaterThan(5);
     for (const body of items) expect(body).toMatch(/<[A-Z]\w+ aria-hidden/);
+  });
+
+  it('gives the submenu triggers icons too, so a menu is not half iconned', () => {
+    // Download, Export and Layout sit in the same column as items that all carry one. Leaving
+    // them bare made those three lines start at a different place from every other.
+    const triggers = itemsOf('MenubarSubTrigger');
+    expect(triggers.length).toBeGreaterThan(1);
+    for (const body of triggers) expect(body).toMatch(/<[A-Z]\w+ aria-hidden/);
   });
 
   it('gives the checkbox and radio items none, because that slot holds the tick', () => {

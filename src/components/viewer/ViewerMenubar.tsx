@@ -11,6 +11,7 @@ import {
   ListTree,
   BookOpen,
   Info,
+  Share,
 } from 'lucide-react';
 import {
   Menubar,
@@ -69,7 +70,10 @@ export function ViewerMenubar({
         <MenubarTrigger>File</MenubarTrigger>
         <MenubarContent>
           <MenubarSub>
-            <MenubarSubTrigger>Download</MenubarSubTrigger>
+            <MenubarSubTrigger>
+              <Download aria-hidden="true" />
+              Download
+            </MenubarSubTrigger>
             <MenubarSubContent>
               <MenubarItem asChild>
                 {/* The file exactly as it was submitted, from the same route the viewer
@@ -97,7 +101,10 @@ export function ViewerMenubar({
           </MenubarItem>
           <MenubarSeparator />
           <MenubarSub>
-            <MenubarSubTrigger>Export</MenubarSubTrigger>
+            <MenubarSubTrigger>
+              <Share aria-hidden="true" />
+              Export
+            </MenubarSubTrigger>
             <MenubarSubContent>
               <MenubarItem disabled={!ready} onSelect={() => run('downloadSVG')}>
                 <FileCode2 aria-hidden="true" />
@@ -173,27 +180,27 @@ export function ViewerMenubar({
             <ListTree aria-hidden="true" />
             Text representation
           </MenubarItem>
-          <MenubarSeparator />
-          <MenubarSub>
-            <MenubarSubTrigger>Layout</MenubarSubTrigger>
-            <MenubarSubContent>
-              {/* A radio group, not two checkboxes: the machine is drawn one way or the
-                  other, never both and never neither, and the control should say so. */}
-              <MenubarRadioGroup
-                value={layout}
-                onValueChange={(next) =>
-                  run(next === 'as-drawn' ? 'setAsDrawn' : 'setAutoArranged')
-                }
-              >
-                <MenubarRadioItem value="as-drawn" disabled={!ready}>
-                  As drawn
-                </MenubarRadioItem>
-                <MenubarRadioItem value="auto" disabled={!ready}>
-                  Auto-arranged
-                </MenubarRadioItem>
-              </MenubarRadioGroup>
-            </MenubarSubContent>
-          </MenubarSub>
+        </MenubarContent>
+      </MenubarMenu>
+
+      <MenubarMenu>
+        <MenubarTrigger>Machine</MenubarTrigger>
+        <MenubarContent>
+          {/* Flattened rather than kept behind a Layout submenu: the choice is the whole of
+              this menu, and burying two options one level down to label them is a level of
+              nesting that earns nothing. "Machine" rather than "Automata" because the code and
+              the text representation already call it that, and because it is one machine. */}
+          <MenubarRadioGroup
+            value={layout}
+            onValueChange={(next) => run(next === 'as-drawn' ? 'setAsDrawn' : 'setAutoArranged')}
+          >
+            <MenubarRadioItem value="as-drawn" disabled={!ready}>
+              As drawn
+            </MenubarRadioItem>
+            <MenubarRadioItem value="auto" disabled={!ready}>
+              Auto-arranged
+            </MenubarRadioItem>
+          </MenubarRadioGroup>
         </MenubarContent>
       </MenubarMenu>
 

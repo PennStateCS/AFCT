@@ -204,6 +204,16 @@ export type UseJffCytoscapeOptions = {
   src: string;
   title?: string;
   epsSymbol?: string;
+  /**
+   * What the viewer opens at.
+   *
+   * `fit` scales the machine to the space available, which is right in a dialog where the
+   * space is small and arbitrary. `actual` opens at 100%, so the drawing appears at the size
+   * its author gave it, the way JFLAP shows it. The standalone window uses `actual`: it has
+   * the whole screen, and a reader comparing what they see against JFLAP should be looking at
+   * the same thing.
+   */
+  initialZoom?: 'fit' | 'actual';
   darkMode?: boolean;
   honorPositionsDefault?: boolean;
 };
@@ -236,6 +246,7 @@ export function useJffCytoscape({
   src,
   title,
   epsSymbol = DEFAULT_EPS,
+  initialZoom = 'fit',
   darkMode = false,
   honorPositionsDefault = false,
 }: UseJffCytoscapeOptions) {
@@ -265,6 +276,8 @@ export function useJffCytoscape({
   // value from whenever the effect that started it was created.
   const showNotesRef = useRef(showNotes);
   showNotesRef.current = showNotes;
+  const initialZoomRef = useRef(initialZoom);
+  initialZoomRef.current = initialZoom;
 
   // Customization variables
   const FIT_PADDING = 80;
@@ -668,7 +681,17 @@ export function useJffCytoscape({
         // Expose fitAndResize for Fit button and initial layout
         onResizeRef.current = () => void fitAndResize();
         setTimeout(() => {
-          onResizeRef.current?.();
+          void (async () => {
+            // Fit first either way: it sizes the canvas and settles the layout, and the
+            // centring it does is what keeps the machine in view at 100% rather than off in a
+            // corner. Only then is the scale set back to 1:1, if that is what was asked for.
+            await fitAndResize();
+            if (initialZoomRef.current !== 'actual') return;
+            const current = cyRef.current;
+            if (!current) return;
+            current.zoom(1);
+            current.center(current.nodes());
+          })();
         }, 0);
 
         // keep size/zoom coherent if dialog resizes

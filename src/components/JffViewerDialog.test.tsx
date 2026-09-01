@@ -54,7 +54,15 @@ const h = vi.hoisted(() => {
     on: vi.fn(),
     // Records handlers so a test can fire a tap the way cytoscape would.
     __handlers: {} as Record<string, (evt: unknown) => void>,
-    layout: vi.fn(() => ({ run: vi.fn(), on: vi.fn() })),
+    // The layout reports completion, as cytoscape's does. Without it the viewer's own
+    // `await new Promise(resolve => layout.on('layoutstop', resolve))` never settles, so
+    // everything after the fit silently never ran and looked untestable.
+    layout: vi.fn(() => ({
+      run: vi.fn(),
+      on: vi.fn((_event: string, cb: () => void) => {
+        cb();
+      }),
+    })),
     width: vi.fn(() => 800),
     height: vi.fn(() => 600),
     zoom: vi.fn(() => 1),
@@ -741,5 +749,27 @@ describe('copying the text representation', () => {
     // The dialog mock renders its children regardless of `open`, so this proves the button is
     // there to be shown rather than that the dialog is open. See the note on that mock above.
     expect(screen.getByRole('button', { name: /copy as text/i })).toBeInTheDocument();
+  });
+});
+
+describe('what the viewer opens at', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('fits to the space by default, which is what a dialog wants', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    await waitFor(() => expect(h.cy.resize).toHaveBeenCalled());
+    // Fit leaves the scale wherever it lands; nothing forces it back to 1.
+    expect(h.cy.zoom).not.toHaveBeenCalledWith(1);
+  });
+
+  it('opens at 100% when asked, so the machine is the size its author drew it', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" initialZoom="actual" />);
+    await waitForEngine();
+    // Still fits first: that sizes the canvas and centres the machine, which is what keeps it
+    // in view at 1:1 rather than off in a corner.
+    await waitFor(() => expect(h.cy.zoom).toHaveBeenCalledWith(1));
+    expect(h.cy.resize).toHaveBeenCalled();
+    expect(h.cy.center).toHaveBeenCalled();
   });
 });
