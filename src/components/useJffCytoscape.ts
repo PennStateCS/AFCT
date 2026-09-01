@@ -790,6 +790,11 @@ export function useJffCytoscape({
               if (!current) return;
               current.zoom(1);
               current.center(current.nodes());
+            } catch (err) {
+              // Reported rather than swallowed: the graph still appears, thanks to the
+              // `finally` below, so nothing here is worth failing a load over, but a scale
+              // step that has started throwing is a bug somebody should see.
+              console.error('[viewer] could not set the initial scale:', err);
             } finally {
               // One frame first. Revealing in the same tick as the last change uncovers the
               // canvas while cytoscape may still be redrawing it, which is the tail of the

@@ -942,11 +942,16 @@ describe('the machine does not flash on the way in', () => {
     // What the `finally` actually protects. `fitAndResize` swallows its own errors, so a
     // failing layout never reaches here; the step after it can still throw, and an invisible
     // graph with no explanation is worse than one at the wrong zoom.
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => {});
     h.cy.center.mockImplementationOnce(() => {
       throw new Error('center exploded');
     });
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" initialZoom="actual" />);
     await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
+    // Caught, not escaped. Letting it escape leaves an unhandled rejection that fails the
+    // whole run rather than any one test, which is how it reached CI green locally and red there.
+    await waitFor(() => expect(reported).toHaveBeenCalled());
+    reported.mockRestore();
   });
 });
 
