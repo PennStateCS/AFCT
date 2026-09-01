@@ -2,8 +2,6 @@
 
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { format } from 'sql-formatter';
-import chalk from 'chalk';
 
 // Use a global singleton in development to avoid creating multiple Prisma instances on reload
 const globalForPrisma = globalThis as unknown as {
@@ -44,21 +42,21 @@ const createPrismaClient = () => {
     ],
   });
 
-  // Only enable query logging in development and if the duration threshold is met
+  // Slow-query logging, in development only.
+  //
+  // Loaded dynamically rather than imported at the top of this file. That module needs a package
+  // which is a devDependency, and the production image installs with `npm ci --omit=dev`. The
+  // submission worker runs this source through tsx instead of a bundle, so a static import of
+  // something absent from the production image crashes it on startup; that is how v0.9.4 failed
+  // to deploy. A dynamic import inside this branch is never evaluated in production.
   if (process.env.NODE_ENV === 'development') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (client as any).$on('query', (e: any) => {
-      // Only log queries that exceed a performance threshold (e.g., 100ms)
-      if (e.duration > 100) {
-        console.log(chalk.yellowBright(`Slow Query (${e.duration}ms)`));
-        try {
-          console.log(chalk.gray(format(e.query, { language: 'postgresql' })));
-        } catch {
-          console.log(chalk.gray(e.query));
-        }
-        console.log(chalk.dim(`Params: ${e.params}`));
-      }
-    });
+    void import('@/lib/dev-query-log')
+      .then((m) => m.attachSlowQueryLog(client))
+      .catch((err) => {
+        // Never fatal: this is a convenience. Say so rather than failing silently, since a dev
+        // tool that quietly stops working is how the original problem stayed hidden.
+        console.warn('[prisma] slow-query logging unavailable:', err);
+      });
   }
 
   return client;
