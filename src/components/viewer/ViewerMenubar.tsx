@@ -9,6 +9,7 @@ import {
   ClipboardType,
   Maximize2,
   ListTree,
+  BookOpen,
 } from 'lucide-react';
 import {
   Menubar,
@@ -25,6 +26,7 @@ import {
   MenubarTrigger,
 } from '@/components/ui/menubar';
 import { useViewerActions } from '@/components/viewer/viewer-actions';
+import { VIEWER_DOCS_URL } from '@/lib/viewer-link';
 
 /**
  * The standalone window's menu bar.
@@ -170,6 +172,20 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
               </MenubarRadioGroup>
             </MenubarSubContent>
           </MenubarSub>
+        </MenubarContent>
+      </MenubarMenu>
+
+      <MenubarMenu>
+        <MenubarTrigger>Help</MenubarTrigger>
+        <MenubarContent>
+          {/* A plain link, so it behaves like one: middle-click, copy the address, open in a
+              background tab. `noopener` because it leaves the application. */}
+          <MenubarItem asChild>
+            <a href={VIEWER_DOCS_URL} target="_blank" rel="noopener noreferrer">
+              <BookOpen aria-hidden="true" />
+              Documentation
+            </a>
+          </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
     </Menubar>

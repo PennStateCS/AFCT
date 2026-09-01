@@ -35,6 +35,15 @@ export function viewerFileSrc(kind: ViewerFileKind, file: string): string {
   return `/api/files/${kind}/${encodeURIComponent(file)}`;
 }
 
+/**
+ * The published documentation for this viewer.
+ *
+ * The trailing slash is the canonical form: without it GitHub Pages answers 301 and the browser
+ * takes a needless extra round trip. Pointed at the page that describes the viewer rather than
+ * the site root, because somebody opening Help from here has a question about this window.
+ */
+export const VIEWER_DOCS_URL = 'https://pennstatecs.github.io/AFCT/admin/submissions/';
+
 type ViewerLinkArgs = {
   /** The `src` a viewer dialog was given, expected to be one of the file routes. */
   src: string;

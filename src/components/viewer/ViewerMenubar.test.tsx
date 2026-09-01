@@ -360,3 +360,47 @@ describe('View, JFLAP Notes', () => {
     expect(actions.toggleNotes).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('the Help menu', () => {
+  it('links to the published documentation for this viewer', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Help' }));
+    const link = await screen.findByRole('menuitem', { name: /documentation/i });
+    // The trailing slash is the canonical form; without it GitHub Pages answers a redirect.
+    expect(link).toHaveAttribute('href', 'https://pennstatecs.github.io/AFCT/admin/submissions/');
+  });
+
+  it('opens it away from the window, without handing over an opener', async () => {
+    // It leaves the application, so the new tab must not keep a handle back to this one.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Help' }));
+    const link = await screen.findByRole('menuitem', { name: /documentation/i });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('is available even when no machine is drawn', async () => {
+    // Help is about the window, not its contents. A grammar disables everything else in the
+    // menus, and being unable to reach the documentation from there would be perverse.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Help' }));
+    expect(await screen.findByRole('menuitem', { name: /documentation/i })).not.toHaveAttribute(
+      'data-disabled',
+    );
+  });
+});
