@@ -9,6 +9,7 @@ import { describeMachine, type MachineType } from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
+import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
 import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 // Grid overlay color (component-only; the engine styling lives in useJffCytoscape).
@@ -359,6 +360,7 @@ export default function JffViewerDialog({
   darkMode,
   showGridDefault = true,
   honorPositionsDefault = true,
+  windowHref,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -370,6 +372,8 @@ export default function JffViewerDialog({
   darkMode?: boolean;
   showGridDefault?: boolean;
   honorPositionsDefault?: boolean;
+  /** Link to the standalone window, or absent when one cannot be built for this file. */
+  windowHref?: string | null;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -391,9 +395,14 @@ export default function JffViewerDialog({
               exactly 1 leaves no room below the baseline, and clamping adds the
               `overflow: hidden` that turns that into a visible cut, beheading the
               descender of the j in every `.jff`. */}
-          <DialogTitle className="line-clamp-2 leading-snug break-words">
-            {title ?? 'JFLAP Viewer'}
-          </DialogTitle>
+          <div className="flex items-start justify-between gap-4 pr-6">
+            <DialogTitle className="line-clamp-2 leading-snug break-words">
+              {title ?? 'JFLAP Viewer'}
+            </DialogTitle>
+            {/* Beside the title rather than in the toolbar below: this is about the window
+                the machine is in, not about how it is drawn. */}
+            {windowHref ? <OpenInWindowButton href={windowHref} /> : null}
+          </div>
         </DialogHeader>
         <div className="min-h-0 flex-1 p-4 pt-2">
           {open ? (

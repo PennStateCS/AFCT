@@ -97,16 +97,21 @@ export function RegexViewerContent({ src }: { src: string }) {
   return <div className="p-4 pt-2 text-center">{expression}</div>;
 }
 
+import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
+
 export function RegexViewerDialog({
   src,
   open,
   onOpenChange,
   title,
+  windowHref,
 }: {
   src: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   title: string | null | undefined;
+  /** Link to the standalone window, or absent when one cannot be built for this file. */
+  windowHref?: string | null;
 }) {
   if (!title) {
     title = '';
@@ -122,6 +127,11 @@ export function RegexViewerDialog({
               {title || 'JFLAP Viewer'}
             </DialogTitle>
             <DialogDescription className="sr-only">Regular expression contents.</DialogDescription>
+            {windowHref ? (
+              <div className="flex justify-start pt-1">
+                <OpenInWindowButton href={windowHref} />
+              </div>
+            ) : null}
           </DialogHeader>
           <RegexViewerContent src={src} />
         </DialogContent>

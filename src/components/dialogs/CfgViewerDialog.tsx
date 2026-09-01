@@ -151,18 +151,23 @@ export function CfgViewerContent({
   );
 }
 
+import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
+
 export function CfgViewerDialog({
   src,
   open,
   onOpenChange,
   title,
   epsSymbol = DEFAULT_EPS,
+  windowHref,
 }: {
   src: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   title: string | null | undefined;
   epsSymbol?: string;
+  /** Link to the standalone window, or absent when one cannot be built for this file. */
+  windowHref?: string | null;
 }) {
   if (!title) {
     title = '';
@@ -184,6 +189,11 @@ export function CfgViewerDialog({
             <DialogDescription className="sr-only">
               Context-free grammar productions.
             </DialogDescription>
+            {windowHref ? (
+              <div className="flex justify-start pt-1">
+                <OpenInWindowButton href={windowHref} />
+              </div>
+            ) : null}
             <CfgViewerContent src={src} epsSymbol={epsSymbol} />
           </DialogHeader>
         </DialogContent>

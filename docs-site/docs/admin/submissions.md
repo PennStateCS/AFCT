@@ -22,6 +22,8 @@ Each row is one submission, and shows when it arrived, whether it was on time, w
 
 **File** is the student's own file name. Click it to open the submission in the viewer for that problem type, or use the download icon beside it to save the original file. This works the same way as the solution file on a course's problem list.
 
+The viewer opens in a panel over the page, which suits a quick look. For a large machine, **Open in a new window** puts the same viewer in a browser window of its own, where it has the whole screen and can sit on a second monitor. One window is reused, so opening another machine replaces what is in it rather than adding a second window.
+
 **Grade** is what that one attempt earned: the problem's full points if the evaluator found it correct, zero if it did not, and a dash while the submission is still pending, processing or failed. A student's several attempts therefore show different grades.
 
 **Recorded grade** is the student's standing grade for the problem, the number the gradebook carries. It is the same on every attempt by that student, so it is off by default; turn it on from **Columns** to spot a grade that was entered by hand and no longer matches the latest attempt.

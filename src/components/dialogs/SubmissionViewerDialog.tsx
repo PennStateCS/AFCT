@@ -3,6 +3,7 @@
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
+import { viewerWindowHref } from '@/lib/viewer-link';
 
 // Problem types rendered by the JFLAP (cytoscape) viewer; the rest map to their own
 // dedicated viewers.
@@ -41,6 +42,9 @@ export function SubmissionViewerDialog({
   showGridDefault,
 }: SubmissionViewerDialogProps) {
   const type = problemType ?? '';
+  // Null when the file is not one this viewer can build a safe link to, in which case no
+  // button is offered rather than one that would fail at the far end.
+  const windowHref = viewerWindowHref({ src, problemType: type, title, epsSymbol });
 
   if (JFF_PROBLEM_TYPES.includes(type)) {
     return (
@@ -53,12 +57,21 @@ export function SubmissionViewerDialog({
         height={height}
         showGridDefault={showGridDefault}
         epsSymbol={epsSymbol}
+        windowHref={windowHref}
       />
     );
   }
 
   if (type === 'RE') {
-    return <RegexViewerDialog open={open} onOpenChange={onOpenChange} src={src} title={title} />;
+    return (
+      <RegexViewerDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        src={src}
+        title={title}
+        windowHref={windowHref}
+      />
+    );
   }
 
   if (type === 'CFG') {
@@ -70,6 +83,7 @@ export function SubmissionViewerDialog({
         src={src}
         title={title}
         epsSymbol={epsSymbol}
+        windowHref={windowHref}
       />
     );
   }
