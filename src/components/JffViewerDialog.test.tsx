@@ -5,6 +5,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import JffViewerDialog, { JffCytoscapeViewer } from './JffViewerDialog';
+import { ViewerActionsProvider } from '@/components/viewer/viewer-actions';
 
 // The engine tests await an async load chain (fetch, parse, dynamic import, cytoscape
 // ctor). On a CPU-starved CI runner that chain can take several seconds, so give this
@@ -293,5 +294,36 @@ describe('the graph canvas says it can be dragged', () => {
     const canvas = screen.getByRole('img');
     expect(canvas.className).toContain('cursor-grab');
     expect(canvas.className).toContain('active:cursor-grabbing');
+  });
+});
+
+describe('the toolbar does not repeat what a menu already offers', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('keeps Grid and Layout in a dialog, where the toolbar is the only place they exist', () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    expect(screen.getByRole('button', { name: /toggle grid/i })).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'Layout' })).toBeInTheDocument();
+  });
+
+  it('drops them in the standalone window, where the menu bar has them', () => {
+    // Presence of the provider IS the signal, so the two can never disagree about which
+    // surface owns these controls.
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+      </ViewerActionsProvider>,
+    );
+    expect(screen.queryByRole('button', { name: /toggle grid/i })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Layout' })).toBeNull();
+  });
+
+  it('keeps zoom and export in both, which the menu does not fully replace', () => {
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+      </ViewerActionsProvider>,
+    );
+    expect(screen.getByRole('button', { name: /zoom in/i })).toBeInTheDocument();
   });
 });

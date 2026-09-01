@@ -118,6 +118,18 @@ export function useRegisterViewerActions(actions: ViewerActions, view: ViewerVie
   }, [registry]);
 }
 
+/**
+ * Whether something around this viewer offers its view controls.
+ *
+ * Read by the viewer itself so it can drop the duplicates from its toolbar. Derived from the
+ * provider rather than passed as a prop on purpose: the thing that decides to show a menu is
+ * the thing that provides the context, so the two cannot drift into a state where the
+ * controls are offered twice or not at all.
+ */
+export function useViewerChromePresent(): boolean {
+  return useContext(ViewerRegistryContext) !== null;
+}
+
 /** What the chrome can offer right now. */
 export function useViewerActions(): {
   ready: boolean;

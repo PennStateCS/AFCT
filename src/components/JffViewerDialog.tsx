@@ -10,7 +10,10 @@ import { cn } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
-import { useRegisterViewerActions } from '@/components/viewer/viewer-actions';
+import {
+  useRegisterViewerActions,
+  useViewerChromePresent,
+} from '@/components/viewer/viewer-actions';
 import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 // Grid overlay color (component-only; the engine styling lives in useJffCytoscape).
@@ -78,6 +81,11 @@ export function JffCytoscapeViewer({
   const [showText, setShowText] = useState(false);
 
   const [grid, setGrid] = useState(showGridDefault);
+
+  // In the standalone window a menu bar offers the grid and the layout, so the toolbar drops
+  // them rather than showing the same two controls twice. False in every dialog, where the
+  // toolbar is the only place they exist.
+  const chromeHasViewControls = useViewerChromePresent();
 
   // Offered to any chrome around this viewer, which today means the standalone window's menu
   // bar. Registers nothing when there is no provider, so a dialog is unaffected. Declared
@@ -158,35 +166,39 @@ export function JffCytoscapeViewer({
         <div className="flex items-center gap-2">
           {/* View controls */}
           <div className="flex items-center gap-1" role="group" aria-label="View controls">
-            <Button
-              size="sm"
-              variant={grid ? 'default' : 'outline'}
-              className={grid ? undefined : controlBtnClass}
-              onClick={() => setGrid((s) => !s)}
-              title="Toggle grid"
-              aria-label="Toggle grid"
-              aria-pressed={grid}
-            >
-              <Grid className="mr-2 h-4 w-4" /> Grid
-            </Button>
-            {/* Both choices are named and on screen. This was one button labelled
-                "Original Positions", which named only the state it was in: with it
-                un-pressed there was nothing to say what you were looking at instead, and
-                "positions" described the node coordinates rather than anything the reader
-                of a diagram thinks about. */}
-            <span className="text-muted-foreground ml-1 text-sm whitespace-nowrap">Layout</span>
-            <SegmentedControl
-              name="jff-layout"
-              ariaLabel="Layout"
-              value={honorPositions ? 'as-drawn' : 'auto'}
-              onValueChange={(next) => {
-                if ((next === 'as-drawn') !== honorPositions) toggleHonorPositions();
-              }}
-              options={[
-                { value: 'as-drawn', label: 'As drawn' },
-                { value: 'auto', label: 'Auto-arranged' },
-              ]}
-            />
+            {chromeHasViewControls ? null : (
+              <>
+                <Button
+                  size="sm"
+                  variant={grid ? 'default' : 'outline'}
+                  className={grid ? undefined : controlBtnClass}
+                  onClick={() => setGrid((s) => !s)}
+                  title="Toggle grid"
+                  aria-label="Toggle grid"
+                  aria-pressed={grid}
+                >
+                  <Grid className="mr-2 h-4 w-4" /> Grid
+                </Button>
+                {/* Both choices are named and on screen. This was one button labelled
+                    "Original Positions", which named only the state it was in: with it
+                    un-pressed there was nothing to say what you were looking at instead, and
+                    "positions" described the node coordinates rather than anything the reader
+                    of a diagram thinks about. */}
+                <span className="text-muted-foreground ml-1 text-sm whitespace-nowrap">Layout</span>
+                <SegmentedControl
+                  name="jff-layout"
+                  ariaLabel="Layout"
+                  value={honorPositions ? 'as-drawn' : 'auto'}
+                  onValueChange={(next) => {
+                    if ((next === 'as-drawn') !== honorPositions) toggleHonorPositions();
+                  }}
+                  options={[
+                    { value: 'as-drawn', label: 'As drawn' },
+                    { value: 'auto', label: 'Auto-arranged' },
+                  ]}
+                />
+              </>
+            )}
             <Button
               size="sm"
               variant="outline"
