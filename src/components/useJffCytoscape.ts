@@ -312,6 +312,9 @@ export function useJffCytoscape({
   // Notes the student wrote on the canvas. On by default: they are the author's own words and
   // part of the answer, not decoration. Turned off when they crowd a busy machine.
   const [showNotes, setShowNotes] = useState(true);
+  // Off by default: a machine arrives with the positions its author chose, and quietly moving
+  // every state the first time one is nudged would be a change nobody asked for.
+  const [snapToGrid, setSnapToGrid] = useState(false);
   // The state a reader has clicked, if any. Held as an id rather than a described object so it
   // survives a reload of the same file and cannot go stale against a re-parsed machine.
   const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
@@ -331,6 +334,8 @@ export function useJffCytoscape({
   // value from whenever the effect that started it was created.
   const showNotesRef = useRef(showNotes);
   showNotesRef.current = showNotes;
+  const snapToGridRef = useRef(snapToGrid);
+  snapToGridRef.current = snapToGrid;
   const initialZoomRef = useRef(initialZoom);
   initialZoomRef.current = initialZoom;
   const honorPositionsRef = useRef(honorPositions);
@@ -355,6 +360,14 @@ export function useJffCytoscape({
 
   // Customization variables
   const FIT_PADDING = 80;
+  /**
+   * The grid's spacing, in model units.
+   *
+   * The same number the CSS background uses for its lines, which is what lets the two agree:
+   * the background is kept in step with the graph's zoom and pan below, so a state snapped to
+   * this lattice lands on a line the reader can actually see.
+   */
+  const GRID_STEP = 24;
   // Ceiling on the zoom the initial fit may choose. Without one, fitting fills the canvas
   // whatever is in it, and a two-state machine arrived at roughly 4x. 1:1 turned out to
   // read as too distant on a large screen, so allow a moderate enlargement and no more.
@@ -831,6 +844,48 @@ export function useJffCytoscape({
           neighborhood.addClass('highlighted').removeClass('faded');
         });
 
+        /**
+         * Keep the painted grid in step with the graph.
+         *
+         * The lines are a CSS background on the container, so without this they stay put while
+         * the machine pans and zooms underneath them: decoration rather than a grid. Written
+         * straight to the element rather than through state, because it changes on every frame
+         * of a pan and re-rendering React that often would be absurd. The component sets only
+         * `background-image`, so it never clobbers these two.
+         */
+        const syncGridToGraph = () => {
+          try {
+            const el = containerRef.current;
+            if (!el) return;
+            const scale = cy.zoom();
+            const offset = cy.pan();
+            if (!Number.isFinite(scale) || !Number.isFinite(offset?.x)) return;
+            el.style.backgroundSize = `${GRID_STEP * scale}px ${GRID_STEP * scale}px`;
+            el.style.backgroundPosition = `${offset.x}px ${offset.y}px`;
+          } catch {
+            // The grid is decoration. It is drawn during the same load that draws the machine,
+            // and a viewer that refused to show a machine because it could not place a
+            // background line would be trading the whole feature for the trim on it.
+          }
+        };
+        cy.on('zoom pan resize', syncGridToGraph);
+        syncGridToGraph();
+
+        // Snap on release rather than during the drag: the state follows the pointer exactly
+        // while it is held, then settles onto the lattice, which reads as landing rather than
+        // as the drag fighting back.
+        cy.on('dragfree', 'node', (evt: any) => {
+          if (!snapToGridRef.current) return;
+          const node = evt.target;
+          if (!node?.position || node.hasClass?.('note') || node.hasClass?.('start')) return;
+          const at = node.position();
+          if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.y)) return;
+          node.position({
+            x: Math.round(at.x / GRID_STEP) * GRID_STEP,
+            y: Math.round(at.y / GRID_STEP) * GRID_STEP,
+          });
+        });
+
         // A drag is one undoable step, so the snapshot is taken when the state is picked up
         // rather than on every pixel of movement. `grab` fires once, at the start.
         cy.on('grab', 'node', () => {
@@ -1082,6 +1137,8 @@ export function useJffCytoscape({
     setZoom,
     showNotes,
     toggleNotes: () => setShowNotes((on) => !on),
+    snapToGrid,
+    toggleSnapToGrid: () => setSnapToGrid((on) => !on),
     canUndo: undoDepth > 0,
     canRedo: redoDepth > 0,
     undo: () => step(undoStack, redoStack),

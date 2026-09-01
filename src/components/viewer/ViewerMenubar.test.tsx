@@ -19,6 +19,7 @@ const actions = {
   redo: vi.fn(),
   toggleGrid: vi.fn(),
   toggleNotes: vi.fn(),
+  toggleSnapToGrid: vi.fn(),
   fitToWindow: vi.fn(),
   showTextRepresentation: vi.fn(),
   setAsDrawn: vi.fn(),
@@ -29,17 +30,19 @@ const actions = {
 function FakeViewer({
   grid = false,
   notes = true,
+  snapToGrid = false,
   layout = 'as-drawn',
   canUndo = false,
   canRedo = false,
 }: {
   grid?: boolean;
   notes?: boolean;
+  snapToGrid?: boolean;
   layout?: 'as-drawn' | 'auto';
   canUndo?: boolean;
   canRedo?: boolean;
 }) {
-  useRegisterViewerActions(actions, { grid, notes, layout, canUndo, canRedo });
+  useRegisterViewerActions(actions, { grid, notes, snapToGrid, layout, canUndo, canRedo });
   return null;
 }
 
@@ -549,5 +552,50 @@ describe('Edit, Undo and Redo', () => {
     await openEdit(user);
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Redo' }));
     expect(actions.redo).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('View, Snap to grid', () => {
+  const openView = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'View' }));
+
+  it('is off to begin with, so nothing moves unasked', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    expect(
+      await screen.findByRole('menuitemcheckbox', { name: 'Snap to grid' }),
+    ).not.toBeChecked();
+  });
+
+  it('follows the viewer when it is on', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer snapToGrid />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    expect(await screen.findByRole('menuitemcheckbox', { name: 'Snap to grid' })).toBeChecked();
+  });
+
+  it('asks the viewer to toggle it', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    // fireEvent for the same jsdom reason as the export case above.
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Snap to grid' }));
+    expect(actions.toggleSnapToGrid).toHaveBeenCalledTimes(1);
   });
 });

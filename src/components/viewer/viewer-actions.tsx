@@ -28,6 +28,8 @@ export type ViewerActions = {
   toggleGrid: () => void;
   /** Show or hide the notes the author wrote on the canvas. */
   toggleNotes: () => void;
+  /** Land a dragged state on the grid, or leave it where it was dropped. */
+  toggleSnapToGrid: () => void;
   /** Open the machine written out as text, for reading or checking a transition. */
   showTextRepresentation: () => void;
   /** Scale and centre the machine so all of it is on screen. */
@@ -44,6 +46,8 @@ export type ViewerViewState = {
   grid: boolean;
   /** Whether the author's notes are being drawn. */
   notes: boolean;
+  /** Whether a dragged state lands on the grid. */
+  snapToGrid: boolean;
   /** Whether there is anything to step back to, or forward to. */
   canUndo: boolean;
   canRedo: boolean;
@@ -74,10 +78,19 @@ const ViewerViewContext = createContext<{
   ready: boolean;
   grid: boolean;
   notes: boolean;
+  snapToGrid: boolean;
   layout: ViewerViewState['layout'];
   canUndo: boolean;
   canRedo: boolean;
-}>({ ready: false, grid: false, notes: true, layout: 'as-drawn', canUndo: false, canRedo: false });
+}>({
+  ready: false,
+  grid: false,
+  notes: true,
+  snapToGrid: false,
+  layout: 'as-drawn',
+  canUndo: false,
+  canRedo: false,
+});
 
 export function ViewerActionsProvider({ children }: { children: React.ReactNode }) {
   const actions = useRef<ViewerActions | null>(null);
@@ -89,14 +102,15 @@ export function ViewerActionsProvider({ children }: { children: React.ReactNode 
   // ticked. It changes only when somebody toggles it, so this costs nothing.
   const [grid, setGrid] = useState(false);
   const [notes, setNotes] = useState(true);
+  const [snapToGrid, setSnapToGrid] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [layout, setLayout] = useState<ViewerViewState['layout']>('as-drawn');
 
   // `useRef` and the `useState` setter are both stable, so this is built once.
   const view = useMemo(
-    () => ({ ready, grid, notes, layout, canUndo, canRedo }),
-    [ready, grid, notes, layout, canUndo, canRedo],
+    () => ({ ready, grid, notes, snapToGrid, layout, canUndo, canRedo }),
+    [ready, grid, notes, snapToGrid, layout, canUndo, canRedo],
   );
 
   const registry = useMemo<Registry>(
@@ -108,6 +122,7 @@ export function ViewerActionsProvider({ children }: { children: React.ReactNode 
         setReady(next !== null);
         setGrid(view?.grid ?? false);
         setNotes(view?.notes ?? true);
+        setSnapToGrid(view?.snapToGrid ?? false);
         setCanUndo(view?.canUndo ?? false);
         setCanRedo(view?.canRedo ?? false);
         setLayout(view?.layout ?? 'as-drawn');
@@ -164,13 +179,15 @@ export function useViewerActions(): {
   ready: boolean;
   grid: boolean;
   notes: boolean;
+  snapToGrid: boolean;
   layout: ViewerViewState['layout'];
   canUndo: boolean;
   canRedo: boolean;
   run: (name: keyof ViewerActions) => void;
 } {
   const registry = useContext(ViewerRegistryContext);
-  const { ready, grid, notes, layout, canUndo, canRedo } = useContext(ViewerViewContext);
+  const { ready, grid, notes, snapToGrid, layout, canUndo, canRedo } =
+    useContext(ViewerViewContext);
   const run = registry?.run;
-  return { ready, grid, notes, layout, canUndo, canRedo, run: (name) => run?.(name) };
+  return { ready, grid, notes, snapToGrid, layout, canUndo, canRedo, run: (name) => run?.(name) };
 }

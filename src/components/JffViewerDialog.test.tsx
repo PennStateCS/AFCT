@@ -68,6 +68,7 @@ const h = vi.hoisted(() => {
     width: vi.fn(() => 800),
     height: vi.fn(() => 600),
     zoom: vi.fn(() => 1),
+    pan: vi.fn(() => ({ x: 0, y: 0 })),
     minZoom: vi.fn(() => 0.2),
     maxZoom: vi.fn(() => 6),
     center: vi.fn(() => ({ x: 0, y: 0 })),
@@ -946,5 +947,60 @@ describe('the machine does not flash on the way in', () => {
     });
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" initialZoom="actual" />);
     await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
+  });
+});
+
+describe('snap to grid', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  /** Fire the handler cytoscape calls when a dragged state is released. */
+  const dropAt = (pos: { x: number; y: number }) => {
+    const handler = h.cy.on.mock.calls.find(([name]) => name === 'dragfree')?.[2] as
+      | ((evt: { target: unknown }) => void)
+      | undefined;
+    const node = {
+      hasClass: () => false,
+      position: vi.fn((next?: { x: number; y: number }) => {
+        if (next) Object.assign(pos, next);
+        return pos;
+      }),
+    };
+    act(() => handler?.({ target: node }));
+    return pos;
+  };
+
+  it('leaves a dropped state exactly where it was put, by default', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    expect(dropAt({ x: 37, y: 61 })).toEqual({ x: 37, y: 61 });
+  });
+
+  it('lands it on the nearest grid intersection when switched on', async () => {
+    let toggle: (() => void) | null = null;
+    function Probe() {
+      const v = useViewerActions();
+      toggle = () => v.run('toggleSnapToGrid');
+      return null;
+    }
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+        <Probe />
+      </ViewerActionsProvider>,
+    );
+    await waitForEngine();
+    act(() => toggle?.());
+
+    // 24-unit lattice: 37 rounds to 48, 61 rounds to 72.
+    await waitFor(() => expect(dropAt({ x: 37, y: 61 })).toEqual({ x: 48, y: 72 }));
+  });
+
+  it('keeps the painted grid in step with the graph, or it snaps to lines nobody can see', async () => {
+    // The lines are a CSS background. Left alone they stay put while the machine pans and
+    // zooms underneath, and "snap to grid" would mean snapping to nothing visible.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" showGridDefault />);
+    await waitForEngine();
+    const registered = h.cy.on.mock.calls.map(([name]) => name);
+    expect(registered).toContain('zoom pan resize');
   });
 });

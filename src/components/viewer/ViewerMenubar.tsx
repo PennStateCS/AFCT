@@ -64,7 +64,7 @@ export function ViewerMenubar({
   // False for a grammar or a regular expression, which have nothing to export: those viewers
   // register no actions, so the items disable themselves rather than being hidden. A missing
   // menu item reads as a bug; a greyed one reads as "not for this kind of file".
-  const { ready, grid, notes, layout, canUndo, canRedo, run } = useViewerActions();
+  const { ready, grid, notes, snapToGrid, layout, canUndo, canRedo, run } = useViewerActions();
 
   return (
     <Menubar className="bg-card h-auto rounded-none border-x-0 border-t-0 px-2 py-1 shadow-none">
@@ -186,6 +186,16 @@ export function ViewerMenubar({
             onCheckedChange={() => run('toggleNotes')}
           >
             JFLAP Notes
+          </MenubarCheckboxItem>
+          {/* Off by default: a machine arrives with the positions its author chose, and
+              quietly moving every state the first time one is nudged would be a change nobody
+              asked for. Directly under Grid, since it is that grid it snaps to. */}
+          <MenubarCheckboxItem
+            checked={snapToGrid}
+            disabled={!ready}
+            onCheckedChange={() => run('toggleSnapToGrid')}
+          >
+            Snap to grid
           </MenubarCheckboxItem>
           <MenubarSeparator />
           {/* The same content the dialog viewers show in a panel under the graph. Here it

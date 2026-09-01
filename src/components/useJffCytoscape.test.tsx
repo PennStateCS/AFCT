@@ -224,6 +224,12 @@ class FakeCy {
   maxZoom() {
     return 6;
   }
+  // Read by the grid sync, which keeps the painted lines in step with the graph. Without it
+  // that sync threw on every load, and only its own try/catch kept the viewer working: the
+  // feature was silently absent here rather than tested.
+  pan() {
+    return { x: 0, y: 0 };
+  }
   panningEnabled() {}
   userPanningEnabled() {}
   userZoomingEnabled() {}

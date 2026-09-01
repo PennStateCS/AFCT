@@ -337,6 +337,8 @@ export function JffCytoscapeViewer({
     toggleHonorPositions,
     showNotes,
     toggleNotes,
+    snapToGrid,
+    toggleSnapToGrid,
     canUndo,
     canRedo,
     undo,
@@ -395,6 +397,7 @@ export function JffCytoscapeViewer({
       redo,
       toggleGrid: () => setGrid((on) => !on),
       toggleNotes,
+      toggleSnapToGrid,
       fitToWindow: fit,
       showTextRepresentation: () => setShowText(true),
       // Set rather than toggled, so the menu's two options are a choice between states and
@@ -406,18 +409,26 @@ export function JffCytoscapeViewer({
         if (honorPositions) toggleHonorPositions();
       },
     },
-    { grid, notes: showNotes, layout: honorPositions ? 'as-drawn' : 'auto', canUndo, canRedo },
+    {
+      grid,
+      notes: showNotes,
+      snapToGrid,
+      layout: honorPositions ? 'as-drawn' : 'auto',
+      canUndo,
+      canRedo,
+    },
   );
 
   // Grid lines read the theme var live (subtle light gray in light mode, subtle dark line in
   // dark mode). The literal is only a fallback, and being a literal is what keeps the server
   // and client markup identical.
   const gridLine = `var(--grid-color, ${GRID_COLOR_FALLBACK})`;
+  // Only the lines. Their SIZE and POSITION are written straight to the element by the engine,
+  // which keeps them in step with the graph's zoom and pan; listing them here as well would
+  // have React reset them to these values on every render and the grid would stop tracking.
   const backgroundStyle: React.CSSProperties = grid
     ? {
         backgroundImage: `linear-gradient(${gridLine} 1px, transparent 1px), linear-gradient(90deg, ${gridLine} 1px, transparent 1px)`,
-        backgroundSize: '24px 24px',
-        backgroundPosition: 'center center',
       }
     : {};
 
