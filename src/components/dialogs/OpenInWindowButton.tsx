@@ -32,7 +32,7 @@ export function OpenInWindowButton({ href }: { href: string }) {
       }}
     >
       <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-      Open in a new window
+      Open in the viewer
     </Button>
   );
 }

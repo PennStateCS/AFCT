@@ -702,3 +702,17 @@ describe('clicking a transition', () => {
     expect(screen.queryByRole('group', { name: /transition from/i })).toBeNull();
   });
 });
+
+describe('copying the text representation', () => {
+  it('offers the copy beside the text, in the standalone window', async () => {
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" />
+      </ViewerActionsProvider>,
+    );
+    await waitForEngine();
+    // The dialog mock renders its children regardless of `open`, so this proves the button is
+    // there to be shown rather than that the dialog is open. See the note on that mock above.
+    expect(screen.getByRole('button', { name: /copy as text/i })).toBeInTheDocument();
+  });
+});

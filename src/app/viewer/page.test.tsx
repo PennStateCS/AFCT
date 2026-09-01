@@ -32,6 +32,9 @@ vi.mock('@/components/session/SessionWatcher', () => ({
     return null;
   },
 }));
+// Reaches the database and resolves permissions, neither of which this page's own tests are
+// about. Its behaviour is covered in lib/viewer-properties.test.ts.
+vi.mock('@/lib/viewer-properties', () => ({ loadViewerProperties: vi.fn(async () => null) }));
 vi.mock('./ViewerClient', () => ({ ViewerClient: () => null }));
 
 import ViewerPage from './page';

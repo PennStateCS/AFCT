@@ -22,13 +22,14 @@ Each row is one submission, and shows when it arrived, whether it was on time, w
 
 **File** is the student's own file name. Click it to open the submission in the viewer for that problem type, or use the download icon beside it to save the original file. This works the same way as the solution file on a course's problem list.
 
-The viewer opens in a panel over the page, which suits a quick look. For a large machine, **Open in a new window** puts the same viewer in a browser window of its own, where it has the whole screen and can sit on a second monitor. One window is reused, so opening another machine replaces what is in it rather than adding a second window.
+The viewer opens in a panel over the page, which suits a quick look. For a large machine, **Open in the viewer** puts the same viewer in a browser window of its own, where it has the whole screen and can sit on a second monitor. One window is reused, so opening another machine replaces what is in it rather than adding a second window.
 
 That window has a menu bar of its own:
 
 - **File → Download** offers two things. **Original file** saves the file exactly as it was submitted. **Current view** saves a new `.jff` with the machine laid out as it is on screen, which is useful after **Auto-arranged** has made a crowded drawing readable. The submitted file is never altered by this.
 - **File → Export** saves the drawing as an SVG or a PNG.
-- **Edit** holds three ways of copying, because each one pastes where the others cannot: **Copy as PNG** for a document or an email, **Copy as SVG** for a drawing program or a slide, where it stays sharp at any size, and **Copy as text**, which puts the machine into words so it can be quoted in a reply.
+- **File → Properties** says where the file came from: whether it is a student's submission or the instructor's solution, the course, assignment and problem, the student who submitted it (and the group, on group work), and when it arrived. It says nothing about grades.
+- **Edit** copies the drawing: **Copy as PNG** for a document or an email, and **Copy as SVG** for a drawing program or a slide, where it stays sharp at any size. To copy the machine as words, open **View → Text representation** and use the **Copy as text** button there.
 - **Help** opens this documentation page in a new tab.
 - **View** holds **Fit to window**, which brings the whole machine back on screen after zooming or panning about, and **Text representation**, which opens the machine written out as states and transitions in a window of its own. It also turns the background **Grid** on and off, shows or hides the **JFLAP Notes** the author wrote on the canvas (on by default, and only drawn in the As drawn layout), and **View → Layout** chooses between **As drawn**, which places the states where their author put them, and **Auto-arranged**, which lets the layout engine place them. One of the two is always in effect.
 

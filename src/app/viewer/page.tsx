@@ -6,6 +6,7 @@ import QueryProvider from '@/components/providers/QueryProvider';
 import SessionWatcher from '@/components/session/SessionWatcher';
 import { isSafeUploadName } from '@/lib/upload-names';
 import { isViewerFileKind, viewerFileSrc } from '@/lib/viewer-link';
+import { loadViewerProperties } from '@/lib/viewer-properties';
 import { ViewerActionsProvider } from '@/components/viewer/viewer-actions';
 import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
 import { ViewerClient } from './ViewerClient';
@@ -85,6 +86,12 @@ export default async function ViewerPage({
   const tabLabel = first('name') ?? title;
   const epsSymbol = first('eps');
 
+  // Loaded here rather than from the browser: it needs the database and the same permission
+  // rule the file route applies, and doing it during render keeps that rule on the server.
+  // Null when the file is unknown or not this reader's to see; the menu then says so rather
+  // than showing an empty panel.
+  const properties = await loadViewerProperties(kind, file, session.user);
+
   return (
     <QueryProvider>
       <SessionWatcher />
@@ -93,7 +100,10 @@ export default async function ViewerPage({
           pattern the dashboard shell uses for its content column. */}
       <ViewerActionsProvider>
         <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
-          <ViewerMenubar downloadHref={`${viewerFileSrc(kind, file)}?download=1`} />
+          <ViewerMenubar
+            downloadHref={`${viewerFileSrc(kind, file)}?download=1`}
+            properties={properties}
+          />
           {/* A tab rather than a heading bar. It carries the white of the menu bar above it
               and the grey of the toolbar below, so it reads as the label of the thing it sits
               on rather than as a third strip stacked between them. Open at the bottom, which

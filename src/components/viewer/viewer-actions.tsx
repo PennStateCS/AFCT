@@ -23,8 +23,6 @@ export type ViewerActions = {
   downloadCurrent: () => void | Promise<void>;
   /** The drawing as SVG markup, which pastes as vector art rather than a bitmap. */
   copySVG: () => void | Promise<void>;
-  /** The machine in words, the one export that can be quoted in a reply. */
-  copyDescription: () => void | Promise<void>;
   toggleGrid: () => void;
   /** Show or hide the notes the author wrote on the canvas. */
   toggleNotes: () => void;

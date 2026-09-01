@@ -13,7 +13,6 @@ const actions = {
   copyPNG: vi.fn(),
   downloadCurrent: vi.fn(),
   copySVG: vi.fn(),
-  copyDescription: vi.fn(),
   toggleGrid: vi.fn(),
   toggleNotes: vi.fn(),
   fitToWindow: vi.fn(),
@@ -199,7 +198,6 @@ describe('the Edit menu', () => {
   it.each([
     [/copy as png/i, 'copyPNG'],
     [/copy as svg/i, 'copySVG'],
-    [/copy as text/i, 'copyDescription'],
   ] as const)('runs %s', async (name, action) => {
     const user = userEvent.setup();
     mountWithViewer();
@@ -209,15 +207,15 @@ describe('the Edit menu', () => {
     expect(actions[action]).toHaveBeenCalledTimes(1);
   });
 
-  it('offers all three ways of copying, since each pastes somewhere the others cannot', async () => {
-    // PNG into a document, SVG into a drawing program, text into a reply. Losing one of
-    // these silently would look like a tidy-up rather than a regression.
+  it('offers the two image copies, and leaves the text one beside the text', async () => {
+    // Copying the description moved next to the description itself, where it is wanted. If it
+    // ever comes back here as well there would be two ways to do one thing.
     const user = userEvent.setup();
     mountWithViewer();
     await openEdit(user);
-    const items = await screen.findAllByRole('menuitem');
-    const labels = items.map((i) => i.textContent);
-    expect(labels.filter((l) => l?.startsWith('Copy as'))).toHaveLength(3);
+    const labels = (await screen.findAllByRole('menuitem')).map((i) => i.textContent);
+    expect(labels.filter((l) => l?.startsWith('Copy as'))).toHaveLength(2);
+    expect(labels).not.toContain('Copy as text');
   });
 });
 
@@ -400,6 +398,58 @@ describe('the Help menu', () => {
     );
     await user.click(screen.getByRole('menuitem', { name: 'Help' }));
     expect(await screen.findByRole('menuitem', { name: /documentation/i })).not.toHaveAttribute(
+      'data-disabled',
+    );
+  });
+});
+
+describe('File, Properties', () => {
+  const props = {
+    rows: [
+      { label: 'Course', value: 'CMPEN 331 Automata' },
+      { label: 'Assignment', value: 'Homework 2' },
+      { label: 'Submitted', value: '2026-03-04 09:05 UTC' },
+    ],
+  };
+
+  it('shows where the file came from', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/x?download=1" properties={props} />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'File' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Properties' }));
+    expect(await screen.findByText('CMPEN 331 Automata')).toBeInTheDocument();
+    expect(screen.getByText('Homework 2')).toBeInTheDocument();
+    expect(screen.getByText('2026-03-04 09:05 UTC')).toBeInTheDocument();
+  });
+
+  it('is disabled rather than hidden when there is nothing to show', async () => {
+    // The menu keeps its shape between files. A vanishing item reads as a bug.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/x?download=1" properties={null} />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'File' }));
+    expect(await screen.findByRole('menuitem', { name: 'Properties' })).toHaveAttribute(
+      'data-disabled',
+    );
+  });
+
+  it('does not need a drawn machine, since it describes the file not the picture', async () => {
+    // A grammar disables the exports; where the file came from is still a fair question.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/x?download=1" properties={props} />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'File' }));
+    expect(await screen.findByRole('menuitem', { name: 'Properties' })).not.toHaveAttribute(
       'data-disabled',
     );
   });

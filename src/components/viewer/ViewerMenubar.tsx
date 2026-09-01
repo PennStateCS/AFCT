@@ -1,15 +1,17 @@
 'use client';
 
+import { Fragment, useState } from 'react';
+
 import {
   Download,
   FileDown,
   FileImage,
   FileCode2,
   Copy,
-  ClipboardType,
   Maximize2,
   ListTree,
   BookOpen,
+  Info,
 } from 'lucide-react';
 import {
   Menubar,
@@ -27,6 +29,14 @@ import {
 } from '@/components/ui/menubar';
 import { useViewerActions } from '@/components/viewer/viewer-actions';
 import { VIEWER_DOCS_URL } from '@/lib/viewer-link';
+import type { ViewerProperties } from '@/lib/viewer-properties';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 /**
  * The standalone window's menu bar.
@@ -40,7 +50,15 @@ import { VIEWER_DOCS_URL } from '@/lib/viewer-link';
  * used rarely and need to be found by reading rather than recognised by icon. One menu today;
  * the shape is what makes adding the next one uneventful.
  */
-export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
+export function ViewerMenubar({
+  downloadHref,
+  properties,
+}: {
+  downloadHref: string;
+  /** Null when the file is unknown or not this reader's to see. */
+  properties?: ViewerProperties | null;
+}) {
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
   // False for a grammar or a regular expression, which have nothing to export: those viewers
   // register no actions, so the items disable themselves rather than being hidden. A missing
   // menu item reads as a bug; a greyed one reads as "not for this kind of file".
@@ -71,6 +89,13 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
               </MenubarItem>
             </MenubarSubContent>
           </MenubarSub>
+          <MenubarSeparator />
+          {/* Where the file came from, rather than what is in it. Disabled rather than hidden
+              when there is nothing to show, so the menu does not change shape between files. */}
+          <MenubarItem disabled={!properties} onSelect={() => setPropertiesOpen(true)}>
+            <Info aria-hidden="true" />
+            Properties
+          </MenubarItem>
           <MenubarSeparator />
           <MenubarSub>
             <MenubarSubTrigger>Export</MenubarSubTrigger>
@@ -103,13 +128,6 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
           <MenubarItem disabled={!ready} onSelect={() => run('copySVG')}>
             <FileCode2 aria-hidden="true" />
             Copy as SVG
-          </MenubarItem>
-          <MenubarSeparator />
-          {/* The only one of the three that can be quoted in a reply: a picture of an
-              automaton cannot be answered inline, a description of it can. */}
-          <MenubarItem disabled={!ready} onSelect={() => run('copyDescription')}>
-            <ClipboardType aria-hidden="true" />
-            Copy as text
           </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
@@ -188,6 +206,25 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
           </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
+
+      {properties ? (
+        <Dialog open={propertiesOpen} onOpenChange={setPropertiesOpen}>
+          <DialogContent className="max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Properties</DialogTitle>
+              <DialogDescription>Where this file came from.</DialogDescription>
+            </DialogHeader>
+            <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+              {properties.rows.map((row) => (
+                <Fragment key={row.label}>
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="break-words">{row.value}</dd>
+                </Fragment>
+              ))}
+            </dl>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </Menubar>
   );
 }

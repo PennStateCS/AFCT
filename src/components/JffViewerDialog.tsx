@@ -343,7 +343,6 @@ export function JffCytoscapeViewer({
       downloadCurrent,
       copyPNG,
       copySVG,
-      copyDescription,
       toggleGrid: () => setGrid((on) => !on),
       toggleNotes,
       fitToWindow: fit,
@@ -613,6 +612,15 @@ export function JffCytoscapeViewer({
                   <DialogTitle>Text representation</DialogTitle>
                   <DialogDescription>{description.summary}</DialogDescription>
                 </DialogHeader>
+                {/* Beside the thing it copies, rather than in a menu two levels away. This is
+                    the only export that can be quoted in a reply, and it is most obviously
+                    wanted while looking at the text it produces. */}
+                <div className="flex justify-end">
+                  <Button type="button" size="sm" variant="outline" onClick={copyDescription}>
+                    <Copy className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                    Copy as text
+                  </Button>
+                </div>
                 <div className="text-sm">
                   <MachineDescriptionList description={description} />
                 </div>
