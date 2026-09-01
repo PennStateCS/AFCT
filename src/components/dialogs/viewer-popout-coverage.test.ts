@@ -34,9 +34,9 @@ describe('the standalone window is offered everywhere a viewer dialog is opened'
     expect(sites.length).toBeGreaterThan(0);
   });
 
-  it.each(callSites())('%s passes a windowHref', (file) => {
+  it.each(callSites())('%s passes a windowTarget', (file) => {
     const source = readFileSync(path.join(ROOT, file), 'utf8');
-    expect(source).toContain('windowHref');
+    expect(source).toContain('windowTarget');
   });
 });
 

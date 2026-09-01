@@ -19,7 +19,7 @@ import {
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
-import { viewerWindowHref } from '@/lib/viewer-link';
+import { viewerWindowTarget } from '@/lib/viewer-tabs';
 import { formatDateInTimeZone } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 import { RichDescription } from '@/components/rich-description/RichDescription';
@@ -256,7 +256,7 @@ export const useProblemColumns = ({
       encodeURIComponent(openDialog.problem.fileName ?? ''),
     );
     const answerTitle = `${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`;
-    const windowHref = viewerWindowHref({
+    const windowTarget = viewerWindowTarget({
       src: answerSrc,
       problemType: openDialog.problem.type,
       title: answerTitle,
@@ -278,7 +278,7 @@ export const useProblemColumns = ({
             width="70vw"
             height="70vh"
             epsSymbol={epsSymbol}
-            windowHref={windowHref}
+            windowTarget={windowTarget}
           />
         );
       case 'RE':
@@ -290,7 +290,7 @@ export const useProblemColumns = ({
             }
             src={answerSrc}
             title={answerTitle}
-            windowHref={windowHref}
+            windowTarget={windowTarget}
           />
         );
       case 'CFG':
@@ -303,7 +303,7 @@ export const useProblemColumns = ({
             src={answerSrc}
             title={answerTitle}
             epsSymbol={epsSymbol}
-            windowHref={windowHref}
+            windowTarget={windowTarget}
           />
         );
       default:

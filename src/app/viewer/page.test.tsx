@@ -81,6 +81,7 @@ describe('the standalone viewer page', () => {
     ['a traversal name', { kind: 'submissions', file: '../x', type: 'FA' }, /name a file/i],
     ['an unknown machine type', { kind: 'submissions', file: 'a.jff', type: 'MEALY' }, /kind of machine/i],
     ['nothing at all', {}, /which kind of file/i],
+    ['a truncated tab list', { tabs: '[{"kind":"submi' }, /damaged/i],
   ])('refuses %s and says which part of the link is wrong', async (_l, search, expected) => {
     // These URLs get bookmarked and hand-edited, so a refusal has to be readable.
     signedIn();

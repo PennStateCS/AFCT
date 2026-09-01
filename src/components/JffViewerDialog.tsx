@@ -31,6 +31,7 @@ import {
 } from '@/lib/zoom-scale';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
+import type { ViewerWindowTarget } from '@/lib/viewer-tabs';
 import {
   useRegisterViewerActions,
   useViewerChromePresent,
@@ -770,7 +771,7 @@ export default function JffViewerDialog({
   darkMode,
   showGridDefault = true,
   honorPositionsDefault = true,
-  windowHref,
+  windowTarget,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -782,8 +783,8 @@ export default function JffViewerDialog({
   darkMode?: boolean;
   showGridDefault?: boolean;
   honorPositionsDefault?: boolean;
-  /** Link to the standalone window, or absent when one cannot be built for this file. */
-  windowHref?: string | null;
+  /** Where the pop-out sends this file, or absent when a link cannot be built for it. */
+  windowTarget?: ViewerWindowTarget | null;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -811,7 +812,9 @@ export default function JffViewerDialog({
             </DialogTitle>
             {/* Beside the title rather than in the toolbar below: this is about the window
                 the machine is in, not about how it is drawn. */}
-            {windowHref ? <OpenInWindowButton href={windowHref} /> : null}
+            {windowTarget ? (
+              <OpenInWindowButton href={windowTarget.href} tab={windowTarget.tab} />
+            ) : null}
           </div>
         </DialogHeader>
         <div className="min-h-0 flex-1 p-4 pt-2">

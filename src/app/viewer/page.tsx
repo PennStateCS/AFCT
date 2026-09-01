@@ -4,12 +4,11 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import QueryProvider from '@/components/providers/QueryProvider';
 import SessionWatcher from '@/components/session/SessionWatcher';
+import { loadViewerProperties, type ViewerProperties } from '@/lib/viewer-properties';
 import { isSafeUploadName } from '@/lib/upload-names';
-import { isViewerFileKind, viewerFileSrc } from '@/lib/viewer-link';
-import { loadViewerProperties } from '@/lib/viewer-properties';
-import { ViewerActionsProvider } from '@/components/viewer/viewer-actions';
-import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
-import { ViewerClient } from './ViewerClient';
+import { isViewerFileKind } from '@/lib/viewer-link';
+import { readActiveIndex, readTabs } from '@/lib/viewer-tabs';
+import { ViewerWindow } from './ViewerWindow';
 
 export const metadata: Metadata = { title: 'AFCT Viewer' };
 
@@ -29,21 +28,33 @@ function Refusal({ message }: { message: string }) {
 }
 
 /**
+ * Say which part of a link is wrong, because these URLs get bookmarked, pasted into mail and
+ * hand-edited, and "something went wrong" would leave somebody with no idea whether to blame
+ * the link or the file.
+ *
+ * Only the single-file form can be diagnosed this way. A `tabs` list is written by the viewer
+ * itself, so a broken one is truncation or an edit rather than a part somebody left out.
+ */
+function badLinkMessage(params: URLSearchParams): string {
+  if (params.get('tabs')) return 'This link is damaged, and does not name any file to open.';
+  if (!isViewerFileKind(params.get('kind')))
+    return 'This link does not say which kind of file to open.';
+  if (!isSafeUploadName(params.get('file')))
+    return 'This link does not name a file the viewer can open.';
+  return 'This link does not say what kind of machine the file holds.';
+}
+
+/**
  * The standalone machine viewer, opened in its own window from a viewer dialog.
  *
- * Outside `/dashboard` on purpose: that layout supplies the sidebar and navbar, and a
- * window whose whole job is to show one machine as large as possible should have neither.
- * The providers the viewers need (theme, session, toasts) come from the root layout, so
- * the only thing this route has to re-add is the idle-session watcher, which the dashboard
- * layout would otherwise have mounted.
+ * Outside `/dashboard` on purpose: that layout supplies the sidebar and navbar, and a window
+ * whose whole job is to show machines should have neither. The providers the viewers need
+ * (theme, session, toasts) come from the root layout, so this route re-adds only the
+ * idle-session watcher and a query client, which `SessionWatcher` needs to read the timeout.
  *
- * It grants no access of its own. The file itself is fetched from the same route the
- * dialog uses, which authorises per file and writes the audit record; this page only
- * decides that the link is well formed and that somebody is signed in.
- *
- * `QueryProvider` is here because `SessionWatcher` reads the configured idle timeout with
- * react-query. Outside `/dashboard` nothing else supplies a query client, and the failure
- * is a blank error page rather than a missing feature, so the two belong together.
+ * It grants no access of its own. Each file is fetched from the same route the dialog uses,
+ * which authorises per file and writes the audit record; this page decides only that the link
+ * is well formed and that somebody is signed in.
  */
 export default async function ViewerPage({
   searchParams,
@@ -51,80 +62,43 @@ export default async function ViewerPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const session = await auth();
-  // Same two conditions the dashboard layout applies: a session, and an account that has
-  // not been marked inactive since it was issued.
+  // Same two conditions the dashboard layout applies: a session, and an account that has not
+  // been marked inactive since it was issued.
   if (!session?.user?.id || session.user.inactive) {
     redirect('/login');
   }
 
-  const params = await searchParams;
-  const first = (key: string) => {
-    const value = params[key];
-    return Array.isArray(value) ? value[0] : value;
-  };
-
-  const kind = first('kind');
-  const file = first('file');
-  const type = (first('type') ?? '').toUpperCase();
-
-  // Each refusal names the part of the link that is wrong, because these URLs get
-  // bookmarked, pasted into mail and hand-edited, and "something went wrong" would leave
-  // somebody with no idea whether to blame the link or the file.
-  if (!isViewerFileKind(kind)) {
-    return <Refusal message="This link does not say which kind of file to open." />;
-  }
-  if (!isSafeUploadName(file)) {
-    return <Refusal message="This link does not name a file the viewer can open." />;
-  }
-  if (!KNOWN_TYPES.includes(type)) {
-    return <Refusal message="This link does not say what kind of machine the file holds." />;
+  const raw = await searchParams;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'string') params.set(key, value);
+    else if (Array.isArray(value) && value[0] !== undefined) params.set(key, value[0]);
   }
 
-  const title = first('title') ?? file;
-  // The tab shows the file's own name. The composed heading stays as the accessible name for
-  // the graph, where the problem it belongs to is worth having.
-  const tabLabel = first('name') ?? title;
-  const epsSymbol = first('eps');
+  const tabs = readTabs(params).filter((tab) => KNOWN_TYPES.includes(tab.type.toUpperCase()));
+  if (tabs.length === 0) {
+    return <Refusal message={badLinkMessage(params)} />;
+  }
 
-  // Loaded here rather than from the browser: it needs the database and the same permission
-  // rule the file route applies, and doing it during render keeps that rule on the server.
-  // Null when the file is unknown or not this reader's to see; the menu then says so rather
-  // than showing an empty panel.
-  const properties = await loadViewerProperties(kind, file, session.user);
+  // Only for the tabs the window opens with. One added later has never been near the server,
+  // and fetches its own from /api/viewer/properties.
+  const properties: Record<string, ViewerProperties | null> = {};
+  for (const tab of tabs) {
+    properties[`${tab.kind}:${tab.file}`] = await loadViewerProperties(
+      tab.kind,
+      tab.file,
+      session.user,
+    );
+  }
 
   return (
     <QueryProvider>
       <SessionWatcher />
-      {/* `min-w-0 flex-1` because the root layout's body is a flex row: a block child sizes
-          to its content there and the viewer came out at roughly half the window. The same
-          pattern the dashboard shell uses for its content column. */}
-      <ViewerActionsProvider>
-        <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
-          <ViewerMenubar
-            downloadHref={`${viewerFileSrc(kind, file)}?download=1`}
-            properties={properties}
-          />
-          {/* A tab rather than a heading bar. It carries the white of the menu bar above it
-              and the grey of the toolbar below, so it reads as the label of the thing it sits
-              on rather than as a third strip stacked between them. Open at the bottom, which
-              is what joins it to the toolbar. */}
-          <header className="bg-card shrink-0 px-3 pt-2">
-            <h1 className="bg-background inline-flex max-w-full items-center rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-semibold">
-              <span className="truncate" title={title}>
-                {tabLabel}
-              </span>
-            </h1>
-          </header>
-          <div className="min-h-0 flex-1">
-            <ViewerClient
-              src={viewerFileSrc(kind, file)}
-              problemType={type}
-              title={title}
-              epsSymbol={epsSymbol}
-            />
-          </div>
-        </main>
-      </ViewerActionsProvider>
+      <ViewerWindow
+        initialTabs={tabs}
+        initialActive={readActiveIndex(params, tabs.length)}
+        initialProperties={properties}
+      />
     </QueryProvider>
   );
 }

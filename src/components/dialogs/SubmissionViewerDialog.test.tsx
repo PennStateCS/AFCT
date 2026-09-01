@@ -6,18 +6,42 @@ import { describe, it, expect, vi } from 'vitest';
 
 // Stub each underlying viewer so we can assert which one the selector renders.
 vi.mock('@/components/JffViewerDialog', () => ({
-  default: ({ windowHref }: { windowHref?: string | null }) => (
-    <div data-testid="jff-viewer" data-window-href={windowHref ?? ''} />
+  default: ({
+    windowTarget,
+  }: {
+    windowTarget?: { href: string; tab: { file: string } } | null;
+  }) => (
+    <div
+      data-testid="jff-viewer"
+      data-window-href={windowTarget?.href ?? ''}
+      data-window-tab={windowTarget?.tab.file ?? ''}
+    />
   ),
 }));
 vi.mock('@/components/dialogs/RegexViewerDialog', () => ({
-  RegexViewerDialog: ({ windowHref }: { windowHref?: string | null }) => (
-    <div data-testid="regex-viewer" data-window-href={windowHref ?? ''} />
+  RegexViewerDialog: ({
+    windowTarget,
+  }: {
+    windowTarget?: { href: string; tab: { file: string } } | null;
+  }) => (
+    <div
+      data-testid="regex-viewer"
+      data-window-href={windowTarget?.href ?? ''}
+      data-window-tab={windowTarget?.tab.file ?? ''}
+    />
   ),
 }));
 vi.mock('@/components/dialogs/CfgViewerDialog', () => ({
-  CfgViewerDialog: ({ windowHref }: { windowHref?: string | null }) => (
-    <div data-testid="cfg-viewer" data-window-href={windowHref ?? ''} />
+  CfgViewerDialog: ({
+    windowTarget,
+  }: {
+    windowTarget?: { href: string; tab: { file: string } } | null;
+  }) => (
+    <div
+      data-testid="cfg-viewer"
+      data-window-href={windowTarget?.href ?? ''}
+      data-window-tab={windowTarget?.tab.file ?? ''}
+    />
   ),
 }));
 
@@ -72,6 +96,8 @@ describe('the link to the standalone window', () => {
     expect(href).toContain('/viewer?');
     expect(href).toContain('kind=submissions');
     expect(href).toContain(`type=${type}`);
+    // The tab the window is asked to open, which is what an already-open window is sent.
+    expect(screen.getByTestId(testId).getAttribute('data-window-tab')).toBe('abc.jff');
   });
 
   it('is absent when the source is not one of the file routes', () => {

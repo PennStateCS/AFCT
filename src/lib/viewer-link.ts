@@ -44,6 +44,32 @@ export function viewerFileSrc(kind: ViewerFileKind, file: string): string {
  */
 export const VIEWER_DOCS_URL = 'https://pennstatecs.github.io/AFCT/admin/submissions/';
 
+/**
+ * Read a viewer dialog's `src` back into the pieces the standalone window needs.
+ *
+ * Returns null for anything that is not one of this application's own file routes, an absolute
+ * URL included: the viewer reads from those routes and nowhere else, and a name that is not a
+ * plain basename is refused here rather than at the far end.
+ */
+export function parseViewerSrc(src: string): { kind: ViewerFileKind; file: string } | null {
+  const match = /^\/api\/files\/([a-z]+)\/([^/?#]+)$/.exec(src.trim());
+  if (!match) return null;
+
+  const kind = match[1];
+  const rawFile = match[2];
+  if (!isViewerFileKind(kind) || rawFile === undefined) return null;
+
+  let file: string;
+  try {
+    file = decodeURIComponent(rawFile);
+  } catch {
+    // A malformed escape sequence. Nothing safe to build from.
+    return null;
+  }
+  if (!isSafeUploadName(file)) return null;
+  return { kind, file };
+}
+
 type ViewerLinkArgs = {
   /** The `src` a viewer dialog was given, expected to be one of the file routes. */
   src: string;
@@ -79,23 +105,9 @@ export function viewerWindowHref({
   const type = (problemType ?? '').trim();
   if (!type) return null;
 
-  // A relative path only. An absolute URL fails this deliberately: the standalone viewer
-  // reads from this application's own upload routes and nowhere else.
-  const match = /^\/api\/files\/([a-z]+)\/([^/?#]+)$/.exec(src.trim());
-  if (!match) return null;
-
-  const kind = match[1];
-  const rawFile = match[2];
-  if (!isViewerFileKind(kind) || rawFile === undefined) return null;
-
-  let file: string;
-  try {
-    file = decodeURIComponent(rawFile);
-  } catch {
-    // A malformed escape sequence. Nothing safe to build from.
-    return null;
-  }
-  if (!isSafeUploadName(file)) return null;
+  const parsed = parseViewerSrc(src);
+  if (!parsed) return null;
+  const { kind, file } = parsed;
 
   const params = new URLSearchParams({ kind, file, type });
   if (title) params.set('title', title);

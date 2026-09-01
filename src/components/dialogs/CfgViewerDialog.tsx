@@ -152,6 +152,7 @@ export function CfgViewerContent({
 }
 
 import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
+import type { ViewerWindowTarget } from '@/lib/viewer-tabs';
 
 export function CfgViewerDialog({
   src,
@@ -159,15 +160,15 @@ export function CfgViewerDialog({
   onOpenChange,
   title,
   epsSymbol = DEFAULT_EPS,
-  windowHref,
+  windowTarget,
 }: {
   src: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   title: string | null | undefined;
   epsSymbol?: string;
-  /** Link to the standalone window, or absent when one cannot be built for this file. */
-  windowHref?: string | null;
+  /** Where the pop-out sends this file, or absent when a link cannot be built for it. */
+  windowTarget?: ViewerWindowTarget | null;
 }) {
   if (!title) {
     title = '';
@@ -189,9 +190,9 @@ export function CfgViewerDialog({
             <DialogDescription className="sr-only">
               Context-free grammar productions.
             </DialogDescription>
-            {windowHref ? (
+            {windowTarget ? (
               <div className="flex justify-start pt-1">
-                <OpenInWindowButton href={windowHref} />
+                <OpenInWindowButton href={windowTarget.href} tab={windowTarget.tab} />
               </div>
             ) : null}
             <CfgViewerContent src={src} epsSymbol={epsSymbol} />
