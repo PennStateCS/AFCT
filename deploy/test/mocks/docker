@@ -237,6 +237,14 @@ case "$cmd" in
     esac
     ;;
 
+  logs)
+    # What a container printed. MOCK_LOGS carries the lines (\n separated) so a test can
+    # assert the updater copies a failing service's output into the progress log before the
+    # rollback removes the container that produced it.
+    printf '%b' "${MOCK_LOGS:-}"
+    exit 0
+    ;;
+
   *)
     exit 0
     ;;
