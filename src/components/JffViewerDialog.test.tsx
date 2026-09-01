@@ -327,3 +327,28 @@ describe('the toolbar does not repeat what a menu already offers', () => {
     expect(screen.getByRole('button', { name: /zoom in/i })).toBeInTheDocument();
   });
 });
+
+describe('the zoom slider', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('sits between the two zoom buttons', () => {
+    // Position is the request: the control that changes zoom belongs between the two
+    // buttons that also change it, not parked at the end of the toolbar.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    const group = screen.getByRole('group', { name: 'View controls' });
+    const controls = Array.from(
+      group.querySelectorAll('button[aria-label="Zoom out"], [role="slider"], button[aria-label="Zoom in"]'),
+    );
+    expect(controls).toHaveLength(3);
+    expect(controls[0]).toHaveAttribute('aria-label', 'Zoom out');
+    expect(controls[1]).toHaveAttribute('role', 'slider');
+    expect(controls[2]).toHaveAttribute('aria-label', 'Zoom in');
+  });
+
+  it('is announced as a zoom, with the value spoken as a percentage', () => {
+    // "62" is meaningless to a screen reader user; "100%" is the thing they asked about.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    const slider = screen.getByRole('slider', { name: 'Zoom' });
+    expect(slider).toHaveAttribute('aria-valuetext', '100%');
+  });
+});

@@ -8,6 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { describeMachine, type MachineType } from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Slider } from '@/components/ui/slider';
+import {
+  sliderToZoom,
+  zoomPercentLabel,
+  zoomToSlider,
+  ZOOM_SLIDER_MAX,
+  ZOOM_SLIDER_MIN,
+} from '@/lib/zoom-scale';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
 import {
@@ -66,6 +74,9 @@ export function JffCytoscapeViewer({
     toggleHonorPositions,
     zoomIn,
     zoomOut,
+    zoom,
+    setZoom,
+    zoomRange,
     fit,
     downloadSVG,
     downloadPNG,
@@ -213,6 +224,23 @@ export function JffCytoscapeViewer({
             >
               <ZoomOut className="h-4 w-4" />
             </Button>
+            {/* Between the two buttons, which is where the thing they both change belongs.
+                Log scale, so 100% sits near the middle instead of against the left end; see
+                lib/zoom-scale. The value is spoken as a percentage, because "62" means
+                nothing to somebody who cannot see the graph. */}
+            <Slider
+              className="w-20 shrink-0 sm:w-28"
+              min={ZOOM_SLIDER_MIN}
+              max={ZOOM_SLIDER_MAX}
+              step={1}
+              value={[zoomToSlider(zoom, zoomRange().min, zoomRange().max)]}
+              onValueChange={([next]) => {
+                const { min, max } = zoomRange();
+                if (next !== undefined) setZoom(sliderToZoom(next, min, max));
+              }}
+              aria-label="Zoom"
+              aria-valuetext={zoomPercentLabel(zoom)}
+            />
             <Button
               size="sm"
               variant="outline"

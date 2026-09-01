@@ -228,6 +228,9 @@ export function useJffCytoscape({
   // Kept so the viewer can render a text description of the machine; the canvas alone
   // is not a usable representation for a screen reader.
   const [parsed, setParsed] = useState<Parsed | null>(null);
+  // The live zoom level, mirrored into state so a slider can show it. Cytoscape owns the
+  // real value; this follows it, including when the wheel or the Fit button changes it.
+  const [zoom, setZoomState] = useState(1);
 
   // Customization variables
   const FIT_PADDING = 80;
@@ -603,6 +606,12 @@ export function useJffCytoscape({
 
         cyRef.current = cy;
 
+        // Follow cytoscape rather than tracking zoom in parallel: the wheel, a pinch, Fit and
+        // the buttons all change it, and a second source of truth would drift from whichever
+        // of those the user reached for last.
+        setZoomState(cy.zoom());
+        cy.on('zoom', () => setZoomState(cy.zoom()));
+
         // make sure zooming/panning are enabled
         cy.userZoomingEnabled(true);
         cy.panningEnabled(true);
@@ -685,6 +694,28 @@ export function useJffCytoscape({
     // Use cy.center(cy.nodes()) to get the center position
     const center = cy.center(cy.nodes());
     cy.animate({ zoom: next, center }, { duration: 120, easing: 'ease-in-out' });
+  };
+
+  /** Zoom bounds, read from the instance so they cannot disagree with the config above. */
+  const zoomRange = () => {
+    const cy = cyRef.current;
+    const min = cy && typeof cy.minZoom === 'function' ? cy.minZoom() : 0.2;
+    const max = cy && typeof cy.maxZoom === 'function' ? cy.maxZoom() : 6;
+    return { min, max };
+  };
+
+  /**
+   * Set the zoom directly, without the easing the buttons use.
+   *
+   * A slider is dragged continuously, and animating each step would leave the graph chasing
+   * the thumb instead of tracking it.
+   */
+  const setZoom = (level: number) => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    const { min, max } = zoomRange();
+    cy.zoom({ level: Math.max(min, Math.min(max, level)), renderedPosition: undefined });
+    cy.center(cy.nodes());
   };
 
   const zoomIn = () => {
@@ -785,6 +816,9 @@ export function useJffCytoscape({
     toggleHonorPositions: () => setHonorPositions((p) => !p),
     zoomIn,
     zoomOut,
+    zoom,
+    setZoom,
+    zoomRange,
     fit: () => onResizeRef.current?.(),
     downloadSVG,
     copySVG,
