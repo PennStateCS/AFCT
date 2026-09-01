@@ -21,8 +21,18 @@ vi.mock('./ViewerClient', () => ({
   },
 }));
 vi.mock('@/components/viewer/ViewerMenubar', () => ({
-  ViewerMenubar: ({ downloadHref }: { downloadHref: string }) => (
-    <div data-testid="menubar" data-download={downloadHref} />
+  ViewerMenubar: ({
+    downloadHref,
+    properties,
+  }: {
+    downloadHref: string;
+    properties?: { rows: { label: string; value: string }[] } | null;
+  }) => (
+    <div
+      data-testid="menubar"
+      data-download={downloadHref}
+      data-properties={properties?.rows[0]?.value ?? ''}
+    />
   ),
 }));
 
@@ -69,8 +79,12 @@ const showing = () => {
   return visible[0];
 };
 
-const renderWindow = (tabs: ViewerTab[], active = 0) =>
-  render(<ViewerWindow initialTabs={tabs} initialActive={active} initialProperties={{}} />);
+const renderWindow = (
+  tabs: ViewerTab[],
+  active = 0,
+  properties: Record<string, { rows: { label: string; value: string }[] } | null> = {},
+) =>
+  render(<ViewerWindow initialTabs={tabs} initialActive={active} initialProperties={properties} />);
 
 beforeEach(() => {
   mounts.clear();
@@ -205,6 +219,35 @@ describe('what a tab keeps while another one is on screen', () => {
     opener.close();
 
     expect(mounts.get('/api/files/submissions/b.jff')).toBe(2);
+  });
+});
+
+describe('the menu bar belongs to the tab on screen', () => {
+  // Two of the menu's entries do not go through the viewer at all: the Download link and the
+  // Properties panel are handed down from here. They have to follow the selected tab like
+  // everything else, or a reader downloads one student's file while looking at another's.
+
+  it('offers the showing tab as the download, marked as a download', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    expect(screen.getByTestId('menubar').getAttribute('data-download')).toBe(
+      '/api/files/submissions/a.jff?download=1',
+    );
+
+    fireEvent.click(screen.getAllByRole('tab')[1]);
+    expect(screen.getByTestId('menubar').getAttribute('data-download')).toBe(
+      '/api/files/submissions/b.jff?download=1',
+    );
+  });
+
+  it("shows the showing tab's properties", () => {
+    renderWindow([tab('a.jff'), tab('b.jff')], 0, {
+      'submissions:a.jff': { rows: [{ label: 'Student', value: 'Ada' }] },
+      'submissions:b.jff': { rows: [{ label: 'Student', value: 'Grace' }] },
+    });
+    expect(screen.getByTestId('menubar').getAttribute('data-properties')).toBe('Ada');
+
+    fireEvent.click(screen.getAllByRole('tab')[1]);
+    expect(screen.getByTestId('menubar').getAttribute('data-properties')).toBe('Grace');
   });
 });
 

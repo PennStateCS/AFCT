@@ -606,7 +606,7 @@ describe('several viewers mounted at once', () => {
    * Fresh mocks per test, not the shared `actions` above: those accumulate calls across this
    * file, so asserting on them here would pass whatever the gate did.
    */
-  const makeActions = () => ({ ...actions, undo: vi.fn() });
+  const makeActions = () => ({ ...actions, undo: vi.fn(), redo: vi.fn() });
 
   function Viewer({ own, canUndo }: { own: typeof actions; canUndo: boolean }) {
     useRegisterViewerActions(own, {
@@ -615,7 +615,7 @@ describe('several viewers mounted at once', () => {
       snapToGrid: false,
       layout: 'as-drawn',
       canUndo,
-      canRedo: false,
+      canRedo: true,
     });
     return null;
   }
@@ -658,6 +658,58 @@ describe('several viewers mounted at once', () => {
 
     expect(first.undo).toHaveBeenCalled();
     expect(second.undo).not.toHaveBeenCalled();
+  });
+
+  it('follows the switch when a different tab is selected', async () => {
+    // The case the two static tests cannot reach. Switching hands the registry from one
+    // viewer to the other in a single commit: the one losing it withdraws in the same flush
+    // that the one gaining it registers, and getting that order wrong would leave the menu
+    // driving nothing, or still driving the tab that was left behind.
+    const user = userEvent.setup();
+    const first = makeActions();
+    const second = makeActions();
+    const { rerender } = render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/f.jff" />
+        <TwoViewers first={first} second={second} activeSecond />
+      </ViewerActionsProvider>,
+    );
+
+    // Back to the first, which is not the one that renders last: that is what makes this
+    // fail if the menu is driven by render order rather than by which tab is showing.
+    rerender(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/f.jff" />
+        <TwoViewers first={first} second={second} activeSecond={false} />
+      </ViewerActionsProvider>,
+    );
+
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    await user.click(await screen.findByRole('menuitem', { name: /^Redo/ }));
+
+    expect(first.redo).toHaveBeenCalled();
+    expect(second.redo).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing once the last viewer has gone', async () => {
+    // Closing the last tab leaves the menu bar with no machine behind it. The items have to
+    // go quiet rather than run against a graph that has been torn down.
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/f.jff" />
+        <TwoViewers first={makeActions()} second={makeActions()} activeSecond={false} />
+      </ViewerActionsProvider>,
+    );
+    rerender(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/f.jff" />
+      </ViewerActionsProvider>,
+    );
+
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    const redo = await screen.findByRole('menuitem', { name: /^Redo/ });
+    expect(redo.getAttribute('aria-disabled')).toBe('true');
   });
 
   it("shows the active tab's view state, not the last one's", async () => {
