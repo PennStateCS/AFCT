@@ -24,12 +24,17 @@ import {
 } from '@/components/viewer/viewer-actions';
 import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
-// Grid overlay color (component-only; the engine styling lives in useJffCytoscape).
-const GRID_COLOR =
-  typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--grid-color').trim() ||
-      '#0f172a'
-    : '#0f172a';
+/**
+ * Fallback grid colour, used only if `--grid-color` is somehow absent.
+ *
+ * A plain constant, deliberately. It used to read the computed value off the document behind
+ * a `typeof window` check, which meant the server rendered one colour and the browser
+ * another: React reported a hydration mismatch on the first page that server-renders this
+ * viewer, which the dialogs never did because they only ever mount after a click. Reading
+ * computed styles during render is the thing that cannot be done here; the CSS variable does
+ * the theming anyway, live, without any of this.
+ */
+const GRID_COLOR_FALLBACK = '#0f172a';
 
 /* ───────────────────────────── Viewer component ────────────────────────── */
 
@@ -80,6 +85,7 @@ export function JffCytoscapeViewer({
     fit,
     downloadSVG,
     downloadPNG,
+    downloadCurrent,
     copyPNG,
     copySVG,
     copyDescription,
@@ -108,6 +114,7 @@ export function JffCytoscapeViewer({
     {
       downloadSVG,
       downloadPNG,
+      downloadCurrent,
       copyPNG,
       copySVG,
       copyDescription,
@@ -125,9 +132,10 @@ export function JffCytoscapeViewer({
     { grid, layout: honorPositions ? 'as-drawn' : 'auto' },
   );
 
-  // Grid lines read the theme var live (subtle light gray in light mode, subtle
-  // dark line in dark mode), falling back to the load-time color.
-  const gridLine = `var(--grid-color, ${GRID_COLOR})`;
+  // Grid lines read the theme var live (subtle light gray in light mode, subtle dark line in
+  // dark mode). The literal is only a fallback, and being a literal is what keeps the server
+  // and client markup identical.
+  const gridLine = `var(--grid-color, ${GRID_COLOR_FALLBACK})`;
   const backgroundStyle: React.CSSProperties = grid
     ? {
         backgroundImage: `linear-gradient(${gridLine} 1px, transparent 1px), linear-gradient(90deg, ${gridLine} 1px, transparent 1px)`,
@@ -166,7 +174,11 @@ export function JffCytoscapeViewer({
   return (
     <div
       className={cn(
-        'bg-card w-full overflow-hidden rounded-md border',
+        'bg-card w-full overflow-hidden border',
+        // Rounded and fully bordered as a card inside a dialog. In the standalone window it is
+        // the window's content rather than a card in it, and the rounding would put a gap
+        // between the title tab and the toolbar it is meant to sit on.
+        chromeHasViewControls ? 'rounded-none border-0' : 'rounded-md',
         fill && 'flex h-full flex-col',
       )}
     >
@@ -264,42 +276,49 @@ export function JffCytoscapeViewer({
             </Button>
           </div>
 
-          {/* Separator between control groups */}
-          <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
+          {/* Exporting moves into the menu bar in the standalone window, so the
+              toolbar drops the whole group there rather than carrying a second copy
+              of it. The separator goes with them: a divider with nothing after it. */}
+          {chromeHasViewControls ? null : (
+            <>
+              {/* Separator between control groups */}
+              <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
 
-          {/* Export controls */}
-          <div className="flex items-center gap-1" role="group" aria-label="Export controls">
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={downloadSVG}
-              title="Download SVG"
-              aria-label="Download SVG"
-            >
-              <Download className="mr-2 h-4 w-4" /> SVG
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={downloadPNG}
-              title="Download PNG"
-              aria-label="Download PNG"
-            >
-              <ImageDown className="mr-2 h-4 w-4" /> PNG
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={copyPNG}
-              title="Copy PNG to clipboard"
-              aria-label="Copy PNG to clipboard"
-            >
-              <Copy className="mr-2 h-4 w-4" /> Copy PNG
-            </Button>
-          </div>
+              {/* Export controls */}
+              <div className="flex items-center gap-1" role="group" aria-label="Export controls">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={controlBtnClass}
+                  onClick={downloadSVG}
+                  title="Download SVG"
+                  aria-label="Download SVG"
+                >
+                  <Download className="mr-2 h-4 w-4" /> SVG
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={controlBtnClass}
+                  onClick={downloadPNG}
+                  title="Download PNG"
+                  aria-label="Download PNG"
+                >
+                  <ImageDown className="mr-2 h-4 w-4" /> PNG
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={controlBtnClass}
+                  onClick={copyPNG}
+                  title="Copy PNG to clipboard"
+                  aria-label="Copy PNG to clipboard"
+                >
+                  <Copy className="mr-2 h-4 w-4" /> Copy PNG
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

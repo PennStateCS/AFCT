@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -318,13 +320,31 @@ describe('the toolbar does not repeat what a menu already offers', () => {
     expect(screen.queryByRole('radiogroup', { name: 'Layout' })).toBeNull();
   });
 
-  it('keeps zoom and export in both, which the menu does not fully replace', () => {
+  it('drops the export buttons in the standalone window too', () => {
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+      </ViewerActionsProvider>,
+    );
+    expect(screen.queryByRole('group', { name: 'Export controls' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /copy png/i })).toBeNull();
+  });
+
+  it('keeps the export buttons in a dialog, which has no menu bar', () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    expect(screen.getByRole('group', { name: 'Export controls' })).toBeInTheDocument();
+  });
+
+  it('keeps zoom in both, since the menu has no zoom', () => {
+    // The dividing line is duplication, not tidiness: zoom exists only on the toolbar, so it
+    // stays in both places.
     render(
       <ViewerActionsProvider>
         <JffCytoscapeViewer src={SRC} title="abc.jff" />
       </ViewerActionsProvider>,
     );
     expect(screen.getByRole('button', { name: /zoom in/i })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Zoom' })).toBeInTheDocument();
   });
 });
 
@@ -377,5 +397,29 @@ describe('what the viewer publishes to a menu', () => {
     h.cy.resize.mockClear();
     act(() => run?.('fitToWindow'));
     expect(h.cy.resize).toHaveBeenCalled();
+  });
+});
+
+describe('the grid background renders the same on the server and in the browser', () => {
+  it('uses the CSS variable with a literal fallback, not a computed colour', () => {
+    // The viewer used to read --grid-color off the document at module scope behind a
+    // `typeof window` check, so a server-rendered page produced one colour and hydration
+    // produced another. Any literal here is fine; a computed one is not.
+    render(<JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" showGridDefault />);
+    const style = screen.getByRole('img').getAttribute('style') ?? '';
+    expect(style).toContain('var(--grid-color, #0f172a)');
+    // A resolved colour function is what the mismatch looked like on the client side.
+    expect(style).not.toContain('lab(');
+    expect(style).not.toContain('oklch(');
+  });
+
+  it('reads no computed style while rendering', () => {
+    // Deliberately a source check. jsdom resolves --grid-color to an empty string, so the
+    // computed-style version falls back to the same literal and renders identically here:
+    // the runtime assertion above cannot tell the two apart, and passed throughout the bug.
+    // What can be checked is the practice, which is what actually caused it. A computed read
+    // inside an effect or a handler would be fine; this file should have neither.
+    const source = readFileSync(path.join(__dirname, 'JffViewerDialog.tsx'), 'utf8');
+    expect(source).not.toContain('getComputedStyle');
   });
 });

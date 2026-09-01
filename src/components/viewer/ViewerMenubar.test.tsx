@@ -11,6 +11,7 @@ const actions = {
   downloadSVG: vi.fn(),
   downloadPNG: vi.fn(),
   copyPNG: vi.fn(),
+  downloadCurrent: vi.fn(),
   copySVG: vi.fn(),
   copyDescription: vi.fn(),
   toggleGrid: vi.fn(),
@@ -45,8 +46,44 @@ describe('the standalone viewer menu bar', () => {
       </ViewerActionsProvider>,
     );
     await openFile(user);
-    const link = await screen.findByRole('menuitem', { name: /download original file/i });
+    await user.click(await screen.findByRole('menuitem', { name: 'Download' }));
+    const link = await screen.findByRole('menuitem', { name: /original file/i });
     expect(link).toHaveAttribute('href', '/api/files/submissions/abc.jff?download=1');
+  });
+
+  it('offers the current view as a separate download', async () => {
+    // Two distinct things: what the student submitted, and what is on screen after the layout
+    // engine has had a go at it. Collapsing them into one item would hide that difference.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openFile(user);
+    await user.click(await screen.findByRole('menuitem', { name: 'Download' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /current view/i }));
+    expect(actions.downloadCurrent).toHaveBeenCalledTimes(1);
+  });
+
+  it('still offers the original when nothing is drawn, since that needs no graph', async () => {
+    // A grammar has no rendered machine, so there is no current view to save. The submitted
+    // file is still right there and must not be disabled with it.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openFile(user);
+    await user.click(await screen.findByRole('menuitem', { name: 'Download' }));
+    expect(await screen.findByRole('menuitem', { name: /original file/i })).not.toHaveAttribute(
+      'data-disabled',
+    );
+    expect(await screen.findByRole('menuitem', { name: /current view/i })).toHaveAttribute(
+      'data-disabled',
+    );
   });
 
   it('runs the export the viewer registered', async () => {

@@ -91,8 +91,16 @@ export default async function ViewerPage({
       <ViewerActionsProvider>
         <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
           <ViewerMenubar downloadHref={`${viewerFileSrc(kind, file)}?download=1`} />
-          <header className="shrink-0 border-b px-4 py-3">
-            <h1 className="text-foreground text-sm font-semibold break-words">{title}</h1>
+          {/* A tab rather than a heading bar. It carries the white of the menu bar above it
+              and the grey of the toolbar below, so it reads as the label of the thing it sits
+              on rather than as a third strip stacked between them. Open at the bottom, which
+              is what joins it to the toolbar. */}
+          <header className="bg-card shrink-0 px-3 pt-2">
+            <h1 className="bg-background inline-flex max-w-full items-center rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-semibold">
+              <span className="truncate" title={title}>
+                {title}
+              </span>
+            </h1>
           </header>
           <div className="min-h-0 flex-1">
             <ViewerClient

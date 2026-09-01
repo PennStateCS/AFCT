@@ -105,3 +105,24 @@ describe('the providers the page has to bring with it', () => {
     await expect(renderPage({ ...GOOD, title: 'Ada' })).resolves.toContain('Ada');
   });
 });
+
+describe('the title tab', () => {
+  beforeEach(() => {
+    authMock.mockReset();
+    signedIn();
+  });
+
+  it('names the file, and keeps the full name reachable when it is truncated', async () => {
+    // These titles are a file name followed by the problem's own title, so they are long and
+    // the tab clips them. The title attribute is what makes the clipped part readable.
+    const html = await renderPage({ ...GOOD, title: 'd_flip-flop.jff - D Flip-Flop' });
+    expect(html).toContain('d_flip-flop.jff - D Flip-Flop');
+    expect(html).toContain('title="d_flip-flop.jff - D Flip-Flop"');
+  });
+
+  it('is open at the bottom, which is what joins it to the toolbar', async () => {
+    const html = await renderPage(GOOD);
+    expect(html).toContain('rounded-t-md');
+    expect(html).toContain('border-b-0');
+  });
+});

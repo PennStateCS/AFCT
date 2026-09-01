@@ -1,6 +1,14 @@
 'use client';
 
-import { Download, FileImage, FileCode2, Copy, ClipboardType, Maximize2 } from 'lucide-react';
+import {
+  Download,
+  FileDown,
+  FileImage,
+  FileCode2,
+  Copy,
+  ClipboardType,
+  Maximize2,
+} from 'lucide-react';
 import {
   Menubar,
   MenubarCheckboxItem,
@@ -20,6 +28,11 @@ import { useViewerActions } from '@/components/viewer/viewer-actions';
 /**
  * The standalone window's menu bar.
  *
+ * `bg-card` rather than the component's default `bg-background`: this app's light background
+ * token is a light blue-grey (#E7EBF0), which reads as a disabled strip across the top of a
+ * window. A menu bar is expected to be the same colour as the thing it belongs to, so it takes
+ * the white card surface and separates itself with the border underneath instead.
+ *
  * A menu rather than a row of buttons because this window will accumulate commands that are
  * used rarely and need to be found by reading rather than recognised by icon. One menu today;
  * the shape is what makes adding the next one uneventful.
@@ -31,18 +44,30 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
   const { ready, grid, layout, run } = useViewerActions();
 
   return (
-    <Menubar className="rounded-none border-x-0 border-t-0 shadow-none">
+    <Menubar className="bg-card h-auto rounded-none border-x-0 border-t-0 px-2 py-1 shadow-none">
       <MenubarMenu>
         <MenubarTrigger>File</MenubarTrigger>
         <MenubarContent>
-          <MenubarItem asChild>
-            {/* The file exactly as it was submitted, from the same route the viewer reads,
-                which records it as a download rather than a view. */}
-            <a href={downloadHref} download>
-              <Download aria-hidden="true" />
-              Download original file
-            </a>
-          </MenubarItem>
+          <MenubarSub>
+            <MenubarSubTrigger>Download</MenubarSubTrigger>
+            <MenubarSubContent>
+              <MenubarItem asChild>
+                {/* The file exactly as it was submitted, from the same route the viewer
+                    reads, which records it as a download rather than a view. */}
+                <a href={downloadHref} download>
+                  <Download aria-hidden="true" />
+                  Original file
+                </a>
+              </MenubarItem>
+              {/* The same machine with the layout on screen, which after auto-arranging is
+                  usually far more readable than the one that was submitted. A new file: the
+                  submitted one is never altered. */}
+              <MenubarItem disabled={!ready} onSelect={() => run('downloadCurrent')}>
+                <FileDown aria-hidden="true" />
+                Current view
+              </MenubarItem>
+            </MenubarSubContent>
+          </MenubarSub>
           <MenubarSeparator />
           <MenubarSub>
             <MenubarSubTrigger>Export</MenubarSubTrigger>

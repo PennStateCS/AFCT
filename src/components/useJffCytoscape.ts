@@ -18,6 +18,7 @@ import {
   START_MARKER_SIZE,
   STATE_BORDER_WIDTH,
 } from '@/lib/jflap-layout';
+import { toJflapXml } from '@/lib/jflap-write';
 import {
   describeMachine,
   machineDescriptionText,
@@ -788,6 +789,40 @@ export function useJffCytoscape({
     }
   };
 
+  /**
+   * The machine as it currently sits, as a `.jff`.
+   *
+   * The point of it is the auto-arranged layout: the engine's placement is usually far more
+   * readable than a hand-drawn one, and until now there was no way to keep it. Positions are
+   * read from the live graph rather than from the parsed file, so what is saved is what is on
+   * screen.
+   *
+   * The submitted file is never touched. This writes a new one, because the bytes a student
+   * submitted are the record of what they did and several stored hashes are derived from them.
+   */
+  const downloadCurrent = async () => {
+    const cy = cyRef.current;
+    if (!cy || !parsed) return;
+
+    const states = parsed.states.map((state) => {
+      const node = cy.getElementById(state.id);
+      // A state the graph does not have (it should not happen) keeps the position it came
+      // with, rather than being moved to the origin.
+      if (!node || typeof node.position !== 'function' || node.empty?.()) return state;
+      const position = node.position();
+      if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return state;
+      // Both cytoscape and JFLAP put a state's coordinates at its centre, so this is a
+      // straight copy. Notes are the ones that differ, and they are not moved here.
+      return { ...state, xPos: position.x, yPos: position.y };
+    });
+
+    const xml = toJflapXml({ ...parsed, states });
+    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    await downloadDataUrl(`${(title ?? 'automaton').replace(/\s+/g, '_')}.jff`, url);
+    URL.revokeObjectURL(url);
+  };
+
   const copyPNG = async () => {
     if (!cyRef.current) return;
     try {
@@ -821,6 +856,7 @@ export function useJffCytoscape({
     zoomRange,
     fit: () => onResizeRef.current?.(),
     downloadSVG,
+    downloadCurrent,
     copySVG,
     copyDescription,
     downloadPNG,
