@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
+import { tabKey, VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
 
 /** How many times a viewer for each file has been built, so a remount is visible. */
 const mounts = new Map<string, number>();
@@ -36,6 +36,7 @@ vi.mock('@/components/viewer/ViewerMenubar', () => ({
   ),
 }));
 
+import type { ViewerLayout } from '@/lib/viewer-panes';
 import { ViewerWindow } from './ViewerWindow';
 
 /**
@@ -79,12 +80,20 @@ const showing = () => {
   return visible[0];
 };
 
+/** A window opened on these files, all in one pane, showing the one at `active`. */
 const renderWindow = (
   tabs: ViewerTab[],
   active = 0,
   properties: Record<string, { rows: { label: string; value: string }[] } | null> = {},
-) =>
-  render(<ViewerWindow initialTabs={tabs} initialActive={active} initialProperties={properties} />);
+) => {
+  const layout: ViewerLayout = {
+    tabs,
+    panes: {},
+    active: [tabs[active] ? tabKey(tabs[active]!) : null, null],
+    focused: 0,
+  };
+  return render(<ViewerWindow initialLayout={layout} initialProperties={properties} />);
+};
 
 beforeEach(() => {
   mounts.clear();
@@ -134,7 +143,8 @@ describe('the tab strip', () => {
     renderWindow([tab('a.jff'), tab('b.jff')]);
     fireEvent.click(screen.getAllByRole('tab')[1]);
     const search = new URLSearchParams(window.location.search);
-    expect(search.get('active')).toBe('1');
+    // One active tab per pane, so the second half is the empty right pane.
+    expect(search.get('active')).toBe('1,-1');
     expect(search.get('tabs')).toContain('b.jff');
   });
 });
@@ -258,6 +268,80 @@ describe('the menu bar belongs to the tab on screen', () => {
 
     fireEvent.click(screen.getAllByRole('tab')[1]);
     expect(screen.getByTestId('menubar').getAttribute('data-properties')).toBe('Grace');
+  });
+});
+
+describe('a window split into two panes', () => {
+  // Nothing on screen can make a split yet: the drag lands in a later step. What is being
+  // checked here is the rendering the split will drive, and the one property everything else
+  // rests on, which is that moving a machine between the panes does not rebuild it.
+  const splitLayout = (): ViewerLayout => ({
+    tabs: [tab('a.jff'), tab('b.jff'), tab('c.jff')],
+    panes: { 'submissions:c.jff': 1 },
+    active: ['submissions:a.jff', 'submissions:c.jff'],
+    focused: 1,
+  });
+
+  const renderLayout = (layout: ViewerLayout) =>
+    render(<ViewerWindow initialLayout={layout} initialProperties={{}} />);
+
+  it('gives each side its own strip, named so they can be told apart', () => {
+    renderLayout(splitLayout());
+    const strips = screen.getAllByRole('tablist');
+    expect(strips.map((s) => s.getAttribute('aria-label'))).toEqual(['Left pane', 'Right pane']);
+    expect(
+      within(strips[0]!)
+        .getAllByRole('tab')
+        .map((t) => t.textContent),
+    ).toEqual(['a.jff', 'b.jff']);
+    expect(
+      within(strips[1]!)
+        .getAllByRole('tab')
+        .map((t) => t.textContent),
+    ).toEqual(['c.jff']);
+  });
+
+  it('shows one machine per pane, and hides the rest', () => {
+    renderLayout(splitLayout());
+    const visible = screen
+      .getAllByTestId('viewer')
+      .filter((v) => !v.closest('[inert]'))
+      .map((v) => v.getAttribute('data-src'));
+    expect(visible).toHaveLength(2);
+    expect(visible.join(' ')).toContain('a.jff');
+    expect(visible.join(' ')).toContain('c.jff');
+  });
+
+  it('puts each pane in its own half', () => {
+    renderLayout(splitLayout());
+    const paneOf = (file: string) =>
+      screen
+        .getAllByTestId('viewer')
+        .find((v) => v.getAttribute('data-src')?.includes(file))!
+        .closest('div[class*="absolute"]')!.className;
+    expect(paneOf('a.jff')).toContain('left-0');
+    expect(paneOf('c.jff')).toContain('left-1/2');
+  });
+
+  it('does not rebuild the machines when a pane collapses', () => {
+    // Closing the last tab on one side takes the window back to one pane, which changes every
+    // surviving machine's half-width rectangle to the full one. It must be only that: a
+    // rebuild would take the zoom, the arrangement and the undo history with it.
+    //
+    // This is the reason every viewer in the window is a sibling in one container, rendered
+    // in the window's own tab order rather than grouped by pane. Grouped, a collapse would
+    // move them to a different parent and React would unmount them.
+    renderLayout(splitLayout());
+    expect(mounts.get('/api/files/submissions/c.jff')).toBe(1);
+
+    // Emptying the LEFT pane, so the survivor on the right has to become the left pane. That
+    // is the case where a grouped layout would move it to a different parent; closing the
+    // right-hand tab instead would leave everything where it was and prove nothing.
+    fireEvent.click(screen.getByLabelText('Close a.jff'));
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+
+    expect(screen.getAllByRole('tablist')).toHaveLength(1);
+    expect(mounts.get('/api/files/submissions/c.jff')).toBe(1);
   });
 });
 

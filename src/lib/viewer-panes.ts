@@ -73,8 +73,11 @@ export const emptyLayout = (): ViewerLayout => ({
  * Called after every change rather than made each caller's problem: a pane that lost its last
  * tab has to disappear, whatever emptied it, and a pane whose active tab has gone has to show
  * something else. Doing it in one place is why the callers below are each a few lines.
+ *
+ * Exported because the page drops tabs of a type the viewer cannot draw, which is a change to
+ * the tab list like any other and leaves the same loose ends behind.
  */
-function settle(layout: ViewerLayout): ViewerLayout {
+export function settleLayout(layout: ViewerLayout): ViewerLayout {
   const keys = new Set(layout.tabs.map(tabKey));
 
   // Drop assignments for tabs that have closed, so the record does not grow forever.
@@ -118,12 +121,12 @@ export function selectTab(layout: ViewerLayout, key: string): ViewerLayout {
   const pane = paneOf(layout, key);
   const active: [string | null, string | null] = [...layout.active];
   active[pane] = key;
-  return settle({ ...layout, active, focused: pane });
+  return settleLayout({ ...layout, active, focused: pane });
 }
 
 /** Focus a pane without changing which tab it shows. */
 export const focusPane = (layout: ViewerLayout, pane: PaneIndex): ViewerLayout =>
-  settle({ ...layout, focused: pane });
+  settleLayout({ ...layout, focused: pane });
 
 /**
  * Add a tab, or select it if it is already open.
@@ -148,13 +151,13 @@ export function openTab(layout: ViewerLayout, next: ViewerTab): ViewerLayout {
 
   const active: [string | null, string | null] = [...layout.active];
   active[layout.focused] = tabKey(next);
-  return settle({ ...layout, tabs, panes, active });
+  return settleLayout({ ...layout, tabs, panes, active });
 }
 
 /** Close a tab. A pane left with nothing closes with it. */
 export function closeTab(layout: ViewerLayout, key: string): ViewerLayout {
   if (!layout.tabs.some((tab) => tabKey(tab) === key)) return layout;
-  return settle({ ...layout, tabs: layout.tabs.filter((tab) => tabKey(tab) !== key) });
+  return settleLayout({ ...layout, tabs: layout.tabs.filter((tab) => tabKey(tab) !== key) });
 }
 
 /**
@@ -180,7 +183,7 @@ export function splitTabToSide(
 
   const active: [string | null, string | null] = [null, null];
   active[dragged] = key;
-  return settle({ ...layout, panes, active, focused: dragged });
+  return settleLayout({ ...layout, panes, active, focused: dragged });
 }
 
 /**
@@ -195,7 +198,7 @@ export function moveTabToPane(layout: ViewerLayout, key: string, pane: PaneIndex
 
   const active: [string | null, string | null] = [...layout.active];
   active[pane] = key;
-  return settle({ ...layout, panes: { ...layout.panes, [key]: pane }, active, focused: pane });
+  return settleLayout({ ...layout, panes: { ...layout.panes, [key]: pane }, active, focused: pane });
 }
 
 /* ── where a dragged tab would land ─────────────────────────────────────── */
@@ -280,7 +283,7 @@ export function readLayout(params: URLSearchParams): ViewerLayout {
   const focusRaw = Number(params.get('focus') ?? '0');
   const focused: PaneIndex = focusRaw === 1 ? 1 : 0;
 
-  return settle({
+  return settleLayout({
     tabs,
     panes,
     active: [indexOf(left), indexOf(right)],

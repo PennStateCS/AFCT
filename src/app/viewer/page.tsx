@@ -7,7 +7,8 @@ import SessionWatcher from '@/components/session/SessionWatcher';
 import { loadViewerProperties, type ViewerProperties } from '@/lib/viewer-properties';
 import { isSafeUploadName } from '@/lib/upload-names';
 import { isViewerFileKind } from '@/lib/viewer-link';
-import { readActiveIndex, readTabs } from '@/lib/viewer-tabs';
+import { tabKey } from '@/lib/viewer-tabs';
+import { readLayout, settleLayout } from '@/lib/viewer-panes';
 import { ViewerWindow } from './ViewerWindow';
 
 export const metadata: Metadata = { title: 'AFCT Viewer' };
@@ -36,7 +37,8 @@ function Refusal({ message }: { message: string }) {
  * itself, so a broken one is truncation or an edit rather than a part somebody left out.
  */
 function badLinkMessage(params: URLSearchParams): string {
-  if (params.get('tabs')) return 'This link is damaged, and does not name any file to open.';
+  if (params.get('tabs') || params.get('panes'))
+    return 'This link is damaged, and does not name any file to open.';
   if (!isViewerFileKind(params.get('kind')))
     return 'This link does not say which kind of file to open.';
   if (!isSafeUploadName(params.get('file')))
@@ -75,30 +77,28 @@ export default async function ViewerPage({
     else if (Array.isArray(value) && value[0] !== undefined) params.set(key, value[0]);
   }
 
-  const tabs = readTabs(params).filter((tab) => KNOWN_TYPES.includes(tab.type.toUpperCase()));
-  if (tabs.length === 0) {
+  const read = readLayout(params);
+  // A type the viewer cannot draw is dropped rather than opened as a broken tab. Settled
+  // afterwards, because dropping one can leave a pane empty or showing nothing.
+  const layout = settleLayout({
+    ...read,
+    tabs: read.tabs.filter((tab) => KNOWN_TYPES.includes(tab.type.toUpperCase())),
+  });
+  if (layout.tabs.length === 0) {
     return <Refusal message={badLinkMessage(params)} />;
   }
 
   // Only for the tabs the window opens with. One added later has never been near the server,
   // and fetches its own from /api/viewer/properties.
   const properties: Record<string, ViewerProperties | null> = {};
-  for (const tab of tabs) {
-    properties[`${tab.kind}:${tab.file}`] = await loadViewerProperties(
-      tab.kind,
-      tab.file,
-      session.user,
-    );
+  for (const tab of layout.tabs) {
+    properties[tabKey(tab)] = await loadViewerProperties(tab.kind, tab.file, session.user);
   }
 
   return (
     <QueryProvider>
       <SessionWatcher />
-      <ViewerWindow
-        initialTabs={tabs}
-        initialActive={readActiveIndex(params, tabs.length)}
-        initialProperties={properties}
-      />
+      <ViewerWindow initialLayout={layout} initialProperties={properties} />
     </QueryProvider>
   );
 }
