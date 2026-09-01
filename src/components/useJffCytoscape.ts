@@ -20,6 +20,7 @@ import {
 } from '@/lib/jflap-layout';
 import { toJflapXml } from '@/lib/jflap-write';
 import {
+  clearViewState,
   readViewState,
   writeViewState,
   viewStateFits,
@@ -453,10 +454,28 @@ export function useJffCytoscape({
    * False when there is nothing saved, or when what is saved names states this machine does
    * not have. The caller then opens the file the ordinary way.
    */
+  /**
+   * The remembered view belongs to the first load and nothing after it.
+   *
+   * Switching between the drawn and the auto-arranged layout rebuilds the graph, and without
+   * this the restore ran again at the end of that rebuild and put the old positions straight
+   * back over the layout engine's. Choosing Auto-arranged appeared to do nothing at all.
+   */
+  const hasRestored = useRef(false);
+
+  /**
+   * Bumped to rebuild the graph when nothing `load` depends on has changed.
+   *
+   * Reset is the only user of it: resetting a machine that is already on its own layout has
+   * to re-read the file anyway, because the states have been dragged since.
+   */
+  const [reloadNonce, setReloadNonce] = useState(0);
+
   const restoreSavedView = useCallback(
     (cy: any): boolean => {
       const saved = savedView;
-      if (!saved) return false;
+      if (!saved || hasRestored.current) return false;
+      hasRestored.current = true;
       try {
         const ids = cy.nodes().map((node: any) => node.id());
         if (!viewStateFits(saved, ids)) return false;
@@ -1046,6 +1065,8 @@ export function useJffCytoscape({
     return () => window.removeEventListener('pagehide', flush);
   }, [rememberView]);
 
+  // `reloadNonce` is here rather than in `load` because the cleanup below is what makes a
+  // rebuild safe: it destroys the previous engine and takes its resize listener with it.
   useEffect(() => {
     if (typeof window !== 'undefined') void load();
     return () => {
@@ -1056,7 +1077,7 @@ export function useJffCytoscape({
         cyRef.current = null;
       }
     };
-  }, [load]);
+  }, [load, reloadNonce]);
 
   /* ── undo and redo ──────────────────────────────────────────────────── */
 
@@ -1259,6 +1280,25 @@ export function useJffCytoscape({
         setRedoDepth(0);
       }
       setHonorPositions((p) => !p);
+    },
+    /**
+     * Put this machine back the way it opened.
+     *
+     * The states return to where the file has them, the layout returns to the one the viewer
+     * opens on, and the remembered view and the undo history go. Only this machine: the other
+     * tabs, the grid, the notes and snapping are all left alone.
+     *
+     * Nothing here touches the submitted file. It was never changed in the first place; what
+     * is being discarded is the reader's own rearranging of the drawing.
+     */
+    resetMachine: () => {
+      // The rebuild below will not put the discarded arrangement back: `hasRestored` is
+      // already set, since restoring happens on the first load and only there.
+      clearViewState(viewStateKeyRef.current);
+      setHonorPositions(honorPositionsDefault);
+      // The rebuild does the rest: reading the file again puts every state back where its
+      // author had it, and clearing the undo history is already part of loading a machine.
+      setReloadNonce((n) => n + 1);
     },
     zoomIn,
     zoomOut,
