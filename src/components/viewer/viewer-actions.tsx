@@ -38,6 +38,8 @@ export type ViewerActions = {
   setAsDrawn: () => void;
   /** Let the layout engine place the states. */
   setAutoArranged: () => void;
+  /** Put this machine back the way it opened, discarding the reader's rearranging of it. */
+  resetMachine: () => void;
 };
 
 /** View state the chrome needs to render, as opposed to actions it can invoke. */

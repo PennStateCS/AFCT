@@ -99,9 +99,7 @@ beforeAll(async () => {
 });
 
 // Keep the Dialog wrapper light (no Radix portal / a11y noise); it renders children.
-vi.mock('@/components/ui/dialog', () =>
-  import('@/test/mocks/ui').then((mod) => mod.dialogMock),
-);
+vi.mock('@/components/ui/dialog', () => import('@/test/mocks/ui').then((mod) => mod.dialogMock));
 
 /* ──────────────────────────────── fixtures ──────────────────────────────── */
 
@@ -146,11 +144,38 @@ afterEach(() => {
 // slow under full-suite CPU contention, and 5s raced vitest's default and flaked.
 const waitForEngine = () => waitFor(() => expect(h.ctor).toHaveBeenCalled(), { timeout: 15000 });
 
+/**
+ * Render the viewer as the standalone window does, with a handle on what it publishes.
+ *
+ * The toolbar in a panel is deliberately small: the exports, the layout choice and undo are
+ * offered by the window's menu instead. So the tests that used to click a toolbar button
+ * invoke the published action, which is the surface that still exists.
+ */
+function renderWithMenu(props: React.ComponentProps<typeof JffCytoscapeViewer>) {
+  const seen: { current: ReturnType<typeof useViewerActions> | null } = { current: null };
+  function Probe() {
+    seen.current = useViewerActions();
+    return null;
+  }
+  const view = render(
+    <ViewerActionsProvider>
+      <JffCytoscapeViewer {...props} />
+      <Probe />
+    </ViewerActionsProvider>,
+  );
+  return { ...view, menu: () => seen.current! };
+}
+
 /* ────────────────────────────────  tests  ───────────────────────────────── */
 
 describe('JffCytoscapeViewer — load & error', () => {
   it('shows an error message when the source fetch fails', async () => {
-    fetchImpl = async () => ({ ok: false, status: 404, statusText: 'Not Found', text: async () => '' });
+    fetchImpl = async () => ({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      text: async () => '',
+    });
     render(<JffCytoscapeViewer src="/api/files/solutions/x.jff" />);
     expect(await screen.findByText(/Failed to fetch: 404/)).toBeInTheDocument();
     // The engine is never constructed on a failed fetch.
@@ -170,19 +195,21 @@ describe('JffCytoscapeViewer — load & error', () => {
 });
 
 describe('JffCytoscapeViewer — toolbar presence', () => {
-  it('renders the view and export controls', async () => {
+  it('renders the controls a panel keeps', async () => {
     render(<JffCytoscapeViewer src="/x.jff" />);
-    for (const label of [
-      'Toggle grid',
-      'Zoom out',
-      'Zoom in',
-      'Fit automaton to view',
-      'Download SVG',
-      'Download PNG',
-      'Copy PNG to clipboard',
-    ]) {
+    for (const label of ['Toggle grid', 'Zoom out', 'Zoom in', 'Fit automaton to view']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }
+  });
+
+  it('leaves the rest to the standalone window', async () => {
+    // A panel over the page is for a look. Everything that changes the machine or takes a
+    // copy of it lives in the window's menus, and the way there is on this toolbar.
+    render(<JffCytoscapeViewer src="/x.jff" />);
+    for (const label of ['Download SVG', 'Download PNG', 'Copy PNG to clipboard', 'Undo', 'Redo']) {
+      expect(screen.queryByRole('button', { name: label })).toBeNull();
+    }
+    expect(screen.queryByRole('radiogroup', { name: 'Layout' })).toBeNull();
   });
 });
 
@@ -204,39 +231,35 @@ describe('JffCytoscapeViewer — view toggles', () => {
       'true',
     );
   });
+});
 
-  it('names both layouts, not just the one in use', () => {
-    // The single "Original Positions" toggle this replaced left the other choice
-    // unnamed: with the button un-pressed nothing said what you were looking at.
-    render(<JffCytoscapeViewer src="/x.jff" />);
-    expect(screen.getByRole('radiogroup', { name: 'Layout' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'As drawn' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Auto-arranged' })).toBeInTheDocument();
+describe('the layout the viewer publishes', () => {
+  // The toolbar's segmented control is gone; the Machine menu owns the choice now. What has
+  // to keep working is what the viewer publishes and what it does when told.
+
+  it('starts auto-arranged, and says so', () => {
+    const { menu } = renderWithMenu({ src: '/x.jff' });
+    expect(menu().layout).toBe('auto');
   });
 
-  it('starts on the auto-arranged layout and switches to as-drawn on click', () => {
-    render(<JffCytoscapeViewer src="/x.jff" />);
-    const asDrawn = screen.getByRole('radio', { name: 'As drawn' });
-    const auto = screen.getByRole('radio', { name: 'Auto-arranged' });
-
-    expect(auto).toBeChecked();
-    expect(asDrawn).not.toBeChecked();
-
-    fireEvent.click(asDrawn);
-    expect(asDrawn).toBeChecked();
-    expect(auto).not.toBeChecked();
+  it('follows honorPositionsDefault', () => {
+    const { menu } = renderWithMenu({ src: '/x.jff', honorPositionsDefault: true });
+    expect(menu().layout).toBe('as-drawn');
   });
 
-  it('honors honorPositionsDefault for the initial selection', () => {
-    render(<JffCytoscapeViewer src="/x.jff" honorPositionsDefault />);
-    expect(screen.getByRole('radio', { name: 'As drawn' })).toBeChecked();
+  it('switches when the menu asks for the other one', () => {
+    const { menu } = renderWithMenu({ src: '/x.jff' });
+    act(() => menu().run('setAsDrawn'));
+    expect(menu().layout).toBe('as-drawn');
+    act(() => menu().run('setAutoArranged'));
+    expect(menu().layout).toBe('auto');
   });
 
-  it('does not flip the layout when the selected option is chosen again', () => {
-    render(<JffCytoscapeViewer src="/x.jff" honorPositionsDefault />);
-    const asDrawn = screen.getByRole('radio', { name: 'As drawn' });
-    fireEvent.click(asDrawn);
-    expect(asDrawn).toBeChecked();
+  it('does nothing when told to use the layout already showing', () => {
+    // Switching rebuilds the graph, so a menu click on the ticked option must not.
+    const { menu } = renderWithMenu({ src: '/x.jff', honorPositionsDefault: true });
+    act(() => menu().run('setAsDrawn'));
+    expect(menu().layout).toBe('as-drawn');
   });
 });
 
@@ -260,25 +283,25 @@ describe('JffCytoscapeViewer — engine controls', () => {
     expect(h.cy.animate.mock.calls[0][0].zoom).toBeCloseTo(1 / 1.2);
   });
 
-  it('exports an SVG via the engine on Download SVG', async () => {
-    render(<JffCytoscapeViewer src="/x.jff" title="My FA" />);
+  it('exports an SVG via the engine', async () => {
+    const { menu } = renderWithMenu({ src: '/x.jff', title: 'My FA' });
     await waitForEngine();
-    fireEvent.click(screen.getByRole('button', { name: 'Download SVG' }));
+    act(() => menu().run('downloadSVG'));
     await waitFor(() => expect(h.cy.svg).toHaveBeenCalled());
     expect(URL.createObjectURL).toHaveBeenCalled();
   });
 
-  it('exports a PNG via the engine on Download PNG', async () => {
-    render(<JffCytoscapeViewer src="/x.jff" />);
+  it('exports a PNG via the engine', async () => {
+    const { menu } = renderWithMenu({ src: '/x.jff' });
     await waitForEngine();
-    fireEvent.click(screen.getByRole('button', { name: 'Download PNG' }));
+    act(() => menu().run('downloadPNG'));
     await waitFor(() => expect(h.cy.png).toHaveBeenCalled());
   });
 
-  it('falls back to a PNG download when the clipboard is unavailable on Copy PNG', async () => {
-    render(<JffCytoscapeViewer src="/x.jff" />);
+  it('falls back to a PNG download when the clipboard is unavailable', async () => {
+    const { menu } = renderWithMenu({ src: '/x.jff' });
     await waitForEngine();
-    fireEvent.click(screen.getByRole('button', { name: 'Copy PNG to clipboard' }));
+    act(() => menu().run('copyPNG'));
     // jsdom has no ClipboardItem → copyPNG falls back to downloadPNG (png()).
     await waitFor(() => expect(h.cy.png).toHaveBeenCalled());
   });
@@ -319,13 +342,12 @@ describe('the graph canvas says it can be dragged', () => {
 describe('the toolbar does not repeat what a menu already offers', () => {
   const SRC = '/api/files/submissions/abc.jff';
 
-  it('keeps Grid and Layout in a dialog, where the toolbar is the only place they exist', () => {
+  it('keeps Grid in a dialog, where the toolbar is the only place it exists', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     expect(screen.getByRole('button', { name: /toggle grid/i })).toBeInTheDocument();
-    expect(screen.getByRole('radiogroup', { name: 'Layout' })).toBeInTheDocument();
   });
 
-  it('drops them in the standalone window, where the menu bar has them', () => {
+  it('drops it in the standalone window, where the menu bar has it', () => {
     // Presence of the provider IS the signal, so the two can never disagree about which
     // surface owns these controls.
     render(
@@ -334,22 +356,20 @@ describe('the toolbar does not repeat what a menu already offers', () => {
       </ViewerActionsProvider>,
     );
     expect(screen.queryByRole('button', { name: /toggle grid/i })).toBeNull();
-    expect(screen.queryByRole('radiogroup', { name: 'Layout' })).toBeNull();
   });
 
-  it('drops the export buttons in the standalone window too', () => {
+  it('keeps undo and redo to the standalone window', () => {
+    // The other direction: these are not offered in a panel at all, so there is nothing to
+    // duplicate. A machine is rearranged in the window, where there is room to see it.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+
     render(
       <ViewerActionsProvider>
         <JffCytoscapeViewer src={SRC} title="abc.jff" />
       </ViewerActionsProvider>,
     );
-    expect(screen.queryByRole('group', { name: 'Export controls' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /copy png/i })).toBeNull();
-  });
-
-  it('keeps the export buttons in a dialog, which has no menu bar', () => {
-    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
-    expect(screen.getByRole('group', { name: 'Export controls' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
   });
 
   it('keeps zoom in both, since the menu has no zoom', () => {
@@ -449,7 +469,9 @@ describe('the grid background renders the same on the server and in the browser'
     // The viewer used to read --grid-color off the document at module scope behind a
     // `typeof window` check, so a server-rendered page produced one colour and hydration
     // produced another. Any literal here is fine; a computed one is not.
-    render(<JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" showGridDefault />);
+    render(
+      <JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" showGridDefault />,
+    );
     const style = screen.getByRole('img').getAttribute('style') ?? '';
     expect(style).toContain('var(--grid-color, #0f172a)');
     // A resolved colour function is what the mismatch looked like on the client side.
@@ -577,7 +599,9 @@ describe('the start marker', () => {
     // Unfilled, the grid lines and any edge passing behind it ran straight through the
     // triangle, which made it read as an outline sitting on the canvas rather than as part
     // of the machine.
-    render(<JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" darkMode={false} />);
+    render(
+      <JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" darkMode={false} />,
+    );
     await waitForEngine();
     expect(startStyle()?.['background-opacity']).toBe(1);
     expect(startStyle()?.['background-color']).toBe('#ffffff');
@@ -596,8 +620,7 @@ describe('clicking a state', () => {
   /** Fire the tap handler cytoscape would have called, with a node-shaped target. */
   const tapNode = (id: string) => {
     const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
-      | ((evt: { target: unknown }) => void)
-      | undefined;
+      ((evt: { target: unknown }) => void) | undefined;
     const node = {
       isNode: () => true,
       hasClass: () => false,
@@ -609,8 +632,7 @@ describe('clicking a state', () => {
 
   const tapBackground = () => {
     const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
-      | ((evt: { target: unknown }) => void)
-      | undefined;
+      ((evt: { target: unknown }) => void) | undefined;
     act(() => tap?.({ target: h.cy }));
   };
 
@@ -650,8 +672,7 @@ describe('clicking a state', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
-      | ((evt: { target: unknown }) => void)
-      | undefined;
+      ((evt: { target: unknown }) => void) | undefined;
     act(() =>
       tap?.({
         target: {
@@ -671,8 +692,7 @@ describe('clicking a transition', () => {
 
   const tapEdge = (source: string, target: string) => {
     const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
-      | ((evt: { target: unknown }) => void)
-      | undefined;
+      ((evt: { target: unknown }) => void) | undefined;
     const edge = {
       isNode: () => false,
       hasClass: () => false,
@@ -685,8 +705,7 @@ describe('clicking a transition', () => {
 
   const tapNode = (id: string) => {
     const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
-      | ((evt: { target: unknown }) => void)
-      | undefined;
+      ((evt: { target: unknown }) => void) | undefined;
     act(() =>
       tap?.({
         target: {
@@ -725,8 +744,7 @@ describe('clicking a transition', () => {
     tapEdge('0', '1');
     expect(await screen.findByRole('group', { name: /transition from/i })).toBeInTheDocument();
     const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
-      | ((evt: { target: unknown }) => void)
-      | undefined;
+      ((evt: { target: unknown }) => void) | undefined;
     act(() => tap?.({ target: h.cy }));
     expect(screen.queryByRole('group', { name: /transition from/i })).toBeNull();
   });
@@ -793,8 +811,7 @@ describe('undo and redo of the arrangement', () => {
 
   const fire = (event: string) => {
     const handler = h.cy.on.mock.calls.find(([name]) => name === event)?.[2] as
-      | (() => void)
-      | undefined;
+      (() => void) | undefined;
     act(() => handler?.());
   };
 
@@ -865,14 +882,14 @@ describe('the toolbar undo and redo buttons', () => {
   const SRC = '/api/files/submissions/abc.jff';
 
   it('are disabled until there is something to step through', async () => {
-    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    renderWithMenu({ src: SRC, title: 'abc.jff' });
     await waitForEngine();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Redo' })).toBeDisabled();
   });
 
   it('sit before the zoom group, where a toolbar puts them', async () => {
-    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    renderWithMenu({ src: SRC, title: 'abc.jff' });
     await waitForEngine();
     const undoButton = screen.getByRole('button', { name: 'Undo' });
     const zoomGroup = screen.getByRole('group', { name: 'Zoom' });
@@ -896,12 +913,11 @@ describe('the toolbar undo and redo buttons', () => {
     h.cy.nodes.mockReturnValue({ forEach: (fn: (n: unknown) => void) => fn(node), length: 1 });
     h.cy.getElementById.mockReturnValue(node);
 
-    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    renderWithMenu({ src: SRC, title: 'abc.jff' });
     await waitForEngine();
 
     const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
-      | (() => void)
-      | undefined;
+      (() => void) | undefined;
     act(() => grab?.());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled());
 
@@ -923,7 +939,9 @@ describe('the machine does not flash on the way in', () => {
 
   it('appears once it has settled', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
-    await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
+    await waitFor(() =>
+      expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'),
+    );
   });
 
   it('hides again when a second file is loaded into the same viewer', async () => {
@@ -931,11 +949,15 @@ describe('the machine does not flash on the way in', () => {
     // can change in place, so a load that began with the graph already visible painted the
     // new machine un-fitted for a moment. Every load starts hidden.
     const { rerender } = render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
-    await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
+    await waitFor(() =>
+      expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'),
+    );
 
     rerender(<JffCytoscapeViewer src="/api/files/submissions/other.jff" title="other.jff" />);
     await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-0'));
-    await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
+    await waitFor(() =>
+      expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'),
+    );
   });
 
   it('appears even if setting the initial scale throws', async () => {
@@ -947,7 +969,9 @@ describe('the machine does not flash on the way in', () => {
       throw new Error('center exploded');
     });
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" initialZoom="actual" />);
-    await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
+    await waitFor(() =>
+      expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'),
+    );
     // Caught, not escaped. Letting it escape leaves an unhandled rejection that fails the
     // whole run rather than any one test, which is how it reached CI green locally and red there.
     await waitFor(() => expect(reported).toHaveBeenCalled());
@@ -961,8 +985,7 @@ describe('snap to grid', () => {
   /** Fire the handler cytoscape calls when a dragged state is released. */
   const dropAt = (pos: { x: number; y: number }) => {
     const handler = h.cy.on.mock.calls.find(([name]) => name === 'dragfree')?.[2] as
-      | ((evt: { target: unknown }) => void)
-      | undefined;
+      ((evt: { target: unknown }) => void) | undefined;
     const node = {
       hasClass: () => false,
       position: vi.fn((next?: { x: number; y: number }) => {
@@ -1007,5 +1030,55 @@ describe('snap to grid', () => {
     await waitForEngine();
     const registered = h.cy.on.mock.calls.map(([name]) => name);
     expect(registered).toContain('zoom pan resize');
+  });
+});
+
+describe('the way to the standalone window', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+  const TARGET = {
+    href: '/viewer?kind=submissions&file=abc.jff&type=FA',
+    tab: {
+      kind: 'submissions' as const,
+      file: 'abc.jff',
+      type: 'FA',
+      name: 'abc.jff',
+      title: 'abc.jff',
+    },
+  };
+
+  it('sits on the toolbar, which is where the controls it replaces were', () => {
+    // The exports and the layout choice came off this toolbar; this is what took their place,
+    // so it belongs in the same strip rather than up beside the dialog title.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" windowTarget={TARGET} />);
+    const button = screen.getByRole('button', { name: /open in the viewer/i });
+    const follows = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // After the zoom controls and before the drawing: in the strip, at the end of it.
+    expect(follows(screen.getByRole('group', { name: 'Zoom' }), button)).toBe(true);
+    expect(follows(button, screen.getByRole('img'))).toBe(true);
+  });
+
+  it('is absent when the file cannot be linked to', () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    expect(screen.queryByRole('button', { name: /open in the viewer/i })).toBeNull();
+  });
+
+  it('closes the panel once the window has the file', () => {
+    // Otherwise the reader has to dismiss a panel showing the same machine before they can
+    // use the window they just asked for.
+    const onOpenChange = vi.fn();
+    vi.stubGlobal('open', vi.fn());
+    render(
+      <JffViewerDialog
+        open
+        onOpenChange={onOpenChange}
+        src={SRC}
+        title="abc.jff"
+        windowTarget={TARGET}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /open in the viewer/i }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

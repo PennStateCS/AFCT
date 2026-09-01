@@ -2,7 +2,7 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -28,6 +28,7 @@ const actions = {
   showTextRepresentation: vi.fn(),
   setAsDrawn: vi.fn(),
   setAutoArranged: vi.fn(),
+  resetMachine: vi.fn(),
 };
 
 /** Stands in for a rendered machine that publishes its actions and its view state. */
@@ -196,9 +197,10 @@ describe('the View menu', () => {
   });
 });
 
-describe('the Edit menu', () => {
-  const openEdit = (user: ReturnType<typeof userEvent.setup>) =>
-    user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+describe('copying the machine', () => {
+  // Under Machine rather than Edit: what these copy is the drawing, not a selection.
+  const openMachine = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'Machine' }));
 
   const mountWithViewer = () =>
     render(
@@ -214,7 +216,7 @@ describe('the Edit menu', () => {
   ] as const)('runs %s', async (name, action) => {
     const user = userEvent.setup();
     mountWithViewer();
-    await openEdit(user);
+    await openMachine(user);
     // fireEvent for the same jsdom reason as the export case above.
     fireEvent.click(await screen.findByRole('menuitem', { name }));
     expect(actions[action]).toHaveBeenCalledTimes(1);
@@ -225,10 +227,18 @@ describe('the Edit menu', () => {
     // ever comes back here as well there would be two ways to do one thing.
     const user = userEvent.setup();
     mountWithViewer();
-    await openEdit(user);
+    await openMachine(user);
     const labels = (await screen.findAllByRole('menuitem')).map((i) => i.textContent);
     expect(labels.filter((l) => l?.startsWith('Copy as'))).toHaveLength(2);
     expect(labels).not.toContain('Copy as text');
+  });
+
+  it('is not left behind under Edit, which would be two ways to one thing', async () => {
+    const user = userEvent.setup();
+    mountWithViewer();
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    const labels = (await screen.findAllByRole('menuitem')).map((i) => i.textContent);
+    expect(labels.filter((l) => l?.startsWith('Copy as'))).toHaveLength(0);
   });
 });
 
@@ -725,5 +735,66 @@ describe('several viewers mounted at once', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
     const undo = await screen.findByRole('menuitem', { name: /^Undo/ });
     expect(undo.getAttribute('aria-disabled')).not.toBe('true');
+  });
+});
+
+describe('resetting a machine', () => {
+  // The `actions` mocks are shared across this file, so a test that asserts something was
+  // NOT called has to start from a clean count or an earlier test satisfies it.
+  beforeEach(() => actions.resetMachine.mockClear());
+
+  const openMachine = async (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'Machine' }));
+
+  const renderWithViewer = () =>
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/f.jff" />
+        <FakeViewer />
+      </ViewerActionsProvider>,
+    );
+
+  it('asks before it does anything', async () => {
+    // A reader can spend a while pulling a crowded machine apart, and the undo history goes
+    // with the reset, so there is nothing to step back to afterwards.
+    const user = userEvent.setup();
+    renderWithViewer();
+    await openMachine(user);
+    await user.click(await screen.findByRole('menuitem', { name: /reset machine/i }));
+
+    expect(await screen.findByText(/Reset this machine\?/i)).toBeTruthy();
+    expect(actions.resetMachine).not.toHaveBeenCalled();
+  });
+
+  it('resets once it is confirmed', async () => {
+    const user = userEvent.setup();
+    renderWithViewer();
+    await openMachine(user);
+    await user.click(await screen.findByRole('menuitem', { name: /reset machine/i }));
+    await user.click(await screen.findByRole('button', { name: 'Reset machine' }));
+
+    expect(actions.resetMachine).toHaveBeenCalled();
+  });
+
+  it('does nothing if the reader backs out', async () => {
+    const user = userEvent.setup();
+    renderWithViewer();
+    await openMachine(user);
+    await user.click(await screen.findByRole('menuitem', { name: /reset machine/i }));
+    await user.click(await screen.findByRole('button', { name: /cancel/i }));
+
+    expect(actions.resetMachine).not.toHaveBeenCalled();
+  });
+
+  it('says what it will and will not touch', async () => {
+    // The two things somebody about to click this needs to know: the other tabs are safe, and
+    // nothing happens to what the student submitted.
+    const user = userEvent.setup();
+    renderWithViewer();
+    await openMachine(user);
+    await user.click(await screen.findByRole('menuitem', { name: /reset machine/i }));
+
+    const text = (await screen.findByText(/other open files/i)).textContent ?? '';
+    expect(text).toMatch(/submitted file is not changed/i);
   });
 });

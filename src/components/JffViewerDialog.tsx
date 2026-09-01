@@ -19,7 +19,6 @@ import {
   type StateDescription,
 } from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Slider } from '@/components/ui/slider';
 import {
   sliderToZoom,
@@ -36,7 +35,7 @@ import {
   useRegisterViewerActions,
   useViewerChromePresent,
 } from '@/components/viewer/viewer-actions';
-import { Grid, Download, ImageDown, Copy, Minus, Plus, Scan, Undo2, Redo2, X } from 'lucide-react';
+import { Grid, Copy, Minus, Plus, Scan, Undo2, Redo2, X } from 'lucide-react';
 
 /**
  * Fallback grid colour, used only if `--grid-color` is somehow absent.
@@ -304,6 +303,8 @@ export function JffCytoscapeViewer({
   honorPositionsDefault = false,
   initialZoom = 'fit',
   viewStateKey = null,
+  windowTarget,
+  onOpenedInWindow,
 }: {
   src: string;
   title?: string;
@@ -325,6 +326,10 @@ export function JffCytoscapeViewer({
   initialZoom?: 'fit' | 'actual';
   /** Remember the zoom, pan and arrangement under this key. See useJffCytoscape. */
   viewStateKey?: string | null;
+  /** Where the pop-out sends this file, or absent when a link cannot be built for it. */
+  windowTarget?: ViewerWindowTarget | null;
+  /** Called once the file is on its way to the standalone window. */
+  onOpenedInWindow?: () => void;
 }) {
   // `resolvedTheme` rather than `theme`: the latter is "system" for most people, which says
   // nothing about which colours are actually on screen.
@@ -339,6 +344,7 @@ export function JffCytoscapeViewer({
     type,
     honorPositions,
     toggleHonorPositions,
+    resetMachine,
     showNotes,
     toggleNotes,
     snapToGrid,
@@ -413,6 +419,7 @@ export function JffCytoscapeViewer({
       setAutoArranged: () => {
         if (honorPositions) toggleHonorPositions();
       },
+      resetMachine,
     },
     {
       grid,
@@ -476,52 +483,43 @@ export function JffCytoscapeViewer({
                 >
                   <Grid className="mr-2 h-4 w-4" /> Grid
                 </Button>
-                {/* Both choices are named and on screen. This was one button labelled
-                    "Original Positions", which named only the state it was in: with it
-                    un-pressed there was nothing to say what you were looking at instead, and
-                    "positions" described the node coordinates rather than anything the reader
-                    of a diagram thinks about. */}
-                <span className="text-muted-foreground ml-1 text-sm whitespace-nowrap">Layout</span>
-                <SegmentedControl
-                  name="jff-layout"
-                  ariaLabel="Layout"
-                  value={honorPositions ? 'as-drawn' : 'auto'}
-                  onValueChange={(next) => {
-                    if ((next === 'as-drawn') !== honorPositions) toggleHonorPositions();
-                  }}
-                  options={[
-                    { value: 'as-drawn', label: 'As drawn' },
-                    { value: 'auto', label: 'Auto-arranged' },
-                  ]}
-                />
               </>
             )}
-            {/* Left of everything else, where an application toolbar puts them. Disabled
-                rather than hidden, so the toolbar keeps its shape and their position stays
-                learnable. They step through arrangement changes only; see useJffCytoscape. */}
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={undo}
-              disabled={!canUndo}
-              title="Undo"
-              aria-label="Undo"
-            >
-              <Undo2 className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={redo}
-              disabled={!canRedo}
-              title="Redo"
-              aria-label="Redo"
-            >
-              <Redo2 className="h-4 w-4" />
-            </Button>
-            <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
+            {/* Only in the standalone window. Disabled rather than hidden there, so the
+                toolbar keeps its shape and their position stays learnable. A panel over the
+                page is for a look rather than for rearranging a machine, and it has no menu
+                to pair them with. They step through arrangement changes only; see
+                useJffCytoscape. */}
+            {chromeHasViewControls ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={controlBtnClass}
+                  onClick={undo}
+                  disabled={!canUndo}
+                  title="Undo"
+                  aria-label="Undo"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={controlBtnClass}
+                  onClick={redo}
+                  disabled={!canRedo}
+                  title="Redo"
+                  aria-label="Redo"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <div
+                  className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0"
+                  aria-hidden="true"
+                />
+              </>
+            ) : null}
             {/* One bordered group holding the two buttons, the value they change, and the
                 slider that changes it continuously. Four separate controls in a row read as
                 four unrelated things; a single container says they are one. */}
@@ -590,49 +588,21 @@ export function JffCytoscapeViewer({
             </Button>
           </div>
 
-          {/* Exporting moves into the menu bar in the standalone window, so the
-              toolbar drops the whole group there rather than carrying a second copy
-              of it. The separator goes with them: a divider with nothing after it. */}
-          {chromeHasViewControls ? null : (
+          {/* The exports and the layout choice are not offered here. In a panel over the
+              page they crowded a strip that has to fit beside another one in the Similarity
+              comparison, and everything they did is in the standalone window's menus. This
+              is the way there, so what was a row of buttons is one. */}
+          {windowTarget ? (
             <>
               {/* Separator between control groups */}
               <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
-
-              {/* Export controls */}
-              <div className="flex items-center gap-1" role="group" aria-label="Export controls">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={controlBtnClass}
-                  onClick={downloadSVG}
-                  title="Download SVG"
-                  aria-label="Download SVG"
-                >
-                  <Download className="mr-2 h-4 w-4" /> SVG
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={controlBtnClass}
-                  onClick={downloadPNG}
-                  title="Download PNG"
-                  aria-label="Download PNG"
-                >
-                  <ImageDown className="mr-2 h-4 w-4" /> PNG
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className={controlBtnClass}
-                  onClick={copyPNG}
-                  title="Copy PNG to clipboard"
-                  aria-label="Copy PNG to clipboard"
-                >
-                  <Copy className="mr-2 h-4 w-4" /> Copy PNG
-                </Button>
-              </div>
+              <OpenInWindowButton
+                href={windowTarget.href}
+                tab={windowTarget.tab}
+                onOpened={onOpenedInWindow}
+              />
             </>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -814,11 +784,6 @@ export default function JffViewerDialog({
             <DialogTitle className="line-clamp-2 leading-snug break-words">
               {title ?? 'JFLAP Viewer'}
             </DialogTitle>
-            {/* Beside the title rather than in the toolbar below: this is about the window
-                the machine is in, not about how it is drawn. */}
-            {windowTarget ? (
-              <OpenInWindowButton href={windowTarget.href} tab={windowTarget.tab} />
-            ) : null}
           </div>
         </DialogHeader>
         <div className="min-h-0 flex-1 p-4 pt-2">
@@ -832,6 +797,11 @@ export default function JffViewerDialog({
               darkMode={darkMode}
               showGridDefault={showGridDefault}
               honorPositionsDefault={honorPositionsDefault}
+              windowTarget={windowTarget}
+              // The reader asked for this machine somewhere else. Leaving the panel up would
+              // mean dismissing it before they could use the window, with the same file
+              // showing twice in the meantime.
+              onOpenedInWindow={() => onOpenChange(false)}
             />
           ) : null}
         </div>

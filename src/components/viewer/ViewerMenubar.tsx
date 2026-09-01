@@ -14,6 +14,7 @@ import {
   Share,
   Undo2,
   Redo2,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Menubar,
@@ -30,6 +31,7 @@ import {
   MenubarTrigger,
 } from '@/components/ui/menubar';
 import { useViewerActions } from '@/components/viewer/viewer-actions';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
 import { VIEWER_DOCS_URL } from '@/lib/viewer-link';
 import type { ViewerProperties } from '@/lib/viewer-properties';
 import {
@@ -61,6 +63,7 @@ export function ViewerMenubar({
   properties?: ViewerProperties | null;
 }) {
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   // False for a grammar or a regular expression, which have nothing to export: those viewers
   // register no actions, so the items disable themselves rather than being hidden. A missing
   // menu item reads as a bug; a greyed one reads as "not for this kind of file".
@@ -135,23 +138,6 @@ export function ViewerMenubar({
             <Redo2 aria-hidden="true" />
             Redo
           </MenubarItem>
-          <MenubarSeparator />
-          {/* Copying belongs with the other things you do to take the machine elsewhere,
-              which is what an Edit menu means to most people, rather than with saving it to
-              disk under File. */}
-          {/* Format icons, matching File > Export, so the same format carries the same icon
-              wherever it appears. Two identical Copy icons would say only "these are both
-              copies", which the labels already say. */}
-          <MenubarItem disabled={!ready} onSelect={() => run('copyPNG')}>
-            <FileImage aria-hidden="true" />
-            Copy as PNG
-          </MenubarItem>
-          {/* Pastes as vector art, so it stays sharp in a slide or a printed handout, where
-              the PNG above does not. */}
-          <MenubarItem disabled={!ready} onSelect={() => run('copySVG')}>
-            <FileCode2 aria-hidden="true" />
-            Copy as SVG
-          </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
 
@@ -225,6 +211,27 @@ export function ViewerMenubar({
               Auto-arranged
             </MenubarRadioItem>
           </MenubarRadioGroup>
+          <MenubarSeparator />
+          {/* With the machine rather than under Edit: what these copy is the drawing, not a
+              selection, and this is the menu about the drawing. */}
+          {/* Format icons, matching File > Export, so the same format carries the same icon
+              wherever it appears. Two identical Copy icons would say only "these are both
+              copies", which the labels already say. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('copyPNG')}>
+            <FileImage aria-hidden="true" />
+            Copy as PNG
+          </MenubarItem>
+          {/* Pastes as vector art, so it stays sharp in a slide or a printed handout, where
+              the PNG above does not. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('copySVG')}>
+            <FileCode2 aria-hidden="true" />
+            Copy as SVG
+          </MenubarItem>
+          <MenubarSeparator />
+          <MenubarItem disabled={!ready} onSelect={() => setResetOpen(true)}>
+            <RotateCcw aria-hidden="true" />
+            Reset machine
+          </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
 
@@ -260,6 +267,20 @@ export function ViewerMenubar({
           </DialogContent>
         </Dialog>
       ) : null}
+
+      {/* Confirmed rather than immediate: a reader can spend a while pulling a crowded
+          machine apart, and there is no undo once the history has gone with it. */}
+      <ConfirmDialog
+        open={resetOpen}
+        title="Reset this machine?"
+        description="The states go back where the file has them, and the layout, the zoom and the undo history for this machine are forgotten. The other open files are not affected, and the submitted file is not changed."
+        confirmText="Reset machine"
+        onConfirm={() => {
+          run('resetMachine');
+          setResetOpen(false);
+        }}
+        onCancel={() => setResetOpen(false)}
+      />
     </Menubar>
   );
 }

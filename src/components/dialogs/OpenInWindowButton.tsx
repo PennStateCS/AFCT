@@ -35,7 +35,22 @@ function viewerIsOpen(): boolean {
  * leaves a timestamp in `localStorage` and this reads it, the same trick and the same reason as
  * the shared idle clock in `SessionWatcher`.
  */
-export function OpenInWindowButton({ href, tab }: { href: string; tab: ViewerTab }) {
+export function OpenInWindowButton({
+  href,
+  tab,
+  onOpened,
+}: {
+  href: string;
+  tab: ViewerTab;
+  /**
+   * Called once the file is on its way to the window.
+   *
+   * The dialogs use it to close themselves: the reader asked for this machine somewhere else,
+   * so leaving the panel over the page they came from means dismissing it before they can use
+   * it, and the two copies of the same file would be showing at once.
+   */
+  onOpened?: () => void;
+}) {
   return (
     <Button
       type="button"
@@ -52,6 +67,7 @@ export function OpenInWindowButton({ href, tab }: { href: string; tab: ViewerTab
           // An empty URL returns the existing window without navigating it, which is what
           // brings it forward without throwing away the tabs it already has.
           window.open('', VIEWER_WINDOW_NAME)?.focus();
+          onOpened?.();
           return;
         }
 
@@ -59,6 +75,7 @@ export function OpenInWindowButton({ href, tab }: { href: string; tab: ViewerTab
         // window could never be found again and every file would get a window of its own. The
         // viewer is same-origin, so the handle it keeps is ours either way.
         window.open(href, VIEWER_WINDOW_NAME);
+        onOpened?.();
       }}
     >
       <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
