@@ -817,6 +817,8 @@ export default function SubmissionsClient() {
         problemType={viewerProblemType}
         src={jffViewerSrc ?? ''}
         title={jffViewerTitle ?? 'Submission'}
+        // This screen's title is already the bare file name, so the tab and the heading agree.
+        fileName={jffViewerTitle ?? undefined}
         epsSymbol={jffEpsSymbol}
       />
 

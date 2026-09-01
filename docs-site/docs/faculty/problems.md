@@ -36,7 +36,7 @@ The problem table shows the title, type, answer file, state limit, deterministic
 
 Open **Manage** to:
 
-- **View Answer** using the viewer for that problem type
+- **View Answer** using the viewer for that problem type. The viewer has an **Open in the viewer** button on its toolbar, which shows the same thing in a window of its own for a machine too large to read comfortably in a panel, and closes the panel as it goes. That window holds several files as tabs, so opening a second one puts it beside the first rather than replacing it.
 - **Edit Problem** details and replace the answer file
 - **Duplicate Problem** to create a copy in the same bank
 - **Delete Problem** when the problem is not used by an assignment

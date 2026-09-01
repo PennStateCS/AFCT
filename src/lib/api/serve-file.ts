@@ -3,25 +3,14 @@ import path from 'path';
 import fs from 'fs';
 import { resolveInsideDir } from '@/lib/safe-upload';
 import { apiError } from './http';
+import { isSafeUploadName } from '@/lib/upload-names';
+
+// Re-exported so the existing route imports keep working; the rule itself lives in a leaf
+// module because the browser needs it too. See lib/upload-names.ts.
+export { isSafeUploadName };
 
 /** The subdirectories under the private uploads root that we serve files from. */
 export type UploadSubdir = 'pfps' | 'problems' | 'submissions' | 'solutions';
-
-/**
- * Guards a user-supplied filename. It must be a bare basename (no directory parts)
- * with no path separators, null bytes, control characters, or `..` traversal
- * sequences. Narrows to `string` so callers can use it in a type guard.
- */
-export function isSafeUploadName(file: string | null | undefined): file is string {
-  return (
-    typeof file === 'string' &&
-    file.length > 0 &&
-    // Reject path separators, null bytes, and control characters (leaves a bare
-    // basename), plus any `..` traversal sequence.
-    !/[\\/\x00-\x1f]/.test(file) &&
-    !file.includes('..')
-  );
-}
 
 /** Sanitize a name for the quoted `filename` param (strip quotes/backslashes/CR/LF). */
 function sanitizeDispositionName(name: string): string {

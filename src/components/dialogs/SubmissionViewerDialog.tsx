@@ -3,6 +3,7 @@
 import JffViewerDialog from '@/components/JffViewerDialog';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
+import { viewerWindowTarget } from '@/lib/viewer-tabs';
 
 // Problem types rendered by the JFLAP (cytoscape) viewer; the rest map to their own
 // dedicated viewers.
@@ -16,6 +17,13 @@ type SubmissionViewerDialogProps = {
   /** URL of the file to view (submission or solution). */
   src: string;
   title?: string;
+  /**
+   * The file's own name, when the caller has it.
+   *
+   * Only used to label the tab in the standalone window. Without it that tab falls back to the
+   * composed title, which is correct but longer than it needs to be.
+   */
+  fileName?: string;
   /** Empty-string symbol (ε / λ) for the JFLAP and grammar viewers. */
   epsSymbol?: string;
   width?: string;
@@ -35,12 +43,16 @@ export function SubmissionViewerDialog({
   problemType,
   src,
   title,
+  fileName,
   epsSymbol,
   width = '70vw',
   height = '70vh',
   showGridDefault,
 }: SubmissionViewerDialogProps) {
   const type = problemType ?? '';
+  // Null when the file is not one this viewer can build a safe link to, in which case no
+  // button is offered rather than one that would fail at the far end.
+  const windowTarget = viewerWindowTarget({ src, problemType: type, title, fileName, epsSymbol });
 
   if (JFF_PROBLEM_TYPES.includes(type)) {
     return (
@@ -53,12 +65,21 @@ export function SubmissionViewerDialog({
         height={height}
         showGridDefault={showGridDefault}
         epsSymbol={epsSymbol}
+        windowTarget={windowTarget}
       />
     );
   }
 
   if (type === 'RE') {
-    return <RegexViewerDialog open={open} onOpenChange={onOpenChange} src={src} title={title} />;
+    return (
+      <RegexViewerDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        src={src}
+        title={title}
+        windowTarget={windowTarget}
+      />
+    );
   }
 
   if (type === 'CFG') {
@@ -70,6 +91,7 @@ export function SubmissionViewerDialog({
         src={src}
         title={title}
         epsSymbol={epsSymbol}
+        windowTarget={windowTarget}
       />
     );
   }

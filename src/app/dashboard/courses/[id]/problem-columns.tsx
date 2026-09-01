@@ -19,6 +19,7 @@ import {
 import { useEmptyStringSymbol } from '@/hooks/use-empty-string-symbol';
 import { RegexViewerDialog } from '@/components/dialogs/RegexViewerDialog';
 import { CfgViewerDialog } from '@/components/dialogs/CfgViewerDialog';
+import { viewerWindowTarget } from '@/lib/viewer-tabs';
 import { formatDateInTimeZone } from '@/lib/date-format';
 import { apiPaths } from '@/lib/api-paths';
 import { RichDescription } from '@/components/rich-description/RichDescription';
@@ -251,6 +252,17 @@ export const useProblemColumns = ({
 
   const answerDialog = (() => {
     if (!openDialog.problem) return null;
+    const answerSrc = apiPaths.files.solution(
+      encodeURIComponent(openDialog.problem.fileName ?? ''),
+    );
+    const answerTitle = `${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`;
+    const windowTarget = viewerWindowTarget({
+      src: answerSrc,
+      problemType: openDialog.problem.type,
+      title: answerTitle,
+      fileName: openDialog.problem.originalFileName || openDialog.problem.fileName || undefined,
+      epsSymbol,
+    });
     switch (openDialog.problem.type) {
       case 'FA':
       case 'PDA':
@@ -261,11 +273,12 @@ export const useProblemColumns = ({
             onOpenChange={(open) =>
               setOpenDialog({ open, problem: open ? openDialog.problem : null })
             }
-            src={apiPaths.files.solution(encodeURIComponent(openDialog.problem.fileName ?? ''))}
-            title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+            src={answerSrc}
+            title={answerTitle}
             width="70vw"
             height="70vh"
             epsSymbol={epsSymbol}
+            windowTarget={windowTarget}
           />
         );
       case 'RE':
@@ -275,8 +288,9 @@ export const useProblemColumns = ({
             onOpenChange={(open) =>
               setOpenDialog({ open, problem: open ? openDialog.problem : null })
             }
-            src={apiPaths.files.solution(encodeURIComponent(openDialog.problem.fileName ?? ''))}
-            title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+            src={answerSrc}
+            title={answerTitle}
+            windowTarget={windowTarget}
           />
         );
       case 'CFG':
@@ -286,9 +300,10 @@ export const useProblemColumns = ({
             onOpenChange={(open) =>
               setOpenDialog({ open, problem: open ? openDialog.problem : null })
             }
-            src={apiPaths.files.solution(encodeURIComponent(openDialog.problem.fileName ?? ''))}
-            title={`${openDialog.problem.originalFileName || openDialog.problem.fileName} - Problem`}
+            src={answerSrc}
+            title={answerTitle}
             epsSymbol={epsSymbol}
+            windowTarget={windowTarget}
           />
         );
       default:

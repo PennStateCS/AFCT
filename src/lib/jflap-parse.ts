@@ -323,6 +323,125 @@ const MACHINE_NOUN: Record<MachineType, string> = {
   unknown: 'Automaton',
 };
 
+/**
+ * A machine description as plain text, for pasting somewhere that is not a picture.
+ *
+ * The same content the viewer shows behind "Show text representation", laid out for an email
+ * or a comment rather than for a screen reader walking a list. It is the only export that
+ * survives being quoted: an SVG or a PNG of a student's automaton cannot be replied to inline.
+ */
+export function machineDescriptionText(description: MachineDescription): string {
+  const lines: string[] = [description.summary, ''];
+
+  if (description.stateNames.length > 0) {
+    lines.push(`States: ${description.stateNames.join(', ')}`);
+    lines.push(`Initial state: ${description.initialState ?? 'not set'}`);
+    lines.push(
+      `Final states: ${description.finalStates.length > 0 ? description.finalStates.join(', ') : 'none'}`,
+    );
+  }
+
+  if (description.transitionLines.length > 0) {
+    lines.push('', 'Transitions:');
+    for (const line of description.transitionLines) lines.push(`  ${line}`);
+  }
+
+  // Notes are the student's own words, so they are quoted rather than summarised away.
+  if (description.noteLines.length > 0) {
+    lines.push('', 'Notes on the drawing:');
+    for (const note of description.noteLines) lines.push(`  ${note}`);
+  }
+
+  return lines.join('\n');
+}
+
+/** One state, described for the panel that appears when a reader clicks it. */
+export type StateDescription = {
+  id: string;
+  name: string;
+  initial: boolean;
+  final: boolean;
+  /** "on a to q1", already formatted for the machine's type. */
+  outgoing: string[];
+  /** "from q0 on a". */
+  incoming: string[];
+  /** A self-loop appears in both lists; this is the count of distinct transitions touching it. */
+  degree: number;
+};
+
+/**
+ * Describe a single state.
+ *
+ * Shares `labelFor` with the whole-machine description, so a transition never reads one way in
+ * the panel and another in the text representation. Returns null for an id the machine does not
+ * have, which is what a click on a note or a start marker would produce.
+ */
+export function describeState(parsed: Parsed, id: string, eps: string): StateDescription | null {
+  const state = parsed.states.find((s) => s.id === id);
+  if (!state) return null;
+
+  const nameById = new Map(parsed.states.map((s) => [s.id, s.name || s.id]));
+  const nameOf = (target: string) => nameById.get(target) ?? target;
+
+  const ordered = [...parsed.transitions].sort((a, b) => a.__idx - b.__idx);
+  const outgoing = ordered
+    .filter((t) => t.from === id)
+    .map((t) => `on ${labelFor(t, parsed.type, eps)} to ${nameOf(t.to)}`);
+  const incoming = ordered
+    .filter((t) => t.to === id)
+    .map((t) => `from ${nameOf(t.from)} on ${labelFor(t, parsed.type, eps)}`);
+
+  return {
+    id: state.id,
+    name: state.name || state.id,
+    initial: state.initial,
+    final: state.final,
+    outgoing,
+    incoming,
+    degree: ordered.filter((t) => t.from === id || t.to === id).length,
+  };
+}
+
+/** The transitions drawn as one edge between a pair of states. */
+export type EdgeDescription = {
+  from: string;
+  to: string;
+  /** True when both ends are the same state, which is drawn as a loop. */
+  selfLoop: boolean;
+  /** One entry per transition, already formatted for the machine's type. */
+  labels: string[];
+};
+
+/**
+ * Describe the edge between two states.
+ *
+ * An edge is not a transition. Parallel transitions between the same pair are bundled into one
+ * line on the canvas with a combined label, so clicking it asks about all of them: a panel that
+ * showed only the first would be quietly wrong on exactly the machines where it matters, the
+ * ones with several ways to get from one state to another.
+ *
+ * Returns null when no transition joins the two, which is what a click on something that is not
+ * an edge would produce.
+ */
+export function describeEdge(
+  parsed: Parsed,
+  from: string,
+  to: string,
+  eps: string,
+): EdgeDescription | null {
+  const nameById = new Map(parsed.states.map((st) => [st.id, st.name || st.id]));
+  const nameOf = (id: string) => nameById.get(id) ?? id;
+
+  const labels = [...parsed.transitions]
+    .sort((a, b) => a.__idx - b.__idx)
+    .filter((t) => t.from === from && t.to === to)
+    .map((t) => labelFor(t, parsed.type, eps));
+
+  if (labels.length === 0) return null;
+
+  return { from: nameOf(from), to: nameOf(to), selfLoop: from === to, labels };
+}
+
 export function describeMachine(parsed: Parsed, eps: string): MachineDescription {
   const nameById = new Map(parsed.states.map((s) => [s.id, s.name || s.id]));
   const nameOf = (id: string) => nameById.get(id) ?? id;

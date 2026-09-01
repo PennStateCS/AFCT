@@ -243,6 +243,9 @@ export default function AssignmentDashboardPage({
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerSrc, setViewerSrc] = useState<string | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string | undefined>(undefined);
+  // Kept beside the composed title: the standalone window's tab wants the file's own name,
+  // and it cannot be split back out of a heading reliably.
+  const [viewerFileName, setViewerFileName] = useState<string | undefined>(undefined);
   const [jffType, setJffType] = useState<string | null>(null);
 
   // Allow optional file fields even if not in generated Prisma type
@@ -260,6 +263,7 @@ export default function AssignmentDashboardPage({
     const src = apiPaths.files.solution(encodeURIComponent(fileName));
     setViewerSrc(src);
     setViewerTitle(`${original || fileName} - ${problem.title}`);
+    setViewerFileName(original || fileName);
     setViewerOpen(true);
     setJffType(problem.type);
   }, []);
@@ -939,6 +943,7 @@ export default function AssignmentDashboardPage({
           problemType={jffType}
           src={viewerSrc}
           title={viewerTitle}
+          fileName={viewerFileName}
           epsSymbol={epsSymbol}
           width="80vw"
           height="80vh"

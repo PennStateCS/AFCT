@@ -2,21 +2,293 @@
 
 import { useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { describeMachine, type MachineType } from '@/lib/jflap-parse';
+import {
+  describeMachine,
+  type MachineDescription,
+  type MachineType,
+  type EdgeDescription,
+  type StateDescription,
+} from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
-import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Slider } from '@/components/ui/slider';
+import {
+  sliderToZoom,
+  zoomPercentLabel,
+  zoomPercentSpoken,
+  zoomToSlider,
+  ZOOM_SLIDER_MAX,
+  ZOOM_SLIDER_MIN,
+} from '@/lib/zoom-scale';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
-import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
+import type { ViewerWindowTarget } from '@/lib/viewer-tabs';
+import {
+  useRegisterViewerActions,
+  useViewerChromePresent,
+} from '@/components/viewer/viewer-actions';
+import { Grid, Copy, Minus, Plus, Scan, Undo2, Redo2, X } from 'lucide-react';
 
-// Grid overlay color (component-only; the engine styling lives in useJffCytoscape).
-const GRID_COLOR =
-  typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--grid-color').trim() ||
-      '#0f172a'
-    : '#0f172a';
+/**
+ * Fallback grid colour, used only if `--grid-color` is somehow absent.
+ *
+ * A plain constant, deliberately. It used to read the computed value off the document behind
+ * a `typeof window` check, which meant the server rendered one colour and the browser
+ * another: React reported a hydration mismatch on the first page that server-renders this
+ * viewer, which the dialogs never did because they only ever mount after a click. Reading
+ * computed styles during render is the thing that cannot be done here; the CSS variable does
+ * the theming anyway, live, without any of this.
+ */
+const GRID_COLOR_FALLBACK = '#0f172a';
+
+/**
+ * The machine written out: states, transitions and any notes.
+ *
+ * One component because it now appears in two places and must not drift between them. In a
+ * dialog it sits in a panel under the graph; in the standalone window the View menu opens it
+ * in a window of its own, so the graph keeps the whole height.
+ */
+function MachineDescriptionList({ description }: { description: MachineDescription }) {
+  return (
+    <>
+      {description.isEmpty ? (
+        <p className="text-muted-foreground">
+          This file contains no states or notes, so there is nothing to describe.
+        </p>
+      ) : (
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+          <dt className="text-muted-foreground">States</dt>
+          <dd>{description.stateNames.join(', ')}</dd>
+
+          <dt className="text-muted-foreground">Initial state</dt>
+          <dd>{description.initialState ?? 'Not set'}</dd>
+
+          <dt className="text-muted-foreground">Final states</dt>
+          <dd>{description.finalStates.length ? description.finalStates.join(', ') : 'None'}</dd>
+
+          <dt className="text-muted-foreground">Transitions</dt>
+          <dd>
+            {description.transitionLines.length === 0 ? (
+              'None'
+            ) : (
+              <ul className="list-none space-y-0.5">
+                {description.transitionLines.map((line, i) => (
+                  <li key={`${line}-${i}`}>{line}</li>
+                ))}
+              </ul>
+            )}
+          </dd>
+
+          {/* Only when there are any: an empty Notes row on every machine would be
+              noise, and most files have none. Notes are drawn on the canvas only in
+              "As drawn", so this is where they are always readable. */}
+          {description.noteLines.length > 0 ? (
+            <>
+              <dt className="text-muted-foreground">Notes</dt>
+              <dd>
+                <ul className="list-none space-y-0.5">
+                  {description.noteLines.map((line, i) => (
+                    <li key={`${line}-${i}`}>{line}</li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          ) : null}
+        </dl>
+      )}
+    </>
+  );
+}
+
+/**
+ * What a clicked state is, floated over the top right of the canvas.
+ *
+ * Over the graph rather than beside it: the graph is the whole point of the window, and a side
+ * panel would take a column away from the machine permanently to show something that is only
+ * wanted occasionally.
+ *
+ * Mouse-only by nature, because it answers a click on a canvas and a canvas cannot be tabbed
+ * into. Everything it shows is also in the text representation, which is the keyboard and
+ * screen-reader route to the same facts, so this is a convenience rather than the only way to
+ * them.
+ */
+function PropertiesPanel({
+  label,
+  heading,
+  onClose,
+  children,
+}: {
+  label: string;
+  heading: React.ReactNode;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      // Capped and scrollable, so a hub state with twenty transitions cannot run off the canvas.
+      className="bg-card absolute top-2 right-2 z-10 max-h-[min(60%,20rem)] w-64 overflow-y-auto rounded-md border p-3 shadow-md"
+      role="group"
+      aria-label={label}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 text-sm font-semibold">{heading}</div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="-mt-1 -mr-1 h-6 w-6 shrink-0 p-0"
+          onClick={onClose}
+          aria-label="Close state properties"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** What a clicked state is. */
+function StateProperties({ state, onClose }: { state: StateDescription; onClose: () => void }) {
+  return (
+    <PropertiesPanel
+      label={`Properties of state ${state.name}`}
+      heading={<span className="font-mono break-all">{state.name}</span>}
+      onClose={onClose}
+    >
+      {state.initial || state.final ? (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {state.initial ? (
+            <Badge variant="outline" className="text-xs">
+              Initial
+            </Badge>
+          ) : null}
+          {state.final ? (
+            <Badge variant="outline" className="text-xs">
+              Final
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
+
+      <dl className="mt-3 space-y-2 text-xs">
+        <div>
+          <dt className="text-muted-foreground">Out</dt>
+          <dd>
+            {state.outgoing.length === 0 ? (
+              <span className="text-muted-foreground">Nothing leaves this state</span>
+            ) : (
+              <ul className="list-none space-y-0.5">
+                {state.outgoing.map((line, i) => (
+                  <li key={`${line}-${i}`}>{line}</li>
+                ))}
+              </ul>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">In</dt>
+          <dd>
+            {state.incoming.length === 0 ? (
+              <span className="text-muted-foreground">Nothing reaches this state</span>
+            ) : (
+              <ul className="list-none space-y-0.5">
+                {state.incoming.map((line, i) => (
+                  <li key={`${line}-${i}`}>{line}</li>
+                ))}
+              </ul>
+            )}
+          </dd>
+        </div>
+      </dl>
+    </PropertiesPanel>
+  );
+}
+
+/**
+ * What a clicked transition is.
+ *
+ * Plural on purpose: parallel transitions between the same two states are drawn as one line, so
+ * clicking it asks about all of them.
+ */
+function TransitionProperties({ edge, onClose }: { edge: EdgeDescription; onClose: () => void }) {
+  return (
+    <PropertiesPanel
+      label={`Properties of the transition from ${edge.from} to ${edge.to}`}
+      heading={
+        <span className="font-mono break-all">
+          {edge.from} &rarr; {edge.to}
+        </span>
+      }
+      onClose={onClose}
+    >
+      {edge.selfLoop ? (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          <Badge variant="outline" className="text-xs">
+            Self-loop
+          </Badge>
+        </div>
+      ) : null}
+
+      <dl className="mt-3 space-y-2 text-xs">
+        <div>
+          <dt className="text-muted-foreground">
+            {edge.labels.length === 1 ? 'Reads' : `Reads (${edge.labels.length})`}
+          </dt>
+          <dd>
+            <ul className="list-none space-y-0.5">
+              {edge.labels.map((line, i) => (
+                <li key={`${line}-${i}`} className="font-mono">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </dd>
+        </div>
+      </dl>
+    </PropertiesPanel>
+  );
+}
+
+/**
+ * The machine type, as a coloured chip.
+ *
+ * At module scope, not inside the viewer. Defined in the body it got a fresh identity on
+ * every render, so React unmounted and remounted it each time and the badge element was
+ * replaced rather than updated. Harmless to look at and quietly wasteful, and it made any
+ * test that held a reference to the badge fail the moment anything else re-rendered.
+ */
+function TypeBadge({ t }: { t: MachineType }) {
+  const label =
+    t === 'fa'
+      ? 'Finite Automaton'
+      : t === 'pda'
+        ? 'Pushdown Automaton'
+        : t === 'tm'
+          ? 'Turing Machine'
+          : 'Unknown';
+  const cls =
+    t === 'fa'
+      ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200'
+      : t === 'pda'
+        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
+        : t === 'tm'
+          ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'
+          : 'bg-muted text-muted-foreground';
+  return (
+    <Badge variant="outline" className={cls}>
+      {label}
+    </Badge>
+  );
+}
 
 /* ───────────────────────────── Viewer component ────────────────────────── */
 
@@ -29,6 +301,10 @@ export function JffCytoscapeViewer({
   darkMode,
   showGridDefault = false,
   honorPositionsDefault = false,
+  initialZoom = 'fit',
+  viewStateKey = null,
+  windowTarget,
+  onOpenedInWindow,
 }: {
   src: string;
   title?: string;
@@ -46,6 +322,14 @@ export function JffCytoscapeViewer({
   darkMode?: boolean;
   showGridDefault?: boolean;
   honorPositionsDefault?: boolean;
+  /** `fit` scales to the space available; `actual` opens at 100%. See useJffCytoscape. */
+  initialZoom?: 'fit' | 'actual';
+  /** Remember the zoom, pan and arrangement under this key. See useJffCytoscape. */
+  viewStateKey?: string | null;
+  /** Where the pop-out sends this file, or absent when a link cannot be built for it. */
+  windowTarget?: ViewerWindowTarget | null;
+  /** Called once the file is on its way to the standalone window. */
+  onOpenedInWindow?: () => void;
 }) {
   // `resolvedTheme` rather than `theme`: the latter is "system" for most people, which says
   // nothing about which colours are actually on screen.
@@ -55,18 +339,45 @@ export function JffCytoscapeViewer({
   // a hook; this component owns only the toolbar chrome and the grid overlay.
   const {
     containerRef,
+    settled,
     error,
     type,
     honorPositions,
     toggleHonorPositions,
+    resetMachine,
+    showNotes,
+    toggleNotes,
+    snapToGrid,
+    toggleSnapToGrid,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    selectedState,
+    selectedTransition,
+    clearSelectedState,
     zoomIn,
     zoomOut,
+    zoom,
+    setZoom,
+    zoomRange,
     fit,
     downloadSVG,
     downloadPNG,
+    downloadCurrent,
     copyPNG,
+    copySVG,
+    copyDescription,
     parsed,
-  } = useJffCytoscape({ src, title, epsSymbol, darkMode: isDark, honorPositionsDefault });
+  } = useJffCytoscape({
+    src,
+    title,
+    epsSymbol,
+    darkMode: isDark,
+    honorPositionsDefault,
+    initialZoom,
+    viewStateKey,
+  });
 
   // Non-visual alternative. The canvas is unreadable to a screen reader, and reading
   // automata is the point of this viewer, so the same machine is also published as text:
@@ -77,40 +388,61 @@ export function JffCytoscapeViewer({
 
   const [grid, setGrid] = useState(showGridDefault);
 
-  // Grid lines read the theme var live (subtle light gray in light mode, subtle
-  // dark line in dark mode), falling back to the load-time color.
-  const gridLine = `var(--grid-color, ${GRID_COLOR})`;
+  // In the standalone window a menu bar offers the grid and the layout, so the toolbar drops
+  // them rather than showing the same two controls twice. False in every dialog, where the
+  // toolbar is the only place they exist.
+  const chromeHasViewControls = useViewerChromePresent();
+
+  // Offered to any chrome around this viewer, which today means the standalone window's menu
+  // bar. Registers nothing when there is no provider, so a dialog is unaffected. Declared
+  // after the grid state because it publishes it: the menu shows the grid ticked or not, and
+  // the toolbar button below stays the same control on the same state.
+  useRegisterViewerActions(
+    {
+      downloadSVG,
+      downloadPNG,
+      downloadCurrent,
+      copyPNG,
+      copySVG,
+      undo,
+      redo,
+      toggleGrid: () => setGrid((on) => !on),
+      toggleNotes,
+      toggleSnapToGrid,
+      fitToWindow: fit,
+      showTextRepresentation: () => setShowText(true),
+      // Set rather than toggled, so the menu's two options are a choice between states and
+      // selecting the one already showing does nothing.
+      setAsDrawn: () => {
+        if (!honorPositions) toggleHonorPositions();
+      },
+      setAutoArranged: () => {
+        if (honorPositions) toggleHonorPositions();
+      },
+      resetMachine,
+    },
+    {
+      grid,
+      notes: showNotes,
+      snapToGrid,
+      layout: honorPositions ? 'as-drawn' : 'auto',
+      canUndo,
+      canRedo,
+    },
+  );
+
+  // Grid lines read the theme var live (subtle light gray in light mode, subtle dark line in
+  // dark mode). The literal is only a fallback, and being a literal is what keeps the server
+  // and client markup identical.
+  const gridLine = `var(--grid-color, ${GRID_COLOR_FALLBACK})`;
+  // Only the lines. Their SIZE and POSITION are written straight to the element by the engine,
+  // which keeps them in step with the graph's zoom and pan; listing them here as well would
+  // have React reset them to these values on every render and the grid would stop tracking.
   const backgroundStyle: React.CSSProperties = grid
     ? {
         backgroundImage: `linear-gradient(${gridLine} 1px, transparent 1px), linear-gradient(90deg, ${gridLine} 1px, transparent 1px)`,
-        backgroundSize: '24px 24px',
-        backgroundPosition: 'center center',
       }
     : {};
-
-  const TypeBadge = ({ t }: { t: MachineType }) => {
-    const label =
-      t === 'fa'
-        ? 'Finite Automaton'
-        : t === 'pda'
-          ? 'Pushdown Automaton'
-          : t === 'tm'
-            ? 'Turing Machine'
-            : 'Unknown';
-    const cls =
-      t === 'fa'
-        ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200'
-        : t === 'pda'
-          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
-          : t === 'tm'
-            ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'
-            : 'bg-muted text-muted-foreground';
-    return (
-      <Badge variant="outline" className={cls}>
-        {label}
-      </Badge>
-    );
-  };
 
   // White fill so the outline/idle buttons stand out against the gray toolbar.
   const controlBtnClass = 'bg-card';
@@ -118,7 +450,11 @@ export function JffCytoscapeViewer({
   return (
     <div
       className={cn(
-        'bg-card w-full overflow-hidden rounded-md border',
+        'bg-card w-full overflow-hidden border',
+        // Rounded and fully bordered as a card inside a dialog. In the standalone window it is
+        // the window's content rather than a card in it, and the rounding would put a gap
+        // between the title tab and the toolbar it is meant to sit on.
+        chromeHasViewControls ? 'rounded-none border-0' : 'rounded-md',
         fill && 'flex h-full flex-col',
       )}
     >
@@ -134,103 +470,139 @@ export function JffCytoscapeViewer({
         <div className="flex items-center gap-2">
           {/* View controls */}
           <div className="flex items-center gap-1" role="group" aria-label="View controls">
-            <Button
-              size="sm"
-              variant={grid ? 'default' : 'outline'}
-              className={grid ? undefined : controlBtnClass}
-              onClick={() => setGrid((s) => !s)}
-              title="Toggle grid"
-              aria-label="Toggle grid"
-              aria-pressed={grid}
+            {chromeHasViewControls ? null : (
+              <>
+                <Button
+                  size="sm"
+                  variant={grid ? 'default' : 'outline'}
+                  className={grid ? undefined : controlBtnClass}
+                  onClick={() => setGrid((s) => !s)}
+                  title="Toggle grid"
+                  aria-label="Toggle grid"
+                  aria-pressed={grid}
+                >
+                  <Grid className="mr-2 h-4 w-4" /> Grid
+                </Button>
+              </>
+            )}
+            {/* Only in the standalone window. Disabled rather than hidden there, so the
+                toolbar keeps its shape and their position stays learnable. A panel over the
+                page is for a look rather than for rearranging a machine, and it has no menu
+                to pair them with. They step through arrangement changes only; see
+                useJffCytoscape. */}
+            {chromeHasViewControls ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={controlBtnClass}
+                  onClick={undo}
+                  disabled={!canUndo}
+                  title="Undo"
+                  aria-label="Undo"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={controlBtnClass}
+                  onClick={redo}
+                  disabled={!canRedo}
+                  title="Redo"
+                  aria-label="Redo"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </Button>
+                <div
+                  className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0"
+                  aria-hidden="true"
+                />
+              </>
+            ) : null}
+            {/* One bordered group holding the two buttons, the value they change, and the
+                slider that changes it continuously. Four separate controls in a row read as
+                four unrelated things; a single container says they are one. */}
+            <div
+              className="border-input bg-card flex h-8 items-center gap-0.5 rounded-md border px-0.5"
+              role="group"
+              aria-label="Zoom"
             >
-              <Grid className="mr-2 h-4 w-4" /> Grid
-            </Button>
-            {/* Both choices are named and on screen. This was one button labelled
-                "Original Positions", which named only the state it was in: with it
-                un-pressed there was nothing to say what you were looking at instead, and
-                "positions" described the node coordinates rather than anything the reader
-                of a diagram thinks about. */}
-            <span className="text-muted-foreground ml-1 text-sm whitespace-nowrap">Layout</span>
-            <SegmentedControl
-              name="jff-layout"
-              ariaLabel="Layout"
-              value={honorPositions ? 'as-drawn' : 'auto'}
-              onValueChange={(next) => {
-                if ((next === 'as-drawn') !== honorPositions) toggleHonorPositions();
-              }}
-              options={[
-                { value: 'as-drawn', label: 'As drawn' },
-                { value: 'auto', label: 'Auto-arranged' },
-              ]}
-            />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 shrink-0 p-0"
+                onClick={zoomOut}
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              {/* Fixed width and tabular numerals, so the toolbar does not shift sideways as
+                  the value moves between 50% and 200%. State rather than a control: it is not
+                  focusable and does nothing when clicked, and the slider beside it carries the
+                  same value for anybody who cannot see this. */}
+              <span className="text-muted-foreground w-11 shrink-0 text-center text-xs tabular-nums">
+                {zoomPercentLabel(zoom)}
+              </span>
+              {/* Log scale, so 100% sits near the middle of the track rather than against the
+                  left end; see lib/zoom-scale. Shortest thing here, and the first to give way
+                  when the toolbar is tight. */}
+              <Slider
+                className="w-14 shrink-0 sm:w-20"
+                min={ZOOM_SLIDER_MIN}
+                max={ZOOM_SLIDER_MAX}
+                step={1}
+                value={[zoomToSlider(zoom, zoomRange().min, zoomRange().max)]}
+                onValueChange={([next]) => {
+                  const { min, max } = zoomRange();
+                  if (next !== undefined) setZoom(sliderToZoom(next, min, max));
+                }}
+                aria-label="Zoom level"
+                aria-valuetext={zoomPercentSpoken(zoom)}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 shrink-0 p-0"
+                onClick={zoomIn}
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* Outside the group: it sets the zoom rather than nudging it, and it is the one
+                control here somebody reaches for without knowing what the current value is.
+                The label drops below `sm`, where the icon and the tooltip carry it. */}
             <Button
               size="sm"
               variant="outline"
-              className={controlBtnClass}
-              onClick={zoomOut}
-              title="Zoom out"
-              aria-label="Zoom out"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={zoomIn}
-              title="Zoom in"
-              aria-label="Zoom in"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
+              className={cn(controlBtnClass, 'h-8 shrink-0')}
               onClick={fit}
-              title="Fit"
-              aria-label="Fit to view"
+              title="Fit automaton to view"
+              aria-label="Fit automaton to view"
             >
-              <Maximize2 className="h-4 w-4" />
+              <Scan className="h-4 w-4 sm:mr-2" />
+              <span className="sr-only sm:not-sr-only">Fit</span>
             </Button>
           </div>
 
-          {/* Separator between control groups */}
-          <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
-
-          {/* Export controls */}
-          <div className="flex items-center gap-1" role="group" aria-label="Export controls">
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={downloadSVG}
-              title="Download SVG"
-              aria-label="Download SVG"
-            >
-              <Download className="mr-2 h-4 w-4" /> SVG
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={downloadPNG}
-              title="Download PNG"
-              aria-label="Download PNG"
-            >
-              <ImageDown className="mr-2 h-4 w-4" /> PNG
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={copyPNG}
-              title="Copy PNG to clipboard"
-              aria-label="Copy PNG to clipboard"
-            >
-              <Copy className="mr-2 h-4 w-4" /> Copy PNG
-            </Button>
-          </div>
+          {/* The exports and the layout choice are not offered here. In a panel over the
+              page they crowded a strip that has to fit beside another one in the Similarity
+              comparison, and everything they did is in the standalone window's menus. This
+              is the way there, so what was a row of buttons is one. */}
+          {windowTarget ? (
+            <>
+              {/* Separator between control groups */}
+              <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
+              <OpenInWindowButton
+                href={windowTarget.href}
+                tab={windowTarget.tab}
+                onOpened={onOpenedInWindow}
+              />
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -249,98 +621,112 @@ export function JffCytoscapeViewer({
 
       {/* The rendered graph. role="img" + a description keeps a screen reader from
           wandering into cytoscape's internals while still conveying what it shows. */}
-      <div
-        ref={containerRef}
-        // In fill mode the flex track supplies the height; an inline one would fight it.
-        style={fill ? backgroundStyle : { height, ...backgroundStyle }}
-        className={cn('bg-card relative overflow-hidden', fill && 'min-h-0 flex-1')}
-        role="img"
-        aria-label={
-          error
-            ? 'The diagram could not be drawn'
-            : title
-              ? `Diagram of ${title}`
-              : 'Automaton diagram'
-        }
-        aria-describedby={description ? summaryId : undefined}
-      />
+      {/* A positioned wrapper around the graph, because cytoscape owns the container's
+          children and anything floated over the drawing has to be a sibling of it. */}
+      <div className={cn('relative', fill ? 'flex min-h-0 flex-1 flex-col' : undefined)}>
+        <div
+          ref={containerRef}
+          // In fill mode the flex track supplies the height; an inline one would fight it.
+          style={fill ? backgroundStyle : { height, ...backgroundStyle }}
+          // The ordinary arrow at rest, a closed hand while the button is down and the graph is
+          // being dragged. Not an open hand throughout: that reads as "this whole surface is a
+          // handle" over a diagram whose states and transitions are the things worth pointing
+          // at. `cursor` inherits, so the canvases cytoscape puts inside pick this up without
+          // being styled themselves.
+          className={cn(
+            'bg-card relative cursor-default overflow-hidden active:cursor-grabbing',
+            fill && 'min-h-0 flex-1',
+            // The CANVASES are held back, not this container. Cytoscape paints the moment it
+            // is constructed, at whatever scale the file's own coordinates imply, and the fit
+            // runs after: unhidden, the machine arrives at the wrong size and visibly jumps.
+            //
+            // Hiding the container instead (which is what this was) took the grid and the
+            // surface with it, so the toolbar sat fully drawn above a blank white rectangle
+            // for about half a second and then everything appeared at once. Keeping the
+            // prepared canvas visible and fading in only the drawing is the difference
+            // between a panel that is loading and a panel that looks broken.
+            '[&_canvas]:transition-opacity [&_canvas]:duration-150',
+            'motion-reduce:[&_canvas]:transition-none',
+            settled ? '[&_canvas]:opacity-100' : '[&_canvas]:opacity-0',
+          )}
+          role="img"
+          aria-label={
+            error
+              ? 'The diagram could not be drawn'
+              : title
+                ? `Diagram of ${title}`
+                : 'Automaton diagram'
+          }
+          aria-describedby={description ? summaryId : undefined}
+        />
+        {selectedState ? (
+          <StateProperties state={selectedState} onClose={clearSelectedState} />
+        ) : selectedTransition ? (
+          <TransitionProperties edge={selectedTransition} onClose={clearSelectedState} />
+        ) : null}
+      </div>
 
       {description ? (
-        // Capped and scrollable on its own: the expanded transition listing can be long,
-        // and it must not steal height from the graph or grow the dialog. Focusable with it,
-        // because past the toggle below there is nothing tabbable, so the states and
-        // transitions this panel exists to expose could not be scrolled to by keyboard.
-        <div
-          className="max-h-40 shrink-0 overflow-y-auto border-t px-3 py-2"
-          tabIndex={0}
-          role="group"
-          aria-label="Description of this file"
-        >
-          <p id={summaryId} className="text-muted-foreground text-xs">
-            {description.summary}
-          </p>
-
-          <button
-            type="button"
-            onClick={() => setShowText((v) => !v)}
-            aria-expanded={showText}
-            aria-controls="jff-text-representation"
-            className="text-foreground focus-visible:ring-ring mt-1 rounded text-xs underline focus-visible:ring-2 focus-visible:outline-none"
+        chromeHasViewControls ? (
+          <>
+            {/* The summary is still here, just not on screen. It is what `aria-describedby` on
+          the canvas points at, and a canvas with no text alternative is unreadable to a
+          screen reader, so it is hidden visually rather than removed. */}
+            <p id={summaryId} className="sr-only">
+              {description.summary}
+            </p>
+            <Dialog open={showText} onOpenChange={setShowText}>
+              <DialogContent className="max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Text representation</DialogTitle>
+                  <DialogDescription>{description.summary}</DialogDescription>
+                </DialogHeader>
+                {/* Beside the thing it copies, rather than in a menu two levels away. This is
+                    the only export that can be quoted in a reply, and it is most obviously
+                    wanted while looking at the text it produces. */}
+                <div className="flex justify-end">
+                  <Button type="button" size="sm" variant="outline" onClick={copyDescription}>
+                    <Copy className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
+                    Copy as text
+                  </Button>
+                </div>
+                <div className="text-sm">
+                  <MachineDescriptionList description={description} />
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
+        ) : (
+          // Capped and scrollable on its own: the listing can be long, and it must not steal
+          // height from the graph or grow the dialog. Focusable with it, because past the
+          // toggle there is nothing tabbable, so the states and transitions this panel exists
+          // to expose could not be scrolled to by keyboard.
+          <div
+            className="max-h-40 shrink-0 overflow-y-auto border-t px-3 py-2"
+            tabIndex={0}
+            role="group"
+            aria-label="Description of this file"
           >
-            {showText ? 'Hide text representation' : 'Show text representation'}
-          </button>
+            <p id={summaryId} className="text-muted-foreground text-xs">
+              {description.summary}
+            </p>
 
-          {/* Kept mounted so aria-controls always resolves. */}
-          <div id="jff-text-representation" hidden={!showText} className="mt-2 text-xs">
-            {description.isEmpty ? (
-              <p className="text-muted-foreground">
-                This file contains no states or notes, so there is nothing to describe.
-              </p>
-            ) : (
-              <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
-                <dt className="text-muted-foreground">States</dt>
-                <dd>{description.stateNames.join(', ')}</dd>
+            <button
+              type="button"
+              onClick={() => setShowText((v) => !v)}
+              aria-expanded={showText}
+              aria-controls="jff-text-representation"
+              className="text-foreground focus-visible:ring-ring mt-1 rounded text-xs underline focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {showText ? 'Hide text representation' : 'Show text representation'}
+            </button>
 
-                <dt className="text-muted-foreground">Initial state</dt>
-                <dd>{description.initialState ?? 'Not set'}</dd>
-
-                <dt className="text-muted-foreground">Final states</dt>
-                <dd>
-                  {description.finalStates.length ? description.finalStates.join(', ') : 'None'}
-                </dd>
-
-                <dt className="text-muted-foreground">Transitions</dt>
-                <dd>
-                  {description.transitionLines.length === 0 ? (
-                    'None'
-                  ) : (
-                    <ul className="list-none space-y-0.5">
-                      {description.transitionLines.map((line, i) => (
-                        <li key={`${line}-${i}`}>{line}</li>
-                      ))}
-                    </ul>
-                  )}
-                </dd>
-
-                {/* Only when there are any: an empty Notes row on every machine would be
-                    noise, and most files have none. Notes are drawn on the canvas only in
-                    "As drawn", so this is where they are always readable. */}
-                {description.noteLines.length > 0 ? (
-                  <>
-                    <dt className="text-muted-foreground">Notes</dt>
-                    <dd>
-                      <ul className="list-none space-y-0.5">
-                        {description.noteLines.map((line, i) => (
-                          <li key={`${line}-${i}`}>{line}</li>
-                        ))}
-                      </ul>
-                    </dd>
-                  </>
-                ) : null}
-              </dl>
-            )}
+            {/* Kept mounted so aria-controls always resolves. */}
+            <div id="jff-text-representation" hidden={!showText} className="mt-2 text-xs">
+              <MachineDescriptionList description={description} />
+            </div>
           </div>
-        </div>
+        )
       ) : null}
     </div>
   );
@@ -359,6 +745,7 @@ export default function JffViewerDialog({
   darkMode,
   showGridDefault = true,
   honorPositionsDefault = true,
+  windowTarget,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -370,6 +757,8 @@ export default function JffViewerDialog({
   darkMode?: boolean;
   showGridDefault?: boolean;
   honorPositionsDefault?: boolean;
+  /** Where the pop-out sends this file, or absent when a link cannot be built for it. */
+  windowTarget?: ViewerWindowTarget | null;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -391,9 +780,11 @@ export default function JffViewerDialog({
               exactly 1 leaves no room below the baseline, and clamping adds the
               `overflow: hidden` that turns that into a visible cut, beheading the
               descender of the j in every `.jff`. */}
-          <DialogTitle className="line-clamp-2 leading-snug break-words">
-            {title ?? 'JFLAP Viewer'}
-          </DialogTitle>
+          <div className="flex items-start justify-between gap-4 pr-6">
+            <DialogTitle className="line-clamp-2 leading-snug break-words">
+              {title ?? 'JFLAP Viewer'}
+            </DialogTitle>
+          </div>
         </DialogHeader>
         <div className="min-h-0 flex-1 p-4 pt-2">
           {open ? (
@@ -406,6 +797,11 @@ export default function JffViewerDialog({
               darkMode={darkMode}
               showGridDefault={showGridDefault}
               honorPositionsDefault={honorPositionsDefault}
+              windowTarget={windowTarget}
+              // The reader asked for this machine somewhere else. Leaving the panel up would
+              // mean dismissing it before they could use the window, with the same file
+              // showing twice in the meantime.
+              onOpenedInWindow={() => onOpenChange(false)}
             />
           ) : null}
         </div>

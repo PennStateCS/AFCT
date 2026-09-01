@@ -1,0 +1,286 @@
+'use client';
+
+import { Fragment, useState } from 'react';
+
+import {
+  Download,
+  FileDown,
+  FileImage,
+  FileCode2,
+  Scan,
+  ListTree,
+  BookOpen,
+  Info,
+  Share,
+  Undo2,
+  Redo2,
+  RotateCcw,
+} from 'lucide-react';
+import {
+  Menubar,
+  MenubarCheckboxItem,
+  MenubarRadioGroup,
+  MenubarRadioItem,
+  MenubarContent,
+  MenubarItem,
+  MenubarMenu,
+  MenubarSeparator,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
+  MenubarTrigger,
+} from '@/components/ui/menubar';
+import { useViewerActions } from '@/components/viewer/viewer-actions';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import { VIEWER_DOCS_URL } from '@/lib/viewer-link';
+import type { ViewerProperties } from '@/lib/viewer-properties';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+/**
+ * The standalone window's menu bar.
+ *
+ * `bg-card` rather than the component's default `bg-background`: this app's light background
+ * token is a light blue-grey (#E7EBF0), which reads as a disabled strip across the top of a
+ * window. A menu bar is expected to be the same colour as the thing it belongs to, so it takes
+ * the white card surface and separates itself with the border underneath instead.
+ *
+ * A menu rather than a row of buttons because this window will accumulate commands that are
+ * used rarely and need to be found by reading rather than recognised by icon. One menu today;
+ * the shape is what makes adding the next one uneventful.
+ */
+export function ViewerMenubar({
+  downloadHref,
+  properties,
+}: {
+  downloadHref: string;
+  /** Null when the file is unknown or not this reader's to see. */
+  properties?: ViewerProperties | null;
+}) {
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  // False for a grammar or a regular expression, which have nothing to export: those viewers
+  // register no actions, so the items disable themselves rather than being hidden. A missing
+  // menu item reads as a bug; a greyed one reads as "not for this kind of file".
+  const { ready, grid, notes, snapToGrid, layout, canUndo, canRedo, run } = useViewerActions();
+
+  return (
+    <Menubar className="bg-card h-auto rounded-none border-x-0 border-t-0 px-2 py-1 shadow-none">
+      <MenubarMenu>
+        <MenubarTrigger>File</MenubarTrigger>
+        <MenubarContent>
+          <MenubarSub>
+            <MenubarSubTrigger>
+              <Download aria-hidden="true" />
+              Download
+            </MenubarSubTrigger>
+            <MenubarSubContent>
+              <MenubarItem asChild>
+                {/* The file exactly as it was submitted, from the same route the viewer
+                    reads, which records it as a download rather than a view. */}
+                <a href={downloadHref} download>
+                  <Download aria-hidden="true" />
+                  Original file
+                </a>
+              </MenubarItem>
+              {/* The same machine with the layout on screen, which after auto-arranging is
+                  usually far more readable than the one that was submitted. A new file: the
+                  submitted one is never altered. */}
+              <MenubarItem disabled={!ready} onSelect={() => run('downloadCurrent')}>
+                <FileDown aria-hidden="true" />
+                Current view
+              </MenubarItem>
+            </MenubarSubContent>
+          </MenubarSub>
+          <MenubarSeparator />
+          {/* Where the file came from, rather than what is in it. Disabled rather than hidden
+              when there is nothing to show, so the menu does not change shape between files. */}
+          <MenubarItem disabled={!properties} onSelect={() => setPropertiesOpen(true)}>
+            <Info aria-hidden="true" />
+            Properties
+          </MenubarItem>
+          <MenubarSeparator />
+          <MenubarSub>
+            <MenubarSubTrigger>
+              <Share aria-hidden="true" />
+              Export
+            </MenubarSubTrigger>
+            <MenubarSubContent>
+              <MenubarItem disabled={!ready} onSelect={() => run('downloadSVG')}>
+                <FileCode2 aria-hidden="true" />
+                SVG
+              </MenubarItem>
+              <MenubarItem disabled={!ready} onSelect={() => run('downloadPNG')}>
+                <FileImage aria-hidden="true" />
+                PNG
+              </MenubarItem>
+            </MenubarSubContent>
+          </MenubarSub>
+        </MenubarContent>
+      </MenubarMenu>
+
+      <MenubarMenu>
+        <MenubarTrigger>Edit</MenubarTrigger>
+        <MenubarContent>
+          {/* At the top of Edit, where every application puts them. They step back through
+              changes to the arrangement: a state dragged, or the layout switched. Not zoom or
+              pan, which move the camera rather than the machine. */}
+          <MenubarItem disabled={!canUndo} onSelect={() => run('undo')}>
+            <Undo2 aria-hidden="true" />
+            Undo
+          </MenubarItem>
+          <MenubarItem disabled={!canRedo} onSelect={() => run('redo')}>
+            <Redo2 aria-hidden="true" />
+            Redo
+          </MenubarItem>
+        </MenubarContent>
+      </MenubarMenu>
+
+      <MenubarMenu>
+        <MenubarTrigger>View</MenubarTrigger>
+        <MenubarContent>
+          {/* First because it is the one people reach for most: after zooming or panning
+              about, this is how you get the whole machine back on screen. */}
+          {/* The same icon the toolbar's Fit button uses. One action, one icon, wherever it
+              is offered from. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('fitToWindow')}>
+            <Scan aria-hidden="true" />
+            Fit to window
+          </MenubarItem>
+          <MenubarSeparator />
+          {/* A checkbox item rather than a plain one, so the menu says what the grid is
+              doing now rather than only what selecting it would do. It drives the same state
+              as the Grid button in the viewer's own toolbar, so the two never disagree. */}
+          <MenubarCheckboxItem
+            checked={grid}
+            disabled={!ready}
+            onCheckedChange={() => run('toggleGrid')}
+          >
+            Grid
+          </MenubarCheckboxItem>
+          {/* On by default: a note is the author's own words, part of the answer rather than
+              decoration. Off is for a busy machine where they cover the states. They are only
+              drawn in the "As drawn" layout, so this does nothing once auto-arranged. */}
+          <MenubarCheckboxItem
+            checked={notes}
+            disabled={!ready}
+            onCheckedChange={() => run('toggleNotes')}
+          >
+            JFLAP Notes
+          </MenubarCheckboxItem>
+          {/* Off by default: a machine arrives with the positions its author chose, and
+              quietly moving every state the first time one is nudged would be a change nobody
+              asked for. Directly under Grid, since it is that grid it snaps to. */}
+          <MenubarCheckboxItem
+            checked={snapToGrid}
+            disabled={!ready}
+            onCheckedChange={() => run('toggleSnapToGrid')}
+          >
+            Snap to grid
+          </MenubarCheckboxItem>
+          <MenubarSeparator />
+          {/* The same content the dialog viewers show in a panel under the graph. Here it
+              opens in a window, so the graph keeps the full height of the screen. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('showTextRepresentation')}>
+            <ListTree aria-hidden="true" />
+            Text representation
+          </MenubarItem>
+        </MenubarContent>
+      </MenubarMenu>
+
+      <MenubarMenu>
+        <MenubarTrigger>Machine</MenubarTrigger>
+        <MenubarContent>
+          {/* Flattened rather than kept behind a Layout submenu: the choice is the whole of
+              this menu, and burying two options one level down to label them is a level of
+              nesting that earns nothing. "Machine" rather than "Automata" because the code and
+              the text representation already call it that, and because it is one machine. */}
+          <MenubarRadioGroup
+            value={layout}
+            onValueChange={(next) => run(next === 'as-drawn' ? 'setAsDrawn' : 'setAutoArranged')}
+          >
+            <MenubarRadioItem value="as-drawn" disabled={!ready}>
+              As drawn
+            </MenubarRadioItem>
+            <MenubarRadioItem value="auto" disabled={!ready}>
+              Auto-arranged
+            </MenubarRadioItem>
+          </MenubarRadioGroup>
+          <MenubarSeparator />
+          {/* With the machine rather than under Edit: what these copy is the drawing, not a
+              selection, and this is the menu about the drawing. */}
+          {/* Format icons, matching File > Export, so the same format carries the same icon
+              wherever it appears. Two identical Copy icons would say only "these are both
+              copies", which the labels already say. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('copyPNG')}>
+            <FileImage aria-hidden="true" />
+            Copy as PNG
+          </MenubarItem>
+          {/* Pastes as vector art, so it stays sharp in a slide or a printed handout, where
+              the PNG above does not. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('copySVG')}>
+            <FileCode2 aria-hidden="true" />
+            Copy as SVG
+          </MenubarItem>
+          <MenubarSeparator />
+          <MenubarItem disabled={!ready} onSelect={() => setResetOpen(true)}>
+            <RotateCcw aria-hidden="true" />
+            Reset machine
+          </MenubarItem>
+        </MenubarContent>
+      </MenubarMenu>
+
+      <MenubarMenu>
+        <MenubarTrigger>Help</MenubarTrigger>
+        <MenubarContent>
+          {/* A plain link, so it behaves like one: middle-click, copy the address, open in a
+              background tab. `noopener` because it leaves the application. */}
+          <MenubarItem asChild>
+            <a href={VIEWER_DOCS_URL} target="_blank" rel="noopener noreferrer">
+              <BookOpen aria-hidden="true" />
+              Documentation
+            </a>
+          </MenubarItem>
+        </MenubarContent>
+      </MenubarMenu>
+
+      {properties ? (
+        <Dialog open={propertiesOpen} onOpenChange={setPropertiesOpen}>
+          <DialogContent className="max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Properties</DialogTitle>
+              <DialogDescription>Where this file came from.</DialogDescription>
+            </DialogHeader>
+            <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+              {properties.rows.map((row) => (
+                <Fragment key={row.label}>
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="break-words">{row.value}</dd>
+                </Fragment>
+              ))}
+            </dl>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {/* Confirmed rather than immediate: a reader can spend a while pulling a crowded
+          machine apart, and there is no undo once the history has gone with it. */}
+      <ConfirmDialog
+        open={resetOpen}
+        title="Reset this machine?"
+        description="The states go back where the file has them, and the layout, the zoom and the undo history for this machine are forgotten. The other open files are not affected, and the submitted file is not changed."
+        confirmText="Reset machine"
+        onConfirm={() => {
+          run('resetMachine');
+          setResetOpen(false);
+        }}
+        onCancel={() => setResetOpen(false)}
+      />
+    </Menubar>
+  );
+}
