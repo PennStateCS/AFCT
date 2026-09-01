@@ -650,12 +650,18 @@ export function JffCytoscapeViewer({
           className={cn(
             'bg-card relative cursor-default overflow-hidden active:cursor-grabbing',
             fill && 'min-h-0 flex-1',
-            // Held back until the first layout has settled. Cytoscape paints the moment it is
-            // constructed, at whatever scale the file's own coordinates imply, and the fit
-            // runs after that: without this the machine arrives at the wrong size and visibly
-            // jumps. A short fade rather than a hard cut, so it appears rather than blinks.
-            'transition-opacity duration-150 motion-reduce:transition-none',
-            settled ? 'opacity-100' : 'opacity-0',
+            // The CANVASES are held back, not this container. Cytoscape paints the moment it
+            // is constructed, at whatever scale the file's own coordinates imply, and the fit
+            // runs after: unhidden, the machine arrives at the wrong size and visibly jumps.
+            //
+            // Hiding the container instead (which is what this was) took the grid and the
+            // surface with it, so the toolbar sat fully drawn above a blank white rectangle
+            // for about half a second and then everything appeared at once. Keeping the
+            // prepared canvas visible and fading in only the drawing is the difference
+            // between a panel that is loading and a panel that looks broken.
+            '[&_canvas]:transition-opacity [&_canvas]:duration-150',
+            'motion-reduce:[&_canvas]:transition-none',
+            settled ? '[&_canvas]:opacity-100' : '[&_canvas]:opacity-0',
           )}
           role="img"
           aria-label={

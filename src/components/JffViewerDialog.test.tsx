@@ -917,12 +917,12 @@ describe('the machine does not flash on the way in', () => {
     // Cytoscape paints as soon as it is built, before anything has been fitted or scaled, so
     // the machine used to arrive at the wrong size and jump. Rendered but not shown.
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
-    expect(screen.getByRole('img').className).toContain('opacity-0');
+    expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-0');
   });
 
   it('appears once it has settled', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
-    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
   });
 
   it('hides again when a second file is loaded into the same viewer', async () => {
@@ -930,11 +930,11 @@ describe('the machine does not flash on the way in', () => {
     // can change in place, so a load that began with the graph already visible painted the
     // new machine un-fitted for a moment. Every load starts hidden.
     const { rerender } = render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
-    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
 
     rerender(<JffCytoscapeViewer src="/api/files/submissions/other.jff" title="other.jff" />);
     await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-0'));
-    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
   });
 
   it('appears even if setting the initial scale throws', async () => {
@@ -945,6 +945,6 @@ describe('the machine does not flash on the way in', () => {
       throw new Error('center exploded');
     });
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" initialZoom="actual" />);
-    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('[&_canvas]:opacity-100'));
   });
 });
