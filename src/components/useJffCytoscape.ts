@@ -225,6 +225,17 @@ export type UseJffCytoscapeOptions = {
  * chrome. Returns the container ref to mount the graph into, the load `error` and parsed
  * machine `type`, the `honorPositions` toggle (a layout input), and the action handlers.
  */
+/**
+ * Wait for the next paint.
+ *
+ * Guarded, because a test environment without `requestAnimationFrame` would otherwise hang
+ * here forever, and this is on the path that makes the graph visible at all.
+ */
+function nextFrame(): Promise<void> {
+  if (typeof requestAnimationFrame !== 'function') return Promise.resolve();
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 /** Where every state sits, and which layout produced it. */
 type ArrangementSnapshot = {
   positions: Record<string, { x: number; y: number }>;
@@ -358,6 +369,11 @@ export function useJffCytoscape({
   const load = useMemo(
     () => async () => {
       setError(null);
+      // Before anything else, and before any await. A second load onto a viewer that is
+      // already showing something (React re-running effects in development, or the source
+      // changing) would otherwise start with the graph visible, and the new machine would be
+      // painted un-fitted for the moment before its own layout settles. That is the flash.
+      setSettled(false);
       try {
         const res = await fetch(src);
         if (!res.ok) throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
@@ -762,8 +778,12 @@ export function useJffCytoscape({
               current.zoom(1);
               current.center(current.nodes());
             } finally {
-              // In a `finally` so a layout that throws or never settles reveals the graph
-              // anyway. A machine drawn wrongly is recoverable; one that never appears is not.
+              // One frame first. Revealing in the same tick as the last change uncovers the
+              // canvas while cytoscape may still be redrawing it, which is the tail of the
+              // flash rather than its cause.
+              await nextFrame();
+              // In a `finally` so a layout that throws still reveals the graph. A machine
+              // drawn wrongly is recoverable; one that never appears is not.
               setSettled(true);
             }
           })();

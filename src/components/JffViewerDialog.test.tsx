@@ -925,6 +925,18 @@ describe('the machine does not flash on the way in', () => {
     await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
   });
 
+  it('hides again when a second file is loaded into the same viewer', async () => {
+    // The one that was still flashing. React re-runs effects in development, and the source
+    // can change in place, so a load that began with the graph already visible painted the
+    // new machine un-fitted for a moment. Every load starts hidden.
+    const { rerender } = render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
+
+    rerender(<JffCytoscapeViewer src="/api/files/submissions/other.jff" title="other.jff" />);
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-0'));
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
+  });
+
   it('appears even if setting the initial scale throws', async () => {
     // What the `finally` actually protects. `fitAndResize` swallows its own errors, so a
     // failing layout never reaches here; the step after it can still throw, and an invisible
