@@ -666,6 +666,37 @@ txn() { printf '%s' "$1" > "$TESTDIR/triggers/transaction.json"; }
   run grep -q 'degraded during the stability window' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
 }
 
+@test "a degraded service is named, not just reported as one of several" {
+  # The reason this exists: v0.9.4 rolled back three times saying only that "a service
+  # degraded", and the rollback then destroyed the container holding the explanation, so
+  # naming the service needed a deliberate reproduction on the production box.
+  export UPDATER_STABILITY_SECONDS=4
+  export MOCK_UNHEALTHY_AFTER=4
+  export MOCK_HEALTH_COUNT_FILE="$TESTDIR/hc-named"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"s2n","backupFirst":false}'
+  run sh updater.sh
+  [ "$(tag_now)" = "v1.0.0" ]
+  # The service name and the state that damned it both appear on the line.
+  run grep -qE 'degraded during the stability window:.*(app|worker|nginx|db-backup)=' \
+    "$TESTDIR/triggers/progress.log"
+  [ "$status" -eq 0 ]
+  run grep -q 'unhealthy' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+}
+
+@test "a degraded service's output is copied out before the rollback destroys it" {
+  export UPDATER_STABILITY_SECONDS=4
+  export MOCK_UNHEALTHY_AFTER=4
+  export MOCK_HEALTH_COUNT_FILE="$TESTDIR/hc-logs"
+  export MOCK_LOGS="Error: Cannot find module 'chalk'\nRequire stack:\n- /app/src/lib/prisma.ts\n"
+  request '{"action":"upgrade","tag":"v1.1.0","requestId":"s2l","backupFirst":false}'
+  run sh updater.sh
+  [ "$(tag_now)" = "v1.0.0" ]
+  run grep -q 'last output from' "$TESTDIR/triggers/progress.log"; [ "$status" -eq 0 ]
+  # The actual failure text survives the rollback, which is the whole point.
+  run grep -q "Cannot find module 'chalk'" "$TESTDIR/triggers/progress.log"
+  [ "$status" -eq 0 ]
+}
+
 @test "a transient image-pull failure is retried and then succeeds" {
   export MOCK_PULL_FAIL_TIMES=2
   export MOCK_PULL_COUNT_FILE="$TESTDIR/pc"
