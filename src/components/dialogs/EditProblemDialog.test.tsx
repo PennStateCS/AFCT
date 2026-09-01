@@ -153,6 +153,25 @@ afterAll(() => {
 });
 
 describe('EditProblemDialog (bank wizard)', () => {
+  it('says why a plain text answer file was rejected instead of ignoring it', async () => {
+    // #791. The wiring is per-dialog, so the Edit wizard needs its own proof that the message
+    // reaches the screen: both dialogs used to lose it to the resolver's revalidation.
+    const user = userEvent.setup();
+    const content = 'q0 -> q1 on a';
+    const file = new File([content], 'answer.txt', { type: 'text/plain' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+
+    renderDialog();
+
+    await clickNext(user); // -> Type
+    await clickNext(user); // -> Answer File
+
+    const fileInput = document.getElementById('answer-file') as HTMLInputElement;
+    await user.upload(fileInput, file);
+
+    expect(await screen.findByText(/not a JFLAP model/i)).toBeInTheDocument();
+  });
+
   it('walks the wizard and PUTs only the problem definition', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(createJsonResponse({ id: 'problem-1' }));

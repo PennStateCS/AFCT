@@ -156,6 +156,35 @@ describe('CreateProblemDialog', () => {
     expect(setOpen).toHaveBeenCalledWith(false);
   });
 
+  it('says why a plain text answer file was rejected instead of ignoring it', async () => {
+    // #790's sibling, #791: a .txt is an accepted extension but the contents still have to be
+    // JFLAP XML. Rejecting it is right; doing so in silence is not, because the picker offered
+    // .txt and the author is left with no file and no reason.
+    const user = userEvent.setup();
+    const content = 'q0 -> q1 on a';
+    const file = new File([content], 'answer.txt', { type: 'text/plain' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(content) });
+
+    render(
+      <CreateProblemDialog
+        open
+        setOpen={vi.fn()}
+        courseId="course-1"
+        courseIsArchived={false}
+        onCreated={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Title'), 'DFA #1');
+    await clickNext(user);
+    await clickNext(user);
+
+    const fileInput = document.getElementById('answer-file') as HTMLInputElement;
+    await user.upload(fileInput, file);
+
+    expect(await screen.findByText(/not a JFLAP model/i)).toBeInTheDocument();
+  });
+
   it('disables the answer-file upload when the course is archived', async () => {
     const user = userEvent.setup();
 

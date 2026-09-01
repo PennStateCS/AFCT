@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FlaskConical, Play, Terminal } from 'lucide-react';
 
@@ -25,6 +25,7 @@ import { fetchJson } from '@/lib/query-fetch';
 import { apiPaths } from '@/lib/api-paths';
 import { queryKeys } from '@/lib/query-keys';
 import { isTrialFinished, type EvaluatorTrialView } from '@/lib/evaluator-trial-view';
+import { ANSWER_FILE_EXTENSIONS, ANSWER_FILE_HINT, answerFileRejection } from '@/lib/answer-file';
 import { cn } from '@/lib/utils';
 import { PAGE_HEADER_ICON_CLASS } from '@/lib/page-header';
 
@@ -63,8 +64,6 @@ const NOTE_SPAN: Record<ProblemType, string> = {
   RE: 'lg:col-span-2',
 };
 
-const ACCEPTED_FILES = '.txt,.fa,.pda,.cfg,.re,.jff';
-
 // A native select, the same control the problem dialog uses, wearing SelectField's trigger
 // classes so the fields in this card share a height, a border and a focus ring. SelectField
 // itself is a Radix listbox, and there is no shared component for the native element.
@@ -98,6 +97,30 @@ export default function EvaluatorSandboxClient() {
   const [isDeterministic, setIsDeterministic] = useState(false);
   const [answerFile, setAnswerFile] = useState<File | undefined>();
   const [submissionFile, setSubmissionFile] = useState<File | undefined>();
+
+  const [answerFileError, setAnswerFileError] = useState<string>();
+  const [submissionFileError, setSubmissionFileError] = useState<string>();
+
+  /**
+   * Both files go through the check the problem wizards apply, so a file that is not a JFLAP
+   * model is refused here with a reason instead of being sent to the evaluator to fail there
+   * (#791). The docs promise this page enforces the same rule as the problem bank.
+   */
+  const acceptFile = async (
+    file: File | undefined,
+    setFile: (f: File | undefined) => void,
+    setFileError: (message: string | undefined) => void,
+  ) => {
+    const rejection = file ? answerFileRejection(await file.text(), type) : null;
+    setFileError(rejection ?? undefined);
+    setFile(rejection ? undefined : file);
+  };
+
+  // A rejection naming the old type stops being true once the type changes.
+  useEffect(() => {
+    setAnswerFileError(undefined);
+    setSubmissionFileError(undefined);
+  }, [type]);
 
   const [trialId, setTrialId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -299,22 +322,26 @@ export default function EvaluatorSandboxClient() {
             name="answerFile"
             label="Answer File"
             description="The solution the submission is checked against."
-            accept={ACCEPTED_FILES}
+            accept={ANSWER_FILE_EXTENSIONS}
             maxSizeMb={maxMb}
+            hint={ANSWER_FILE_HINT}
+            error={answerFileError}
             value={answerFile}
             disabled={running}
-            onChange={setAnswerFile}
+            onChange={(f) => void acceptFile(f, setAnswerFile, setAnswerFileError)}
           />
           <FileUploadInput
             id="trial-submission-file"
             name="submissionFile"
             label="Submission File"
             description="The file to check, for example a student's attempt."
-            accept={ACCEPTED_FILES}
+            accept={ANSWER_FILE_EXTENSIONS}
             maxSizeMb={maxMb}
+            hint={ANSWER_FILE_HINT}
+            error={submissionFileError}
             value={submissionFile}
             disabled={running}
-            onChange={setSubmissionFile}
+            onChange={(f) => void acceptFile(f, setSubmissionFile, setSubmissionFileError)}
           />
         </CardContent>
 
