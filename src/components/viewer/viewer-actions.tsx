@@ -24,6 +24,8 @@ export type ViewerActions = {
   /** The machine in words, the one export that can be quoted in a reply. */
   copyDescription: () => void | Promise<void>;
   toggleGrid: () => void;
+  /** Scale and centre the machine so all of it is on screen. */
+  fitToWindow: () => void;
   /** Draw the machine where the author put the states, rather than auto-arranging it. */
   setAsDrawn: () => void;
   /** Let the layout engine place the states. */

@@ -112,6 +112,7 @@ export function JffCytoscapeViewer({
       copySVG,
       copyDescription,
       toggleGrid: () => setGrid((on) => !on),
+      fitToWindow: fit,
       // Set rather than toggled, so the menu's two options are a choice between states and
       // selecting the one already showing does nothing.
       setAsDrawn: () => {

@@ -1,11 +1,11 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import JffViewerDialog, { JffCytoscapeViewer } from './JffViewerDialog';
-import { ViewerActionsProvider } from '@/components/viewer/viewer-actions';
+import { ViewerActionsProvider, useViewerActions } from '@/components/viewer/viewer-actions';
 
 // The engine tests await an async load chain (fetch, parse, dynamic import, cytoscape
 // ctor). On a CPU-starved CI runner that chain can take several seconds, so give this
@@ -350,5 +350,32 @@ describe('the zoom slider', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     const slider = screen.getByRole('slider', { name: 'Zoom' });
     expect(slider).toHaveAttribute('aria-valuetext', '100%');
+  });
+});
+
+describe('what the viewer publishes to a menu', () => {
+  it('wires Fit to window to the real fit, not to a stub', async () => {
+    // The menu's own test can only prove the menu calls whatever was registered. This is the
+    // other half: that the viewer registers something that actually fits the graph. Wiring it
+    // to a no-op would satisfy the menu test and do nothing in the window.
+    let run: ((name: 'fitToWindow') => void) | null = null;
+    function Probe() {
+      run = useViewerActions().run;
+      return null;
+    }
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" />
+        <Probe />
+      </ViewerActionsProvider>,
+    );
+
+    // `fit` is only wired once the engine has loaded, so calling it before that would pass
+    // for the wrong reason: a no-op is indistinguishable from a stub.
+    await waitForEngine();
+    // Loading the graph resizes it too, so start counting from here.
+    h.cy.resize.mockClear();
+    act(() => run?.('fitToWindow'));
+    expect(h.cy.resize).toHaveBeenCalled();
   });
 });

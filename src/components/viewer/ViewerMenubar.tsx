@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, FileImage, FileCode2, Copy, ClipboardType } from 'lucide-react';
+import { Download, FileImage, FileCode2, Copy, ClipboardType, Maximize2 } from 'lucide-react';
 import {
   Menubar,
   MenubarCheckboxItem,
@@ -89,6 +89,13 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
       <MenubarMenu>
         <MenubarTrigger>View</MenubarTrigger>
         <MenubarContent>
+          {/* First because it is the one people reach for most: after zooming or panning
+              about, this is how you get the whole machine back on screen. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('fitToWindow')}>
+            <Maximize2 aria-hidden="true" />
+            Fit to window
+          </MenubarItem>
+          <MenubarSeparator />
           {/* A checkbox item rather than a plain one, so the menu says what the grid is
               doing now rather than only what selecting it would do. It drives the same state
               as the Grid button in the viewer's own toolbar, so the two never disagree. */}

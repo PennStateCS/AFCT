@@ -28,7 +28,7 @@ That window has a menu bar of its own:
 
 - **File** holds **Download original file**, which saves the file exactly as it was submitted, and **Export**, which saves the drawing as an SVG or a PNG.
 - **Edit** holds three ways of copying, because each one pastes where the others cannot: **Copy as PNG** for a document or an email, **Copy as SVG** for a drawing program or a slide, where it stays sharp at any size, and **Copy as text**, which puts the machine into words so it can be quoted in a reply.
-- **View** turns the background **Grid** on and off, and **View → Layout** chooses between **As drawn**, which places the states where their author put them, and **Auto-arranged**, which lets the layout engine place them. One of the two is always in effect.
+- **View** holds **Fit to window**, which brings the whole machine back on screen after zooming or panning about. It also turns the background **Grid** on and off, and **View → Layout** chooses between **As drawn**, which places the states where their author put them, and **Auto-arranged**, which lets the layout engine place them. One of the two is always in effect.
 
 Grid and Layout move into the menu in this window, so the toolbar does not carry a second copy of them. The zoom and export controls stay on the toolbar as well. They all act on a drawn machine, so they are unavailable for a grammar or a regular expression, which have nothing to draw.
 

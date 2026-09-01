@@ -14,6 +14,7 @@ const actions = {
   copySVG: vi.fn(),
   copyDescription: vi.fn(),
   toggleGrid: vi.fn(),
+  fitToWindow: vi.fn(),
   setAsDrawn: vi.fn(),
   setAutoArranged: vi.fn(),
 };
@@ -226,5 +227,34 @@ describe('View, Layout', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Auto-arranged' }));
     expect(actions.setAutoArranged).toHaveBeenCalledTimes(1);
     expect(actions.setAsDrawn).not.toHaveBeenCalled();
+  });
+});
+
+describe('View, Fit to window', () => {
+  it('asks the viewer to fit the machine on screen', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'View' }));
+    // fireEvent for the same jsdom reason as the export case above.
+    fireEvent.click(await screen.findByRole('menuitem', { name: /fit to window/i }));
+    expect(actions.fitToWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('is unavailable when nothing is drawn', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'View' }));
+    expect(await screen.findByRole('menuitem', { name: /fit to window/i })).toHaveAttribute(
+      'data-disabled',
+    );
   });
 });
