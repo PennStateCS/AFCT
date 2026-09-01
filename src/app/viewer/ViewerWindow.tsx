@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,9 @@ import {
   focusedTab,
   isShowing,
   layoutToSearch,
+  focusPane,
   openTab,
+  paneAtPoint,
   paneCount,
   paneOf,
   selectTab,
@@ -178,6 +180,21 @@ export function ViewerWindow({
     };
   }, [showing, properties]);
 
+  /**
+   * Focus the pane a click landed in.
+   *
+   * On the shared body rather than on a pane element, because there is no pane element: the
+   * panes are rectangles over one container, so which one was clicked is arithmetic. Capture
+   * phase, so a click that also does something inside the graph still moves focus first.
+   */
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const focusFromPoint = (clientX: number) => {
+    const rect = bodyRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pane = paneAtPoint(clientX, rect, panes);
+    if (pane !== null && pane !== layout.focused) setLayout((c) => focusPane(c, pane));
+  };
+
   const close = (tab: ViewerTab) => {
     const key = tabKey(tab);
     setLayout((current) => closeTab(current, key));
@@ -274,7 +291,11 @@ export function ViewerWindow({
           cytoscape reads the container to work out its viewport, and a collapsed one would
           come back at the wrong scale, which is the very thing this is preserving.
         */}
-        <div className="relative min-h-0 flex-1">
+        <div
+          className="relative min-h-0 flex-1"
+          ref={bodyRef}
+          onPointerDownCapture={(event) => focusFromPoint(event.clientX)}
+        >
           {layout.tabs
             .filter((tab) => opened.includes(tabKey(tab)) || isShowing(layout, tab))
             .map((tab) => {

@@ -323,6 +323,24 @@ describe('a window split into two panes', () => {
     expect(paneOf('c.jff')).toContain('left-1/2');
   });
 
+  it('follows a click into the other pane, so the menu acts on what was clicked', () => {
+    // jsdom measures everything as zero, and which pane a point is in is arithmetic over a
+    // rectangle. Without a real one the test would be exercising degenerate input rather than
+    // the behaviour.
+    const rect = vi
+      .spyOn(HTMLDivElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ left: 0, width: 800, top: 0, height: 600 } as DOMRect);
+
+    renderLayout(splitLayout());
+    // Opened focused on the right pane, so the menu bar starts on c.jff.
+    expect(screen.getByTestId('menubar').getAttribute('data-download')).toContain('c.jff');
+
+    fireEvent.pointerDown(screen.getAllByTestId('viewer')[0]!, { clientX: 100 });
+    expect(screen.getByTestId('menubar').getAttribute('data-download')).toContain('a.jff');
+
+    rect.mockRestore();
+  });
+
   it('does not rebuild the machines when a pane collapses', () => {
     // Closing the last tab on one side takes the window back to one pane, which changes every
     // surviving machine's half-width rectangle to the full one. It must be only that: a

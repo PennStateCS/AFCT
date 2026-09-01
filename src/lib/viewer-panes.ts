@@ -198,7 +198,12 @@ export function moveTabToPane(layout: ViewerLayout, key: string, pane: PaneIndex
 
   const active: [string | null, string | null] = [...layout.active];
   active[pane] = key;
-  return settleLayout({ ...layout, panes: { ...layout.panes, [key]: pane }, active, focused: pane });
+  return settleLayout({
+    ...layout,
+    panes: { ...layout.panes, [key]: pane },
+    active,
+    focused: pane,
+  });
 }
 
 /* ── where a dragged tab would land ─────────────────────────────────────── */
@@ -225,16 +230,38 @@ export const SPLIT_EDGE_FRACTION = 0.25;
  * pane goes on. With two panes the whole half is a target: the panes are already there, so a
  * drop anywhere in one means that one, and there is no third thing it could mean.
  */
+/**
+ * Which pane a point is over, or null when it is outside or the rectangle is meaningless.
+ *
+ * Separate from `dropZone` because it answers a question a click asks as well as a drag: a
+ * pointer down in one pane focuses it, which is how the menu bar knows which machine to act
+ * on. jsdom hands out zero-sized rectangles, so a width of nothing has to mean "no answer"
+ * rather than an arithmetic accident: `NaN < 0.5` is false, and the right pane would be
+ * returned with complete confidence.
+ */
+export function paneAtPoint(
+  clientX: number,
+  rect: { left: number; width: number },
+  panes: 1 | 2,
+): PaneIndex | null {
+  if (!(rect.width > 0) || !Number.isFinite(clientX)) return null;
+  const x = (clientX - rect.left) / rect.width;
+  if (x < 0 || x > 1) return null;
+  if (panes === 1) return 0;
+  // The divider itself belongs to the right pane, so there is no gap between them.
+  return x < 0.5 ? 0 : 1;
+}
+
 export function dropZone(
   clientX: number,
   rect: { left: number; width: number },
   panes: 1 | 2,
 ): DropTarget | null {
-  if (!(rect.width > 0) || !Number.isFinite(clientX)) return null;
-  const x = (clientX - rect.left) / rect.width;
-  if (x < 0 || x > 1) return null;
+  const pane = paneAtPoint(clientX, rect, panes);
+  if (pane === null) return null;
+  if (panes === 2) return { kind: 'move', pane };
 
-  if (panes === 2) return { kind: 'move', pane: x < 0.5 ? 0 : 1 };
+  const x = (clientX - rect.left) / rect.width;
   if (x <= SPLIT_EDGE_FRACTION) return { kind: 'split', side: 'left' };
   if (x >= 1 - SPLIT_EDGE_FRACTION) return { kind: 'split', side: 'right' };
   return null;

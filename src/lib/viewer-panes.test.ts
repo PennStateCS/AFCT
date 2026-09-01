@@ -13,6 +13,7 @@ import {
   layoutToSearch,
   moveTabToPane,
   openTab,
+  paneAtPoint,
   paneCount,
   paneOf,
   readLayout,
@@ -222,6 +223,26 @@ describe('where a dragged tab would land', () => {
     const layout = layoutOf('a.jff', 'b.jff');
     const target = dropZone(850, rect, 1)!;
     expect(names(tabsInPane(applyDrop(layout, key('b.jff'), target), 1))).toEqual(['b.jff']);
+  });
+});
+
+describe('which pane a point is over', () => {
+  const rect = { left: 100, width: 800 };
+
+  it('is always the only one when there is only one', () => {
+    expect(paneAtPoint(150, rect, 1)).toBe(0);
+    expect(paneAtPoint(850, rect, 1)).toBe(0);
+  });
+
+  it('splits at the middle when there are two', () => {
+    expect(paneAtPoint(450, rect, 2)).toBe(0);
+    expect(paneAtPoint(600, rect, 2)).toBe(1);
+  });
+
+  it('says nothing outside the area, or for a rectangle with no width', () => {
+    expect(paneAtPoint(50, rect, 2)).toBeNull();
+    expect(paneAtPoint(950, rect, 2)).toBeNull();
+    expect(paneAtPoint(0, { left: 0, width: 0 }, 2)).toBeNull();
   });
 });
 
