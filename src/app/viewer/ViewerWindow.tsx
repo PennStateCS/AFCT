@@ -8,6 +8,7 @@ import { ViewerActionsGate, ViewerActionsProvider } from '@/components/viewer/vi
 import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
 import { viewerFileSrc } from '@/lib/viewer-link';
 import type { ViewerProperties } from '@/lib/viewer-properties';
+import { clearViewState } from '@/lib/viewer-view-state';
 import {
   tabsToSearch,
   withTab,
@@ -209,6 +210,9 @@ export function ViewerWindow({
                     // Closing already unmounts it, since it leaves `tabs`. This just keeps
                     // the list from accumulating files nobody has open any more.
                     setOpened((current) => current.filter((key) => key !== keyOf(tab)));
+                    // Closing is how a reader discards an arrangement, so the remembered view
+                    // goes with it rather than reappearing if they open the file again.
+                    clearViewState(keyOf(tab));
                   }}
                   aria-label={`Close ${tab.name}`}
                 >
@@ -242,6 +246,7 @@ export function ViewerWindow({
                       problemType={tab.type}
                       title={tab.title}
                       epsSymbol={tab.eps}
+                      viewStateKey={keyOf(tab)}
                     />
                   </ViewerActionsGate>
                 </div>

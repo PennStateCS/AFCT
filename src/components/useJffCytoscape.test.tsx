@@ -215,7 +215,9 @@ class FakeCy {
     this.animations.push(opts);
   }
   zoomLevel = 1;
-  zoom() {
+  /** A getter and a setter on one name, as cytoscape's is. */
+  zoom(next?: number) {
+    if (typeof next === 'number') this.zoomLevel = next;
     return this.zoomLevel;
   }
   minZoom() {
@@ -227,8 +229,10 @@ class FakeCy {
   // Read by the grid sync, which keeps the painted lines in step with the graph. Without it
   // that sync threw on every load, and only its own try/catch kept the viewer working: the
   // feature was silently absent here rather than tested.
-  pan() {
-    return { x: 0, y: 0 };
+  panPosition: Pos = { x: 0, y: 0 };
+  pan(next?: Pos) {
+    if (next) this.panPosition = { ...next };
+    return this.panPosition;
   }
   panningEnabled() {}
   userPanningEnabled() {}
@@ -255,6 +259,7 @@ vi.mock('cytoscape-elk', () => ({ default: () => {} }));
 vi.mock('cytoscape-svg', () => ({ default: () => {} }));
 
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
+import type { ViewerViewState } from '@/lib/viewer-view-state';
 
 /* ─────────────────────────────── the fixture ─────────────────────────────── */
 
@@ -657,5 +662,100 @@ describe('zooming', () => {
     api().zoomIn();
 
     expect(lastCy().animations.at(-1)?.zoom).toBe(6);
+  });
+});
+
+describe('remembering the view across a refresh', () => {
+  const KEY = 'submissions:machine.jff';
+  const STORAGE_KEY = `afct.viewer.view.${KEY}`;
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  const saved = () => {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ViewerViewState) : null;
+  };
+
+  it('writes the view down once the machine has settled', async () => {
+    renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(saved()).not.toBeNull());
+    // Both states, since the viewer opens on the drawn layout here.
+    expect(Object.keys(saved()!.positions).sort()).toEqual(['0', '1']);
+  });
+
+  it('follows the reader as they zoom and pan', async () => {
+    renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(saved()).not.toBeNull());
+
+    const cy = lastCy();
+    cy.zoom(2.5);
+    cy.pan({ x: -30, y: 12 });
+    // Cytoscape fires this for the wheel, the slider, Fit and a drag of the background alike.
+    cy.handlers['viewport position']?.({});
+
+    await waitFor(() => expect(saved()?.zoom).toBe(2.5));
+    expect(saved()?.pan).toEqual({ x: -30, y: 12 });
+  });
+
+  it('saves the last movement before the page goes', async () => {
+    // The writer is debounced, so without a flush on the way out a wheel or a drag in the
+    // last fraction of a second before a refresh would be lost. Asserted synchronously on
+    // purpose: the pending timer cannot have fired yet, so only the flush can have written.
+    renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(saved()).not.toBeNull());
+
+    lastCy().zoom(2.5);
+    lastCy().handlers['viewport position']?.({});
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(saved()?.zoom).toBe(2.5);
+  });
+
+  it('opens the next time where the reader left it', async () => {
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 3,
+        pan: { x: 42, y: -7 },
+        // Keyed by the ids in the file, which is what the graph's nodes carry.
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+      }),
+    );
+
+    renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+    expect(lastCy().panPosition).toEqual({ x: 42, y: -7 });
+    expect(lastCy().byId('0')?.position()).toEqual({ x: 500, y: 500 });
+  });
+
+  it('ignores an arrangement belonging to a different machine', async () => {
+    // Positions are keyed by state name, so another machine's would move whichever states
+    // happened to share a name and leave the rest, which is worse than opening at the fit.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 3,
+        pan: { x: 42, y: -7 },
+        positions: { '0': { x: 500, y: 500 }, '7': { x: 900, y: 500 } },
+        honorPositions: true,
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().type).toBe('fa'));
+    await waitFor(() => expect(lastCy().fitCalls).toBeGreaterThan(0));
+    expect(lastCy().zoomLevel).not.toBe(3);
+    expect(lastCy().byId('0')?.position()).not.toEqual({ x: 500, y: 500 });
+  });
+
+  it('remembers nothing without a key, which is every viewer in a dialog', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().type).toBe('fa'));
+    expect(window.sessionStorage.length).toBe(0);
   });
 });

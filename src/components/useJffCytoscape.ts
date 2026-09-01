@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   bestLoopDirection,
   bestStartMarkerDirection,
@@ -19,6 +19,12 @@ import {
   STATE_BORDER_WIDTH,
 } from '@/lib/jflap-layout';
 import { toJflapXml } from '@/lib/jflap-write';
+import {
+  readViewState,
+  writeViewState,
+  viewStateFits,
+  type ViewerViewState,
+} from '@/lib/viewer-view-state';
 import {
   describeMachine,
   describeEdge,
@@ -216,6 +222,13 @@ export type UseJffCytoscapeOptions = {
   initialZoom?: 'fit' | 'actual';
   darkMode?: boolean;
   honorPositionsDefault?: boolean;
+  /**
+   * Remember the zoom, the pan and where the states were put, under this key.
+   *
+   * Set only by the standalone window, which passes the tab's own key. A viewer in a dialog
+   * passes nothing and stays what it was: a look at a file, forgotten when it closes.
+   */
+  viewStateKey?: string | null;
 };
 
 /**
@@ -241,6 +254,11 @@ type ArrangementSnapshot = {
   positions: Record<string, { x: number; y: number }>;
   honorPositions: boolean;
 };
+
+/** A point cytoscape will accept: both halves present and real numbers. */
+function isFinitePoint(value: any): value is { x: number; y: number } {
+  return !!value && Number.isFinite(value.x) && Number.isFinite(value.y);
+}
 
 /** Read the current arrangement out of the graph. */
 function readArrangement(cy: any, honorPositions: boolean): ArrangementSnapshot | null {
@@ -296,12 +314,34 @@ export function useJffCytoscape({
   initialZoom = 'fit',
   darkMode = false,
   honorPositionsDefault = false,
+  viewStateKey = null,
 }: UseJffCytoscapeOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any | null>(null);
 
   const [error, setError] = useState<string | null>(null);
-  const [honorPositions, setHonorPositions] = useState(honorPositionsDefault);
+  /**
+   * What was remembered about this file, read once.
+   *
+   * Through `useState` rather than `useRef` because `useRef` has no lazy initializer: its
+   * argument is evaluated on every render, and this one parses a machine's worth of positions
+   * out of storage. Zoom re-renders on every tick of the wheel.
+   */
+  const [savedView] = useState<ViewerViewState | null>(() => readViewState(viewStateKey));
+  /**
+   * Seeded from the saved view so the first load builds the layout the reader left, rather
+   * than building the other one and then rebuilding when it is corrected. This is in `load`'s
+   * dependencies, so a correction after mount costs a whole second load.
+   *
+   * Reading storage during render is safe here only because of who passes a key. A dialog
+   * passes none, and mounts after a click in any case. The standalone window passes one, and
+   * hides the layout control behind the menu, so no server-rendered markup depends on this
+   * value and there is nothing for hydration to disagree about. A new caller that renders the
+   * layout control on the server would have to think about that again.
+   */
+  const [honorPositions, setHonorPositions] = useState(
+    savedView?.honorPositions ?? honorPositionsDefault,
+  );
   const [type, setType] = useState<MachineType>('unknown');
   // Kept so the viewer can render a text description of the machine; the canvas alone
   // is not a usable representation for a screen reader.
@@ -378,6 +418,61 @@ export function useJffCytoscape({
 
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
+
+  /* ── remembering the view across a refresh ──────────────────────────── */
+
+  const viewStateKeyRef = useRef(viewStateKey);
+  viewStateKeyRef.current = viewStateKey;
+
+  /** Write down where the reader is looking and where they have put the states. */
+  const rememberView = useCallback(() => {
+    if (!viewStateKeyRef.current) return;
+    const cy = cyRef.current;
+    if (!cy) return;
+    try {
+      const arrangement = readArrangement(cy, honorPositionsRef.current);
+      const pan = cy.pan();
+      const zoom = cy.zoom();
+      if (!arrangement || !isFinitePoint(pan) || !Number.isFinite(zoom) || zoom <= 0) return;
+      writeViewState(viewStateKeyRef.current, {
+        v: 1,
+        zoom,
+        pan: { x: pan.x, y: pan.y },
+        positions: arrangement.positions,
+        honorPositions: arrangement.honorPositions,
+      });
+    } catch {
+      // A graph mid-teardown, or storage refusing. Neither is worth interrupting a reader.
+    }
+    // Everything it touches is a ref, so it never needs rebuilding.
+  }, []);
+
+  /**
+   * Put a remembered view back, and say whether it was used.
+   *
+   * False when there is nothing saved, or when what is saved names states this machine does
+   * not have. The caller then opens the file the ordinary way.
+   */
+  const restoreSavedView = useCallback(
+    (cy: any): boolean => {
+      const saved = savedView;
+      if (!saved) return false;
+      try {
+        const ids = cy.nodes().map((node: any) => node.id());
+        if (!viewStateFits(saved, ids)) return false;
+        applyArrangement(cy, { positions: saved.positions, honorPositions: saved.honorPositions });
+        cy.zoom(saved.zoom);
+        cy.pan(saved.pan);
+        return true;
+      } catch {
+        // An engine that does not offer these, which is every one of them in a test that has
+        // not been told about this. Opening at the fit is the right answer either way.
+        return false;
+      }
+    },
+    // Read once at mount and never replaced, so this is built once.
+    [savedView],
+  );
 
   const load = useMemo(
     () => async () => {
@@ -785,9 +880,11 @@ export function useJffCytoscape({
               // centring it does is what keeps the machine in view at 100% rather than off in
               // a corner. Only then is the scale set back to 1:1, if that was asked for.
               await fitAndResize();
-              if (initialZoomRef.current !== 'actual') return;
               const current = cyRef.current;
               if (!current) return;
+              // A remembered view wins over both, because it is where the reader was.
+              if (restoreSavedView(current)) return;
+              if (initialZoomRef.current !== 'actual') return;
               current.zoom(1);
               current.center(current.nodes());
             } catch (err) {
@@ -803,9 +900,22 @@ export function useJffCytoscape({
               // In a `finally` so a layout that throws still reveals the graph. A machine
               // drawn wrongly is recoverable; one that never appears is not.
               setSettled(true);
+              // Write the opening view down now, so a reader who changes nothing and refreshes
+              // still comes back to the same picture. Nothing above this can lose the saved
+              // view: it was read into `savedView` before the first render.
+              rememberView();
             }
           })();
         }, 0);
+
+        // Everything that changes the view, in one place. `viewport` covers the zoom and the
+        // pan, whichever of the wheel, the slider, Fit or a drag of the background caused
+        // them; `position` covers a state being moved, including by undo and redo. Debounced,
+        // because both fire continuously while a reader is dragging. Written as it happens
+        // rather than on the way out, so a browser that is closed or killed still leaves the
+        // view it had.
+        const rememberViewSoon = debounce(rememberView, 400);
+        cy.on('viewport position', rememberViewSoon);
 
         // keep size/zoom coherent if dialog resizes
         const debouncedFitAndResize = debounce(() => void fitAndResize(), 160);
@@ -919,8 +1029,22 @@ export function useJffCytoscape({
         setError(e?.message || 'Failed to render .jff');
       }
     },
-    [src, epsSymbol, darkMode, honorPositions],
+    // The last two never change identity, so they cost nothing here.
+    [src, epsSymbol, darkMode, honorPositions, rememberView, restoreSavedView],
   );
+
+  /**
+   * Write the view down on the way out.
+   *
+   * The writer is debounced, so a wheel or a drag in the last fraction of a second before a
+   * refresh would otherwise not be saved: exactly the sequence somebody runs to check that
+   * this works at all. Reads only refs, so the closure being from the first render is fine.
+   */
+  useEffect(() => {
+    const flush = () => rememberView();
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, [rememberView]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') void load();

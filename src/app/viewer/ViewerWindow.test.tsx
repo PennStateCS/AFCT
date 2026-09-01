@@ -93,6 +93,7 @@ beforeEach(() => {
   // The properties fetch for a tab the server never saw. Not what these tests are about.
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -204,6 +205,15 @@ describe('what a tab keeps while another one is on screen', () => {
     renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')]);
     expect(screen.getAllByTestId('viewer')).toHaveLength(1);
     expect(mounts.has('/api/files/submissions/c.jff')).toBe(false);
+  });
+
+  it('throws away the remembered view when a tab is closed', () => {
+    // Closing is how a reader discards an arrangement. Leaving it in storage would bring it
+    // back the next time the same file was opened, which nobody asked for.
+    window.sessionStorage.setItem('afct.viewer.view.submissions:b.jff', '{"v":1}');
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+    expect(window.sessionStorage.getItem('afct.viewer.view.submissions:b.jff')).toBeNull();
   });
 
   it('starts clean when a closed file is opened again', () => {

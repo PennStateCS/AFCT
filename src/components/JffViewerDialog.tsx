@@ -303,6 +303,7 @@ export function JffCytoscapeViewer({
   showGridDefault = false,
   honorPositionsDefault = false,
   initialZoom = 'fit',
+  viewStateKey = null,
 }: {
   src: string;
   title?: string;
@@ -322,6 +323,8 @@ export function JffCytoscapeViewer({
   honorPositionsDefault?: boolean;
   /** `fit` scales to the space available; `actual` opens at 100%. See useJffCytoscape. */
   initialZoom?: 'fit' | 'actual';
+  /** Remember the zoom, pan and arrangement under this key. See useJffCytoscape. */
+  viewStateKey?: string | null;
 }) {
   // `resolvedTheme` rather than `theme`: the latter is "system" for most people, which says
   // nothing about which colours are actually on screen.
@@ -367,6 +370,7 @@ export function JffCytoscapeViewer({
     darkMode: isDark,
     honorPositionsDefault,
     initialZoom,
+    viewStateKey,
   });
 
   // Non-visual alternative. The canvas is unreadable to a screen reader, and reading

@@ -20,11 +20,17 @@ export function ViewerClient({
   problemType,
   title,
   epsSymbol,
+  viewStateKey,
 }: {
   src: string;
   problemType: string;
   title: string;
   epsSymbol?: string;
+  /**
+   * Remember this file's zoom, pan and arrangement under this key, so a refresh comes back to
+   * where the reader was. Only the drawn machines have anything to remember.
+   */
+  viewStateKey?: string | null;
 }) {
   if (JFF_PROBLEM_TYPES.includes(problemType)) {
     return (
@@ -38,6 +44,7 @@ export function ViewerClient({
         // The window has the whole screen, so the machine opens at the size its author drew
         // it, matching JFLAP. Fit is a click away for anything that does not fit.
         initialZoom="actual"
+        viewStateKey={viewStateKey}
       />
     );
   }
