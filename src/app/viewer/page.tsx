@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 import { auth } from '@/lib/auth';
+import QueryProvider from '@/components/providers/QueryProvider';
 import SessionWatcher from '@/components/session/SessionWatcher';
 import { isSafeUploadName } from '@/lib/upload-names';
 import { isViewerFileKind, viewerFileSrc } from '@/lib/viewer-link';
@@ -36,6 +37,10 @@ function Refusal({ message }: { message: string }) {
  * It grants no access of its own. The file itself is fetched from the same route the
  * dialog uses, which authorises per file and writes the audit record; this page only
  * decides that the link is well formed and that somebody is signed in.
+ *
+ * `QueryProvider` is here because `SessionWatcher` reads the configured idle timeout with
+ * react-query. Outside `/dashboard` nothing else supplies a query client, and the failure
+ * is a blank error page rather than a missing feature, so the two belong together.
  */
 export default async function ViewerPage({
   searchParams,
@@ -76,9 +81,12 @@ export default async function ViewerPage({
   const epsSymbol = first('eps');
 
   return (
-    <>
+    <QueryProvider>
       <SessionWatcher />
-      <main className="flex h-screen flex-col overflow-hidden">
+      {/* `min-w-0 flex-1` because the root layout's body is a flex row: a block child sizes
+          to its content there and the viewer came out at roughly half the window. The same
+          pattern the dashboard shell uses for its content column. */}
+      <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
         <header className="shrink-0 border-b px-4 py-3">
           <h1 className="text-foreground text-sm font-semibold break-words">{title}</h1>
         </header>
@@ -91,6 +99,6 @@ export default async function ViewerPage({
           />
         </div>
       </main>
-    </>
+    </QueryProvider>
   );
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 globalThis.React = React;
@@ -11,9 +12,26 @@ const redirectMock = vi.hoisted(() =>
   }),
 );
 
+// Supplied by RootProviders in the real app, which the root layout wraps every page in.
+// QueryProvider's cache-reset reads it, so without this the test fails for a reason that
+// says nothing about this page.
+vi.mock('next-auth/react', () => ({
+  useSession: () => ({ data: null, status: 'unauthenticated' }),
+  SessionProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
-vi.mock('@/components/session/SessionWatcher', () => ({ __esModule: true, default: () => null }));
+// Stubbed, but NOT inert: the real watcher reads the idle timeout through react-query, and
+// that is the whole reason this page has to supply a query client of its own. A stub that
+// rendered null passed happily while the real page threw "No QueryClient set" in the browser.
+// This one keeps the dependency that actually mattered and drops the rest.
+vi.mock('@/components/session/SessionWatcher', () => ({
+  __esModule: true,
+  default: function SessionWatcherProbe() {
+    useQuery({ queryKey: ['viewer-test-probe'], queryFn: async () => null, enabled: false });
+    return null;
+  },
+}));
 vi.mock('./ViewerClient', () => ({ ViewerClient: () => null }));
 
 import ViewerPage from './page';
@@ -72,5 +90,18 @@ describe('the standalone viewer page', () => {
     // A signed-out visitor must not learn whether a file name is valid.
     authMock.mockResolvedValue(null);
     await expect(renderPage({ kind: 'nonsense' })).rejects.toThrow('NEXT_REDIRECT');
+  });
+});
+
+describe('the providers the page has to bring with it', () => {
+  beforeEach(() => {
+    authMock.mockReset();
+    signedIn();
+  });
+
+  it('supplies a query client, because nothing outside the dashboard does', async () => {
+    // The failure this guards against is not subtle in the browser and was invisible here:
+    // the page rendered a blank error boundary while every test passed.
+    await expect(renderPage({ ...GOOD, title: 'Ada' })).resolves.toContain('Ada');
   });
 });

@@ -3,6 +3,7 @@
 import { Eye } from 'lucide-react';
 import { useState } from 'react';
 import JffViewerDialog from './JffViewerDialog';
+import { viewerWindowHref } from '@/lib/viewer-link';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { apiPaths } from '@/lib/api-paths';
@@ -135,6 +136,12 @@ export default function ProblemDetails({
                     height="70vh"
                     showGridDefault={true}
                     epsSymbol={epsSymbol}
+                    windowHref={viewerWindowHref({
+                      src: apiPaths.files.solution(encodeURIComponent(problem.fileName ?? '')),
+                      problemType: problem.type,
+                      title: `${problem.originalFileName || problem.fileName} - ${problem.title}`,
+                      epsSymbol,
+                    })}
                   />
                 </div>
               </div>
