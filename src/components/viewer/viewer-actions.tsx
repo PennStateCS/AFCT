@@ -163,6 +163,33 @@ export function useRegisterViewerActions(actions: ViewerActions, view: ViewerVie
 }
 
 /**
+ * Let one of several viewers reach the chrome, and cut the rest off from it.
+ *
+ * The standalone window keeps every tab a reader has opened mounted, which is what preserves
+ * each one's zoom, arrangement and undo history while another is on screen. Registering
+ * happens after every render, so without this the menu would be driven by whichever viewer
+ * rendered last rather than the one being looked at.
+ *
+ * Always in the tree, never conditionally around the viewer: a wrapper that came and went
+ * would change the shape of the tree at that position, React would unmount the viewer, and
+ * the state this exists to preserve would go with it.
+ */
+export function ViewerActionsGate({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  const registry = useContext(ViewerRegistryContext);
+  return (
+    <ViewerRegistryContext.Provider value={active ? registry : null}>
+      {children}
+    </ViewerRegistryContext.Provider>
+  );
+}
+
+/**
  * Whether something around this viewer offers its view controls.
  *
  * Read by the viewer itself so it can drop the duplicates from its toolbar. Derived from the

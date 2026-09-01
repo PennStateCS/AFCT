@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { ViewerActionsProvider } from '@/components/viewer/viewer-actions';
+import { ViewerActionsGate, ViewerActionsProvider } from '@/components/viewer/viewer-actions';
 import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
 import { viewerFileSrc } from '@/lib/viewer-link';
 import type { ViewerProperties } from '@/lib/viewer-properties';
@@ -12,6 +12,7 @@ import {
   tabsToSearch,
   withTab,
   withoutTab,
+  sameTab,
   VIEWER_ALIVE_KEY,
   VIEWER_CHANNEL,
   type ViewerTab,
@@ -46,9 +47,25 @@ export function ViewerWindow({
   const [activeIndex, setActiveIndex] = useState(initialActive);
   const [properties, setProperties] =
     useState<Record<string, ViewerProperties | null>>(initialProperties);
+  /**
+   * Which tabs have been looked at, and so are kept mounted.
+   *
+   * A tab that has been on screen stays in the tree, hidden, because unmounting it would take
+   * its zoom, its arrangement and its undo history with it: switching away and back would
+   * silently undo the reader's work on that machine. One that has never been opened is not
+   * mounted at all, which is what keeps a window full of tabs from fetching a dozen students'
+   * files, and the audit trail from recording a dozen views nobody made.
+   */
+  const [opened, setOpened] = useState<string[]>([]);
 
   const active = tabs[activeIndex];
   const keyOf = (tab: ViewerTab) => `${tab.kind}:${tab.file}`;
+
+  useEffect(() => {
+    if (!active) return;
+    const key = keyOf(active);
+    setOpened((current) => (current.includes(key) ? current : [...current, key]));
+  }, [active]);
 
   // The URL follows the tabs, so a refresh restores this set and the link can be handed on.
   useEffect(() => {
@@ -189,6 +206,9 @@ export function ViewerWindow({
                     const result = withoutTab(tabs, index, activeIndex);
                     setTabs(result.tabs);
                     setActiveIndex(result.activeIndex);
+                    // Closing already unmounts it, since it leaves `tabs`. This just keeps
+                    // the list from accumulating files nobody has open any more.
+                    setOpened((current) => current.filter((key) => key !== keyOf(tab)));
                   }}
                   aria-label={`Close ${tab.name}`}
                 >
@@ -199,16 +219,34 @@ export function ViewerWindow({
           })}
         </div>
 
-        <div className="min-h-0 flex-1">
-          {/* Keyed on the file, so switching tabs builds a fresh graph rather than reusing one
-              machine's engine for another's states. */}
-          <ViewerClient
-            key={keyOf(active)}
-            src={viewerFileSrc(active.kind, active.file)}
-            problemType={active.type}
-            title={active.title}
-            epsSymbol={active.eps}
-          />
+        {/* Every opened tab is here at once, stacked, with all but one hidden. `visibility`
+            rather than `display`, because a hidden box keeps its size: cytoscape reads the
+            container to work out its viewport, and a collapsed one would come back at the
+            wrong scale, which is the very thing this is preserving. */}
+        <div className="relative min-h-0 flex-1">
+          {tabs
+            .filter((tab) => opened.includes(keyOf(tab)) || sameTab(tab, active))
+            .map((tab) => {
+              const showing = sameTab(tab, active);
+              return (
+                <div
+                  key={keyOf(tab)}
+                  className={cn('absolute inset-0', !showing && 'invisible')}
+                  // Out of the accessibility tree and out of the tab order while hidden, so a
+                  // reader is not walked through a dozen machines they cannot see.
+                  inert={!showing}
+                >
+                  <ViewerActionsGate active={showing}>
+                    <ViewerClient
+                      src={viewerFileSrc(tab.kind, tab.file)}
+                      problemType={tab.type}
+                      title={tab.title}
+                      epsSymbol={tab.eps}
+                    />
+                  </ViewerActionsGate>
+                </div>
+              );
+            })}
         </div>
       </main>
     </ViewerActionsProvider>

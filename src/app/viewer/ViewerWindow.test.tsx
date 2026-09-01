@@ -6,10 +6,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
 
+/** How many times a viewer for each file has been built, so a remount is visible. */
+const mounts = new Map<string, number>();
+
 // The viewer itself is exercised by its own tests; here it only has to say which file it was
-// given, so switching tabs can be seen to switch machines.
+// given, so switching tabs can be seen to switch machines, and count its own mounts, which is
+// how "the zoom survived" is checked without a layout engine to zoom.
 vi.mock('./ViewerClient', () => ({
-  ViewerClient: ({ src }: { src: string }) => <div data-testid="viewer" data-src={src} />,
+  ViewerClient: ({ src }: { src: string }) => {
+    React.useEffect(() => {
+      mounts.set(src, (mounts.get(src) ?? 0) + 1);
+    }, [src]);
+    return <div data-testid="viewer" data-src={src} />;
+  },
 }));
 vi.mock('@/components/viewer/ViewerMenubar', () => ({
   ViewerMenubar: ({ downloadHref }: { downloadHref: string }) => (
@@ -50,10 +59,21 @@ const tab = (file: string, name = file): ViewerTab => ({
   title: `${name} heading`,
 });
 
+/** The file the reader is actually looking at: the one viewer that is not hidden. */
+const showing = () => {
+  const visible = screen
+    .getAllByTestId('viewer')
+    .filter((v) => !v.closest('[inert]'))
+    .map((v) => v.getAttribute('data-src'));
+  expect(visible).toHaveLength(1);
+  return visible[0];
+};
+
 const renderWindow = (tabs: ViewerTab[], active = 0) =>
   render(<ViewerWindow initialTabs={tabs} initialActive={active} initialProperties={{}} />);
 
 beforeEach(() => {
+  mounts.clear();
   TestChannel.open = [];
   vi.stubGlobal('BroadcastChannel', TestChannel);
   // The properties fetch for a tab the server never saw. Not what these tests are about.
@@ -71,21 +91,21 @@ describe('the tab strip', () => {
     const strip = screen.getAllByRole('tab');
     expect(strip.map((t) => t.textContent)).toEqual(['a.jff', 'b.jff']);
     expect(strip[1].getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByTestId('viewer').getAttribute('data-src')).toContain('b.jff');
+    expect(showing()).toContain('b.jff');
   });
 
   it('switches the machine on screen when another tab is chosen', () => {
     renderWindow([tab('a.jff'), tab('b.jff')]);
-    expect(screen.getByTestId('viewer').getAttribute('data-src')).toContain('a.jff');
+    expect(showing()).toContain('a.jff');
     fireEvent.click(screen.getAllByRole('tab')[1]);
-    expect(screen.getByTestId('viewer').getAttribute('data-src')).toContain('b.jff');
+    expect(showing()).toContain('b.jff');
   });
 
   it('closes a tab and keeps a neighbour showing', () => {
     renderWindow([tab('a.jff'), tab('b.jff')], 1);
     fireEvent.click(screen.getByLabelText('Close b.jff'));
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['a.jff']);
-    expect(screen.getByTestId('viewer').getAttribute('data-src')).toContain('a.jff');
+    expect(showing()).toContain('a.jff');
   });
 
   it('says so plainly when the last tab is closed', () => {
@@ -117,14 +137,14 @@ describe('a file sent from another window', () => {
     renderWindow([tab('a.jff')]);
     send(tab('b.jff'));
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['a.jff', 'b.jff']);
-    expect(screen.getByTestId('viewer').getAttribute('data-src')).toContain('b.jff');
+    expect(showing()).toContain('b.jff');
   });
 
   it('selects the tab it already has rather than opening a second one', () => {
     renderWindow([tab('a.jff'), tab('b.jff')], 1);
     send(tab('a.jff'));
     expect(screen.getAllByRole('tab')).toHaveLength(2);
-    expect(screen.getByTestId('viewer').getAttribute('data-src')).toContain('a.jff');
+    expect(showing()).toContain('a.jff');
   });
 
   it('ignores a message that is not asking for a tab', () => {
@@ -136,6 +156,55 @@ describe('a file sent from another window', () => {
     });
     opener.close();
     expect(screen.getAllByRole('tab')).toHaveLength(1);
+  });
+});
+
+describe('what a tab keeps while another one is on screen', () => {
+  it('does not rebuild a machine that is switched away from and back to', () => {
+    // The bug this fixes: the viewer was keyed on the active file, so every tab click threw
+    // the graph away and built a new one. Zoom, the arrangement and the undo history went
+    // with it, which looked like the zoom resetting itself.
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    const first = screen.getByTestId('viewer').getAttribute('data-src');
+
+    fireEvent.click(screen.getAllByRole('tab')[1]);
+    fireEvent.click(screen.getAllByRole('tab')[0]);
+
+    expect(mounts.get(first!)).toBe(1);
+  });
+
+  it('holds the tab it left behind in the page, hidden rather than removed', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    fireEvent.click(screen.getAllByRole('tab')[1]);
+
+    const viewers = screen.getAllByTestId('viewer');
+    expect(viewers).toHaveLength(2);
+    // Hidden ones are out of the accessibility tree and the tab order, so a reader is not
+    // walked through machines nobody can see.
+    expect(viewers.filter((v) => v.closest('[inert]'))).toHaveLength(1);
+  });
+
+  it('does not build a tab nobody has opened yet', () => {
+    // What keeps a window of tabs from fetching a dozen students' files, and the audit trail
+    // from recording a dozen views nobody made.
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')]);
+    expect(screen.getAllByTestId('viewer')).toHaveLength(1);
+    expect(mounts.has('/api/files/submissions/c.jff')).toBe(false);
+  });
+
+  it('starts clean when a closed file is opened again', () => {
+    // Closing a tab is the way to discard an arrangement, so re-opening the same file must
+    // build a new graph rather than appear to remember one that has gone.
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    fireEvent.click(screen.getAllByRole('tab')[1]);
+    expect(mounts.get('/api/files/submissions/b.jff')).toBe(1);
+
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+    const opener = new TestChannel(VIEWER_CHANNEL);
+    act(() => opener.postMessage({ type: 'open-tab', tab: tab('b.jff') }));
+    opener.close();
+
+    expect(mounts.get('/api/files/submissions/b.jff')).toBe(2);
   });
 });
 

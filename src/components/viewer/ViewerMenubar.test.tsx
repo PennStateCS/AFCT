@@ -7,7 +7,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { ViewerMenubar } from './ViewerMenubar';
-import { ViewerActionsProvider, useRegisterViewerActions } from './viewer-actions';
+import {
+  ViewerActionsGate,
+  ViewerActionsProvider,
+  useRegisterViewerActions,
+} from './viewer-actions';
 
 const actions = {
   downloadSVG: vi.fn(),
@@ -130,9 +134,7 @@ describe('the standalone viewer menu bar', () => {
     );
     await openFile(user);
     await user.click(await screen.findByRole('menuitem', { name: 'Export' }));
-    expect(await screen.findByRole('menuitem', { name: 'PNG' })).toHaveAttribute(
-      'data-disabled',
-    );
+    expect(await screen.findByRole('menuitem', { name: 'PNG' })).toHaveAttribute('data-disabled');
   });
 });
 
@@ -348,9 +350,7 @@ describe('View, JFLAP Notes', () => {
       </ViewerActionsProvider>,
     );
     await openView(user);
-    expect(
-      await screen.findByRole('menuitemcheckbox', { name: 'JFLAP Notes' }),
-    ).not.toBeChecked();
+    expect(await screen.findByRole('menuitemcheckbox', { name: 'JFLAP Notes' })).not.toBeChecked();
   });
 
   it('asks the viewer to toggle them', async () => {
@@ -471,8 +471,7 @@ describe('File, Properties', () => {
  * than what any single open menu shows, and a menu bar only renders the one menu that is open.
  */
 describe('the menu uses icons consistently', () => {
-  const source = () =>
-    readFileSync(path.resolve(__dirname, 'ViewerMenubar.tsx'), 'utf8');
+  const source = () => readFileSync(path.resolve(__dirname, 'ViewerMenubar.tsx'), 'utf8');
 
   const itemsOf = (kind: string) => {
     const found: string[] = [];
@@ -568,9 +567,7 @@ describe('View, Snap to grid', () => {
       </ViewerActionsProvider>,
     );
     await openView(user);
-    expect(
-      await screen.findByRole('menuitemcheckbox', { name: 'Snap to grid' }),
-    ).not.toBeChecked();
+    expect(await screen.findByRole('menuitemcheckbox', { name: 'Snap to grid' })).not.toBeChecked();
   });
 
   it('follows the viewer when it is on', async () => {
@@ -597,5 +594,84 @@ describe('View, Snap to grid', () => {
     // fireEvent for the same jsdom reason as the export case above.
     fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Snap to grid' }));
     expect(actions.toggleSnapToGrid).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('several viewers mounted at once', () => {
+  /**
+   * The standalone window keeps every opened tab mounted so each keeps its own zoom and undo
+   * history, so more than one viewer publishes actions. The menu has to drive the one being
+   * looked at, not whichever rendered last, and last is what it would get without the gate.
+   *
+   * Fresh mocks per test, not the shared `actions` above: those accumulate calls across this
+   * file, so asserting on them here would pass whatever the gate did.
+   */
+  const makeActions = () => ({ ...actions, undo: vi.fn() });
+
+  function Viewer({ own, canUndo }: { own: typeof actions; canUndo: boolean }) {
+    useRegisterViewerActions(own, {
+      grid: false,
+      notes: true,
+      snapToGrid: false,
+      layout: 'as-drawn',
+      canUndo,
+      canRedo: false,
+    });
+    return null;
+  }
+
+  /** Two viewers in the tree, the second rendered last, with one of them showing. */
+  function TwoViewers({
+    first,
+    second,
+    activeSecond,
+  }: {
+    first: typeof actions;
+    second: typeof actions;
+    activeSecond: boolean;
+  }) {
+    return (
+      <>
+        <ViewerActionsGate active={!activeSecond}>
+          <Viewer own={first} canUndo />
+        </ViewerActionsGate>
+        <ViewerActionsGate active={activeSecond}>
+          <Viewer own={second} canUndo={false} />
+        </ViewerActionsGate>
+      </>
+    );
+  }
+
+  it('undoes in the tab being looked at, not the one that rendered last', async () => {
+    const user = userEvent.setup();
+    const first = makeActions();
+    const second = makeActions();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/f.jff" />
+        <TwoViewers first={first} second={second} activeSecond={false} />
+      </ViewerActionsProvider>,
+    );
+
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    await user.click(await screen.findByRole('menuitem', { name: /^Undo/ }));
+
+    expect(first.undo).toHaveBeenCalled();
+    expect(second.undo).not.toHaveBeenCalled();
+  });
+
+  it("shows the active tab's view state, not the last one's", async () => {
+    // The tab being looked at has something to undo; the one behind it does not, and renders
+    // last. The menu must offer Undo.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <ViewerMenubar downloadHref="/f.jff" />
+        <TwoViewers first={makeActions()} second={makeActions()} activeSecond={false} />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    const undo = await screen.findByRole('menuitem', { name: /^Undo/ });
+    expect(undo.getAttribute('aria-disabled')).not.toBe('true');
   });
 });
