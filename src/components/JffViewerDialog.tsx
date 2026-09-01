@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
+import { useRegisterViewerActions } from '@/components/viewer/viewer-actions';
 import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 // Grid overlay color (component-only; the engine styling lives in useJffCytoscape).
@@ -77,6 +78,28 @@ export function JffCytoscapeViewer({
   const [showText, setShowText] = useState(false);
 
   const [grid, setGrid] = useState(showGridDefault);
+
+  // Offered to any chrome around this viewer, which today means the standalone window's menu
+  // bar. Registers nothing when there is no provider, so a dialog is unaffected. Declared
+  // after the grid state because it publishes it: the menu shows the grid ticked or not, and
+  // the toolbar button below stays the same control on the same state.
+  useRegisterViewerActions(
+    {
+      downloadSVG,
+      downloadPNG,
+      copyPNG,
+      toggleGrid: () => setGrid((on) => !on),
+      // Set rather than toggled, so the menu's two options are a choice between states and
+      // selecting the one already showing does nothing.
+      setAsDrawn: () => {
+        if (!honorPositions) toggleHonorPositions();
+      },
+      setAutoArranged: () => {
+        if (honorPositions) toggleHonorPositions();
+      },
+    },
+    { grid, layout: honorPositions ? 'as-drawn' : 'auto' },
+  );
 
   // Grid lines read the theme var live (subtle light gray in light mode, subtle
   // dark line in dark mode), falling back to the load-time color.

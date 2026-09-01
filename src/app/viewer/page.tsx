@@ -6,6 +6,8 @@ import QueryProvider from '@/components/providers/QueryProvider';
 import SessionWatcher from '@/components/session/SessionWatcher';
 import { isSafeUploadName } from '@/lib/upload-names';
 import { isViewerFileKind, viewerFileSrc } from '@/lib/viewer-link';
+import { ViewerActionsProvider } from '@/components/viewer/viewer-actions';
+import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
 import { ViewerClient } from './ViewerClient';
 
 export const metadata: Metadata = { title: 'AFCT Viewer' };
@@ -86,19 +88,22 @@ export default async function ViewerPage({
       {/* `min-w-0 flex-1` because the root layout's body is a flex row: a block child sizes
           to its content there and the viewer came out at roughly half the window. The same
           pattern the dashboard shell uses for its content column. */}
-      <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="shrink-0 border-b px-4 py-3">
-          <h1 className="text-foreground text-sm font-semibold break-words">{title}</h1>
-        </header>
-        <div className="min-h-0 flex-1">
-          <ViewerClient
-            src={viewerFileSrc(kind, file)}
-            problemType={type}
-            title={title}
-            epsSymbol={epsSymbol}
-          />
-        </div>
-      </main>
+      <ViewerActionsProvider>
+        <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
+          <ViewerMenubar downloadHref={`${viewerFileSrc(kind, file)}?download=1`} />
+          <header className="shrink-0 border-b px-4 py-3">
+            <h1 className="text-foreground text-sm font-semibold break-words">{title}</h1>
+          </header>
+          <div className="min-h-0 flex-1">
+            <ViewerClient
+              src={viewerFileSrc(kind, file)}
+              problemType={type}
+              title={title}
+              epsSymbol={epsSymbol}
+            />
+          </div>
+        </main>
+      </ViewerActionsProvider>
     </QueryProvider>
   );
 }

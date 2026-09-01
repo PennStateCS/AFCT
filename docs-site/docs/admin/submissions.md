@@ -24,6 +24,14 @@ Each row is one submission, and shows when it arrived, whether it was on time, w
 
 The viewer opens in a panel over the page, which suits a quick look. For a large machine, **Open in a new window** puts the same viewer in a browser window of its own, where it has the whole screen and can sit on a second monitor. One window is reused, so opening another machine replaces what is in it rather than adding a second window.
 
+That window has a menu bar of its own:
+
+- **File** holds **Download original file**, which saves the file exactly as it was submitted, and **Export**, which saves the drawing as an SVG or a PNG.
+- **Edit** holds **Copy PNG to clipboard**, for pasting the drawing straight into an email or a slide.
+- **View** turns the background **Grid** on and off, and **View → Layout** chooses between **As drawn**, which places the states where their author put them, and **Auto-arranged**, which lets the layout engine place them. One of the two is always in effect.
+
+These match the controls on the viewer's own toolbar rather than replacing them, so the menu and the toolbar always agree. They all act on a drawn machine, so they are unavailable for a grammar or a regular expression, which have nothing to draw.
+
 **Grade** is what that one attempt earned: the problem's full points if the evaluator found it correct, zero if it did not, and a dash while the submission is still pending, processing or failed. A student's several attempts therefore show different grades.
 
 **Recorded grade** is the student's standing grade for the problem, the number the gradebook carries. It is the same on every attempt by that student, so it is off by default; turn it on from **Columns** to spot a grade that was entered by hand and no longer matches the latest attempt.
