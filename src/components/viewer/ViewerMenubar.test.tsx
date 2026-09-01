@@ -15,6 +15,8 @@ const actions = {
   copyPNG: vi.fn(),
   downloadCurrent: vi.fn(),
   copySVG: vi.fn(),
+  undo: vi.fn(),
+  redo: vi.fn(),
   toggleGrid: vi.fn(),
   toggleNotes: vi.fn(),
   fitToWindow: vi.fn(),
@@ -28,12 +30,16 @@ function FakeViewer({
   grid = false,
   notes = true,
   layout = 'as-drawn',
+  canUndo = false,
+  canRedo = false,
 }: {
   grid?: boolean;
   notes?: boolean;
   layout?: 'as-drawn' | 'auto';
+  canUndo?: boolean;
+  canRedo?: boolean;
 }) {
-  useRegisterViewerActions(actions, { grid, notes, layout });
+  useRegisterViewerActions(actions, { grid, notes, layout, canUndo, canRedo });
   return null;
 }
 
@@ -495,5 +501,53 @@ describe('the menu uses icons consistently', () => {
 
   it('marks every icon as decoration, since the label already names the item', () => {
     expect(source()).not.toMatch(/<[A-Z]\w+ className="[^"]*"\s*\/>\s*\n\s*[A-Z]/);
+  });
+});
+
+describe('Edit, Undo and Redo', () => {
+  const openEdit = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+
+  it('is disabled when there is nothing to step back to', async () => {
+    // A fresh viewer has no history. Greyed rather than hidden, so the menu keeps its shape.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openEdit(user);
+    expect(await screen.findByRole('menuitem', { name: 'Undo' })).toHaveAttribute('data-disabled');
+    expect(await screen.findByRole('menuitem', { name: 'Redo' })).toHaveAttribute('data-disabled');
+  });
+
+  it('offers undo once something has changed', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer canUndo />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openEdit(user);
+    const undo = await screen.findByRole('menuitem', { name: 'Undo' });
+    expect(undo).not.toHaveAttribute('data-disabled');
+    // fireEvent for the same jsdom reason as the export case above.
+    fireEvent.click(undo);
+    expect(actions.undo).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers redo only after an undo', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer canRedo />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openEdit(user);
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Redo' }));
+    expect(actions.redo).toHaveBeenCalledTimes(1);
   });
 });

@@ -35,7 +35,7 @@ import {
   useRegisterViewerActions,
   useViewerChromePresent,
 } from '@/components/viewer/viewer-actions';
-import { Grid, Download, ImageDown, Copy, Minus, Plus, Scan, X } from 'lucide-react';
+import { Grid, Download, ImageDown, Copy, Minus, Plus, Scan, Undo2, Redo2, X } from 'lucide-react';
 
 /**
  * Fallback grid colour, used only if `--grid-color` is somehow absent.
@@ -258,6 +258,38 @@ function TransitionProperties({ edge, onClose }: { edge: EdgeDescription; onClos
   );
 }
 
+/**
+ * The machine type, as a coloured chip.
+ *
+ * At module scope, not inside the viewer. Defined in the body it got a fresh identity on
+ * every render, so React unmounted and remounted it each time and the badge element was
+ * replaced rather than updated. Harmless to look at and quietly wasteful, and it made any
+ * test that held a reference to the badge fail the moment anything else re-rendered.
+ */
+function TypeBadge({ t }: { t: MachineType }) {
+  const label =
+    t === 'fa'
+      ? 'Finite Automaton'
+      : t === 'pda'
+        ? 'Pushdown Automaton'
+        : t === 'tm'
+          ? 'Turing Machine'
+          : 'Unknown';
+  const cls =
+    t === 'fa'
+      ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200'
+      : t === 'pda'
+        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
+        : t === 'tm'
+          ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'
+          : 'bg-muted text-muted-foreground';
+  return (
+    <Badge variant="outline" className={cls}>
+      {label}
+    </Badge>
+  );
+}
+
 /* ───────────────────────────── Viewer component ────────────────────────── */
 
 export function JffCytoscapeViewer({
@@ -298,12 +330,17 @@ export function JffCytoscapeViewer({
   // a hook; this component owns only the toolbar chrome and the grid overlay.
   const {
     containerRef,
+    settled,
     error,
     type,
     honorPositions,
     toggleHonorPositions,
     showNotes,
     toggleNotes,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
     selectedState,
     selectedTransition,
     clearSelectedState,
@@ -354,6 +391,8 @@ export function JffCytoscapeViewer({
       downloadCurrent,
       copyPNG,
       copySVG,
+      undo,
+      redo,
       toggleGrid: () => setGrid((on) => !on),
       toggleNotes,
       fitToWindow: fit,
@@ -367,7 +406,7 @@ export function JffCytoscapeViewer({
         if (honorPositions) toggleHonorPositions();
       },
     },
-    { grid, notes: showNotes, layout: honorPositions ? 'as-drawn' : 'auto' },
+    { grid, notes: showNotes, layout: honorPositions ? 'as-drawn' : 'auto', canUndo, canRedo },
   );
 
   // Grid lines read the theme var live (subtle light gray in light mode, subtle dark line in
@@ -381,30 +420,6 @@ export function JffCytoscapeViewer({
         backgroundPosition: 'center center',
       }
     : {};
-
-  const TypeBadge = ({ t }: { t: MachineType }) => {
-    const label =
-      t === 'fa'
-        ? 'Finite Automaton'
-        : t === 'pda'
-          ? 'Pushdown Automaton'
-          : t === 'tm'
-            ? 'Turing Machine'
-            : 'Unknown';
-    const cls =
-      t === 'fa'
-        ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200'
-        : t === 'pda'
-          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200'
-          : t === 'tm'
-            ? 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-200'
-            : 'bg-muted text-muted-foreground';
-    return (
-      <Badge variant="outline" className={cls}>
-        {label}
-      </Badge>
-    );
-  };
 
   // White fill so the outline/idle buttons stand out against the gray toolbar.
   const controlBtnClass = 'bg-card';
@@ -465,6 +480,32 @@ export function JffCytoscapeViewer({
                 />
               </>
             )}
+            {/* Left of everything else, where an application toolbar puts them. Disabled
+                rather than hidden, so the toolbar keeps its shape and their position stays
+                learnable. They step through arrangement changes only; see useJffCytoscape. */}
+            <Button
+              size="sm"
+              variant="outline"
+              className={controlBtnClass}
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo"
+              aria-label="Undo"
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className={controlBtnClass}
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo"
+              aria-label="Redo"
+            >
+              <Redo2 className="h-4 w-4" />
+            </Button>
+            <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
             {/* One bordered group holding the two buttons, the value they change, and the
                 slider that changes it continuously. Four separate controls in a row read as
                 four unrelated things; a single container says they are one. */}
@@ -609,6 +650,12 @@ export function JffCytoscapeViewer({
           className={cn(
             'bg-card relative cursor-default overflow-hidden active:cursor-grabbing',
             fill && 'min-h-0 flex-1',
+            // Held back until the first layout has settled. Cytoscape paints the moment it is
+            // constructed, at whatever scale the file's own coordinates imply, and the fit
+            // runs after that: without this the machine arrives at the wrong size and visibly
+            // jumps. A short fade rather than a hard cut, so it appears rather than blinks.
+            'transition-opacity duration-150 motion-reduce:transition-none',
+            settled ? 'opacity-100' : 'opacity-0',
           )}
           role="img"
           aria-label={

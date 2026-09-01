@@ -23,6 +23,8 @@ export type ViewerActions = {
   downloadCurrent: () => void | Promise<void>;
   /** The drawing as SVG markup, which pastes as vector art rather than a bitmap. */
   copySVG: () => void | Promise<void>;
+  undo: () => void;
+  redo: () => void;
   toggleGrid: () => void;
   /** Show or hide the notes the author wrote on the canvas. */
   toggleNotes: () => void;
@@ -42,6 +44,9 @@ export type ViewerViewState = {
   grid: boolean;
   /** Whether the author's notes are being drawn. */
   notes: boolean;
+  /** Whether there is anything to step back to, or forward to. */
+  canUndo: boolean;
+  canRedo: boolean;
   /** Which layout is showing, so a menu can mark one of the two. */
   layout: 'as-drawn' | 'auto';
 };
@@ -70,7 +75,9 @@ const ViewerViewContext = createContext<{
   grid: boolean;
   notes: boolean;
   layout: ViewerViewState['layout'];
-}>({ ready: false, grid: false, notes: true, layout: 'as-drawn' });
+  canUndo: boolean;
+  canRedo: boolean;
+}>({ ready: false, grid: false, notes: true, layout: 'as-drawn', canUndo: false, canRedo: false });
 
 export function ViewerActionsProvider({ children }: { children: React.ReactNode }) {
   const actions = useRef<ViewerActions | null>(null);
@@ -82,10 +89,15 @@ export function ViewerActionsProvider({ children }: { children: React.ReactNode 
   // ticked. It changes only when somebody toggles it, so this costs nothing.
   const [grid, setGrid] = useState(false);
   const [notes, setNotes] = useState(true);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const [layout, setLayout] = useState<ViewerViewState['layout']>('as-drawn');
 
   // `useRef` and the `useState` setter are both stable, so this is built once.
-  const view = useMemo(() => ({ ready, grid, notes, layout }), [ready, grid, notes, layout]);
+  const view = useMemo(
+    () => ({ ready, grid, notes, layout, canUndo, canRedo }),
+    [ready, grid, notes, layout, canUndo, canRedo],
+  );
 
   const registry = useMemo<Registry>(
     () => ({
@@ -96,6 +108,8 @@ export function ViewerActionsProvider({ children }: { children: React.ReactNode 
         setReady(next !== null);
         setGrid(view?.grid ?? false);
         setNotes(view?.notes ?? true);
+        setCanUndo(view?.canUndo ?? false);
+        setCanRedo(view?.canRedo ?? false);
         setLayout(view?.layout ?? 'as-drawn');
       },
       // `void`: three of these are async, and their result is nothing the caller waits on.
@@ -151,10 +165,12 @@ export function useViewerActions(): {
   grid: boolean;
   notes: boolean;
   layout: ViewerViewState['layout'];
+  canUndo: boolean;
+  canRedo: boolean;
   run: (name: keyof ViewerActions) => void;
 } {
   const registry = useContext(ViewerRegistryContext);
-  const { ready, grid, notes, layout } = useContext(ViewerViewContext);
+  const { ready, grid, notes, layout, canUndo, canRedo } = useContext(ViewerViewContext);
   const run = registry?.run;
-  return { ready, grid, notes, layout, run: (name) => run?.(name) };
+  return { ready, grid, notes, layout, canUndo, canRedo, run: (name) => run?.(name) };
 }

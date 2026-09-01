@@ -50,6 +50,8 @@ const h = vi.hoisted(() => {
     edges: vi.fn(() => chain),
     elements: vi.fn(() => chain),
     getElementById: vi.fn(() => chain),
+    // Node positions, so the undo tests can watch an arrangement being restored.
+    __positions: {} as Record<string, { x: number; y: number }>,
     add: vi.fn(() => chain),
     on: vi.fn(),
     // Records handlers so a test can fire a tap the way cytoscape would.
@@ -771,5 +773,166 @@ describe('what the viewer opens at', () => {
     await waitFor(() => expect(h.cy.zoom).toHaveBeenCalledWith(1));
     expect(h.cy.resize).toHaveBeenCalled();
     expect(h.cy.center).toHaveBeenCalled();
+  });
+});
+
+describe('undo and redo of the arrangement', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  /** A node the history code can read a position from and write one back to. */
+  const fakeNode = (id: string, pos: { x: number; y: number }) => ({
+    id: () => id,
+    hasClass: () => false,
+    empty: () => false,
+    position: vi.fn((next?: { x: number; y: number }) => {
+      if (next) Object.assign(pos, next);
+      return pos;
+    }),
+  });
+
+  const fire = (event: string) => {
+    const handler = h.cy.on.mock.calls.find(([name]) => name === event)?.[2] as
+      | (() => void)
+      | undefined;
+    act(() => handler?.());
+  };
+
+  it('records a step when a state is picked up, not on every pixel of the drag', async () => {
+    // One drag is one undoable step. `grab` fires once, at the start; `position` fires
+    // continuously, and recording there would bury the previous state under hundreds of
+    // near-identical snapshots.
+    const pos = { x: 10, y: 20 };
+    const node = fakeNode('0', pos);
+    h.cy.nodes.mockReturnValue({ forEach: (fn: (n: unknown) => void) => fn(node), length: 1 });
+
+    const view: { current: { canUndo: boolean; run: (n: 'undo') => void } | null } = {
+      current: null,
+    };
+    function Probe() {
+      const v = useViewerActions();
+      view.current = { canUndo: v.canUndo, run: v.run };
+      return null;
+    }
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+        <Probe />
+      </ViewerActionsProvider>,
+    );
+    await waitForEngine();
+
+    expect(view.current?.canUndo).toBe(false);
+    fire('grab');
+    await waitFor(() => expect(view.current?.canUndo).toBe(true));
+  });
+
+  it('puts the positions back when undone', async () => {
+    const pos = { x: 10, y: 20 };
+    const node = fakeNode('0', pos);
+    h.cy.nodes.mockReturnValue({ forEach: (fn: (n: unknown) => void) => fn(node), length: 1 });
+    h.cy.getElementById.mockReturnValue(node);
+
+    const view: { current: { canUndo: boolean; run: (n: 'undo') => void } | null } = {
+      current: null,
+    };
+    function Probe() {
+      const v = useViewerActions();
+      view.current = { canUndo: v.canUndo, run: v.run };
+      return null;
+    }
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+        <Probe />
+      </ViewerActionsProvider>,
+    );
+    await waitForEngine();
+
+    fire('grab');
+    await waitFor(() => expect(view.current?.canUndo).toBe(true));
+
+    // The drag itself: the state ends up somewhere else.
+    pos.x = 500;
+    pos.y = 600;
+
+    act(() => view.current?.run('undo'));
+    await waitFor(() => expect(pos).toEqual({ x: 10, y: 20 }));
+  });
+});
+
+describe('the toolbar undo and redo buttons', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('are disabled until there is something to step through', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Redo' })).toBeDisabled();
+  });
+
+  it('sit before the zoom group, where a toolbar puts them', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    const undoButton = screen.getByRole('button', { name: 'Undo' });
+    const zoomGroup = screen.getByRole('group', { name: 'Zoom' });
+    const precedes = Boolean(
+      undoButton.compareDocumentPosition(zoomGroup) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(precedes).toBe(true);
+  });
+
+  it('drive the same history the menu does', async () => {
+    const pos = { x: 10, y: 20 };
+    const node = {
+      id: () => '0',
+      hasClass: () => false,
+      empty: () => false,
+      position: vi.fn((next?: { x: number; y: number }) => {
+        if (next) Object.assign(pos, next);
+        return pos;
+      }),
+    };
+    h.cy.nodes.mockReturnValue({ forEach: (fn: (n: unknown) => void) => fn(node), length: 1 });
+    h.cy.getElementById.mockReturnValue(node);
+
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+
+    const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
+      | (() => void)
+      | undefined;
+    act(() => grab?.());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled());
+
+    pos.x = 500;
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(pos.x).toBe(10));
+  });
+});
+
+describe('the machine does not flash on the way in', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('is hidden while the first layout is still settling', () => {
+    // Cytoscape paints as soon as it is built, before anything has been fitted or scaled, so
+    // the machine used to arrive at the wrong size and jump. Rendered but not shown.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    expect(screen.getByRole('img').className).toContain('opacity-0');
+  });
+
+  it('appears once it has settled', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
+  });
+
+  it('appears even if setting the initial scale throws', async () => {
+    // What the `finally` actually protects. `fitAndResize` swallows its own errors, so a
+    // failing layout never reaches here; the step after it can still throw, and an invisible
+    // graph with no explanation is worse than one at the wrong zoom.
+    h.cy.center.mockImplementationOnce(() => {
+      throw new Error('center exploded');
+    });
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" initialZoom="actual" />);
+    await waitFor(() => expect(screen.getByRole('img').className).toContain('opacity-100'));
   });
 });

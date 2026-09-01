@@ -225,6 +225,42 @@ export type UseJffCytoscapeOptions = {
  * chrome. Returns the container ref to mount the graph into, the load `error` and parsed
  * machine `type`, the `honorPositions` toggle (a layout input), and the action handlers.
  */
+/** Where every state sits, and which layout produced it. */
+type ArrangementSnapshot = {
+  positions: Record<string, { x: number; y: number }>;
+  honorPositions: boolean;
+};
+
+/** Read the current arrangement out of the graph. */
+function readArrangement(cy: any, honorPositions: boolean): ArrangementSnapshot | null {
+  try {
+    const positions: Record<string, { x: number; y: number }> = {};
+    cy.nodes().forEach((node: any) => {
+      // Notes and start markers are placed relative to what they annotate, so restoring them
+      // directly would fight the code that keeps them attached.
+      if (node.hasClass?.('note') || node.hasClass?.('start')) return;
+      const p = node.position();
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.y))
+        positions[node.id()] = { x: p.x, y: p.y };
+    });
+    return { positions, honorPositions };
+  } catch {
+    return null;
+  }
+}
+
+/** Put a remembered arrangement back. */
+function applyArrangement(cy: any, snapshot: ArrangementSnapshot): void {
+  try {
+    for (const [id, position] of Object.entries(snapshot.positions)) {
+      const node = cy.getElementById(id);
+      if (node && !node.empty?.()) node.position(position);
+    }
+  } catch {
+    // A graph mid-teardown. Nothing to restore onto.
+  }
+}
+
 /**
  * Show or hide the notes a student wrote on the canvas.
  *
@@ -268,6 +304,14 @@ export function useJffCytoscape({
   // The state a reader has clicked, if any. Held as an id rather than a described object so it
   // survives a reload of the same file and cannot go stale against a re-parsed machine.
   const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
+  /**
+   * Whether the first layout has finished and the graph is worth showing.
+   *
+   * Cytoscape paints as soon as it is constructed, at whatever scale the file's coordinates
+   * happen to imply, and only then does the fit run and the zoom settle. The reader saw the
+   * machine arrive at the wrong size and jump. Nothing is drawn until this is true.
+   */
+  const [settled, setSettled] = useState(false);
   // The edge a reader has clicked, as its two endpoints rather than an element id: the id is
   // assigned by the bundler and would not survive a re-parse, while the pair is the machine's
   // own identity for it.
@@ -278,6 +322,25 @@ export function useJffCytoscape({
   showNotesRef.current = showNotes;
   const initialZoomRef = useRef(initialZoom);
   initialZoomRef.current = initialZoom;
+  const honorPositionsRef = useRef(honorPositions);
+  honorPositionsRef.current = honorPositions;
+
+  /**
+   * Undo history for the arrangement.
+   *
+   * The viewer is read only about the file: nothing here changes what the student submitted.
+   * What a reader CAN change is how it is laid out, by dragging a state or switching between
+   * the drawn and the auto-arranged layout, and that is what these remember. Zoom and pan are
+   * not in it: they move the camera, not the machine, and an undo that rewound the viewport
+   * would fight the scroll wheel.
+   *
+   * Each entry is a whole snapshot rather than a diff. A machine has tens of states, not
+   * thousands, so copying every position is cheaper than the bookkeeping a diff would need.
+   */
+  const [undoDepth, setUndoDepth] = useState(0);
+  const [redoDepth, setRedoDepth] = useState(0);
+  const undoStack = useRef<ArrangementSnapshot[]>([]);
+  const redoStack = useRef<ArrangementSnapshot[]>([]);
 
   // Customization variables
   const FIT_PADDING = 80;
@@ -305,6 +368,12 @@ export function useJffCytoscape({
         setParsed(parsed);
         setSelectedStateId(null);
         setSelectedEdge(null);
+        // A different file is a different machine. Keeping the old history would let undo
+        // apply one machine's positions to another's states.
+        undoStack.current = [];
+        redoStack.current = [];
+        setUndoDepth(0);
+        setRedoDepth(0);
         const elements = toElements(parsed, epsSymbol, honorPositions);
 
         if (!containerRef.current) {
@@ -682,15 +751,21 @@ export function useJffCytoscape({
         onResizeRef.current = () => void fitAndResize();
         setTimeout(() => {
           void (async () => {
-            // Fit first either way: it sizes the canvas and settles the layout, and the
-            // centring it does is what keeps the machine in view at 100% rather than off in a
-            // corner. Only then is the scale set back to 1:1, if that is what was asked for.
-            await fitAndResize();
-            if (initialZoomRef.current !== 'actual') return;
-            const current = cyRef.current;
-            if (!current) return;
-            current.zoom(1);
-            current.center(current.nodes());
+            try {
+              // Fit first either way: it sizes the canvas and settles the layout, and the
+              // centring it does is what keeps the machine in view at 100% rather than off in
+              // a corner. Only then is the scale set back to 1:1, if that was asked for.
+              await fitAndResize();
+              if (initialZoomRef.current !== 'actual') return;
+              const current = cyRef.current;
+              if (!current) return;
+              current.zoom(1);
+              current.center(current.nodes());
+            } finally {
+              // In a `finally` so a layout that throws or never settles reveals the graph
+              // anyway. A machine drawn wrongly is recoverable; one that never appears is not.
+              setSettled(true);
+            }
           })();
         }, 0);
 
@@ -736,6 +811,18 @@ export function useJffCytoscape({
           neighborhood.addClass('highlighted').removeClass('faded');
         });
 
+        // A drag is one undoable step, so the snapshot is taken when the state is picked up
+        // rather than on every pixel of movement. `grab` fires once, at the start.
+        cy.on('grab', 'node', () => {
+          const before = readArrangement(cy, honorPositionsRef.current);
+          if (!before) return;
+          undoStack.current.push(before);
+          // A new action makes the redo branch unreachable, as in any editor.
+          redoStack.current = [];
+          setUndoDepth(undoStack.current.length);
+          setRedoDepth(0);
+        });
+
         // Keep the label and loop geometry, and the initial-state marker, following a
         // state the reader has dragged. Moving the marker itself fires this too, so skip
         // it: it has nothing hanging off it, and reacting would only recurse.
@@ -766,6 +853,26 @@ export function useJffCytoscape({
       }
     };
   }, [load]);
+
+  /* ── undo and redo ──────────────────────────────────────────────────── */
+
+  /** Move one step between the two stacks, applying whatever is on the other side. */
+  const step = (from: typeof undoStack, to: typeof redoStack) => {
+    const cy = cyRef.current;
+    const snapshot = from.current.pop();
+    if (!cy || !snapshot) return;
+
+    const current = readArrangement(cy, honorPositions);
+    if (current) to.current.push(current);
+
+    // The layout first: switching it re-runs the engine and would otherwise overwrite the
+    // positions restored below.
+    if (snapshot.honorPositions !== honorPositions) setHonorPositions(snapshot.honorPositions);
+    applyArrangement(cy, snapshot);
+
+    setUndoDepth(undoStack.current.length);
+    setRedoDepth(redoStack.current.length);
+  };
 
   /* ── notes ──────────────────────────────────────────────────────────── */
 
@@ -932,17 +1039,33 @@ export function useJffCytoscape({
 
   return {
     containerRef,
+    settled,
     error,
     type,
     parsed,
     honorPositions,
-    toggleHonorPositions: () => setHonorPositions((p) => !p),
+    toggleHonorPositions: () => {
+      // Recorded before the switch, so undo returns both the layout and the positions the
+      // reader had arranged under it.
+      const before = cyRef.current ? readArrangement(cyRef.current, honorPositions) : null;
+      if (before) {
+        undoStack.current.push(before);
+        redoStack.current = [];
+        setUndoDepth(undoStack.current.length);
+        setRedoDepth(0);
+      }
+      setHonorPositions((p) => !p);
+    },
     zoomIn,
     zoomOut,
     zoom,
     setZoom,
     showNotes,
     toggleNotes: () => setShowNotes((on) => !on),
+    canUndo: undoDepth > 0,
+    canRedo: redoDepth > 0,
+    undo: () => step(undoStack, redoStack),
+    redo: () => step(redoStack, undoStack),
     selectedState:
       parsed && selectedStateId ? describeState(parsed, selectedStateId, epsSymbol) : null,
     clearSelectedState: () => {

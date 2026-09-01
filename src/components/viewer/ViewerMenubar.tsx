@@ -12,6 +12,8 @@ import {
   BookOpen,
   Info,
   Share,
+  Undo2,
+  Redo2,
 } from 'lucide-react';
 import {
   Menubar,
@@ -62,7 +64,7 @@ export function ViewerMenubar({
   // False for a grammar or a regular expression, which have nothing to export: those viewers
   // register no actions, so the items disable themselves rather than being hidden. A missing
   // menu item reads as a bug; a greyed one reads as "not for this kind of file".
-  const { ready, grid, notes, layout, run } = useViewerActions();
+  const { ready, grid, notes, layout, canUndo, canRedo, run } = useViewerActions();
 
   return (
     <Menubar className="bg-card h-auto rounded-none border-x-0 border-t-0 px-2 py-1 shadow-none">
@@ -122,6 +124,18 @@ export function ViewerMenubar({
       <MenubarMenu>
         <MenubarTrigger>Edit</MenubarTrigger>
         <MenubarContent>
+          {/* At the top of Edit, where every application puts them. They step back through
+              changes to the arrangement: a state dragged, or the layout switched. Not zoom or
+              pan, which move the camera rather than the machine. */}
+          <MenubarItem disabled={!canUndo} onSelect={() => run('undo')}>
+            <Undo2 aria-hidden="true" />
+            Undo
+          </MenubarItem>
+          <MenubarItem disabled={!canRedo} onSelect={() => run('redo')}>
+            <Redo2 aria-hidden="true" />
+            Redo
+          </MenubarItem>
+          <MenubarSeparator />
           {/* Copying belongs with the other things you do to take the machine elsewhere,
               which is what an Edit menu means to most people, rather than with saving it to
               disk under File. */}
