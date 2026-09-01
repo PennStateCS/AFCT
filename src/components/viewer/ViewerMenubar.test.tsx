@@ -15,6 +15,7 @@ const actions = {
   copySVG: vi.fn(),
   copyDescription: vi.fn(),
   toggleGrid: vi.fn(),
+  toggleNotes: vi.fn(),
   fitToWindow: vi.fn(),
   showTextRepresentation: vi.fn(),
   setAsDrawn: vi.fn(),
@@ -24,12 +25,14 @@ const actions = {
 /** Stands in for a rendered machine that publishes its actions and its view state. */
 function FakeViewer({
   grid = false,
+  notes = true,
   layout = 'as-drawn',
 }: {
   grid?: boolean;
+  notes?: boolean;
   layout?: 'as-drawn' | 'auto';
 }) {
-  useRegisterViewerActions(actions, { grid, layout });
+  useRegisterViewerActions(actions, { grid, notes, layout });
   return null;
 }
 
@@ -310,5 +313,50 @@ describe('View, Text representation', () => {
     // fireEvent for the same jsdom reason as the export case above.
     fireEvent.click(await screen.findByRole('menuitem', { name: /text representation/i }));
     expect(actions.showTextRepresentation).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('View, JFLAP Notes', () => {
+  const openView = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'View' }));
+
+  it('is ticked by default, because a note is part of the answer', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    expect(await screen.findByRole('menuitemcheckbox', { name: 'JFLAP Notes' })).toBeChecked();
+  });
+
+  it('follows the viewer when they are hidden', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer notes={false} />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    expect(
+      await screen.findByRole('menuitemcheckbox', { name: 'JFLAP Notes' }),
+    ).not.toBeChecked();
+  });
+
+  it('asks the viewer to toggle them', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    // fireEvent for the same jsdom reason as the export case above.
+    fireEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'JFLAP Notes' }));
+    expect(actions.toggleNotes).toHaveBeenCalledTimes(1);
   });
 });

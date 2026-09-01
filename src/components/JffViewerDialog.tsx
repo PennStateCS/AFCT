@@ -142,6 +142,8 @@ export function JffCytoscapeViewer({
     type,
     honorPositions,
     toggleHonorPositions,
+    showNotes,
+    toggleNotes,
     zoomIn,
     zoomOut,
     zoom,
@@ -184,6 +186,7 @@ export function JffCytoscapeViewer({
       copySVG,
       copyDescription,
       toggleGrid: () => setGrid((on) => !on),
+      toggleNotes,
       fitToWindow: fit,
       showTextRepresentation: () => setShowText(true),
       // Set rather than toggled, so the menu's two options are a choice between states and
@@ -195,7 +198,7 @@ export function JffCytoscapeViewer({
         if (honorPositions) toggleHonorPositions();
       },
     },
-    { grid, layout: honorPositions ? 'as-drawn' : 'auto' },
+    { grid, notes: showNotes, layout: honorPositions ? 'as-drawn' : 'auto' },
   );
 
   // Grid lines read the theme var live (subtle light gray in light mode, subtle dark line in

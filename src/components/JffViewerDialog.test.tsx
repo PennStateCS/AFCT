@@ -62,6 +62,8 @@ const h = vi.hoisted(() => {
     animate: vi.fn(),
     svg: vi.fn(() => '<svg></svg>'),
     png: vi.fn(() => 'data:image/png;base64,AAAA'),
+    // Selecting the note nodes, which the notes toggle styles.
+    $: vi.fn(() => ({ style: vi.fn() })),
   };
 
   const ctor = Object.assign(
@@ -486,5 +488,35 @@ describe('where the text description lives', () => {
     // The listing is present to be shown, with the same content the dialog panel carries.
     expect(screen.getByText('Text representation')).toBeInTheDocument();
     expect(screen.getByText('Initial state')).toBeInTheDocument();
+  });
+});
+
+describe('the JFLAP notes toggle', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('draws notes by default, and hides them as a style change rather than a rebuild', async () => {
+    // A rebuild would re-run the layout and move the machine under the reader, which is not
+    // what asking to hide a note should do.
+    let run: ((name: 'toggleNotes') => void) | null = null;
+    function Probe() {
+      run = useViewerActions().run;
+      return null;
+    }
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+        <Probe />
+      </ViewerActionsProvider>,
+    );
+    await waitForEngine();
+
+    const style = vi.fn();
+    h.cy.$.mockReturnValue({ style });
+    act(() => run?.('toggleNotes'));
+
+    expect(h.cy.$).toHaveBeenCalledWith('node.note');
+    expect(style).toHaveBeenCalledWith('display', 'none');
+    // The graph itself was not rebuilt.
+    expect(h.ctor).toHaveBeenCalledTimes(1);
   });
 });

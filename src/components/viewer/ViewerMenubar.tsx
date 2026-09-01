@@ -42,7 +42,7 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
   // False for a grammar or a regular expression, which have nothing to export: those viewers
   // register no actions, so the items disable themselves rather than being hidden. A missing
   // menu item reads as a bug; a greyed one reads as "not for this kind of file".
-  const { ready, grid, layout, run } = useViewerActions();
+  const { ready, grid, notes, layout, run } = useViewerActions();
 
   return (
     <Menubar className="bg-card h-auto rounded-none border-x-0 border-t-0 px-2 py-1 shadow-none">
@@ -131,6 +131,16 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
             onCheckedChange={() => run('toggleGrid')}
           >
             Grid
+          </MenubarCheckboxItem>
+          {/* On by default: a note is the author's own words, part of the answer rather than
+              decoration. Off is for a busy machine where they cover the states. They are only
+              drawn in the "As drawn" layout, so this does nothing once auto-arranged. */}
+          <MenubarCheckboxItem
+            checked={notes}
+            disabled={!ready}
+            onCheckedChange={() => run('toggleNotes')}
+          >
+            JFLAP Notes
           </MenubarCheckboxItem>
           <MenubarSeparator />
           {/* The same content the dialog viewers show in a panel under the graph. Here it

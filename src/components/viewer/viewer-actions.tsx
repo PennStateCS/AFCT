@@ -26,6 +26,8 @@ export type ViewerActions = {
   /** The machine in words, the one export that can be quoted in a reply. */
   copyDescription: () => void | Promise<void>;
   toggleGrid: () => void;
+  /** Show or hide the notes the author wrote on the canvas. */
+  toggleNotes: () => void;
   /** Open the machine written out as text, for reading or checking a transition. */
   showTextRepresentation: () => void;
   /** Scale and centre the machine so all of it is on screen. */
@@ -40,6 +42,8 @@ export type ViewerActions = {
 export type ViewerViewState = {
   /** Whether the grid is currently drawn, so a menu can show it ticked. */
   grid: boolean;
+  /** Whether the author's notes are being drawn. */
+  notes: boolean;
   /** Which layout is showing, so a menu can mark one of the two. */
   layout: 'as-drawn' | 'auto';
 };
@@ -66,8 +70,9 @@ const ViewerRegistryContext = createContext<Registry | null>(null);
 const ViewerViewContext = createContext<{
   ready: boolean;
   grid: boolean;
+  notes: boolean;
   layout: ViewerViewState['layout'];
-}>({ ready: false, grid: false, layout: 'as-drawn' });
+}>({ ready: false, grid: false, notes: true, layout: 'as-drawn' });
 
 export function ViewerActionsProvider({ children }: { children: React.ReactNode }) {
   const actions = useRef<ViewerActions | null>(null);
@@ -78,10 +83,11 @@ export function ViewerActionsProvider({ children }: { children: React.ReactNode 
   // The grid flag is state, unlike the actions, because a menu has to re-render to show it
   // ticked. It changes only when somebody toggles it, so this costs nothing.
   const [grid, setGrid] = useState(false);
+  const [notes, setNotes] = useState(true);
   const [layout, setLayout] = useState<ViewerViewState['layout']>('as-drawn');
 
   // `useRef` and the `useState` setter are both stable, so this is built once.
-  const view = useMemo(() => ({ ready, grid, layout }), [ready, grid, layout]);
+  const view = useMemo(() => ({ ready, grid, notes, layout }), [ready, grid, notes, layout]);
 
   const registry = useMemo<Registry>(
     () => ({
@@ -91,6 +97,7 @@ export function ViewerActionsProvider({ children }: { children: React.ReactNode 
         // this after every render of the viewer.
         setReady(next !== null);
         setGrid(view?.grid ?? false);
+        setNotes(view?.notes ?? true);
         setLayout(view?.layout ?? 'as-drawn');
       },
       // `void`: three of these are async, and their result is nothing the caller waits on.
@@ -144,11 +151,12 @@ export function useViewerChromePresent(): boolean {
 export function useViewerActions(): {
   ready: boolean;
   grid: boolean;
+  notes: boolean;
   layout: ViewerViewState['layout'];
   run: (name: keyof ViewerActions) => void;
 } {
   const registry = useContext(ViewerRegistryContext);
-  const { ready, grid, layout } = useContext(ViewerViewContext);
+  const { ready, grid, notes, layout } = useContext(ViewerViewContext);
   const run = registry?.run;
-  return { ready, grid, layout, run: (name) => run?.(name) };
+  return { ready, grid, notes, layout, run: (name) => run?.(name) };
 }

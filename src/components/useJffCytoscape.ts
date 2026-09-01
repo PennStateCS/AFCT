@@ -213,6 +213,23 @@ export type UseJffCytoscapeOptions = {
  * chrome. Returns the container ref to mount the graph into, the load `error` and parsed
  * machine `type`, the `honorPositions` toggle (a layout input), and the action handlers.
  */
+/**
+ * Show or hide the notes a student wrote on the canvas.
+ *
+ * A style change rather than a rebuild: the notes are ordinary nodes carrying the `note`
+ * class, so `display: none` takes them out of the drawing and out of the layout without
+ * touching the machine itself. They only exist at all in the "As drawn" layout, since an
+ * auto-arranged graph has moved every state and a note left where its author put it would
+ * end up annotating whatever happened to land there.
+ */
+function applyNoteVisibility(cy: any, visible: boolean): void {
+  try {
+    cy.$('node.note').style('display', visible ? 'element' : 'none');
+  } catch {
+    // A graph mid-teardown. Nothing to show or hide, and nothing worth reporting.
+  }
+}
+
 export function useJffCytoscape({
   src,
   title,
@@ -232,6 +249,13 @@ export function useJffCytoscape({
   // The live zoom level, mirrored into state so a slider can show it. Cytoscape owns the
   // real value; this follows it, including when the wheel or the Fit button changes it.
   const [zoom, setZoomState] = useState(1);
+  // Notes the student wrote on the canvas. On by default: they are the author's own words and
+  // part of the answer, not decoration. Turned off when they crowd a busy machine.
+  const [showNotes, setShowNotes] = useState(true);
+  // Read by the load path, which runs outside React's render and would otherwise capture the
+  // value from whenever the effect that started it was created.
+  const showNotesRef = useRef(showNotes);
+  showNotesRef.current = showNotes;
 
   // Customization variables
   const FIT_PADDING = 80;
@@ -618,6 +642,11 @@ export function useJffCytoscape({
         cy.panningEnabled(true);
         cy.userPanningEnabled(true);
 
+        // The notes are elements like any other, so hiding them is a style change rather than
+        // a rebuild. Applied here as well as in the effect below because the elements only
+        // exist from this point, and an effect that ran before them would do nothing.
+        applyNoteVisibility(cy, showNotesRef.current);
+
         // Expose fitAndResize for Fit button and initial layout
         onResizeRef.current = () => void fitAndResize();
         setTimeout(() => {
@@ -684,6 +713,12 @@ export function useJffCytoscape({
       }
     };
   }, [load]);
+
+  /* ── notes ──────────────────────────────────────────────────────────── */
+
+  useEffect(() => {
+    if (cyRef.current) applyNoteVisibility(cyRef.current, showNotes);
+  }, [showNotes, parsed, honorPositions]);
 
   /* ── zoom helpers (animated, keep center fixed) ─────────────────────── */
   const animatedZoomTo = (level: number) => {
@@ -853,6 +888,8 @@ export function useJffCytoscape({
     zoomOut,
     zoom,
     setZoom,
+    showNotes,
+    toggleNotes: () => setShowNotes((on) => !on),
     zoomRange,
     fit: () => onResizeRef.current?.(),
     downloadSVG,
