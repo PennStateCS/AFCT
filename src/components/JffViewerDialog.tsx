@@ -15,6 +15,7 @@ import {
   describeMachine,
   type MachineDescription,
   type MachineType,
+  type EdgeDescription,
   type StateDescription,
 } from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
@@ -118,22 +119,26 @@ function MachineDescriptionList({ description }: { description: MachineDescripti
  * screen-reader route to the same facts, so this is a convenience rather than the only way to
  * them.
  */
-function StatePropertiesPanel({
-  state,
+function PropertiesPanel({
+  label,
+  heading,
   onClose,
+  children,
 }: {
-  state: StateDescription;
+  label: string;
+  heading: React.ReactNode;
   onClose: () => void;
+  children: React.ReactNode;
 }) {
   return (
     <div
       // Capped and scrollable, so a hub state with twenty transitions cannot run off the canvas.
       className="bg-card absolute top-2 right-2 z-10 max-h-[min(60%,20rem)] w-64 overflow-y-auto rounded-md border p-3 shadow-md"
       role="group"
-      aria-label={`Properties of state ${state.name}`}
+      aria-label={label}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="font-mono text-sm font-semibold break-all">{state.name}</p>
+        <div className="min-w-0 text-sm font-semibold">{heading}</div>
         <Button
           type="button"
           size="sm"
@@ -145,7 +150,19 @@ function StatePropertiesPanel({
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
+      {children}
+    </div>
+  );
+}
 
+/** What a clicked state is. */
+function StateProperties({ state, onClose }: { state: StateDescription; onClose: () => void }) {
+  return (
+    <PropertiesPanel
+      label={`Properties of state ${state.name}`}
+      heading={<span className="font-mono break-all">{state.name}</span>}
+      onClose={onClose}
+    >
       {state.initial || state.final ? (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {state.initial ? (
@@ -191,7 +208,52 @@ function StatePropertiesPanel({
           </dd>
         </div>
       </dl>
-    </div>
+    </PropertiesPanel>
+  );
+}
+
+/**
+ * What a clicked transition is.
+ *
+ * Plural on purpose: parallel transitions between the same two states are drawn as one line, so
+ * clicking it asks about all of them.
+ */
+function TransitionProperties({ edge, onClose }: { edge: EdgeDescription; onClose: () => void }) {
+  return (
+    <PropertiesPanel
+      label={`Properties of the transition from ${edge.from} to ${edge.to}`}
+      heading={
+        <span className="font-mono break-all">
+          {edge.from} &rarr; {edge.to}
+        </span>
+      }
+      onClose={onClose}
+    >
+      {edge.selfLoop ? (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          <Badge variant="outline" className="text-xs">
+            Self-loop
+          </Badge>
+        </div>
+      ) : null}
+
+      <dl className="mt-3 space-y-2 text-xs">
+        <div>
+          <dt className="text-muted-foreground">
+            {edge.labels.length === 1 ? 'Reads' : `Reads (${edge.labels.length})`}
+          </dt>
+          <dd>
+            <ul className="list-none space-y-0.5">
+              {edge.labels.map((line, i) => (
+                <li key={`${line}-${i}`} className="font-mono">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </dd>
+        </div>
+      </dl>
+    </PropertiesPanel>
   );
 }
 
@@ -239,6 +301,7 @@ export function JffCytoscapeViewer({
     showNotes,
     toggleNotes,
     selectedState,
+    selectedTransition,
     clearSelectedState,
     zoomIn,
     zoomOut,
@@ -529,7 +592,9 @@ export function JffCytoscapeViewer({
           aria-describedby={description ? summaryId : undefined}
         />
         {selectedState ? (
-          <StatePropertiesPanel state={selectedState} onClose={clearSelectedState} />
+          <StateProperties state={selectedState} onClose={clearSelectedState} />
+        ) : selectedTransition ? (
+          <TransitionProperties edge={selectedTransition} onClose={clearSelectedState} />
         ) : null}
       </div>
 

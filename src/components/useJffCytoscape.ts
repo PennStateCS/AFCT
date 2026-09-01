@@ -21,6 +21,7 @@ import {
 import { toJflapXml } from '@/lib/jflap-write';
 import {
   describeMachine,
+  describeEdge,
   describeState,
   machineDescriptionText,
   parseJflap,
@@ -256,6 +257,10 @@ export function useJffCytoscape({
   // The state a reader has clicked, if any. Held as an id rather than a described object so it
   // survives a reload of the same file and cannot go stale against a re-parsed machine.
   const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
+  // The edge a reader has clicked, as its two endpoints rather than an element id: the id is
+  // assigned by the bundler and would not survive a re-parse, while the pair is the machine's
+  // own identity for it.
+  const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
   // Read by the load path, which runs outside React's render and would otherwise capture the
   // value from whenever the effect that started it was created.
   const showNotesRef = useRef(showNotes);
@@ -286,6 +291,7 @@ export function useJffCytoscape({
         setType(parsed.type);
         setParsed(parsed);
         setSelectedStateId(null);
+        setSelectedEdge(null);
         const elements = toElements(parsed, epsSymbol, honorPositions);
 
         if (!containerRef.current) {
@@ -684,16 +690,21 @@ export function useJffCytoscape({
             cy.elements().removeClass('faded highlighted');
             // A click on empty canvas means "never mind", so the properties panel goes too.
             setSelectedStateId(null);
+            setSelectedEdge(null);
             return;
           }
           const ele = evt.target;
-          // `events: 'no'` should stop a note being a tap target at all; this is the belt to
-          // that brace, since a note has no neighbourhood and would fade the whole machine.
-          if (ele.hasClass?.('note')) return;
-          // Only a state has properties worth a panel. The start marker is scenery, and an
-          // edge is already described by the two states it joins.
-          setSelectedStateId(
-            ele.isNode?.() && !ele.hasClass?.('start') ? (ele.id?.() ?? null) : null,
+          // Scenery, not machine: a note is the author's words laid on the canvas, and the
+          // start marker is a decoration hanging off the initial state. Clicking either does
+          // nothing at all rather than dimming the machine around it. (`events: 'no'` should
+          // already stop a note being a tap target; this is the belt to that brace, since a
+          // note has no neighbourhood and would otherwise fade everything.)
+          if (ele.hasClass?.('note') || ele.hasClass?.('start')) return;
+          // One panel at a time: a state and an edge cannot both be what was just clicked.
+          const isNode = ele.isNode?.() ?? false;
+          setSelectedStateId(isNode ? (ele.id?.() ?? null) : null);
+          setSelectedEdge(
+            isNode ? null : { from: ele.data?.('source') ?? '', to: ele.data?.('target') ?? '' },
           );
           const neighborhood = ele.closedNeighborhood
             ? ele.closedNeighborhood()
@@ -911,7 +922,14 @@ export function useJffCytoscape({
     toggleNotes: () => setShowNotes((on) => !on),
     selectedState:
       parsed && selectedStateId ? describeState(parsed, selectedStateId, epsSymbol) : null,
-    clearSelectedState: () => setSelectedStateId(null),
+    clearSelectedState: () => {
+      setSelectedStateId(null);
+      setSelectedEdge(null);
+    },
+    selectedTransition:
+      parsed && selectedEdge
+        ? describeEdge(parsed, selectedEdge.from, selectedEdge.to, epsSymbol)
+        : null,
     zoomRange,
     fit: () => onResizeRef.current?.(),
     downloadSVG,

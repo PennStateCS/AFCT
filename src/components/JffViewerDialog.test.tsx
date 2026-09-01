@@ -627,3 +627,78 @@ describe('clicking a state', () => {
     expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
   });
 });
+
+describe('clicking a transition', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  const tapEdge = (source: string, target: string) => {
+    const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
+      | ((evt: { target: unknown }) => void)
+      | undefined;
+    const edge = {
+      isNode: () => false,
+      hasClass: () => false,
+      id: () => `e0-${source}-${target}`,
+      data: (key: string) => (key === 'source' ? source : target),
+      closedNeighborhood: () => ({ addClass: () => ({ removeClass: () => undefined }) }),
+    };
+    act(() => tap?.({ target: edge }));
+  };
+
+  const tapNode = (id: string) => {
+    const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
+      | ((evt: { target: unknown }) => void)
+      | undefined;
+    act(() =>
+      tap?.({
+        target: {
+          isNode: () => true,
+          hasClass: () => false,
+          id: () => id,
+          closedNeighborhood: () => ({ addClass: () => ({ removeClass: () => undefined }) }),
+        },
+      }),
+    );
+  };
+
+  it('names both ends and lists what the transition reads', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapEdge('0', '1');
+    const panel = await screen.findByRole('group', { name: /transition from/i });
+    expect(panel).toHaveTextContent('Reads');
+  });
+
+  it('shows one panel at a time, not a state and a transition together', async () => {
+    // Both are driven by the same click, so the previous one has to give way rather than the
+    // two stacking in the same corner.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    expect(await screen.findByRole('group', { name: /properties of state/i })).toBeInTheDocument();
+    tapEdge('0', '1');
+    expect(await screen.findByRole('group', { name: /transition from/i })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
+  });
+
+  it('goes away on a background click, like the state panel', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapEdge('0', '1');
+    expect(await screen.findByRole('group', { name: /transition from/i })).toBeInTheDocument();
+    const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
+      | ((evt: { target: unknown }) => void)
+      | undefined;
+    act(() => tap?.({ target: h.cy }));
+    expect(screen.queryByRole('group', { name: /transition from/i })).toBeNull();
+  });
+
+  it('shows nothing for an edge the machine does not have', async () => {
+    // describeEdge returns null rather than an empty panel, so a stale or bundled id that no
+    // longer matches produces no window at all.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapEdge('nope', 'also-nope');
+    expect(screen.queryByRole('group', { name: /transition from/i })).toBeNull();
+  });
+});

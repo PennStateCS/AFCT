@@ -402,6 +402,46 @@ export function describeState(parsed: Parsed, id: string, eps: string): StateDes
   };
 }
 
+/** The transitions drawn as one edge between a pair of states. */
+export type EdgeDescription = {
+  from: string;
+  to: string;
+  /** True when both ends are the same state, which is drawn as a loop. */
+  selfLoop: boolean;
+  /** One entry per transition, already formatted for the machine's type. */
+  labels: string[];
+};
+
+/**
+ * Describe the edge between two states.
+ *
+ * An edge is not a transition. Parallel transitions between the same pair are bundled into one
+ * line on the canvas with a combined label, so clicking it asks about all of them: a panel that
+ * showed only the first would be quietly wrong on exactly the machines where it matters, the
+ * ones with several ways to get from one state to another.
+ *
+ * Returns null when no transition joins the two, which is what a click on something that is not
+ * an edge would produce.
+ */
+export function describeEdge(
+  parsed: Parsed,
+  from: string,
+  to: string,
+  eps: string,
+): EdgeDescription | null {
+  const nameById = new Map(parsed.states.map((st) => [st.id, st.name || st.id]));
+  const nameOf = (id: string) => nameById.get(id) ?? id;
+
+  const labels = [...parsed.transitions]
+    .sort((a, b) => a.__idx - b.__idx)
+    .filter((t) => t.from === from && t.to === to)
+    .map((t) => labelFor(t, parsed.type, eps));
+
+  if (labels.length === 0) return null;
+
+  return { from: nameOf(from), to: nameOf(to), selfLoop: from === to, labels };
+}
+
 export function describeMachine(parsed: Parsed, eps: string): MachineDescription {
   const nameById = new Map(parsed.states.map((s) => [s.id, s.name || s.id]));
   const nameOf = (id: string) => nameById.get(id) ?? id;
