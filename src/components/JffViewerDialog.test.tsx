@@ -283,3 +283,15 @@ describe('JffViewerDialog — wrapper', () => {
     expect(screen.getByText('JFLAP Viewer')).toBeInTheDocument();
   });
 });
+
+describe('the graph canvas says it can be dragged', () => {
+  it('carries an open hand, and a closed one while the button is down', () => {
+    // Panning is enabled, so the pointer has to advertise it. jsdom cannot show a cursor,
+    // which is the point of asserting the classes: this is the wiring, and how it looks is
+    // a browser check.
+    render(<JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" />);
+    const canvas = screen.getByRole('img');
+    expect(canvas.className).toContain('cursor-grab');
+    expect(canvas.className).toContain('active:cursor-grabbing');
+  });
+});

@@ -277,7 +277,13 @@ export function JffCytoscapeViewer({
         ref={containerRef}
         // In fill mode the flex track supplies the height; an inline one would fight it.
         style={fill ? backgroundStyle : { height, ...backgroundStyle }}
-        className={cn('bg-card relative overflow-hidden', fill && 'min-h-0 flex-1')}
+        // Dragging the background pans the graph, so the pointer says so: an open hand over
+        // the canvas, a closed one while the button is down. `cursor` inherits, so the
+        // canvases cytoscape puts inside pick it up without being styled themselves.
+        className={cn(
+          'bg-card relative cursor-grab overflow-hidden active:cursor-grabbing',
+          fill && 'min-h-0 flex-1',
+        )}
         role="img"
         aria-label={
           error
