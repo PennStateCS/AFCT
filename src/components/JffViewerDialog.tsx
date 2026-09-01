@@ -11,7 +11,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { describeMachine, type MachineDescription, type MachineType } from '@/lib/jflap-parse';
+import {
+  describeMachine,
+  type MachineDescription,
+  type MachineType,
+  type StateDescription,
+} from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Slider } from '@/components/ui/slider';
@@ -28,7 +33,7 @@ import {
   useRegisterViewerActions,
   useViewerChromePresent,
 } from '@/components/viewer/viewer-actions';
-import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2, X } from 'lucide-react';
 
 /**
  * Fallback grid colour, used only if `--grid-color` is somehow absent.
@@ -101,6 +106,95 @@ function MachineDescriptionList({ description }: { description: MachineDescripti
   );
 }
 
+/**
+ * What a clicked state is, floated over the top right of the canvas.
+ *
+ * Over the graph rather than beside it: the graph is the whole point of the window, and a side
+ * panel would take a column away from the machine permanently to show something that is only
+ * wanted occasionally.
+ *
+ * Mouse-only by nature, because it answers a click on a canvas and a canvas cannot be tabbed
+ * into. Everything it shows is also in the text representation, which is the keyboard and
+ * screen-reader route to the same facts, so this is a convenience rather than the only way to
+ * them.
+ */
+function StatePropertiesPanel({
+  state,
+  onClose,
+}: {
+  state: StateDescription;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      // Capped and scrollable, so a hub state with twenty transitions cannot run off the canvas.
+      className="bg-card absolute top-2 right-2 z-10 max-h-[min(60%,20rem)] w-64 overflow-y-auto rounded-md border p-3 shadow-md"
+      role="group"
+      aria-label={`Properties of state ${state.name}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-mono text-sm font-semibold break-all">{state.name}</p>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="-mt-1 -mr-1 h-6 w-6 shrink-0 p-0"
+          onClick={onClose}
+          aria-label="Close state properties"
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {state.initial || state.final ? (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {state.initial ? (
+            <Badge variant="outline" className="text-xs">
+              Initial
+            </Badge>
+          ) : null}
+          {state.final ? (
+            <Badge variant="outline" className="text-xs">
+              Final
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
+
+      <dl className="mt-3 space-y-2 text-xs">
+        <div>
+          <dt className="text-muted-foreground">Out</dt>
+          <dd>
+            {state.outgoing.length === 0 ? (
+              <span className="text-muted-foreground">Nothing leaves this state</span>
+            ) : (
+              <ul className="list-none space-y-0.5">
+                {state.outgoing.map((line, i) => (
+                  <li key={`${line}-${i}`}>{line}</li>
+                ))}
+              </ul>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">In</dt>
+          <dd>
+            {state.incoming.length === 0 ? (
+              <span className="text-muted-foreground">Nothing reaches this state</span>
+            ) : (
+              <ul className="list-none space-y-0.5">
+                {state.incoming.map((line, i) => (
+                  <li key={`${line}-${i}`}>{line}</li>
+                ))}
+              </ul>
+            )}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
 /* ───────────────────────────── Viewer component ────────────────────────── */
 
 export function JffCytoscapeViewer({
@@ -144,6 +238,8 @@ export function JffCytoscapeViewer({
     toggleHonorPositions,
     showNotes,
     toggleNotes,
+    selectedState,
+    clearSelectedState,
     zoomIn,
     zoomOut,
     zoom,
@@ -406,29 +502,36 @@ export function JffCytoscapeViewer({
 
       {/* The rendered graph. role="img" + a description keeps a screen reader from
           wandering into cytoscape's internals while still conveying what it shows. */}
-      <div
-        ref={containerRef}
-        // In fill mode the flex track supplies the height; an inline one would fight it.
-        style={fill ? backgroundStyle : { height, ...backgroundStyle }}
-        // The ordinary arrow at rest, a closed hand while the button is down and the graph is
-        // being dragged. Not an open hand throughout: that reads as "this whole surface is a
-        // handle" over a diagram whose states and transitions are the things worth pointing
-        // at. `cursor` inherits, so the canvases cytoscape puts inside pick this up without
-        // being styled themselves.
-        className={cn(
-          'bg-card relative cursor-default overflow-hidden active:cursor-grabbing',
-          fill && 'min-h-0 flex-1',
-        )}
-        role="img"
-        aria-label={
-          error
-            ? 'The diagram could not be drawn'
-            : title
-              ? `Diagram of ${title}`
-              : 'Automaton diagram'
-        }
-        aria-describedby={description ? summaryId : undefined}
-      />
+      {/* A positioned wrapper around the graph, because cytoscape owns the container's
+          children and anything floated over the drawing has to be a sibling of it. */}
+      <div className={cn('relative', fill ? 'flex min-h-0 flex-1 flex-col' : undefined)}>
+        <div
+          ref={containerRef}
+          // In fill mode the flex track supplies the height; an inline one would fight it.
+          style={fill ? backgroundStyle : { height, ...backgroundStyle }}
+          // The ordinary arrow at rest, a closed hand while the button is down and the graph is
+          // being dragged. Not an open hand throughout: that reads as "this whole surface is a
+          // handle" over a diagram whose states and transitions are the things worth pointing
+          // at. `cursor` inherits, so the canvases cytoscape puts inside pick this up without
+          // being styled themselves.
+          className={cn(
+            'bg-card relative cursor-default overflow-hidden active:cursor-grabbing',
+            fill && 'min-h-0 flex-1',
+          )}
+          role="img"
+          aria-label={
+            error
+              ? 'The diagram could not be drawn'
+              : title
+                ? `Diagram of ${title}`
+                : 'Automaton diagram'
+          }
+          aria-describedby={description ? summaryId : undefined}
+        />
+        {selectedState ? (
+          <StatePropertiesPanel state={selectedState} onClose={clearSelectedState} />
+        ) : null}
+      </div>
 
       {description ? (
         chromeHasViewControls ? (

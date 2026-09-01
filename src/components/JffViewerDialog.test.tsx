@@ -52,6 +52,8 @@ const h = vi.hoisted(() => {
     getElementById: vi.fn(() => chain),
     add: vi.fn(() => chain),
     on: vi.fn(),
+    // Records handlers so a test can fire a tap the way cytoscape would.
+    __handlers: {} as Record<string, (evt: unknown) => void>,
     layout: vi.fn(() => ({ run: vi.fn(), on: vi.fn() })),
     width: vi.fn(() => 800),
     height: vi.fn(() => 600),
@@ -547,5 +549,81 @@ describe('the start marker', () => {
     render(<JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" darkMode />);
     await waitForEngine();
     expect(startStyle()?.['background-color']).not.toBe('#ffffff');
+  });
+});
+
+describe('clicking a state', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  /** Fire the tap handler cytoscape would have called, with a node-shaped target. */
+  const tapNode = (id: string) => {
+    const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
+      | ((evt: { target: unknown }) => void)
+      | undefined;
+    const node = {
+      isNode: () => true,
+      hasClass: () => false,
+      id: () => id,
+      closedNeighborhood: () => ({ addClass: () => ({ removeClass: () => undefined }) }),
+    };
+    act(() => tap?.({ target: node }));
+  };
+
+  const tapBackground = () => {
+    const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
+      | ((evt: { target: unknown }) => void)
+      | undefined;
+    act(() => tap?.({ target: h.cy }));
+  };
+
+  it('shows nothing until something is clicked', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
+  });
+
+  it('names the state and lists what leaves and arrives', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const panel = await screen.findByRole('group', { name: /properties of state/i });
+    expect(panel).toHaveTextContent('Out');
+    expect(panel).toHaveTextContent('In');
+  });
+
+  it('goes away when the canvas is clicked, which is how somebody dismisses it', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    expect(await screen.findByRole('group', { name: /properties of state/i })).toBeInTheDocument();
+    tapBackground();
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
+  });
+
+  it('closes from its own button too', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    fireEvent.click(await screen.findByRole('button', { name: /close state properties/i }));
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
+  });
+
+  it('shows nothing for the start marker, which is scenery rather than a state', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
+      | ((evt: { target: unknown }) => void)
+      | undefined;
+    act(() =>
+      tap?.({
+        target: {
+          isNode: () => true,
+          hasClass: (c: string) => c === 'start',
+          id: () => 'start-0',
+          closedNeighborhood: () => ({ addClass: () => ({ removeClass: () => undefined }) }),
+        },
+      }),
+    );
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
   });
 });

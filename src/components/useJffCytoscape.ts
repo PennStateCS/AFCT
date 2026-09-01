@@ -21,6 +21,7 @@ import {
 import { toJflapXml } from '@/lib/jflap-write';
 import {
   describeMachine,
+  describeState,
   machineDescriptionText,
   parseJflap,
   toElements,
@@ -252,6 +253,9 @@ export function useJffCytoscape({
   // Notes the student wrote on the canvas. On by default: they are the author's own words and
   // part of the answer, not decoration. Turned off when they crowd a busy machine.
   const [showNotes, setShowNotes] = useState(true);
+  // The state a reader has clicked, if any. Held as an id rather than a described object so it
+  // survives a reload of the same file and cannot go stale against a re-parsed machine.
+  const [selectedStateId, setSelectedStateId] = useState<string | null>(null);
   // Read by the load path, which runs outside React's render and would otherwise capture the
   // value from whenever the effect that started it was created.
   const showNotesRef = useRef(showNotes);
@@ -281,6 +285,7 @@ export function useJffCytoscape({
         const parsed = parseJflap(text);
         setType(parsed.type);
         setParsed(parsed);
+        setSelectedStateId(null);
         const elements = toElements(parsed, epsSymbol, honorPositions);
 
         if (!containerRef.current) {
@@ -677,12 +682,19 @@ export function useJffCytoscape({
         cy.on('tap', (evt: any) => {
           if (evt.target === cy) {
             cy.elements().removeClass('faded highlighted');
+            // A click on empty canvas means "never mind", so the properties panel goes too.
+            setSelectedStateId(null);
             return;
           }
           const ele = evt.target;
           // `events: 'no'` should stop a note being a tap target at all; this is the belt to
           // that brace, since a note has no neighbourhood and would fade the whole machine.
           if (ele.hasClass?.('note')) return;
+          // Only a state has properties worth a panel. The start marker is scenery, and an
+          // edge is already described by the two states it joins.
+          setSelectedStateId(
+            ele.isNode?.() && !ele.hasClass?.('start') ? (ele.id?.() ?? null) : null,
+          );
           const neighborhood = ele.closedNeighborhood
             ? ele.closedNeighborhood()
             : ele.neighborhood();
@@ -897,6 +909,9 @@ export function useJffCytoscape({
     setZoom,
     showNotes,
     toggleNotes: () => setShowNotes((on) => !on),
+    selectedState:
+      parsed && selectedStateId ? describeState(parsed, selectedStateId, epsSymbol) : null,
+    clearSelectedState: () => setSelectedStateId(null),
     zoomRange,
     fit: () => onResizeRef.current?.(),
     downloadSVG,

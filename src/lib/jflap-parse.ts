@@ -355,6 +355,53 @@ export function machineDescriptionText(description: MachineDescription): string 
   return lines.join('\n');
 }
 
+/** One state, described for the panel that appears when a reader clicks it. */
+export type StateDescription = {
+  id: string;
+  name: string;
+  initial: boolean;
+  final: boolean;
+  /** "on a to q1", already formatted for the machine's type. */
+  outgoing: string[];
+  /** "from q0 on a". */
+  incoming: string[];
+  /** A self-loop appears in both lists; this is the count of distinct transitions touching it. */
+  degree: number;
+};
+
+/**
+ * Describe a single state.
+ *
+ * Shares `labelFor` with the whole-machine description, so a transition never reads one way in
+ * the panel and another in the text representation. Returns null for an id the machine does not
+ * have, which is what a click on a note or a start marker would produce.
+ */
+export function describeState(parsed: Parsed, id: string, eps: string): StateDescription | null {
+  const state = parsed.states.find((s) => s.id === id);
+  if (!state) return null;
+
+  const nameById = new Map(parsed.states.map((s) => [s.id, s.name || s.id]));
+  const nameOf = (target: string) => nameById.get(target) ?? target;
+
+  const ordered = [...parsed.transitions].sort((a, b) => a.__idx - b.__idx);
+  const outgoing = ordered
+    .filter((t) => t.from === id)
+    .map((t) => `on ${labelFor(t, parsed.type, eps)} to ${nameOf(t.to)}`);
+  const incoming = ordered
+    .filter((t) => t.to === id)
+    .map((t) => `from ${nameOf(t.from)} on ${labelFor(t, parsed.type, eps)}`);
+
+  return {
+    id: state.id,
+    name: state.name || state.id,
+    initial: state.initial,
+    final: state.final,
+    outgoing,
+    incoming,
+    degree: ordered.filter((t) => t.from === id || t.to === id).length,
+  };
+}
+
 export function describeMachine(parsed: Parsed, eps: string): MachineDescription {
   const nameById = new Map(parsed.states.map((s) => [s.id, s.name || s.id]));
   const nameOf = (id: string) => nameById.get(id) ?? id;
