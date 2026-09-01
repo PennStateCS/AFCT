@@ -324,15 +324,26 @@ running_app_image_id() {
   docker inspect -f '{{.Image}}' "$_cid" 2>/dev/null
 }
 
+# How a container's status and health are read.
+#
+# `index` rather than the plain `.State.Health`, as cheap insurance against a trap in
+# `docker inspect --format`. A template referring only to fields of Docker's typed struct is
+# rendered against that struct, where an absent healthcheck is a nil pointer and `if` reads it as
+# false. Refer to one field that exists only in the raw JSON, `.Id` rather than `.ID` being the
+# easy slip, and the WHOLE template is rendered against the JSON map instead, where a missing
+# Health key is a hard template error rather than an empty value. That would make every
+# healthcheck-less container read as `missing`, which this function treats as fatal, and the
+# worker has none by design: every upgrade would fail. `index` returns empty either way, so the
+# two forms cannot diverge. (Found the hard way, in a throwaway script that used `.Id`.)
+_STATE_TEMPLATE='{{.State.Status}}|{{if index .State "Health"}}{{index .State "Health" "Status"}}{{else}}none{{end}}'
+
 # A single health read (not the polling loop). running+healthy or running+none pass;
 # anything else (starting, unhealthy, exited) is treated as not-yet-good.
 health_ok_once() {
   _proj=$1
   _id=$(dc "$_proj" ps -q "$APP_SERVICE" 2>/dev/null | head -n 1)
   [ -n "$_id" ] || return 1
-  _state=$(docker inspect \
-    -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
-    "$_id" 2>/dev/null || printf 'missing|none')
+  _state=$(docker inspect -f "$_STATE_TEMPLATE" "$_id" 2>/dev/null || printf 'missing|none')
   case "$_state" in
     running\|healthy) return 0 ;;
     running\|none) return 0 ;;
@@ -843,16 +854,6 @@ _recreate_stack() {
 # app), the worker, and the backup sidecar are now verified too, so a crashed sidecar
 # fails the upgrade instead of being missed. The worker has no healthcheck by design, so
 # it passes on "running".
-# How a container's status and health are read.
-#
-# `index` rather than `{{if .State.Health}}`, because a container that defines no healthcheck has
-# no Health key at all in the inspect payload, and looking it up directly is a template ERROR on
-# newer Docker CLIs rather than an empty value. This image currently ships an older CLI that
-# tolerates it, which is the only reason the dotted form worked: bump the CLI and every
-# healthcheck-less container would start reading as `missing`, which this function treats as
-# fatal. The worker has no healthcheck by design, so that would fail every upgrade, and before
-# the reporting below it would have failed them without saying why.
-_STATE_TEMPLATE='{{.State.Status}}|{{if index .State "Health"}}{{index .State "Health" "Status"}}{{else}}none{{end}}'
 
 _STACK_FATAL=false
 # Which services were not good on the last call, as "svc=status|health" pairs. Read by the
