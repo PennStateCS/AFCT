@@ -423,3 +423,68 @@ describe('the grid background renders the same on the server and in the browser'
     expect(source).not.toContain('getComputedStyle');
   });
 });
+
+describe('where the text description lives', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('keeps the panel and its toggle in a dialog', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    expect(screen.getByRole('button', { name: /show text representation/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Description of this file' })).toBeInTheDocument();
+  });
+
+  it('takes the panel off the screen in the standalone window', async () => {
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+      </ViewerActionsProvider>,
+    );
+    await waitForEngine();
+    expect(screen.queryByRole('button', { name: /show text representation/i })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Description of this file' })).toBeNull();
+  });
+
+  it('still gives the canvas its text alternative, which is not optional', async () => {
+    // The panel is hidden, not removed: aria-describedby points at the summary, and a canvas
+    // with nothing behind that attribute is unreadable to a screen reader. Removing the panel
+    // outright would have been a silent accessibility regression.
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+      </ViewerActionsProvider>,
+    );
+    await waitForEngine();
+    const canvas = screen.getByRole('img');
+    const describedBy = canvas.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    const summary = document.getElementById(describedBy as string);
+    expect(summary?.textContent).toMatch(/finite automaton/i);
+  });
+
+  it('publishes an action that opens it, and renders the listing to open', async () => {
+    // What this cannot check: whether the dialog is shut to begin with. The shared ui/dialog
+    // mock this file uses renders its children whatever `open` says and gives them no dialog
+    // role, so open and closed look identical here. The wiring is covered; the opening itself
+    // is a browser check.
+    let run: ((name: 'showTextRepresentation') => void) | null = null;
+    function Probe() {
+      run = useViewerActions().run;
+      return null;
+    }
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src={SRC} title="abc.jff" />
+        <Probe />
+      </ViewerActionsProvider>,
+    );
+    await waitForEngine();
+
+    expect(run).not.toBeNull();
+    act(() => run?.('showTextRepresentation'));
+
+    // The listing is present to be shown, with the same content the dialog panel carries.
+    expect(screen.getByText('Text representation')).toBeInTheDocument();
+    expect(screen.getByText('Initial state')).toBeInTheDocument();
+  });
+});

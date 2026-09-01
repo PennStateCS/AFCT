@@ -16,6 +16,7 @@ const actions = {
   copyDescription: vi.fn(),
   toggleGrid: vi.fn(),
   fitToWindow: vi.fn(),
+  showTextRepresentation: vi.fn(),
   setAsDrawn: vi.fn(),
   setAutoArranged: vi.fn(),
 };
@@ -293,5 +294,21 @@ describe('View, Fit to window', () => {
     expect(await screen.findByRole('menuitem', { name: /fit to window/i })).toHaveAttribute(
       'data-disabled',
     );
+  });
+});
+
+describe('View, Text representation', () => {
+  it('asks the viewer to show the machine written out', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'View' }));
+    // fireEvent for the same jsdom reason as the export case above.
+    fireEvent.click(await screen.findByRole('menuitem', { name: /text representation/i }));
+    expect(actions.showTextRepresentation).toHaveBeenCalledTimes(1);
   });
 });

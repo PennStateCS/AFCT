@@ -8,6 +8,7 @@ import {
   Copy,
   ClipboardType,
   Maximize2,
+  ListTree,
 } from 'lucide-react';
 import {
   Menubar,
@@ -131,6 +132,13 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
           >
             Grid
           </MenubarCheckboxItem>
+          <MenubarSeparator />
+          {/* The same content the dialog viewers show in a panel under the graph. Here it
+              opens in a window, so the graph keeps the full height of the screen. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('showTextRepresentation')}>
+            <ListTree aria-hidden="true" />
+            Text representation
+          </MenubarItem>
           <MenubarSeparator />
           <MenubarSub>
             <MenubarSubTrigger>Layout</MenubarSubTrigger>

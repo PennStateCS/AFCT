@@ -2,10 +2,16 @@
 
 import { useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { describeMachine, type MachineType } from '@/lib/jflap-parse';
+import { describeMachine, type MachineDescription, type MachineType } from '@/lib/jflap-parse';
 import { cn } from '@/lib/utils';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Slider } from '@/components/ui/slider';
@@ -35,6 +41,65 @@ import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2 } from 'luc
  * the theming anyway, live, without any of this.
  */
 const GRID_COLOR_FALLBACK = '#0f172a';
+
+/**
+ * The machine written out: states, transitions and any notes.
+ *
+ * One component because it now appears in two places and must not drift between them. In a
+ * dialog it sits in a panel under the graph; in the standalone window the View menu opens it
+ * in a window of its own, so the graph keeps the whole height.
+ */
+function MachineDescriptionList({ description }: { description: MachineDescription }) {
+  return (
+    <>
+      {description.isEmpty ? (
+        <p className="text-muted-foreground">
+          This file contains no states or notes, so there is nothing to describe.
+        </p>
+      ) : (
+        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+          <dt className="text-muted-foreground">States</dt>
+          <dd>{description.stateNames.join(', ')}</dd>
+
+          <dt className="text-muted-foreground">Initial state</dt>
+          <dd>{description.initialState ?? 'Not set'}</dd>
+
+          <dt className="text-muted-foreground">Final states</dt>
+          <dd>{description.finalStates.length ? description.finalStates.join(', ') : 'None'}</dd>
+
+          <dt className="text-muted-foreground">Transitions</dt>
+          <dd>
+            {description.transitionLines.length === 0 ? (
+              'None'
+            ) : (
+              <ul className="list-none space-y-0.5">
+                {description.transitionLines.map((line, i) => (
+                  <li key={`${line}-${i}`}>{line}</li>
+                ))}
+              </ul>
+            )}
+          </dd>
+
+          {/* Only when there are any: an empty Notes row on every machine would be
+              noise, and most files have none. Notes are drawn on the canvas only in
+              "As drawn", so this is where they are always readable. */}
+          {description.noteLines.length > 0 ? (
+            <>
+              <dt className="text-muted-foreground">Notes</dt>
+              <dd>
+                <ul className="list-none space-y-0.5">
+                  {description.noteLines.map((line, i) => (
+                    <li key={`${line}-${i}`}>{line}</li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          ) : null}
+        </dl>
+      )}
+    </>
+  );
+}
 
 /* ───────────────────────────── Viewer component ────────────────────────── */
 
@@ -120,6 +185,7 @@ export function JffCytoscapeViewer({
       copyDescription,
       toggleGrid: () => setGrid((on) => !on),
       fitToWindow: fit,
+      showTextRepresentation: () => setShowText(true),
       // Set rather than toggled, so the menu's two options are a choice between states and
       // selecting the one already showing does nothing.
       setAsDrawn: () => {
@@ -360,81 +426,57 @@ export function JffCytoscapeViewer({
       />
 
       {description ? (
-        // Capped and scrollable on its own: the expanded transition listing can be long,
-        // and it must not steal height from the graph or grow the dialog. Focusable with it,
-        // because past the toggle below there is nothing tabbable, so the states and
-        // transitions this panel exists to expose could not be scrolled to by keyboard.
-        <div
-          className="max-h-40 shrink-0 overflow-y-auto border-t px-3 py-2"
-          tabIndex={0}
-          role="group"
-          aria-label="Description of this file"
-        >
-          <p id={summaryId} className="text-muted-foreground text-xs">
-            {description.summary}
-          </p>
-
-          <button
-            type="button"
-            onClick={() => setShowText((v) => !v)}
-            aria-expanded={showText}
-            aria-controls="jff-text-representation"
-            className="text-foreground focus-visible:ring-ring mt-1 rounded text-xs underline focus-visible:ring-2 focus-visible:outline-none"
+        chromeHasViewControls ? (
+          <>
+            {/* The summary is still here, just not on screen. It is what `aria-describedby` on
+          the canvas points at, and a canvas with no text alternative is unreadable to a
+          screen reader, so it is hidden visually rather than removed. */}
+            <p id={summaryId} className="sr-only">
+              {description.summary}
+            </p>
+            <Dialog open={showText} onOpenChange={setShowText}>
+              <DialogContent className="max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Text representation</DialogTitle>
+                  <DialogDescription>{description.summary}</DialogDescription>
+                </DialogHeader>
+                <div className="text-sm">
+                  <MachineDescriptionList description={description} />
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
+        ) : (
+          // Capped and scrollable on its own: the listing can be long, and it must not steal
+          // height from the graph or grow the dialog. Focusable with it, because past the
+          // toggle there is nothing tabbable, so the states and transitions this panel exists
+          // to expose could not be scrolled to by keyboard.
+          <div
+            className="max-h-40 shrink-0 overflow-y-auto border-t px-3 py-2"
+            tabIndex={0}
+            role="group"
+            aria-label="Description of this file"
           >
-            {showText ? 'Hide text representation' : 'Show text representation'}
-          </button>
+            <p id={summaryId} className="text-muted-foreground text-xs">
+              {description.summary}
+            </p>
 
-          {/* Kept mounted so aria-controls always resolves. */}
-          <div id="jff-text-representation" hidden={!showText} className="mt-2 text-xs">
-            {description.isEmpty ? (
-              <p className="text-muted-foreground">
-                This file contains no states or notes, so there is nothing to describe.
-              </p>
-            ) : (
-              <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
-                <dt className="text-muted-foreground">States</dt>
-                <dd>{description.stateNames.join(', ')}</dd>
+            <button
+              type="button"
+              onClick={() => setShowText((v) => !v)}
+              aria-expanded={showText}
+              aria-controls="jff-text-representation"
+              className="text-foreground focus-visible:ring-ring mt-1 rounded text-xs underline focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {showText ? 'Hide text representation' : 'Show text representation'}
+            </button>
 
-                <dt className="text-muted-foreground">Initial state</dt>
-                <dd>{description.initialState ?? 'Not set'}</dd>
-
-                <dt className="text-muted-foreground">Final states</dt>
-                <dd>
-                  {description.finalStates.length ? description.finalStates.join(', ') : 'None'}
-                </dd>
-
-                <dt className="text-muted-foreground">Transitions</dt>
-                <dd>
-                  {description.transitionLines.length === 0 ? (
-                    'None'
-                  ) : (
-                    <ul className="list-none space-y-0.5">
-                      {description.transitionLines.map((line, i) => (
-                        <li key={`${line}-${i}`}>{line}</li>
-                      ))}
-                    </ul>
-                  )}
-                </dd>
-
-                {/* Only when there are any: an empty Notes row on every machine would be
-                    noise, and most files have none. Notes are drawn on the canvas only in
-                    "As drawn", so this is where they are always readable. */}
-                {description.noteLines.length > 0 ? (
-                  <>
-                    <dt className="text-muted-foreground">Notes</dt>
-                    <dd>
-                      <ul className="list-none space-y-0.5">
-                        {description.noteLines.map((line, i) => (
-                          <li key={`${line}-${i}`}>{line}</li>
-                        ))}
-                      </ul>
-                    </dd>
-                  </>
-                ) : null}
-              </dl>
-            )}
+            {/* Kept mounted so aria-controls always resolves. */}
+            <div id="jff-text-representation" hidden={!showText} className="mt-2 text-xs">
+              <MachineDescriptionList description={description} />
+            </div>
           </div>
-        </div>
+        )
       ) : null}
     </div>
   );
