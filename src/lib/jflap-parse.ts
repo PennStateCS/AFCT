@@ -323,6 +323,38 @@ const MACHINE_NOUN: Record<MachineType, string> = {
   unknown: 'Automaton',
 };
 
+/**
+ * A machine description as plain text, for pasting somewhere that is not a picture.
+ *
+ * The same content the viewer shows behind "Show text representation", laid out for an email
+ * or a comment rather than for a screen reader walking a list. It is the only export that
+ * survives being quoted: an SVG or a PNG of a student's automaton cannot be replied to inline.
+ */
+export function machineDescriptionText(description: MachineDescription): string {
+  const lines: string[] = [description.summary, ''];
+
+  if (description.stateNames.length > 0) {
+    lines.push(`States: ${description.stateNames.join(', ')}`);
+    lines.push(`Initial state: ${description.initialState ?? 'not set'}`);
+    lines.push(
+      `Final states: ${description.finalStates.length > 0 ? description.finalStates.join(', ') : 'none'}`,
+    );
+  }
+
+  if (description.transitionLines.length > 0) {
+    lines.push('', 'Transitions:');
+    for (const line of description.transitionLines) lines.push(`  ${line}`);
+  }
+
+  // Notes are the student's own words, so they are quoted rather than summarised away.
+  if (description.noteLines.length > 0) {
+    lines.push('', 'Notes on the drawing:');
+    for (const note of description.noteLines) lines.push(`  ${note}`);
+  }
+
+  return lines.join('\n');
+}
+
 export function describeMachine(parsed: Parsed, eps: string): MachineDescription {
   const nameById = new Map(parsed.states.map((s) => [s.id, s.name || s.id]));
   const nameOf = (id: string) => nameById.get(id) ?? id;

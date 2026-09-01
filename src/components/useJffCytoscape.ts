@@ -18,7 +18,14 @@ import {
   START_MARKER_SIZE,
   STATE_BORDER_WIDTH,
 } from '@/lib/jflap-layout';
-import { parseJflap, toElements, type MachineType, type Parsed } from '@/lib/jflap-parse';
+import {
+  describeMachine,
+  machineDescriptionText,
+  parseJflap,
+  toElements,
+  type MachineType,
+  type Parsed,
+} from '@/lib/jflap-parse';
 
 /* ───────────────────────────── Types & consts ───────────────────────────── */
 
@@ -718,6 +725,38 @@ export function useJffCytoscape({
     await downloadDataUrl(`${(title ?? 'automaton').replace(/\s+/g, '_')}.png`, dataUrl);
   };
 
+  /**
+   * Copy the drawing as SVG, as text.
+   *
+   * Written to the clipboard as a string rather than as an `image/svg+xml` item, because that
+   * is what the places people paste into actually accept: a text paste lands as editable
+   * vector art in Illustrator or Inkscape and as markup in an editor, whereas an svg
+   * clipboard item is ignored by most of them.
+   */
+  const copySVG = async () => {
+    if (!cyRef.current) return;
+    const svgStr: string = cyRef.current.svg({ scale: 1, full: true });
+    try {
+      await navigator.clipboard.writeText(svgStr);
+    } catch {
+      // No clipboard permission, or an insecure origin. Falling back to the download keeps
+      // the action doing something rather than failing silently.
+      await downloadSVG();
+    }
+  };
+
+  /** Copy the machine as prose, the one export that can be quoted in a reply. */
+  const copyDescription = async () => {
+    if (!parsed) return;
+    const text = machineDescriptionText(describeMachine(parsed, epsSymbol));
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Nothing to fall back to that would not be a surprise, so this stays quiet. The same
+      // text is on screen behind "Show text representation" and can be selected by hand.
+    }
+  };
+
   const copyPNG = async () => {
     if (!cyRef.current) return;
     try {
@@ -748,6 +787,8 @@ export function useJffCytoscape({
     zoomOut,
     fit: () => onResizeRef.current?.(),
     downloadSVG,
+    copySVG,
+    copyDescription,
     downloadPNG,
     copyPNG,
   };

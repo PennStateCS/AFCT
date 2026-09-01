@@ -19,6 +19,10 @@ export type ViewerActions = {
   downloadSVG: () => void | Promise<void>;
   downloadPNG: () => void | Promise<void>;
   copyPNG: () => void | Promise<void>;
+  /** The drawing as SVG markup, which pastes as vector art rather than a bitmap. */
+  copySVG: () => void | Promise<void>;
+  /** The machine in words, the one export that can be quoted in a reply. */
+  copyDescription: () => void | Promise<void>;
   toggleGrid: () => void;
   /** Draw the machine where the author put the states, rather than auto-arranging it. */
   setAsDrawn: () => void;

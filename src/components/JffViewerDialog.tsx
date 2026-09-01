@@ -70,6 +70,8 @@ export function JffCytoscapeViewer({
     downloadSVG,
     downloadPNG,
     copyPNG,
+    copySVG,
+    copyDescription,
     parsed,
   } = useJffCytoscape({ src, title, epsSymbol, darkMode: isDark, honorPositionsDefault });
 
@@ -96,6 +98,8 @@ export function JffCytoscapeViewer({
       downloadSVG,
       downloadPNG,
       copyPNG,
+      copySVG,
+      copyDescription,
       toggleGrid: () => setGrid((on) => !on),
       // Set rather than toggled, so the menu's two options are a choice between states and
       // selecting the one already showing does nothing.

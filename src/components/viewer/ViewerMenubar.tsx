@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, FileImage, FileCode2, Copy } from 'lucide-react';
+import { Download, FileImage, FileCode2, Copy, ClipboardType } from 'lucide-react';
 import {
   Menubar,
   MenubarCheckboxItem,
@@ -68,7 +68,20 @@ export function ViewerMenubar({ downloadHref }: { downloadHref: string }) {
               disk under File. */}
           <MenubarItem disabled={!ready} onSelect={() => run('copyPNG')}>
             <Copy aria-hidden="true" />
-            Copy PNG to clipboard
+            Copy as PNG
+          </MenubarItem>
+          {/* Pastes as vector art, so it stays sharp in a slide or a printed handout, where
+              the PNG above does not. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('copySVG')}>
+            <FileCode2 aria-hidden="true" />
+            Copy as SVG
+          </MenubarItem>
+          <MenubarSeparator />
+          {/* The only one of the three that can be quoted in a reply: a picture of an
+              automaton cannot be answered inline, a description of it can. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('copyDescription')}>
+            <ClipboardType aria-hidden="true" />
+            Copy as text
           </MenubarItem>
         </MenubarContent>
       </MenubarMenu>

@@ -11,6 +11,8 @@ const actions = {
   downloadSVG: vi.fn(),
   downloadPNG: vi.fn(),
   copyPNG: vi.fn(),
+  copySVG: vi.fn(),
+  copyDescription: vi.fn(),
   toggleGrid: vi.fn(),
   setAsDrawn: vi.fn(),
   setAutoArranged: vi.fn(),
@@ -141,17 +143,39 @@ describe('the View menu', () => {
 });
 
 describe('the Edit menu', () => {
-  it('copies the drawing to the clipboard', async () => {
-    const user = userEvent.setup();
+  const openEdit = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'Edit' }));
+
+  const mountWithViewer = () =>
     render(
       <ViewerActionsProvider>
         <FakeViewer />
         <ViewerMenubar downloadHref="/x?download=1" />
       </ViewerActionsProvider>,
     );
-    await user.click(screen.getByRole('menuitem', { name: 'Edit' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: /copy png/i }));
-    expect(actions.copyPNG).toHaveBeenCalledTimes(1);
+
+  it.each([
+    [/copy as png/i, 'copyPNG'],
+    [/copy as svg/i, 'copySVG'],
+    [/copy as text/i, 'copyDescription'],
+  ] as const)('runs %s', async (name, action) => {
+    const user = userEvent.setup();
+    mountWithViewer();
+    await openEdit(user);
+    // fireEvent for the same jsdom reason as the export case above.
+    fireEvent.click(await screen.findByRole('menuitem', { name }));
+    expect(actions[action]).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers all three ways of copying, since each pastes somewhere the others cannot', async () => {
+    // PNG into a document, SVG into a drawing program, text into a reply. Losing one of
+    // these silently would look like a tidy-up rather than a regression.
+    const user = userEvent.setup();
+    mountWithViewer();
+    await openEdit(user);
+    const items = await screen.findAllByRole('menuitem');
+    const labels = items.map((i) => i.textContent);
+    expect(labels.filter((l) => l?.startsWith('Copy as'))).toHaveLength(3);
   });
 });
 
