@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { zoomToSlider, sliderToZoom, zoomPercentLabel } from './zoom-scale';
+import { zoomToSlider, sliderToZoom, zoomPercentLabel, zoomPercentSpoken } from './zoom-scale';
 
 // The viewer's own bounds, so the assertions describe the real control.
 const MIN = 0.2;
@@ -46,9 +46,14 @@ describe('the zoom slider scale', () => {
     expect(Number.isNaN(zoomToSlider(NaN, MIN, MAX))).toBe(false);
   });
 
-  it('speaks the zoom as a percentage', () => {
+  it('shows the zoom as a percentage', () => {
     expect(zoomPercentLabel(1)).toBe('100%');
     expect(zoomPercentLabel(0.2)).toBe('20%');
     expect(zoomPercentLabel(2.5)).toBe('250%');
+  });
+
+  it('spells the percent out for the slider, where pronunciation of the symbol varies', () => {
+    expect(zoomPercentSpoken(1)).toBe('100 percent');
+    expect(zoomPercentSpoken(0.5)).toBe('50 percent');
   });
 });

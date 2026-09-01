@@ -7,8 +7,7 @@ import {
   FileDown,
   FileImage,
   FileCode2,
-  Copy,
-  Maximize2,
+  Scan,
   ListTree,
   BookOpen,
   Info,
@@ -119,8 +118,11 @@ export function ViewerMenubar({
           {/* Copying belongs with the other things you do to take the machine elsewhere,
               which is what an Edit menu means to most people, rather than with saving it to
               disk under File. */}
+          {/* Format icons, matching File > Export, so the same format carries the same icon
+              wherever it appears. Two identical Copy icons would say only "these are both
+              copies", which the labels already say. */}
           <MenubarItem disabled={!ready} onSelect={() => run('copyPNG')}>
-            <Copy aria-hidden="true" />
+            <FileImage aria-hidden="true" />
             Copy as PNG
           </MenubarItem>
           {/* Pastes as vector art, so it stays sharp in a slide or a printed handout, where
@@ -137,8 +139,10 @@ export function ViewerMenubar({
         <MenubarContent>
           {/* First because it is the one people reach for most: after zooming or panning
               about, this is how you get the whole machine back on screen. */}
+          {/* The same icon the toolbar's Fit button uses. One action, one icon, wherever it
+              is offered from. */}
           <MenubarItem disabled={!ready} onSelect={() => run('fitToWindow')}>
-            <Maximize2 aria-hidden="true" />
+            <Scan aria-hidden="true" />
             Fit to window
           </MenubarItem>
           <MenubarSeparator />

@@ -24,6 +24,7 @@ import { Slider } from '@/components/ui/slider';
 import {
   sliderToZoom,
   zoomPercentLabel,
+  zoomPercentSpoken,
   zoomToSlider,
   ZOOM_SLIDER_MAX,
   ZOOM_SLIDER_MIN,
@@ -34,7 +35,7 @@ import {
   useRegisterViewerActions,
   useViewerChromePresent,
 } from '@/components/viewer/viewer-actions';
-import { Grid, Download, ImageDown, Copy, ZoomIn, ZoomOut, Maximize2, X } from 'lucide-react';
+import { Grid, Download, ImageDown, Copy, Minus, Plus, Scan, X } from 'lucide-react';
 
 /**
  * Fallback grid colour, used only if `--grid-color` is somehow absent.
@@ -454,52 +455,71 @@ export function JffCytoscapeViewer({
                 />
               </>
             )}
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={zoomOut}
-              title="Zoom out"
-              aria-label="Zoom out"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            {/* Between the two buttons, which is where the thing they both change belongs.
-                Log scale, so 100% sits near the middle instead of against the left end; see
-                lib/zoom-scale. The value is spoken as a percentage, because "62" means
-                nothing to somebody who cannot see the graph. */}
-            <Slider
-              className="w-20 shrink-0 sm:w-28"
-              min={ZOOM_SLIDER_MIN}
-              max={ZOOM_SLIDER_MAX}
-              step={1}
-              value={[zoomToSlider(zoom, zoomRange().min, zoomRange().max)]}
-              onValueChange={([next]) => {
-                const { min, max } = zoomRange();
-                if (next !== undefined) setZoom(sliderToZoom(next, min, max));
-              }}
+            {/* One bordered group holding the two buttons, the value they change, and the
+                slider that changes it continuously. Four separate controls in a row read as
+                four unrelated things; a single container says they are one. */}
+            <div
+              className="border-input bg-card flex h-8 items-center gap-0.5 rounded-md border px-0.5"
+              role="group"
               aria-label="Zoom"
-              aria-valuetext={zoomPercentLabel(zoom)}
-            />
-            <Button
-              size="sm"
-              variant="outline"
-              className={controlBtnClass}
-              onClick={zoomIn}
-              title="Zoom in"
-              aria-label="Zoom in"
             >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 shrink-0 p-0"
+                onClick={zoomOut}
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              {/* Fixed width and tabular numerals, so the toolbar does not shift sideways as
+                  the value moves between 50% and 200%. State rather than a control: it is not
+                  focusable and does nothing when clicked, and the slider beside it carries the
+                  same value for anybody who cannot see this. */}
+              <span className="text-muted-foreground w-11 shrink-0 text-center text-xs tabular-nums">
+                {zoomPercentLabel(zoom)}
+              </span>
+              {/* Log scale, so 100% sits near the middle of the track rather than against the
+                  left end; see lib/zoom-scale. Shortest thing here, and the first to give way
+                  when the toolbar is tight. */}
+              <Slider
+                className="w-14 shrink-0 sm:w-20"
+                min={ZOOM_SLIDER_MIN}
+                max={ZOOM_SLIDER_MAX}
+                step={1}
+                value={[zoomToSlider(zoom, zoomRange().min, zoomRange().max)]}
+                onValueChange={([next]) => {
+                  const { min, max } = zoomRange();
+                  if (next !== undefined) setZoom(sliderToZoom(next, min, max));
+                }}
+                aria-label="Zoom level"
+                aria-valuetext={zoomPercentSpoken(zoom)}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 shrink-0 p-0"
+                onClick={zoomIn}
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* Outside the group: it sets the zoom rather than nudging it, and it is the one
+                control here somebody reaches for without knowing what the current value is.
+                The label drops below `sm`, where the icon and the tooltip carry it. */}
             <Button
               size="sm"
               variant="outline"
-              className={controlBtnClass}
+              className={cn(controlBtnClass, 'h-8 shrink-0')}
               onClick={fit}
-              title="Fit"
-              aria-label="Fit to view"
+              title="Fit automaton to view"
+              aria-label="Fit automaton to view"
             >
-              <Maximize2 className="h-4 w-4" />
+              <Scan className="h-4 w-4 sm:mr-2" />
+              <span className="sr-only sm:not-sr-only">Fit</span>
             </Button>
           </div>
 

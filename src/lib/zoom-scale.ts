@@ -28,7 +28,18 @@ export function sliderToZoom(position: number, min: number, max: number): number
   return Math.exp(Math.log(min) + ratio * (Math.log(max) - Math.log(min)));
 }
 
-/** Zoom as a percentage, for the control's spoken value. */
+/** Zoom as a percentage, for the value shown in the toolbar. */
 export function zoomPercentLabel(zoom: number): string {
   return `${Math.round(zoom * 100)}%`;
+}
+
+/**
+ * The same value spelled out, for the slider's `aria-valuetext`.
+ *
+ * A slider whose value is left as a bare number announces "62", which is its position on the
+ * track and means nothing to anybody. The percent sign is written as a word because how a
+ * screen reader pronounces the symbol varies, and this is the one place it must be certain.
+ */
+export function zoomPercentSpoken(zoom: number): string {
+  return `${Math.round(zoom * 100)} percent`;
 }

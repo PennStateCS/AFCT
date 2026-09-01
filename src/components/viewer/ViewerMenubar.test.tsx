@@ -1,5 +1,7 @@
 /** @vitest-environment jsdom */
 import React from 'react';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -452,5 +454,40 @@ describe('File, Properties', () => {
     expect(await screen.findByRole('menuitem', { name: 'Properties' })).not.toHaveAttribute(
       'data-disabled',
     );
+  });
+});
+
+/**
+ * The menu's icon conventions, which are easy to break one item at a time.
+ *
+ * A source check rather than a rendered one, because it is about what the file says rather
+ * than what any single open menu shows, and a menu bar only renders the one menu that is open.
+ */
+describe('the menu uses icons consistently', () => {
+  const source = () =>
+    readFileSync(path.resolve(__dirname, 'ViewerMenubar.tsx'), 'utf8');
+
+  const itemsOf = (kind: string) => {
+    const found: string[] = [];
+    const re = new RegExp(`<${kind}\\b((?:.|\\n)*?)</${kind}>`, 'g');
+    for (const m of source().matchAll(re)) found.push(m[1] ?? '');
+    return found;
+  };
+
+  it('gives every plain item an icon, so none reads as an odd one out', () => {
+    const items = itemsOf('MenubarItem');
+    expect(items.length).toBeGreaterThan(5);
+    for (const body of items) expect(body).toMatch(/<[A-Z]\w+ aria-hidden/);
+  });
+
+  it('gives the checkbox and radio items none, because that slot holds the tick', () => {
+    // Radix draws the check or the dot in the leading slot. An icon there collides with it.
+    for (const body of [...itemsOf('MenubarCheckboxItem'), ...itemsOf('MenubarRadioItem')]) {
+      expect(body).not.toMatch(/<[A-Z]\w+ aria-hidden/);
+    }
+  });
+
+  it('marks every icon as decoration, since the label already names the item', () => {
+    expect(source()).not.toMatch(/<[A-Z]\w+ className="[^"]*"\s*\/>\s*\n\s*[A-Z]/);
   });
 });

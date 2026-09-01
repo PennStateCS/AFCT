@@ -165,7 +165,7 @@ describe('JffCytoscapeViewer — toolbar presence', () => {
       'Toggle grid',
       'Zoom out',
       'Zoom in',
-      'Fit to view',
+      'Fit automaton to view',
       'Download SVG',
       'Download PNG',
       'Copy PNG to clipboard',
@@ -350,32 +350,59 @@ describe('the toolbar does not repeat what a menu already offers', () => {
       </ViewerActionsProvider>,
     );
     expect(screen.getByRole('button', { name: /zoom in/i })).toBeInTheDocument();
-    expect(screen.getByRole('slider', { name: 'Zoom' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Zoom level' })).toBeInTheDocument();
   });
 });
 
 describe('the zoom slider', () => {
   const SRC = '/api/files/submissions/abc.jff';
 
-  it('sits between the two zoom buttons', () => {
-    // Position is the request: the control that changes zoom belongs between the two
-    // buttons that also change it, not parked at the end of the toolbar.
+  it('reads as one group: out, value, slider, in', () => {
+    // The order is the request. Asserted by document position rather than by walking the DOM,
+    // because the slider is built from several nested spans and any structural query would
+    // break the next time that component changes.
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
-    const group = screen.getByRole('group', { name: 'View controls' });
-    const controls = Array.from(
-      group.querySelectorAll('button[aria-label="Zoom out"], [role="slider"], button[aria-label="Zoom in"]'),
-    );
-    expect(controls).toHaveLength(3);
-    expect(controls[0]).toHaveAttribute('aria-label', 'Zoom out');
-    expect(controls[1]).toHaveAttribute('role', 'slider');
-    expect(controls[2]).toHaveAttribute('aria-label', 'Zoom in');
+    const group = screen.getByRole('group', { name: 'Zoom' });
+    const out = screen.getByRole('button', { name: 'Zoom out' });
+    const value = screen.getByText('100%');
+    const slider = screen.getByRole('slider', { name: 'Zoom level' });
+    const zoomIn = screen.getByRole('button', { name: 'Zoom in' });
+
+    for (const el of [out, value, slider, zoomIn]) expect(group).toContainElement(el);
+
+    const precedes = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(precedes(out, value)).toBe(true);
+    expect(precedes(value, slider)).toBe(true);
+    expect(precedes(slider, zoomIn)).toBe(true);
   });
 
-  it('is announced as a zoom, with the value spoken as a percentage', () => {
-    // "62" is meaningless to a screen reader user; "100%" is the thing they asked about.
+  it('shows the current zoom as a percentage', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
-    const slider = screen.getByRole('slider', { name: 'Zoom' });
-    expect(slider).toHaveAttribute('aria-valuetext', '100%');
+    expect(screen.getByRole('group', { name: 'Zoom' })).toHaveTextContent('100%');
+  });
+
+  it('keeps the value a fixed width, so the toolbar does not jump as zoom changes', () => {
+    // Tabular numerals plus a set width. 50% and 200% must not move the buttons beside them.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    const value = screen.getByText('100%');
+    expect(value.className).toContain('tabular-nums');
+    expect(value.className).toMatch(/\bw-\d+\b/);
+  });
+
+  it('offers Fit outside the zoom group, with a name that says what it does', () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    const fitButton = screen.getByRole('button', { name: 'Fit automaton to view' });
+    expect(fitButton).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Zoom' })).not.toContainElement(fitButton);
+  });
+
+  it('announces its value as a spoken percentage, not a track position', () => {
+    // A bare value announces "62", which is where the thumb sits and means nothing. Percent
+    // is spelled out because how a screen reader pronounces the symbol varies.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    const slider = screen.getByRole('slider', { name: 'Zoom level' });
+    expect(slider).toHaveAttribute('aria-valuetext', '100 percent');
   });
 });
 
