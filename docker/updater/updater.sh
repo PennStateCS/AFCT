@@ -125,6 +125,10 @@ FETCH_RETRY_DELAY="${UPDATER_FETCH_RETRY_DELAY:-5}"
 # background process with no healthcheck by design; a deployment that healthchecks every
 # service can turn this on for a stricter gate.
 REQUIRE_HEALTHCHECKS="${UPDATER_REQUIRE_HEALTHCHECKS:-false}"
+# How many lines of a failing service's output to copy into the progress log before the
+# rollback destroys the container that produced them. Enough to carry a stack trace, small
+# enough not to push the rest of the upgrade out of a size-capped log.
+DEGRADED_LOG_LINES="${UPDATER_DEGRADED_LOG_LINES:-25}"
 
 # Fail closed on the release allowlist: when NO manifest can be consulted (the remote is
 # unreachable AND there is no readable local versions.json), refuse the tag instead of
@@ -320,15 +324,26 @@ running_app_image_id() {
   docker inspect -f '{{.Image}}' "$_cid" 2>/dev/null
 }
 
+# How a container's status and health are read.
+#
+# `index` rather than the plain `.State.Health`, as cheap insurance against a trap in
+# `docker inspect --format`. A template referring only to fields of Docker's typed struct is
+# rendered against that struct, where an absent healthcheck is a nil pointer and `if` reads it as
+# false. Refer to one field that exists only in the raw JSON, `.Id` rather than `.ID` being the
+# easy slip, and the WHOLE template is rendered against the JSON map instead, where a missing
+# Health key is a hard template error rather than an empty value. That would make every
+# healthcheck-less container read as `missing`, which this function treats as fatal, and the
+# worker has none by design: every upgrade would fail. `index` returns empty either way, so the
+# two forms cannot diverge. (Found the hard way, in a throwaway script that used `.Id`.)
+_STATE_TEMPLATE='{{.State.Status}}|{{if index .State "Health"}}{{index .State "Health" "Status"}}{{else}}none{{end}}'
+
 # A single health read (not the polling loop). running+healthy or running+none pass;
 # anything else (starting, unhealthy, exited) is treated as not-yet-good.
 health_ok_once() {
   _proj=$1
   _id=$(dc "$_proj" ps -q "$APP_SERVICE" 2>/dev/null | head -n 1)
   [ -n "$_id" ] || return 1
-  _state=$(docker inspect \
-    -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
-    "$_id" 2>/dev/null || printf 'missing|none')
+  _state=$(docker inspect -f "$_STATE_TEMPLATE" "$_id" 2>/dev/null || printf 'missing|none')
   case "$_state" in
     running\|healthy) return 0 ;;
     running\|none) return 0 ;;
@@ -860,26 +875,58 @@ _recreate_stack() {
 # app), the worker, and the backup sidecar are now verified too, so a crashed sidecar
 # fails the upgrade instead of being missed. The worker has no healthcheck by design, so
 # it passes on "running".
+
 _STACK_FATAL=false
+# Which services were not good on the last call, as "svc=status|health" pairs. Read by the
+# callers so a failure names the service instead of only reporting that one exists.
+_STACK_BAD=""
 stack_state_ok() {
   _proj=$1
   _STACK_FATAL=false
+  _STACK_BAD=""
   _ss_ok=true
   # shellcheck disable=SC2086
   for _svc in $STACK_SERVICES; do
     _sid=$(dc "$_proj" ps -q "$_svc" 2>/dev/null | head -n 1)
-    if [ -z "$_sid" ]; then _ss_ok=false; continue; fi
-    _st=$(docker inspect \
-      -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
-      "$_sid" 2>/dev/null || printf 'missing|none')
+    if [ -z "$_sid" ]; then
+      _ss_ok=false
+      _STACK_BAD="$_STACK_BAD $_svc=no-container"
+      continue
+    fi
+    _st=$(docker inspect -f "$_STATE_TEMPLATE" "$_sid" 2>/dev/null || printf 'missing|none')
     case "$_st" in
-      running\|healthy) : ;;
-      running\|none) [ "$REQUIRE_HEALTHCHECKS" = "true" ] && _ss_ok=false ;;
+      running\|healthy) continue ;;
+      running\|none)
+        # No healthcheck defined. Running is as much as this service can prove.
+        [ "$REQUIRE_HEALTHCHECKS" = "true" ] || continue
+        _ss_ok=false
+        ;;
       exited\|* | dead\|* | missing\|* | removing\|*) _STACK_FATAL=true; _ss_ok=false ;;
       *) _ss_ok=false ;;   # starting, unhealthy, restarting, created: keep polling
     esac
+    _STACK_BAD="$_STACK_BAD $_svc=$_st"
   done
   [ "$_ss_ok" = "true" ]
+}
+
+# Copy a struggling service's last output into the progress log.
+#
+# The rollback removes the container that failed, taking its logs with it, so whatever it said
+# has to be captured before then or it is gone for good. Without this an administrator (and
+# anyone helping them) sees only that an upgrade failed, and diagnosing it means reproducing the
+# failure on purpose to watch it happen.
+report_degraded() {
+  _proj=$1
+  # shellcheck disable=SC2086
+  for _pair in $_STACK_BAD; do
+    _bsvc=${_pair%%=*}
+    _bsid=$(dc "$_proj" ps -q "$_bsvc" 2>/dev/null | head -n 1)
+    [ -n "$_bsid" ] || continue
+    progress_note "last output from ${_bsvc}:"
+    docker logs --tail "$DEGRADED_LOG_LINES" "$_bsid" 2>&1 | while IFS= read -r _bline; do
+      progress_note "  [${_bsvc}] ${_bline}"
+    done
+  done
 }
 
 # Wait until the whole stack is up and healthy, or HEALTH_TIMEOUT elapses. Fails fast
@@ -890,10 +937,16 @@ wait_for_health() {
   while [ "$_elapsed" -lt "$HEALTH_TIMEOUT" ]; do
     beat
     if stack_state_ok "$_proj"; then return 0; fi
-    [ "$_STACK_FATAL" = "true" ] && return 1
+    if [ "$_STACK_FATAL" = "true" ]; then
+      progress_note "a service could not start:${_STACK_BAD}"
+      report_degraded "$_proj"
+      return 1
+    fi
     sleep "$HEALTH_INTERVAL"
     _elapsed=$((_elapsed + HEALTH_INTERVAL))
   done
+  progress_note "gave up waiting after ${HEALTH_TIMEOUT}s; still not ready:${_STACK_BAD}"
+  report_degraded "$_proj"
   return 1
 }
 
@@ -910,7 +963,8 @@ stabilize_stack() {
   while [ "$_elapsed" -lt "$STABILITY_SECONDS" ]; do
     beat
     if ! stack_state_ok "$_proj"; then
-      progress_note "a service degraded during the stability window"
+      progress_note "a service degraded during the stability window:${_STACK_BAD}"
+      report_degraded "$_proj"
       return 1
     fi
     if ! deployed_and_healthy "$_tag" "$_proj"; then
