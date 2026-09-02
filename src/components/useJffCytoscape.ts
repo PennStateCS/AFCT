@@ -301,11 +301,25 @@ function panKeepingCentre(
   if (![before.width, before.height, after.width, after.height].every((n) => n > 0)) {
     return null;
   }
-  const centre = {
-    x: (before.width / 2 - pan.x) / zoom,
-    y: (before.height / 2 - pan.y) / zoom,
-  };
-  return { x: after.width / 2 - centre.x * zoom, y: after.height / 2 - centre.y * zoom };
+  return panPuttingCentre(centreOfView(before, zoom, pan), after, zoom);
+}
+
+/** The model point under the middle of the canvas. */
+function centreOfView(
+  size: { width: number; height: number },
+  zoom: number,
+  pan: { x: number; y: number },
+): { x: number; y: number } {
+  return { x: (size.width / 2 - pan.x) / zoom, y: (size.height / 2 - pan.y) / zoom };
+}
+
+/** The pan that puts a model point under the middle of the canvas. */
+function panPuttingCentre(
+  centre: { x: number; y: number },
+  size: { width: number; height: number },
+  zoom: number,
+): { x: number; y: number } {
+  return { x: size.width / 2 - centre.x * zoom, y: size.height / 2 - centre.y * zoom };
 }
 
 /** A point cytoscape will accept: both halves present and real numbers. */
@@ -792,10 +806,17 @@ export function useJffCytoscape({
       const pan = cy.pan();
       const zoom = cy.zoom();
       if (!arrangement || !isFinitePoint(pan) || !Number.isFinite(zoom) || zoom <= 0) return;
+      const size = { width: cy.width(), height: cy.height() };
       writeViewState(viewStateKeyRef.current, {
         v: 1,
         zoom,
         pan: { x: pan.x, y: pan.y },
+        // What the restore actually uses. See the note on the type: the pan alone belongs to the
+        // canvas size it was taken at, and the canvas is not that size when it comes back.
+        centre:
+          size.width > 0 && size.height > 0
+            ? centreOfView(size, zoom, { x: pan.x, y: pan.y })
+            : undefined,
         positions: arrangement.positions,
         honorPositions: arrangement.honorPositions,
         modified: viewModifiedRef.current,
@@ -897,7 +918,14 @@ export function useJffCytoscape({
         // happened either.
         if (saved.modified) setRestoredModified(true);
         cy.zoom(saved.zoom);
-        cy.pan(saved.pan);
+        // The point that was in the middle, put back in the middle of whatever width the canvas
+        // has now. Falling back to the raw pan for an entry written before that was recorded.
+        const size = { width: cy.width(), height: cy.height() };
+        const centred =
+          saved.centre && size.width > 0 && size.height > 0
+            ? panPuttingCentre(saved.centre, size, saved.zoom)
+            : null;
+        cy.pan(centred ?? saved.pan);
         restoreSelection(cy, saved.selection ?? null);
         return true;
       } catch {

@@ -947,6 +947,30 @@ describe('remembering the view across a refresh', () => {
     expect(saved()?.zoom).toBe(3);
   });
 
+  it('comes back to the same place when the canvas is a different width', async () => {
+    // The properties panel docks beside the drawing and takes 20rem of it, and on the way back
+    // in it opens a moment after the view is restored. Restoring the pan, which is in rendered
+    // pixels, therefore moved the machine left by half a panel on every refresh, and it piled
+    // up: Jeff saw it walk further left each time.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        // Written down at 480 wide, where this pan put the model point (100, 100) in the middle.
+        pan: { x: 140, y: 200 },
+        centre: { x: 100, y: 100 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+      }),
+    );
+
+    renderViewer({ viewStateKey: KEY });
+
+    // The fake canvas is 800 x 600, so the same point in the middle means a different pan.
+    await waitFor(() => expect(lastCy().panPosition).toEqual({ x: 300, y: 200 }));
+  });
+
   it('does not put the old positions back when the layout is switched', async () => {
     // The regression this guards: the restore ran at the end of every load, and switching to
     // Auto-arranged is a load, so the layout engine placed the states and the remembered
@@ -1442,6 +1466,37 @@ describe('keeping the canvas in step with its container', () => {
     await resize();
 
     expect(cy.panPosition).toEqual(pan);
+  });
+
+  it('writes down the same centre after a resize, so refreshing does not walk the machine', async () => {
+    // The drift Jeff saw: open the properties panel, refresh, and the machine sits further left
+    // every time. The panel narrows the canvas after the view has been restored, so what is
+    // written down has to be the point in the middle rather than the pan that put it there.
+    const KEY = 'submissions:machine.jff';
+    window.sessionStorage.clear();
+    renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    const cy = lastCy();
+    cy.zoom(2);
+    cy.pan({ x: -200, y: -80 });
+    act(() => cy.handlers['viewport position']?.({}));
+    await waitFor(() =>
+      expect(JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).centre).toBeDefined(),
+    );
+    const before = JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).centre;
+
+    // The panel opening: 20rem off the width of the canvas.
+    cy.containerWidth = 480;
+    await resize();
+    act(() => cy.handlers['viewport position']?.({}));
+
+    await waitFor(() => {
+      const after = JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!);
+      expect(after.centre.x).toBeCloseTo(before.x, 6);
+      expect(after.centre.y).toBeCloseTo(before.y, 6);
+      // The pan did move, which is the point: the same place, seen through a narrower window.
+      expect(after.pan.x).not.toBe(-200);
+    });
   });
 
   it('leaves Fit to window fitting and centring, which is what it is for', async () => {

@@ -39,6 +39,17 @@ export type ViewerViewState = {
   v: 1;
   zoom: number;
   pan: { x: number; y: number };
+  /**
+   * The model point that was under the middle of the canvas.
+   *
+   * The pan above is in rendered pixels and so belongs to the size the canvas had when it was
+   * written down. That size is not the size it comes back at: the properties panel docks beside
+   * the drawing and takes 20rem of it, and on the way back in the panel opens a moment after the
+   * view is restored. Restoring the pan therefore moved the machine left by half a panel every
+   * refresh, and it accumulated. This is what the restore uses; `pan` stays for an entry written
+   * before this existed.
+   */
+  centre?: { x: number; y: number };
   positions: Record<string, { x: number; y: number }>;
   /** Whether the reader was on the drawn layout or the auto-arranged one. */
   honorPositions: boolean;
@@ -128,6 +139,7 @@ function isViewState(value: unknown): value is ViewerViewState {
   if (s.v !== 1) return false;
   if (typeof s.zoom !== 'number' || !Number.isFinite(s.zoom) || s.zoom <= 0) return false;
   if (!isPoint(s.pan)) return false;
+  if (s.centre !== undefined && !isPoint(s.centre)) return false;
   if (typeof s.honorPositions !== 'boolean') return false;
   if (s.modified !== undefined && typeof s.modified !== 'boolean') return false;
   if (s.selection !== undefined && s.selection !== null && !isSelection(s.selection)) return false;
