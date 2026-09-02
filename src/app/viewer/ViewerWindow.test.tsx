@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, fireEvent, act, within } from '@testing-library/react';
+import { render, screen, fireEvent, act, within, createEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { tabKey, VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
@@ -271,6 +271,178 @@ describe('the menu bar belongs to the tab on screen', () => {
   });
 });
 
+describe('dragging a tab to one side', () => {
+  const TYPE = 'application/x-afct-viewer-tab';
+
+  /** A drag payload the browser would build. `types` is all a dragover may read. */
+  const transfer = (types: string[] = [TYPE]) => ({
+    types,
+    setData: vi.fn(),
+    dropEffect: '',
+    effectAllowed: '',
+  });
+
+  /** jsdom measures everything as zero, and where a drop lands is arithmetic over a rect. */
+  const withRect = () =>
+    vi
+      .spyOn(HTMLDivElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ left: 0, width: 800, top: 0, height: 600 } as DOMRect);
+
+  const body = () => screen.getByTestId('viewer-body');
+  const outline = () => screen.queryByTestId('viewer-drop-outline');
+
+  /**
+   * Fire a dragover at a place.
+   *
+   * `fireEvent.dragOver(el, { clientX })` does not work: `clientX` is a read-only getter
+   * inherited from MouseEvent, so the assignment is silently dropped and the handler sees
+   * `undefined`. It has to be defined onto the event.
+   */
+  const dragOverAt = (x: number, types: string[] = [TYPE]) => {
+    const event = createEvent.dragOver(body(), { dataTransfer: transfer(types) });
+    Object.defineProperty(event, 'clientX', { value: x });
+    fireEvent(body(), event);
+    return event;
+  };
+
+  /** Leave the body towards something, or towards nothing when the pointer leaves the page. */
+  const dragLeaveTo = (target: Element | null) => {
+    // `relatedTarget` is a read-only getter, like `clientX` above: assigning it through
+    // fireEvent's init is silently dropped and the handler sees null, which is the one value
+    // that means something different.
+    const event = createEvent.dragLeave(body(), { dataTransfer: transfer() });
+    Object.defineProperty(event, 'relatedTarget', { value: target });
+    fireEvent(body(), event);
+  };
+
+  const dragTab = (name: string) =>
+    fireEvent.dragStart(screen.getByRole('tab', { name }), { dataTransfer: transfer() });
+
+  it('paints an outline over the half the machine would take', () => {
+    const rect = withRect();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    dragTab('b.jff');
+
+    dragOverAt(780);
+    expect(outline()?.className).toContain('left-1/2');
+
+    dragOverAt(20);
+    expect(outline()?.className).toContain('left-0');
+    rect.mockRestore();
+  });
+
+  it('paints nothing across the middle, where a drop would do nothing', () => {
+    const rect = withRect();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    dragTab('b.jff');
+    dragOverAt(400);
+    expect(outline()).toBeNull();
+    rect.mockRestore();
+  });
+
+  it('ignores something dragged in from outside the page', () => {
+    // A file from the desktop, or a selection from another window. Promising a split and then
+    // not doing one is worse than doing nothing.
+    const rect = withRect();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    dragTab('b.jff');
+    dragOverAt(780, ['Files']);
+    expect(outline()).toBeNull();
+    rect.mockRestore();
+  });
+
+  it('accepts the drag, without which the browser would never deliver the drop', () => {
+    // The trap: a dragover that does not call preventDefault means the drop is refused and
+    // `onDrop` is never called at all. jsdom delivers the drop regardless, so nothing else
+    // here would notice; this asserts on the event itself.
+    const rect = withRect();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    dragTab('b.jff');
+
+    expect(dragOverAt(780).defaultPrevented).toBe(true);
+    // And does not claim a drag that is not ours, which would stop the page doing whatever it
+    // would otherwise do with it.
+    expect(dragOverAt(780, ['Files']).defaultPrevented).toBe(false);
+    rect.mockRestore();
+  });
+
+  it('splits the window when the tab is let go', () => {
+    const rect = withRect();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    dragTab('b.jff');
+    dragOverAt(780);
+    fireEvent.drop(body(), { dataTransfer: transfer() });
+
+    const strips = screen.getAllByRole('tablist');
+    expect(strips.map((s) => s.getAttribute('aria-label'))).toEqual(['Left pane', 'Right pane']);
+    expect(
+      within(strips[1]!)
+        .getAllByRole('tab')
+        .map((t) => t.textContent),
+    ).toEqual(['b.jff']);
+    expect(outline()).toBeNull();
+    // And the menu bar follows the machine that was dropped. Somebody dragged this one
+    // somewhere on purpose, so it is what Reset and Download have to mean.
+    expect(screen.getByTestId('menubar').getAttribute('data-download')).toContain('b.jff');
+    rect.mockRestore();
+  });
+
+  it('clears the outline when the pointer leaves the window', () => {
+    const rect = withRect();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    dragTab('b.jff');
+    dragOverAt(780);
+
+    dragLeaveTo(null);
+    expect(outline()).toBeNull();
+    rect.mockRestore();
+  });
+
+  it('keeps the outline while the pointer crosses things inside the window', () => {
+    // dragleave fires on the way into every child, so an unconditional clear would make the
+    // outline flicker off and on as the pointer passed over each machine.
+    const rect = withRect();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    dragTab('b.jff');
+    dragOverAt(780);
+
+    dragLeaveTo(screen.getAllByTestId('viewer')[0]!);
+    expect(outline()).not.toBeNull();
+    rect.mockRestore();
+  });
+
+  it('clears the outline when the drag ends without a drop', () => {
+    // Escape, or letting go outside the window. Neither fires a drop, and the outline would
+    // otherwise stay painted over the machine.
+    const rect = withRect();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    dragTab('b.jff');
+    dragOverAt(780);
+    expect(outline()).not.toBeNull();
+
+    fireEvent.dragEnd(screen.getByRole('tab', { name: 'b.jff' }));
+    expect(outline()).toBeNull();
+    rect.mockRestore();
+  });
+
+  it('tells the browser what is being dragged, or Firefox will not start one', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    const dataTransfer = transfer();
+    fireEvent.dragStart(screen.getByRole('tab', { name: 'b.jff' }), { dataTransfer });
+    expect(dataTransfer.setData).toHaveBeenCalledWith(TYPE, 'submissions:b.jff');
+  });
+
+  it('refuses to split the only open file', () => {
+    const rect = withRect();
+    renderWindow([tab('a.jff')]);
+    dragTab('a.jff');
+    dragOverAt(780);
+    fireEvent.drop(body(), { dataTransfer: transfer() });
+    expect(screen.getAllByRole('tablist')).toHaveLength(1);
+    rect.mockRestore();
+  });
+});
+
 describe('a window split into two panes', () => {
   // Nothing on screen can make a split yet: the drag lands in a later step. What is being
   // checked here is the rendering the split will drive, and the one property everything else
@@ -339,6 +511,32 @@ describe('a window split into two panes', () => {
     expect(screen.getByTestId('menubar').getAttribute('data-download')).toContain('a.jff');
 
     rect.mockRestore();
+  });
+
+  it('marks the half the menu bar is acting on', () => {
+    // Two machines on screen, one menu bar. Without this nobody can tell which one Reset or
+    // Download will mean, which is the question somebody asks before clicking either.
+    renderLayout(splitLayout());
+    const strips = screen.getAllByRole('tablist');
+    // Opened focused on the right.
+    expect(strips[0]!.className).toContain('bg-muted');
+    expect(strips[1]!.className).not.toContain('bg-muted/60');
+
+    const marked = () =>
+      screen
+        .getAllByRole('tab')
+        .filter((t) => t.parentElement?.className.includes('after:bg-primary'))
+        .map((t) => t.textContent);
+    expect(marked()).toEqual(['c.jff']);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'b.jff' }));
+    expect(marked()).toEqual(['b.jff']);
+  });
+
+  it('draws a line between the two halves', () => {
+    // Two grids running into each other read as one crowded picture.
+    const { container } = renderLayout(splitLayout());
+    expect(container.querySelector('.bg-border.absolute')).not.toBeNull();
   });
 
   it('does not rebuild the machines when a pane collapses', () => {

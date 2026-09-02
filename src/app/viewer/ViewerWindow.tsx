@@ -12,10 +12,12 @@ import { clearViewState } from '@/lib/viewer-view-state';
 import { tabKey, VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
 import {
   activeTab,
+  applyDrop,
   closeTab,
   focusedTab,
   isShowing,
   layoutToSearch,
+  dropZone,
   focusPane,
   openTab,
   paneAtPoint,
@@ -23,6 +25,7 @@ import {
   paneOf,
   selectTab,
   tabsInPane,
+  type DropTarget,
   type PaneIndex,
   type ViewerLayout,
 } from '@/lib/viewer-panes';
@@ -33,6 +36,28 @@ const HEARTBEAT_MS = 2000;
 
 /** What each pane is called, for the tab strips and anything that names a side. */
 const PANE_NAMES = ['Left pane', 'Right pane'] as const;
+
+/**
+ * The drag's own media type.
+ *
+ * Checked in `dragover` so that dragging a file in from the desktop, or a selection out of the
+ * page, does not paint a drop outline over a machine and promise something that will not
+ * happen. The payload itself does not travel in the drag: browsers protect drag data until the
+ * drop, so `dragover` can read the type list and nothing else, and what is being dragged has
+ * to be remembered here instead.
+ */
+const TAB_DRAG_TYPE = 'application/x-afct-viewer-tab';
+
+/**
+ * Where the outline sits while a drop would land there.
+ *
+ * The same rectangle either way: a split shows the half the dragged machine would take, and a
+ * move shows the pane it would land in, which is that same half.
+ */
+function outlineRectClass(target: DropTarget): string {
+  const right = target.kind === 'split' ? target.side === 'right' : target.pane === 1;
+  return right ? 'inset-y-0 left-1/2 w-1/2' : 'inset-y-0 left-0 w-1/2';
+}
 
 /**
  * Where a pane sits in the shared body.
@@ -188,11 +213,57 @@ export function ViewerWindow({
    * phase, so a click that also does something inside the graph still moves focus first.
    */
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  /** The tab being dragged, since the drag itself will not carry it. */
+  const draggingKey = useRef<string | null>(null);
+  /** Where a drop would land right now, which is what the outline draws. */
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const focusFromPoint = (clientX: number) => {
     const rect = bodyRef.current?.getBoundingClientRect();
     if (!rect) return;
     const pane = paneAtPoint(clientX, rect, panes);
     if (pane !== null && pane !== layout.focused) setLayout((c) => focusPane(c, pane));
+  };
+
+  const dragProps = (tab: ViewerTab) => ({
+    draggable: true,
+    onDragStart: (event: React.DragEvent) => {
+      draggingKey.current = tabKey(tab);
+      // Firefox refuses to start a drag at all without this, and the type is what tells a
+      // dragover that the thing overhead is one of ours. The value is never read.
+      event.dataTransfer.setData(TAB_DRAG_TYPE, tabKey(tab));
+      event.dataTransfer.effectAllowed = 'move';
+    },
+    // Fires for a drop outside the window and for Escape, neither of which fires `drop`. The
+    // outline would otherwise stay painted over the machine.
+    onDragEnd: () => {
+      draggingKey.current = null;
+      setDropTarget(null);
+    },
+  });
+
+  const bodyDragProps = {
+    onDragOver: (event: React.DragEvent) => {
+      if (!draggingKey.current || !event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
+      // Without this the browser refuses the drop and `onDrop` never fires at all.
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const rect = bodyRef.current?.getBoundingClientRect();
+      setDropTarget(rect ? dropZone(event.clientX, rect, panes) : null);
+    },
+    onDragLeave: (event: React.DragEvent) => {
+      // Only when the pointer has left the body itself, not on the way between the elements
+      // inside it, each of which fires this as it goes.
+      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+      setDropTarget(null);
+    },
+    onDrop: (event: React.DragEvent) => {
+      event.preventDefault();
+      const key = draggingKey.current;
+      const target = dropTarget;
+      draggingKey.current = null;
+      setDropTarget(null);
+      if (key && target) setLayout((current) => applyDrop(current, key, target));
+    },
   };
 
   const close = (tab: ViewerTab) => {
@@ -234,6 +305,13 @@ export function ViewerWindow({
               className={cn(
                 'flex min-w-0 items-end gap-1 overflow-x-auto px-3 pt-2',
                 panes === 1 ? 'flex-1' : 'w-1/2',
+                // The divider between the two halves, carried by the left strip so it lines
+                // up with the one down the body below it.
+                panes === 2 && pane === 0 && 'border-border border-r',
+                // The half that is not being acted on sits back. A background change rather
+                // than dimmed labels: the tab names are already the quietest text here and
+                // fading them further would put them under the contrast floor.
+                panes === 2 && pane !== layout.focused && 'bg-muted/60',
               )}
               role="tablist"
               aria-label={panes === 1 ? 'Open files' : PANE_NAMES[pane]}
@@ -244,16 +322,26 @@ export function ViewerWindow({
                   <div
                     key={tabKey(tab)}
                     className={cn(
-                      'flex max-w-56 shrink-0 items-center gap-1 rounded-t-md border pr-1',
+                      'relative flex max-w-56 shrink-0 items-center gap-1 rounded-t-md border pr-1',
                       selected
                         ? 'bg-background border-b-0'
                         : 'bg-card text-muted-foreground hover:bg-muted border-transparent',
+                      // Which half the menu bar is acting on. A bar along the top of that
+                      // pane's open file, the way an editor marks its active group: with two
+                      // machines on screen, "which one does Reset mean" needs an answer that
+                      // is not a guess. Drawn rather than bordered so nothing shifts by a
+                      // pixel when focus moves, and only when the window is actually split.
+                      panes === 2 &&
+                        selected &&
+                        pane === layout.focused &&
+                        "after:bg-primary after:absolute after:inset-x-0 after:top-0 after:h-[3px] after:rounded-t-md after:content-['']",
                     )}
                   >
                     <button
                       type="button"
                       role="tab"
                       aria-selected={selected}
+                      {...dragProps(tab)}
                       onClick={() => setLayout((current) => selectTab(current, tabKey(tab)))}
                       className="min-w-0 truncate px-3 py-1.5 text-sm font-semibold"
                       title={tab.title}
@@ -295,6 +383,8 @@ export function ViewerWindow({
           className="relative min-h-0 flex-1"
           ref={bodyRef}
           onPointerDownCapture={(event) => focusFromPoint(event.clientX)}
+          data-testid="viewer-body"
+          {...bodyDragProps}
         >
           {layout.tabs
             .filter((tab) => opened.includes(tabKey(tab)) || isShowing(layout, tab))
@@ -322,6 +412,31 @@ export function ViewerWindow({
                 </div>
               );
             })}
+
+          {/* Two machines on two grids run into each other without something between them.
+              A line down the middle rather than a gap, so neither pane loses any width, and
+              over the canvases rather than beside them, since the panes are rectangles in one
+              container and have no edges of their own to carry a border. */}
+          {panes === 2 ? (
+            <div
+              className="bg-border pointer-events-none absolute inset-y-0 left-1/2 z-10 w-px -translate-x-1/2"
+              aria-hidden="true"
+            />
+          ) : null}
+
+          {/* Where the machine would land. `pointer-events: none` because it sits over the
+              body it is reacting to, and would otherwise swallow the very dragover events
+              that keep it in the right place. */}
+          {dropTarget ? (
+            <div
+              className={cn(
+                'border-primary bg-primary/10 pointer-events-none absolute z-20 rounded-md border-2 border-dashed',
+                outlineRectClass(dropTarget),
+              )}
+              aria-hidden="true"
+              data-testid="viewer-drop-outline"
+            />
+          ) : null}
         </div>
       </main>
     </ViewerActionsProvider>
