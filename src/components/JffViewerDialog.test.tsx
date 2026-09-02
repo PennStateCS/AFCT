@@ -744,6 +744,34 @@ describe('clicking a state', () => {
     expect(panel.parentElement).toBe(canvas.parentElement?.parentElement);
   });
 
+  it('renames the state as it is typed', async () => {
+    // A viewer that can be marked up: the label follows the box straight away, and the file is
+    // untouched, which is what the toolbar's note is for.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const field = await screen.findByLabelText('Name');
+
+    fireEvent.change(field, { target: { value: 'start' } });
+
+    expect(await screen.findByRole('group', { name: /properties of state start/i })).toBeVisible();
+    expect(field).toHaveValue('start');
+    expect(await screen.findByRole('button', { name: /file changed/i })).toBeInTheDocument();
+  });
+
+  it('keeps the box empty when it is emptied, rather than filling it back in', async () => {
+    // A state with no name is described by its id, so a box that read its value back from the
+    // machine would put `q0` in as soon as the last character went.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const field = await screen.findByLabelText('Name');
+
+    fireEvent.change(field, { target: { value: '' } });
+
+    expect(field).toHaveValue('');
+  });
+
   it('shows nothing for the start marker, which is scenery rather than a state', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();

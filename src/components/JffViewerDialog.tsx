@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTheme } from 'next-themes';
 import {
   Dialog,
@@ -10,6 +10,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -224,8 +226,35 @@ function PropertiesPanel({
   );
 }
 
-/** What a clicked state is. */
-function StateProperties({ state, onClose }: { state: StateDescription; onClose: () => void }) {
+/**
+ * What a clicked state is, and the one thing about it a reader can change.
+ *
+ * The name is editable and takes effect as it is typed: the label on the drawing, every panel
+ * that mentions the state and the text representation all follow. It changes nothing about the
+ * submitted file, which is why the toolbar says the file has changed on screen once one has
+ * been renamed.
+ *
+ * The box holds its own copy of what has been typed rather than reading it back from the
+ * machine, so that emptying it leaves it empty: a state with no name is described by its id, and
+ * a box that filled itself with `q0` the moment the last character was deleted would be
+ * impossible to type in.
+ */
+function StateProperties({
+  state,
+  onRename,
+  onClose,
+}: {
+  state: StateDescription;
+  onRename: (id: string, name: string) => void;
+  onClose: () => void;
+}) {
+  // Seeded once per state: the call site keys this component by id, so moving to another state
+  // remounts it rather than leaving the previous name in the box.
+  const [name, setName] = useState(state.name);
+  // Unique per rendered panel, not per state: both halves of a split window can be showing the
+  // same file, and two boxes with the same id would leave one label pointing at the other's.
+  const nameFieldId = useId();
+
   return (
     <PropertiesPanel
       label={`Properties of state ${state.name}`}
@@ -238,6 +267,23 @@ function StateProperties({ state, onClose }: { state: StateDescription; onClose:
       closeLabel="Close state properties"
       onClose={onClose}
     >
+      <div className="space-y-1">
+        <Label htmlFor={nameFieldId} className="text-muted-foreground text-xs">
+          Name
+        </Label>
+        <Input
+          id={nameFieldId}
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+            onRename(state.id, event.target.value);
+          }}
+          className="h-8 font-mono text-sm"
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+
       {state.initial || state.final ? (
         <div className="flex flex-wrap gap-1">
           {state.initial ? (
@@ -444,6 +490,7 @@ export function JffCytoscapeViewer({
     selectedState,
     selectedTransition,
     clearSelectedState,
+    renameState,
     zoomIn,
     zoomOut,
     zoom,
@@ -559,7 +606,7 @@ export function JffCytoscapeViewer({
           {/* Title is shown in the dialog header above; only the type label lives here. */}
           <TypeBadge t={type} />
           {/*
-            Whether the drawing has been rearranged, and what to do about it.
+            Whether the drawing has been changed, and what to do about it.
 
             Quiet on purpose: it sits beside the type label rather than announcing itself, and
             it is only there once something has actually been moved. What it answers is a
@@ -581,8 +628,8 @@ export function JffCytoscapeViewer({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-w-xs">
                 <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-                  You have moved things about. The submitted file is unchanged, and nothing here
-                  writes to it.
+                  You have changed how this is shown, by moving states about or renaming one. The
+                  submitted file is unchanged, and nothing here writes to it.
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => void downloadCurrent()}>
@@ -864,7 +911,13 @@ export function JffCytoscapeViewer({
 
         {/* One at a time: a click selects a state or a transition, never both. */}
         {selectedState ? (
-          <StateProperties state={selectedState} onClose={clearSelectedState} />
+          <StateProperties
+            // By id, so the name box is re-seeded when the reader clicks a different state.
+            key={selectedState.id}
+            state={selectedState}
+            onRename={renameState}
+            onClose={clearSelectedState}
+          />
         ) : selectedTransition ? (
           <TransitionProperties edge={selectedTransition} onClose={clearSelectedState} />
         ) : null}

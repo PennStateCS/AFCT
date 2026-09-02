@@ -56,6 +56,14 @@ export type ViewerViewState = {
    * opens, and the worst it costs is a panel the reader has to click again.
    */
   selection?: ViewerSelection | null;
+  /**
+   * The names the reader has given states, by state id.
+   *
+   * Kept for the same reason as the positions: a reader who renames three states to follow an
+   * argument and then reloads should not lose the argument. Optional, like the two above, so an
+   * entry written before this existed still opens.
+   */
+  renames?: Record<string, string>;
 };
 
 const PREFIX = 'afct.viewer.view.';
@@ -89,6 +97,12 @@ function isViewState(value: unknown): value is ViewerViewState {
   if (typeof s.honorPositions !== 'boolean') return false;
   if (s.modified !== undefined && typeof s.modified !== 'boolean') return false;
   if (s.selection !== undefined && s.selection !== null && !isSelection(s.selection)) return false;
+  if (s.renames !== undefined) {
+    if (!s.renames || typeof s.renames !== 'object') return false;
+    if (!Object.values(s.renames as Record<string, unknown>).every((v) => typeof v === 'string')) {
+      return false;
+    }
+  }
   if (!s.positions || typeof s.positions !== 'object') return false;
   return Object.values(s.positions as Record<string, unknown>).every(isPoint);
 }

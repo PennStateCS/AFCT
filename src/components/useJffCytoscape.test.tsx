@@ -318,6 +318,7 @@ vi.mock('cytoscape-elk', () => ({ default: () => {} }));
 vi.mock('cytoscape-svg', () => ({ default: () => {} }));
 
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
+import { describeState } from '@/lib/jflap-parse';
 import type { ViewerViewState } from '@/lib/viewer-view-state';
 
 /* ─────────────────────────────── the fixture ─────────────────────────────── */
@@ -993,6 +994,99 @@ describe('remembering the view across a refresh', () => {
     const { api } = renderViewer();
     await waitFor(() => expect(api().type).toBe('fa'));
     expect(window.sessionStorage.length).toBe(0);
+  });
+});
+
+describe('renaming a state', () => {
+  const KEY = 'submissions:machine.jff';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('changes the label on the drawing and everything that describes it', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers.tap({ target: lastCy().byId('0') }));
+
+    act(() => api().renameState('0', 'start'));
+
+    await waitFor(() => expect(api().selectedState?.name).toBe('start'));
+    expect(lastCy().byId('0')?.data('label')).toBe('start');
+    // And every other panel that names it, which all come from the same parsed machine.
+    expect(api().parsed?.states.find((st) => st.id === '0')?.name).toBe('start');
+    expect(describeState(api().parsed!, '1', DEFAULT_EPS)?.incoming.join(' ')).toContain('start');
+  });
+
+  it('says the drawing has been changed, since it no longer matches the file', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    expect(api().viewModified).toBe(false);
+
+    act(() => api().renameState('0', 'start'));
+
+    await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('survives a rebuild, which re-reads the file and would put the old name back', async () => {
+    const { api, rerender } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().renameState('0', 'start'));
+    await waitFor(() => expect(lastCy().byId('0')?.data('label')).toBe('start'));
+
+    // A theme change is a rebuild, and so is switching the layout.
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('0')?.data('label')).toBe('start'));
+  });
+
+  it('comes back after a refresh, with the note that says the file is not the file', async () => {
+    // Without this the names reverted while the toolbar still said the drawing had been
+    // changed, which was a claim about nothing.
+    window.sessionStorage.setItem(
+      `afct.viewer.view.${KEY}`,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        modified: true,
+        renames: { '0': 'start' },
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+
+    await waitFor(() => expect(lastCy().byId('0')?.data('label')).toBe('start'));
+    expect(api().viewModified).toBe(true);
+  });
+
+  it('writes the names down, so the next visit has them', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().renameState('0', 'start'));
+
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).renames,
+      ).toEqual({ '0': 'start' }),
+    );
+  });
+
+  it('is given up when the machine is put back the way it opened', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().renameState('0', 'start'));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().resetMachine());
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('0')?.data('label')).toBe('q0'));
+    expect(api().viewModified).toBe(false);
   });
 });
 

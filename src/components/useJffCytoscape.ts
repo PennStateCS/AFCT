@@ -324,6 +324,26 @@ function highlightElement(cy: any, ele: any): void {
   neighborhood.addClass('highlighted').removeClass('faded');
 }
 
+/**
+ * The machine with the reader's renamings applied.
+ *
+ * Renamings live beside the parsed file rather than in it, because every rebuild re-reads the
+ * file: switching the layout or the theme would otherwise put the author's names back. Applied
+ * on the way out of each parse instead, so the drawing, the panels, the text representation and
+ * the downloaded arrangement all say the same thing.
+ *
+ * Nothing here writes to the submitted file. It is a view of it, as the whole viewer is.
+ */
+function applyRenames(parsed: Parsed, renames: Record<string, string>): Parsed {
+  if (Object.keys(renames).length === 0) return parsed;
+  return {
+    ...parsed,
+    states: parsed.states.map((state) =>
+      state.id in renames ? { ...state, name: renames[state.id]! } : state,
+    ),
+  };
+}
+
 /** Read the current arrangement out of the graph. */
 function readArrangement(cy: any, honorPositions: boolean): ArrangementSnapshot | null {
   try {
@@ -462,6 +482,21 @@ export function useJffCytoscape({
    * False from the moment a load starts until that load has restored (or decided not to), which
    * is the window in which a write would record a view nobody asked for.
    */
+  /**
+   * The names the reader has given states, by state id.
+   *
+   * Not in `load`'s dependencies on purpose: renaming a state changes one label on a graph that
+   * is already drawn, and rebuilding the machine to do it would throw away the arrangement, the
+   * zoom and the undo history for the sake of a word.
+   *
+   * Seeded from the remembered view rather than restored after the fact: every load applies
+   * these on its way out of the parse, so the first drawing already carries them. Without this
+   * a refresh put the author's names back while the toolbar still said the file had changed on
+   * screen, which was a claim about nothing.
+   */
+  const [renames, setRenames] = useState<Record<string, string>>(savedView?.renames ?? {});
+  const renamesRef = useRef(renames);
+  renamesRef.current = renames;
   const viewRestored = useRef(false);
   /**
    * Which load owns the graph.
@@ -584,7 +619,7 @@ export function useJffCytoscape({
   viewStateKeyRef.current = viewStateKey;
   // Read by the writer, which runs from a cytoscape event rather than from a render.
   const viewModifiedRef = useRef(false);
-  viewModifiedRef.current = undoDepth > 0 || restoredModified;
+  viewModifiedRef.current = undoDepth > 0 || restoredModified || Object.keys(renames).length > 0;
 
   /* ── following another pane's camera ────────────────────────────────── */
 
@@ -660,6 +695,7 @@ export function useJffCytoscape({
         honorPositions: arrangement.honorPositions,
         modified: viewModifiedRef.current,
         selection: selectionRef.current,
+        renames: renamesRef.current,
       });
     } catch {
       // A graph mid-teardown, or storage refusing. Neither is worth interrupting a reader.
@@ -805,6 +841,9 @@ export function useJffCytoscape({
           setFailure(failureForContent());
           return;
         }
+        // Whatever the reader has renamed, put back over the file's own names. Every load
+        // re-reads the file, so this is where a rename survives a rebuild.
+        parsed = applyRenames(parsed, renamesRef.current);
         setPhase('drawing');
         setType(parsed.type);
         setParsed(parsed);
@@ -1712,6 +1751,8 @@ export function useJffCytoscape({
       grabbedArrangement.current = null;
       setUndoDepth(0);
       setRedoDepth(0);
+      // Including the names: "the way the file opened" means the author's, not the reader's.
+      setRenames({});
       setHonorPositions(honorPositionsDefault);
       // The rebuild puts every state back where its author had it.
       setReloadNonce((n) => n + 1);
@@ -1724,8 +1765,8 @@ export function useJffCytoscape({
     toggleNotes: () => setShowNotes((on) => !on),
     snapToGrid,
     toggleSnapToGrid: () => setSnapToGrid((on) => !on),
-    /** Whether the drawing has been rearranged since it was opened. */
-    viewModified: undoDepth > 0 || restoredModified,
+    /** Whether the drawing has been changed since it was opened. */
+    viewModified: viewModifiedRef.current,
     canUndo: undoDepth > 0,
     canRedo: redoDepth > 0,
     undo: () => step(undoStack, redoStack),
@@ -1735,6 +1776,28 @@ export function useJffCytoscape({
     clearSelectedState: () => {
       setSelectedStateId(null);
       setSelectedEdge(null);
+    },
+    /**
+     * Give a state a different name, on screen only.
+     *
+     * The label on the drawing, the panels that mention the state, the text representation and
+     * the `.jff` that "Download this arrangement" writes all follow. The submitted file does
+     * not: nothing in this viewer writes to it, and this is why the reader is told the file has
+     * changed on screen.
+     *
+     * Not undoable. The undo history is the arrangement's, and mixing a rename into it would
+     * make one step mean two different kinds of thing.
+     */
+    renameState: (id: string, name: string) => {
+      setRenames((current) => ({ ...current, [id]: name }));
+      setParsed((current) => (current ? applyRenames(current, { [id]: name }) : current));
+      // The drawing, straight away rather than through a rebuild: the reader is typing.
+      try {
+        const node = cyRef.current?.getElementById(id);
+        if (node && !node.empty?.()) node.data('label', name);
+      } catch {
+        // A graph mid-teardown. The name is kept either way, and the next load applies it.
+      }
     },
     selectedTransition:
       parsed && selectedEdge
