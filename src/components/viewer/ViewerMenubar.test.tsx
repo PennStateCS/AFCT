@@ -798,3 +798,53 @@ describe('resetting a machine', () => {
     expect(text).toMatch(/submitted file is not changed/i);
   });
 });
+
+describe('the keyboard route to a split', () => {
+  const openView = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'View' }));
+
+  it('offers the move, and runs it', async () => {
+    const user = userEvent.setup();
+    const onMoveToOtherSide = vi.fn();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar
+          downloadHref="/x?download=1"
+          onMoveToOtherSide={onMoveToOtherSide}
+          canMoveToOtherSide
+        />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    fireEvent.click(await screen.findByRole('menuitem', { name: /move to other side/i }));
+    expect(onMoveToOtherSide).toHaveBeenCalled();
+  });
+
+  it('greys it out when there is nothing to split away from', async () => {
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" onMoveToOtherSide={vi.fn()} />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    expect(await screen.findByRole('menuitem', { name: /move to other side/i })).toHaveAttribute(
+      'data-disabled',
+    );
+  });
+
+  it('is absent where there are no panes at all', async () => {
+    // The panel viewer over a page has one machine and nowhere to put a second.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    await openView(user);
+    expect(screen.queryByRole('menuitem', { name: /move to other side/i })).toBeNull();
+  });
+});

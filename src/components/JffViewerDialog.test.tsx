@@ -7,7 +7,11 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import JffViewerDialog, { JffCytoscapeViewer } from './JffViewerDialog';
-import { ViewerActionsProvider, useViewerActions } from '@/components/viewer/viewer-actions';
+import {
+  ViewerActionsGate,
+  ViewerActionsProvider,
+  useViewerActions,
+} from '@/components/viewer/viewer-actions';
 
 // The engine tests await an async load chain (fetch, parse, dynamic import, cytoscape
 // ctor). On a CPU-starved CI runner that chain can take several seconds, so give this
@@ -1030,6 +1034,43 @@ describe('snap to grid', () => {
     await waitForEngine();
     const registered = h.cy.on.mock.calls.map(([name]) => name);
     expect(registered).toContain('zoom pan resize');
+  });
+});
+
+describe('a viewer that is visible but not the one the menu is driving', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('still knows there is a menu bar, so it does not grow the controls back', () => {
+    // In a split window both panes are on screen and only one may publish its actions. When
+    // chrome presence was derived from the registry the gate nulls, the unfocused pane
+    // decided it was in a dialog: it grew back the grid and layout controls the menu already
+    // offers, and took a panel's card border, and the two panes swapped appearance every time
+    // focus moved between them.
+    render(
+      <ViewerActionsProvider>
+        <ViewerActionsGate active={false}>
+          <JffCytoscapeViewer src={SRC} title="abc.jff" />
+        </ViewerActionsGate>
+      </ViewerActionsProvider>,
+    );
+    expect(screen.queryByRole('button', { name: /toggle grid/i })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Layout' })).toBeNull();
+  });
+
+  it('looks the same as the one that is, rather than like a panel', () => {
+    const shell = (active: boolean) => {
+      const { container, unmount } = render(
+        <ViewerActionsProvider>
+          <ViewerActionsGate active={active}>
+            <JffCytoscapeViewer src={SRC} title="abc.jff" />
+          </ViewerActionsGate>
+        </ViewerActionsProvider>,
+      );
+      const className = container.querySelector('div')!.className;
+      unmount();
+      return className;
+    };
+    expect(shell(false)).toBe(shell(true));
   });
 });
 

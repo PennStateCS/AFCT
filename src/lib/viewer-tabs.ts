@@ -40,6 +40,14 @@ export const MAX_VIEWER_TABS = 12;
 /** Two tabs are the same tab when they name the same stored file. */
 export const sameTab = (a: ViewerTab, b: ViewerTab) => a.kind === b.kind && a.file === b.file;
 
+/**
+ * A tab's identity, used as its React key, its view-state key and its properties key.
+ *
+ * One string for all three on purpose: a window never holds the same file twice, so the file
+ * is the identity, and three keys that had to agree would be three chances to disagree.
+ */
+export const tabKey = (tab: ViewerTab) => `${tab.kind}:${tab.file}`;
+
 /** The channel a viewer window listens on, and the key its heartbeat is written under. */
 export const VIEWER_CHANNEL = 'afct-viewer';
 export const VIEWER_ALIVE_KEY = 'afct.viewer.alive';

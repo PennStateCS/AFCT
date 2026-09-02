@@ -71,11 +71,22 @@ type Registry = {
 };
 
 /**
- * Two contexts. The registry never changes identity, so the effect that depends on it runs
- * on mount and unmount only. Whether a viewer is present does change, so it lives on its
- * own and cannot drag the registry with it.
+ * Three contexts, each answering a different question.
+ *
+ * The registry never changes identity, so the effect that depends on it runs on mount and
+ * unmount only. Whether a viewer is present does change, so it lives on its own and cannot
+ * drag the registry with it.
+ *
+ * Chrome presence is the third and is separate from the registry on purpose. It used to be
+ * derived from it, which was right while only one viewer was ever on screen. In a split window
+ * both panes are visible but only one may register, so a viewer reading the registry would
+ * conclude it was in a dialog: it would grow back the grid and layout controls the menu
+ * already offers, and take the card border a panel has, and the two panes would swap
+ * appearance every time focus moved between them. Whether there is a menu bar and which
+ * viewer it is driving are two questions.
  */
 const ViewerRegistryContext = createContext<Registry | null>(null);
+const ViewerChromeContext = createContext(false);
 const ViewerViewContext = createContext<{
   ready: boolean;
   grid: boolean;
@@ -138,9 +149,11 @@ export function ViewerActionsProvider({ children }: { children: React.ReactNode 
   );
 
   return (
-    <ViewerRegistryContext.Provider value={registry}>
-      <ViewerViewContext.Provider value={view}>{children}</ViewerViewContext.Provider>
-    </ViewerRegistryContext.Provider>
+    <ViewerChromeContext.Provider value={true}>
+      <ViewerRegistryContext.Provider value={registry}>
+        <ViewerViewContext.Provider value={view}>{children}</ViewerViewContext.Provider>
+      </ViewerRegistryContext.Provider>
+    </ViewerChromeContext.Provider>
   );
 }
 
@@ -194,13 +207,14 @@ export function ViewerActionsGate({
 /**
  * Whether something around this viewer offers its view controls.
  *
- * Read by the viewer itself so it can drop the duplicates from its toolbar. Derived from the
- * provider rather than passed as a prop on purpose: the thing that decides to show a menu is
+ * Read by the viewer itself so it can drop the duplicates from its toolbar. Taken from the
+ * context rather than passed as a prop on purpose: the thing that decides to show a menu is
  * the thing that provides the context, so the two cannot drift into a state where the
- * controls are offered twice or not at all.
+ * controls are offered twice or not at all. Deliberately not the registry: see above, and note
+ * that the gate below never touches this one.
  */
 export function useViewerChromePresent(): boolean {
-  return useContext(ViewerRegistryContext) !== null;
+  return useContext(ViewerChromeContext);
 }
 
 /** What the chrome can offer right now. */

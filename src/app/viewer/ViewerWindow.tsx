@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -9,43 +9,92 @@ import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
 import { viewerFileSrc } from '@/lib/viewer-link';
 import type { ViewerProperties } from '@/lib/viewer-properties';
 import { clearViewState } from '@/lib/viewer-view-state';
+import { tabKey, VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
 import {
-  tabsToSearch,
-  withTab,
-  withoutTab,
-  sameTab,
-  VIEWER_ALIVE_KEY,
-  VIEWER_CHANNEL,
-  type ViewerTab,
-} from '@/lib/viewer-tabs';
+  activeTab,
+  applyDrop,
+  closeTab,
+  focusedTab,
+  insertionIndexAt,
+  isShowing,
+  moveTabBefore,
+  moveTabToPane,
+  layoutToSearch,
+  dropZone,
+  focusPane,
+  openTab,
+  paneAtPoint,
+  paneCount,
+  paneOf,
+  selectTab,
+  splitTabToSide,
+  tabsInPane,
+  type DropTarget,
+  type PaneIndex,
+  type ViewerLayout,
+} from '@/lib/viewer-panes';
 import { ViewerClient } from './ViewerClient';
 
 /** How often the window says it is alive, so an opener can find it without a handle. */
 const HEARTBEAT_MS = 2000;
 
+/** What each pane is called, for the tab strips and anything that names a side. */
+const PANE_NAMES = ['Left pane', 'Right pane'] as const;
+
 /**
- * The standalone viewer window: a strip of open files, one of them showing.
+ * The drag's own media type.
  *
- * The tab list is state here and mirrored into the URL with `history.replaceState`, never a
+ * Checked in `dragover` so that dragging a file in from the desktop, or a selection out of the
+ * page, does not paint a drop outline over a machine and promise something that will not
+ * happen. The payload itself does not travel in the drag: browsers protect drag data until the
+ * drop, so `dragover` can read the type list and nothing else, and what is being dragged has
+ * to be remembered here instead.
+ */
+const TAB_DRAG_TYPE = 'application/x-afct-viewer-tab';
+
+/**
+ * Where the outline sits while a drop would land there.
+ *
+ * The same rectangle either way: a split shows the half the dragged machine would take, and a
+ * move shows the pane it would land in, which is that same half.
+ */
+function outlineRectClass(target: DropTarget): string {
+  const right = target.kind === 'split' ? target.side === 'right' : target.pane === 1;
+  return right ? 'inset-y-0 left-1/2 w-1/2' : 'inset-y-0 left-0 w-1/2';
+}
+
+/**
+ * Where a pane sits in the shared body.
+ *
+ * Absolute rather than a flex row because every viewer in the window is a sibling in one
+ * container: see the body below for why that matters. A pane is a rectangle, not a box with
+ * its own children.
+ */
+function paneRectClass(pane: PaneIndex, panes: 1 | 2): string {
+  if (panes === 1) return 'inset-0';
+  return pane === 0 ? 'inset-y-0 left-0 w-1/2' : 'inset-y-0 left-1/2 w-1/2';
+}
+
+/**
+ * The standalone viewer window: strips of open files, one file showing per pane.
+ *
+ * The layout is state here and mirrored into the URL with `history.replaceState`, never a
  * router navigation. This route is a server component, so navigating would re-run its queries
  * on every tab click for data already in hand. The same reason `useReviewSelection` does it.
  *
- * Only the active tab renders a viewer. That is what keeps the audit trail honest: the bytes
- * of a student's file are fetched when somebody looks at it, so ten open tabs and a refresh do
- * not write eleven disclosure records for work nobody read.
+ * Only a tab that has been looked at renders a viewer. That is what keeps the audit trail
+ * honest: the bytes of a student's file are fetched when somebody looks at it, so ten open
+ * tabs and a refresh do not write eleven disclosure records for work nobody read.
  */
 export function ViewerWindow({
-  initialTabs,
-  initialActive,
+  initialLayout,
   initialProperties,
 }: {
-  initialTabs: ViewerTab[];
-  initialActive: number;
+  initialLayout: ViewerLayout;
   /** Properties for the tabs the window opened with, loaded on the server. */
   initialProperties: Record<string, ViewerProperties | null>;
 }) {
-  const [tabs, setTabs] = useState(initialTabs);
-  const [activeIndex, setActiveIndex] = useState(initialActive);
+  const [layout, setLayout] = useState(initialLayout);
   const [properties, setProperties] =
     useState<Record<string, ViewerProperties | null>>(initialProperties);
   /**
@@ -59,20 +108,45 @@ export function ViewerWindow({
    */
   const [opened, setOpened] = useState<string[]>([]);
 
-  const active = tabs[activeIndex];
-  const keyOf = (tab: ViewerTab) => `${tab.kind}:${tab.file}`;
+  const panes = paneCount(layout);
+  const focused = focusedTab(layout);
+  // Both panes' tabs are on screen at once when the window is split, so both count as looked
+  // at and both need their properties, not just whichever pane the menu bar is driving.
+  const showing = useMemo(
+    () => [activeTab(layout, 0), activeTab(layout, 1)].filter((tab) => tab !== null),
+    [layout],
+  );
+  const showingKeys = showing.map(tabKey).join('|');
+
+  /**
+   * The order the machines are rendered in, which is not the order of the tabs.
+   *
+   * `opened` is append-only: a key joins it the first time its tab is looked at and never
+   * moves. Rendering the body in that order means neither dragging a tab to the other side nor
+   * dragging it along its own strip moves a single node in the DOM, so nothing is unmounted
+   * and nothing inside a machine loses keyboard focus. The strips show the tab order; the body
+   * shows whatever was mounted first, which nobody can see anyway.
+   */
+  const mountOrder = useMemo(() => {
+    const keys = [...opened];
+    for (const tab of showing) if (!keys.includes(tabKey(tab))) keys.push(tabKey(tab));
+    return keys;
+  }, [opened, showing]);
 
   useEffect(() => {
-    if (!active) return;
-    const key = keyOf(active);
-    setOpened((current) => (current.includes(key) ? current : [...current, key]));
-  }, [active]);
+    if (!showingKeys) return;
+    const keys = showingKeys.split('|');
+    setOpened((current) => {
+      const missing = keys.filter((key) => !current.includes(key));
+      return missing.length ? [...current, ...missing] : current;
+    });
+  }, [showingKeys]);
 
-  // The URL follows the tabs, so a refresh restores this set and the link can be handed on.
+  // The URL follows the layout, so a refresh restores this set and the link can be handed on.
   useEffect(() => {
-    if (tabs.length === 0) return;
-    window.history.replaceState(null, '', `?${tabsToSearch(tabs, activeIndex)}`);
-  }, [tabs, activeIndex]);
+    if (layout.tabs.length === 0) return;
+    window.history.replaceState(null, '', `?${layoutToSearch(layout)}`);
+  }, [layout]);
 
   /**
    * Say the window is here.
@@ -108,51 +182,206 @@ export function ViewerWindow({
     };
   }, []);
 
-  const openTab = useCallback((next: ViewerTab) => {
-    setTabs((current) => {
-      const result = withTab(current, next);
-      setActiveIndex(result.activeIndex);
-      return result.tabs;
-    });
+  // A file sent from another window lands in the pane the menu bar is on, which is the one
+  // the reader was last working in.
+  const receiveTab = useCallback((next: ViewerTab) => {
+    setLayout((current) => openTab(current, next));
   }, []);
 
-  // Another window asking for a file to be opened here rather than in a window of its own.
   useEffect(() => {
     if (typeof BroadcastChannel !== 'function') return;
     const channel = new BroadcastChannel(VIEWER_CHANNEL);
     channel.onmessage = (event: MessageEvent) => {
       const message = event.data as { type?: string; tab?: ViewerTab } | null;
       if (message?.type !== 'open-tab' || !message.tab) return;
-      openTab(message.tab);
+      receiveTab(message.tab);
       // Bring the window forward, since the click that asked for this happened elsewhere.
       window.focus();
     };
     return () => channel.close();
-  }, [openTab]);
+  }, [receiveTab]);
 
   // Properties for a tab that arrived after the page was rendered, which the server never saw.
   useEffect(() => {
-    if (!active) return;
-    const key = keyOf(active);
-    if (key in properties) return;
+    const wanted = showing.filter((tab) => !(tabKey(tab) in properties));
+    if (wanted.length === 0) return;
     let cancelled = false;
     void (async () => {
-      try {
-        const res = await fetch(
-          `/api/viewer/properties?kind=${encodeURIComponent(active.kind)}&file=${encodeURIComponent(active.file)}`,
-        );
-        const value = res.ok ? ((await res.json()) as ViewerProperties) : null;
-        if (!cancelled) setProperties((p) => ({ ...p, [key]: value }));
-      } catch {
-        if (!cancelled) setProperties((p) => ({ ...p, [key]: null }));
+      for (const tab of wanted) {
+        try {
+          const res = await fetch(
+            `/api/viewer/properties?kind=${encodeURIComponent(tab.kind)}&file=${encodeURIComponent(tab.file)}`,
+          );
+          const value = res.ok ? ((await res.json()) as ViewerProperties) : null;
+          if (!cancelled) setProperties((p) => ({ ...p, [tabKey(tab)]: value }));
+        } catch {
+          if (!cancelled) setProperties((p) => ({ ...p, [tabKey(tab)]: null }));
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [active, properties]);
+  }, [showing, properties]);
 
-  if (!active) {
+  /**
+   * Focus the pane a click landed in.
+   *
+   * On the shared body rather than on a pane element, because there is no pane element: the
+   * panes are rectangles over one container, so which one was clicked is arithmetic. Capture
+   * phase, so a click that also does something inside the graph still moves focus first.
+   */
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  /** The tab being dragged, since the drag itself will not carry it. */
+  const draggingKey = useRef<string | null>(null);
+  /** Where a drop would land right now, which is what the outline draws. */
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  /** Where a drop into a strip would put the tab, which is what the caret draws. */
+  const [insertion, setInsertion] = useState<{ pane: PaneIndex; index: number; x: number } | null>(
+    null,
+  );
+  const focusFromPoint = (clientX: number) => {
+    const rect = bodyRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const pane = paneAtPoint(clientX, rect, panes);
+    if (pane !== null && pane !== layout.focused) setLayout((c) => focusPane(c, pane));
+  };
+
+  const dragProps = (tab: ViewerTab) => ({
+    draggable: true,
+    onDragStart: (event: React.DragEvent) => {
+      draggingKey.current = tabKey(tab);
+      // Firefox refuses to start a drag at all without this, and the type is what tells a
+      // dragover that the thing overhead is one of ours. The value is never read.
+      event.dataTransfer.setData(TAB_DRAG_TYPE, tabKey(tab));
+      event.dataTransfer.effectAllowed = 'move';
+    },
+    // Fires for a drop outside the window and for Escape, neither of which fires `drop`. The
+    // outline would otherwise stay painted over the machine.
+    onDragEnd: () => {
+      draggingKey.current = null;
+      setDropTarget(null);
+      setInsertion(null);
+    },
+  });
+
+  /**
+   * Dropping a tab into a strip, which both reorders it and decides which side it is on.
+   *
+   * The gap is worked out from where the tabs actually are, so it follows whatever the strip
+   * has done with them: they truncate, and the strip scrolls when there are many.
+   */
+  const stripDragProps = (pane: PaneIndex) => ({
+    onDragOver: (event: React.DragEvent<HTMLDivElement>) => {
+      if (!draggingKey.current || !event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
+      // Without this the browser refuses the drop and `onDrop` never fires at all.
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const strip = event.currentTarget;
+      const tabs = [...strip.querySelectorAll('[data-tab-key]')];
+      const rects = tabs.map((tab) => tab.getBoundingClientRect());
+      const index = insertionIndexAt(event.clientX, rects);
+      if (index === null) {
+        setInsertion(null);
+        return;
+      }
+      // Against the leading edge of the tab it would sit in front of, or the trailing edge of
+      // the last one. Relative to the strip's content, so it stays put when the strip scrolls.
+      const stripRect = strip.getBoundingClientRect();
+      const edge = rects[index]?.left ?? rects[rects.length - 1]?.right ?? stripRect.left;
+      setInsertion({ pane, index, x: edge - stripRect.left + strip.scrollLeft });
+      // A tab dropped into a strip lands in a strip, never as a split.
+      setDropTarget(null);
+    },
+    onDragLeave: (event: React.DragEvent<HTMLDivElement>) => {
+      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+      setInsertion(null);
+    },
+    onDrop: (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const key = draggingKey.current;
+      const at = insertion;
+      draggingKey.current = null;
+      setInsertion(null);
+      setDropTarget(null);
+      if (!key || !at) return;
+      setLayout((current) => {
+        const inPane = tabsInPane(current, at.pane).filter((tab) => tabKey(tab) !== key);
+        const before = inPane[at.index] ?? null;
+        return moveTabBefore(current, key, before ? tabKey(before) : null, at.pane);
+      });
+    },
+  });
+
+  const bodyDragProps = {
+    onDragOver: (event: React.DragEvent) => {
+      if (!draggingKey.current || !event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
+      // Without this the browser refuses the drop and `onDrop` never fires at all.
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const rect = bodyRef.current?.getBoundingClientRect();
+      setDropTarget(rect ? dropZone(event.clientX, rect, panes) : null);
+    },
+    onDragLeave: (event: React.DragEvent) => {
+      // Only when the pointer has left the body itself, not on the way between the elements
+      // inside it, each of which fires this as it goes.
+      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+      setDropTarget(null);
+    },
+    onDrop: (event: React.DragEvent) => {
+      event.preventDefault();
+      const key = draggingKey.current;
+      const target = dropTarget;
+      draggingKey.current = null;
+      setDropTarget(null);
+      if (key && target) setLayout((current) => applyDrop(current, key, target));
+    },
+  };
+
+  /**
+   * The keyboard route to a split, and to moving a machine between the halves.
+   *
+   * Dragging a tab does the same thing. A feature reachable only by dragging is one a reader
+   * using a keyboard, a screen reader or a touch screen cannot use at all, and this is
+   * university software with two accessibility audits behind it.
+   */
+  const canMoveToOtherSide = Boolean(focused) && layout.tabs.length > 1;
+  const moveToOtherSide = () => {
+    if (!focused) return;
+    const key = tabKey(focused);
+    setLayout((current) =>
+      paneCount(current) === 2
+        ? moveTabToPane(current, key, current.focused === 0 ? 1 : 0)
+        : splitTabToSide(current, key, 'right'),
+    );
+    // The tab is unmounted from one strip and mounted in the other, so without this the
+    // keyboard lands back on the document and the reader has to find their place again.
+    setFocusAfterMove(key);
+  };
+
+  /** A tab to put keyboard focus on once it has been re-rendered into its new strip. */
+  const [focusAfterMove, setFocusAfterMove] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusAfterMove) return;
+    const button = document.querySelector<HTMLElement>(
+      `[data-tab-key="${CSS.escape(focusAfterMove)}"]`,
+    );
+    button?.focus();
+    setFocusAfterMove(null);
+  }, [focusAfterMove, layout]);
+
+  const close = (tab: ViewerTab) => {
+    const key = tabKey(tab);
+    setLayout((current) => closeTab(current, key));
+    // Closing already unmounts it, since it leaves the tab list. This just keeps the list
+    // from accumulating files nobody has open any more.
+    setOpened((current) => current.filter((k) => k !== key));
+    // Closing is how a reader discards an arrangement, so the remembered view goes with it
+    // rather than reappearing if they open the file again.
+    clearViewState(key);
+  };
+
+  if (!focused) {
     return (
       <main className="flex h-screen min-w-0 flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -166,92 +395,175 @@ export function ViewerWindow({
     <ViewerActionsProvider>
       <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
         <ViewerMenubar
-          downloadHref={`${viewerFileSrc(active.kind, active.file)}?download=1`}
-          properties={properties[keyOf(active)] ?? null}
+          downloadHref={`${viewerFileSrc(focused.kind, focused.file)}?download=1`}
+          properties={properties[tabKey(focused)] ?? null}
+          onMoveToOtherSide={moveToOtherSide}
+          canMoveToOtherSide={canMoveToOtherSide}
         />
 
-        {/* The strip. Tabs carry the white of the menu bar above and the grey of the toolbar
-            below, so the selected one reads as the label of what is on screen. */}
-        <div
-          className="bg-card flex shrink-0 items-end gap-1 overflow-x-auto px-3 pt-2"
-          role="tablist"
-        >
-          {tabs.map((tab, index) => {
-            const selected = index === activeIndex;
-            return (
-              <div
-                key={keyOf(tab)}
-                className={cn(
-                  'flex max-w-56 shrink-0 items-center gap-1 rounded-t-md border pr-1',
-                  selected
-                    ? 'bg-background border-b-0'
-                    : 'bg-card text-muted-foreground hover:bg-muted border-transparent',
-                )}
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setActiveIndex(index)}
-                  className="min-w-0 truncate px-3 py-1.5 text-sm font-semibold"
-                  title={tab.title}
-                >
-                  {tab.name}
-                </button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-5 w-5 shrink-0 p-0"
-                  onClick={() => {
-                    const result = withoutTab(tabs, index, activeIndex);
-                    setTabs(result.tabs);
-                    setActiveIndex(result.activeIndex);
-                    // Closing already unmounts it, since it leaves `tabs`. This just keeps
-                    // the list from accumulating files nobody has open any more.
-                    setOpened((current) => current.filter((key) => key !== keyOf(tab)));
-                    // Closing is how a reader discards an arrangement, so the remembered view
-                    // goes with it rather than reappearing if they open the file again.
-                    clearViewState(keyOf(tab));
-                  }}
-                  aria-label={`Close ${tab.name}`}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            );
-          })}
+        {/* Which half the menu bar acts on, for a reader who cannot see the marked strip.
+            Only while the window is split, since with one pane there is nothing to say. */}
+        <p role="status" className="sr-only">
+          {panes === 2
+            ? `The menu applies to the ${PANE_NAMES[layout.focused].toLowerCase()}.`
+            : ''}
+        </p>
+
+        {/* One strip per pane, side by side. Tabs carry the white of the menu bar above and
+            the grey of the toolbar below, so the selected one reads as the label of what is
+            on screen. */}
+        <div className="bg-card flex shrink-0">
+          {(panes === 1 ? ([0] as const) : ([0, 1] as const)).map((pane) => (
+            <div
+              key={pane}
+              className={cn(
+                'relative flex min-w-0 items-end gap-1 overflow-x-auto px-3 pt-2',
+                panes === 1 ? 'flex-1' : 'w-1/2',
+                // The divider between the two halves, carried by the left strip so it lines
+                // up with the one down the body below it.
+                panes === 2 && pane === 0 && 'border-border border-r',
+                // The half that is not being acted on sits back. A background change rather
+                // than dimmed labels: the tab names are already the quietest text here and
+                // fading them further would put them under the contrast floor.
+                panes === 2 && pane !== layout.focused && 'bg-muted/60',
+              )}
+              role="tablist"
+              aria-label={panes === 1 ? 'Open files' : PANE_NAMES[pane]}
+              {...stripDragProps(pane)}
+            >
+              {/* Where the tab would go. Drawn in the strip rather than between the tabs so
+                  nothing moves under the pointer while the reader is aiming at a gap. */}
+              {insertion?.pane === pane ? (
+                <div
+                  className="bg-primary pointer-events-none absolute bottom-0 z-10 w-0.5"
+                  style={{ left: insertion.x, top: '0.5rem' }}
+                  aria-hidden="true"
+                  data-testid="viewer-tab-insertion"
+                />
+              ) : null}
+              {tabsInPane(layout, pane).map((tab) => {
+                const selected = isShowing(layout, tab);
+                return (
+                  <div
+                    key={tabKey(tab)}
+                    className={cn(
+                      'relative flex max-w-56 shrink-0 items-center gap-1 rounded-t-md border pr-1',
+                      selected
+                        ? 'bg-background border-b-0'
+                        : 'bg-card text-muted-foreground hover:bg-muted border-transparent',
+                      // Which half the menu bar is acting on. A bar along the top of that
+                      // pane's open file, the way an editor marks its active group: with two
+                      // machines on screen, "which one does Reset mean" needs an answer that
+                      // is not a guess. Drawn rather than bordered so nothing shifts by a
+                      // pixel when focus moves, and only when the window is actually split.
+                      panes === 2 &&
+                        selected &&
+                        pane === layout.focused &&
+                        "after:bg-primary after:absolute after:inset-x-0 after:top-0 after:h-[3px] after:rounded-t-md after:content-['']",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      data-tab-key={tabKey(tab)}
+                      {...dragProps(tab)}
+                      onClick={() => setLayout((current) => selectTab(current, tabKey(tab)))}
+                      className="min-w-0 truncate px-3 py-1.5 text-sm font-semibold"
+                      title={tab.title}
+                    >
+                      {tab.name}
+                    </button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 w-5 shrink-0 p-0"
+                      onClick={() => close(tab)}
+                      aria-label={`Close ${tab.name}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
 
-        {/* Every opened tab is here at once, stacked, with all but one hidden. `visibility`
-            rather than `display`, because a hidden box keeps its size: cytoscape reads the
-            container to work out its viewport, and a collapsed one would come back at the
-            wrong scale, which is the very thing this is preserving. */}
-        <div className="relative min-h-0 flex-1">
-          {tabs
-            .filter((tab) => opened.includes(keyOf(tab)) || sameTab(tab, active))
+        {/*
+          One body holding every opened tab, not one body per pane.
+
+          Two rules keep a machine's zoom, arrangement and undo history alive when it is moved
+          from one side to the other. Every viewer is a direct sibling of every other, so no
+          per-pane wrapper: a component that crosses parents is unmounted and rebuilt. And they
+          are rendered in the window's own tab order, never grouped by pane, so a move changes
+          nothing but a class and does not reorder the DOM, which would drop focus out of the
+          graph a reader was using.
+
+          Hidden with `visibility` rather than `display`, because a hidden box keeps its size:
+          cytoscape reads the container to work out its viewport, and a collapsed one would
+          come back at the wrong scale, which is the very thing this is preserving.
+        */}
+        <div
+          className="relative min-h-0 flex-1"
+          ref={bodyRef}
+          onPointerDownCapture={(event) => focusFromPoint(event.clientX)}
+          data-testid="viewer-body"
+          {...bodyDragProps}
+        >
+          {mountOrder
+            .map((key) => layout.tabs.find((tab) => tabKey(tab) === key))
+            .filter((tab) => tab !== undefined)
             .map((tab) => {
-              const showing = sameTab(tab, active);
+              const pane = paneOf(layout, tabKey(tab));
+              const visible = isShowing(layout, tab);
               return (
                 <div
-                  key={keyOf(tab)}
-                  className={cn('absolute inset-0', !showing && 'invisible')}
+                  key={tabKey(tab)}
+                  className={cn('absolute', paneRectClass(pane, panes), !visible && 'invisible')}
                   // Out of the accessibility tree and out of the tab order while hidden, so a
                   // reader is not walked through a dozen machines they cannot see.
-                  inert={!showing}
+                  inert={!visible}
                 >
-                  <ViewerActionsGate active={showing}>
+                  {/* Only the pane the menu bar is on may publish its actions to it. */}
+                  <ViewerActionsGate active={visible && pane === layout.focused}>
                     <ViewerClient
                       src={viewerFileSrc(tab.kind, tab.file)}
                       problemType={tab.type}
                       title={tab.title}
                       epsSymbol={tab.eps}
-                      viewStateKey={keyOf(tab)}
+                      viewStateKey={tabKey(tab)}
                     />
                   </ViewerActionsGate>
                 </div>
               );
             })}
+
+          {/* Two machines on two grids run into each other without something between them.
+              A line down the middle rather than a gap, so neither pane loses any width, and
+              over the canvases rather than beside them, since the panes are rectangles in one
+              container and have no edges of their own to carry a border. */}
+          {panes === 2 ? (
+            <div
+              className="bg-border pointer-events-none absolute inset-y-0 left-1/2 z-10 w-px -translate-x-1/2"
+              aria-hidden="true"
+            />
+          ) : null}
+
+          {/* Where the machine would land. `pointer-events: none` because it sits over the
+              body it is reacting to, and would otherwise swallow the very dragover events
+              that keep it in the right place. */}
+          {dropTarget ? (
+            <div
+              className={cn(
+                'border-primary bg-primary/10 pointer-events-none absolute z-20 rounded-md border-2 border-dashed',
+                outlineRectClass(dropTarget),
+              )}
+              aria-hidden="true"
+              data-testid="viewer-drop-outline"
+            />
+          ) : null}
         </div>
       </main>
     </ViewerActionsProvider>
