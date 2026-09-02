@@ -24,15 +24,23 @@ vi.mock('@/components/viewer/ViewerMenubar', () => ({
   ViewerMenubar: ({
     downloadHref,
     properties,
+    onMoveToOtherSide,
+    canMoveToOtherSide,
   }: {
     downloadHref: string;
     properties?: { rows: { label: string; value: string }[] } | null;
+    onMoveToOtherSide?: () => void;
+    canMoveToOtherSide?: boolean;
   }) => (
     <div
       data-testid="menubar"
       data-download={downloadHref}
       data-properties={properties?.rows[0]?.value ?? ''}
-    />
+    >
+      <button type="button" disabled={!canMoveToOtherSide} onClick={onMoveToOtherSide}>
+        Move to other side
+      </button>
+    </div>
   ),
 }));
 
@@ -568,5 +576,54 @@ describe('the heartbeat that lets an opener find this window', () => {
     expect(Date.now() - beat).toBeLessThan(1000);
     view.unmount();
     expect(window.localStorage.getItem(VIEWER_ALIVE_KEY)).toBeNull();
+  });
+});
+
+describe('splitting without a mouse', () => {
+  // Dragging a tab is not a gesture everybody can make. The same operation is on the View
+  // menu, which is the keyboard, screen-reader and touch route to it.
+  const move = () => fireEvent.click(screen.getByRole('button', { name: 'Move to other side' }));
+
+  it('splits the window from the menu', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')], 1);
+    move();
+    const strips = screen.getAllByRole('tablist');
+    expect(strips.map((s) => s.getAttribute('aria-label'))).toEqual(['Left pane', 'Right pane']);
+    expect(
+      within(strips[1]!)
+        .getAllByRole('tab')
+        .map((t) => t.textContent),
+    ).toEqual(['b.jff']);
+  });
+
+  it('moves the file back when it is used again', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')], 1);
+    move();
+    move();
+    expect(screen.getAllByRole('tablist')).toHaveLength(1);
+  });
+
+  it('leaves the keyboard on the tab that moved', () => {
+    // It is unmounted from one strip and mounted in the other, so without putting focus back
+    // the reader is returned to the top of the document with no idea where they were.
+    renderWindow([tab('a.jff'), tab('b.jff')], 1);
+    move();
+    expect(document.activeElement?.textContent).toBe('b.jff');
+  });
+
+  it('is offered only when there is a second file to split away from', () => {
+    renderWindow([tab('a.jff')]);
+    expect(screen.getByRole('button', { name: 'Move to other side' })).toBeDisabled();
+  });
+
+  it('says which half the menu is acting on, for somebody who cannot see the strip', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')], 1);
+    expect(screen.getByRole('status').textContent).toBe('');
+
+    move();
+    expect(screen.getByRole('status').textContent).toBe('The menu applies to the right pane.');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'a.jff' }));
+    expect(screen.getByRole('status').textContent).toBe('The menu applies to the left pane.');
   });
 });

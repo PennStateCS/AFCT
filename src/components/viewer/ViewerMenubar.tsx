@@ -15,6 +15,7 @@ import {
   Undo2,
   Redo2,
   RotateCcw,
+  Columns2,
 } from 'lucide-react';
 import {
   Menubar,
@@ -57,10 +58,23 @@ import {
 export function ViewerMenubar({
   downloadHref,
   properties,
+  onMoveToOtherSide,
+  canMoveToOtherSide = false,
 }: {
   downloadHref: string;
   /** Null when the file is unknown or not this reader's to see. */
   properties?: ViewerProperties | null;
+  /**
+   * Put the file on screen on the other side of the window, splitting it if it is not split.
+   *
+   * A window concern rather than a viewer one, so it arrives as a prop rather than through the
+   * actions registry: the machine knows nothing about how many panes there are.
+   *
+   * This is also the keyboard route to a split. Dragging a tab does the same thing, and a
+   * feature reachable only by dragging is not one everybody can use.
+   */
+  onMoveToOtherSide?: () => void;
+  canMoveToOtherSide?: boolean;
 }) {
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -190,6 +204,15 @@ export function ViewerMenubar({
             <ListTree aria-hidden="true" />
             Text representation
           </MenubarItem>
+          {onMoveToOtherSide ? (
+            <>
+              <MenubarSeparator />
+              <MenubarItem disabled={!canMoveToOtherSide} onSelect={onMoveToOtherSide}>
+                <Columns2 aria-hidden="true" />
+                Move to other side
+              </MenubarItem>
+            </>
+          ) : null}
         </MenubarContent>
       </MenubarMenu>
 

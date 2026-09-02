@@ -16,6 +16,7 @@ import {
   closeTab,
   focusedTab,
   isShowing,
+  moveTabToPane,
   layoutToSearch,
   dropZone,
   focusPane,
@@ -24,6 +25,7 @@ import {
   paneCount,
   paneOf,
   selectTab,
+  splitTabToSide,
   tabsInPane,
   type DropTarget,
   type PaneIndex,
@@ -266,6 +268,38 @@ export function ViewerWindow({
     },
   };
 
+  /**
+   * The keyboard route to a split, and to moving a machine between the halves.
+   *
+   * Dragging a tab does the same thing. A feature reachable only by dragging is one a reader
+   * using a keyboard, a screen reader or a touch screen cannot use at all, and this is
+   * university software with two accessibility audits behind it.
+   */
+  const canMoveToOtherSide = Boolean(focused) && layout.tabs.length > 1;
+  const moveToOtherSide = () => {
+    if (!focused) return;
+    const key = tabKey(focused);
+    setLayout((current) =>
+      paneCount(current) === 2
+        ? moveTabToPane(current, key, current.focused === 0 ? 1 : 0)
+        : splitTabToSide(current, key, 'right'),
+    );
+    // The tab is unmounted from one strip and mounted in the other, so without this the
+    // keyboard lands back on the document and the reader has to find their place again.
+    setFocusAfterMove(key);
+  };
+
+  /** A tab to put keyboard focus on once it has been re-rendered into its new strip. */
+  const [focusAfterMove, setFocusAfterMove] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusAfterMove) return;
+    const button = document.querySelector<HTMLElement>(
+      `[data-tab-key="${CSS.escape(focusAfterMove)}"]`,
+    );
+    button?.focus();
+    setFocusAfterMove(null);
+  }, [focusAfterMove, layout]);
+
   const close = (tab: ViewerTab) => {
     const key = tabKey(tab);
     setLayout((current) => closeTab(current, key));
@@ -293,7 +327,17 @@ export function ViewerWindow({
         <ViewerMenubar
           downloadHref={`${viewerFileSrc(focused.kind, focused.file)}?download=1`}
           properties={properties[tabKey(focused)] ?? null}
+          onMoveToOtherSide={moveToOtherSide}
+          canMoveToOtherSide={canMoveToOtherSide}
         />
+
+        {/* Which half the menu bar acts on, for a reader who cannot see the marked strip.
+            Only while the window is split, since with one pane there is nothing to say. */}
+        <p role="status" className="sr-only">
+          {panes === 2
+            ? `The menu applies to the ${PANE_NAMES[layout.focused].toLowerCase()}.`
+            : ''}
+        </p>
 
         {/* One strip per pane, side by side. Tabs carry the white of the menu bar above and
             the grey of the toolbar below, so the selected one reads as the label of what is
@@ -341,6 +385,7 @@ export function ViewerWindow({
                       type="button"
                       role="tab"
                       aria-selected={selected}
+                      data-tab-key={tabKey(tab)}
                       {...dragProps(tab)}
                       onClick={() => setLayout((current) => selectTab(current, tabKey(tab)))}
                       className="min-w-0 truncate px-3 py-1.5 text-sm font-semibold"
