@@ -820,10 +820,16 @@ describe('undo and redo of the arrangement', () => {
     act(() => handler?.());
   };
 
-  it('records a step when a state is picked up, not on every pixel of the drag', async () => {
-    // One drag is one undoable step. `grab` fires once, at the start; `position` fires
-    // continuously, and recording there would bury the previous state under hundreds of
-    // near-identical snapshots.
+  /** A whole drag: picked up, and let go. Cytoscape fires `dragfree` only if it really moved. */
+  const drag = () => {
+    fire('grab');
+    fire('dragfree');
+  };
+
+  it('records one step per drag, not one per pixel of it', async () => {
+    // One drag is one undoable step. The snapshot is taken on `grab`, which fires once at the
+    // start, and kept until the state is let go; `position` fires continuously, and recording
+    // there would bury the previous state under hundreds of near-identical snapshots.
     const pos = { x: 10, y: 20 };
     const node = fakeNode('0', pos);
     h.cy.nodes.mockReturnValue({ forEach: (fn: (n: unknown) => void) => fn(node), length: 1 });
@@ -845,7 +851,7 @@ describe('undo and redo of the arrangement', () => {
     await waitForEngine();
 
     expect(view.current?.canUndo).toBe(false);
-    fire('grab');
+    drag();
     await waitFor(() => expect(view.current?.canUndo).toBe(true));
   });
 
@@ -871,7 +877,7 @@ describe('undo and redo of the arrangement', () => {
     );
     await waitForEngine();
 
-    fire('grab');
+    drag();
     await waitFor(() => expect(view.current?.canUndo).toBe(true));
 
     // The drag itself: the state ends up somewhere else.
@@ -921,9 +927,10 @@ describe('the toolbar undo and redo buttons', () => {
     renderWithMenu({ src: SRC, title: 'abc.jff' });
     await waitForEngine();
 
-    const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
-      (() => void) | undefined;
-    act(() => grab?.());
+    const handler = (event: string) =>
+      h.cy.on.mock.calls.find(([name]) => name === event)?.[2] as (() => void) | undefined;
+    act(() => handler('grab')?.());
+    act(() => handler('dragfree')?.());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled());
 
     pos.x = 500;
@@ -1231,9 +1238,11 @@ describe('telling a reader they have not changed the file', () => {
   const SRC = '/api/files/submissions/abc.jff';
 
   const drag = () => {
-    const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
-      (() => void) | undefined;
-    act(() => grab?.());
+    const handler = (event: string) =>
+      h.cy.on.mock.calls.find(([name]) => name === event)?.[2] as (() => void) | undefined;
+    // Picked up and let go: `dragfree` is what tells a drag from a click, so both are needed.
+    act(() => handler('grab')?.());
+    act(() => handler('dragfree')?.());
   };
 
   it('says nothing about a file nobody has touched', async () => {
@@ -1247,6 +1256,18 @@ describe('telling a reader they have not changed the file', () => {
     await waitForEngine();
     drag();
     expect(await screen.findByRole('button', { name: /view changed/i })).toBeInTheDocument();
+  });
+
+  it('stays away when a state was only clicked to read its properties', async () => {
+    // A click picks the state up and puts it down without moving it, so it used to report a
+    // rearrangement that had not happened.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
+      (() => void) | undefined;
+    act(() => grab?.());
+
+    expect(screen.queryByRole('button', { name: /view changed/i })).toBeNull();
   });
 
   it('says the submitted file is unchanged, which is the whole point of it', async () => {

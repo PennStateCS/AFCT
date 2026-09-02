@@ -349,6 +349,20 @@ const renderViewer = (props: Partial<Parameters<typeof useJffCytoscape>[0]> = {}
 };
 
 const lastCy = () => instances[instances.length - 1];
+
+/**
+ * A state picked up, moved, and put down.
+ *
+ * Cytoscape fires `grab` on the way down and `dragfree` on release, but `dragfree` only when
+ * something really moved, which is how a drag is told from a click. Tests that mean "a state
+ * was moved" have to fire both: firing `grab` alone is a click, and now records nothing.
+ */
+const dragState = (id = '0', to?: { x: number; y: number }) => {
+  const cy = lastCy();
+  act(() => cy.handlers['grab']?.({ target: cy.byId(id) }));
+  if (to) cy.byId(id)?.position(to);
+  act(() => cy.handlers['dragfree']?.({ target: cy.byId(id) }));
+};
 const fetchOk = (body: string) =>
   vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', text: async () => body });
 
@@ -899,7 +913,7 @@ describe('putting a machine back the way it opened', () => {
   it('leaves nothing to undo, since there is nothing to go back to', async () => {
     const { api } = renderViewer({ viewStateKey: KEY });
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
+    dragState();
     await waitFor(() => expect(api().canUndo).toBe(true));
 
     act(() => api().resetMachine());
@@ -1030,8 +1044,7 @@ describe('undoing a layout switch', () => {
     await waitFor(() => expect(instances).toHaveLength(1));
 
     // A state picked up and put down somewhere else, which is one undoable step.
-    act(() => lastCy().handlers['grab']?.({}));
-    lastCy().byId('0')?.position({ x: 640, y: 480 });
+    dragState('0', { x: 640, y: 480 });
     await waitFor(() => expect(api().canUndo).toBe(true));
 
     act(() => api().toggleHonorPositions());
@@ -1047,8 +1060,7 @@ describe('undoing a layout switch', () => {
   it('leaves the view where it was, since an undo moves the machine and not the camera', async () => {
     const { api } = renderViewer({ honorPositionsDefault: true });
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
-    lastCy().byId('0')?.position({ x: 640, y: 480 });
+    dragState('0', { x: 640, y: 480 });
     await waitFor(() => expect(api().canUndo).toBe(true));
 
     act(() => api().toggleHonorPositions());
@@ -1073,8 +1085,7 @@ describe('undoing a layout switch', () => {
     await waitFor(() => expect(instances).toHaveLength(1));
     const before = { ...lastCy().byId('0')!.position() };
 
-    act(() => lastCy().handlers['grab']?.({}));
-    lastCy().byId('0')?.position({ x: 900, y: 900 });
+    dragState('0', { x: 900, y: 900 });
     await waitFor(() => expect(api().canUndo).toBe(true));
 
     act(() => api().undo());
@@ -1120,8 +1131,10 @@ describe("linking one pane's camera to the other", () => {
     // Cytoscape reports a move whether a person or this code caused it. Reporting one back
     // would have the two panes talking past each other.
     const onViewportChange = vi.fn();
-    const { rerender } = renderViewer({ onViewportChange });
-    await waitFor(() => expect(instances).toHaveLength(1));
+    const { rerender, api } = renderViewer({ onViewportChange });
+    // Wait for the load to finish, not just for the graph to exist: it reports the opening
+    // view when it ends, and clearing before that left the report racing the rerender below.
+    await waitFor(() => expect(api().phase).toBe('ready'));
     onViewportChange.mockClear();
 
     // Both props at once, which the window never does: it gives a pane one or the other. This
@@ -1233,8 +1246,23 @@ describe('saying that the drawing has been rearranged', () => {
   it('speaks up once a state has been moved', async () => {
     const { api } = renderViewer();
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
+    dragState();
     await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('says nothing when a state is only clicked to read its properties', async () => {
+    // A click starts by picking the state up, so recording the arrangement there made every
+    // click report a rearrangement that had not happened.
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const cy = lastCy();
+
+    act(() => cy.handlers['grab']?.({ target: cy.byId('0') }));
+    act(() => cy.handlers.tap({ target: cy.byId('0') }));
+
+    await waitFor(() => expect(api().selectedState?.id).toBe('0'));
+    expect(api().viewModified).toBe(false);
+    expect(api().canUndo).toBe(false);
   });
 
   it('speaks up when the layout is switched, which moves every state', async () => {
@@ -1247,7 +1275,7 @@ describe('saying that the drawing has been rearranged', () => {
   it('goes quiet again once the reader has undone what they did', async () => {
     const { api } = renderViewer({ honorPositionsDefault: true });
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
+    dragState();
     await waitFor(() => expect(api().viewModified).toBe(true));
 
     act(() => api().undo());
@@ -1276,8 +1304,9 @@ describe('saying that the drawing has been rearranged', () => {
     await waitFor(() => expect(api().phase).toBe('ready'));
     expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).modified).toBe(false);
 
-    act(() => lastCy().handlers['grab']?.({}));
-    act(() => lastCy().handlers['viewport position']?.({}));
+    // The drag alone, with no scroll after it: releasing the state is the last thing that
+    // happens, so it is what has to write the flag down.
+    dragState();
     await waitFor(() =>
       expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).modified).toBe(true),
     );
@@ -1307,7 +1336,7 @@ describe('saying that the drawing has been rearranged', () => {
   it('goes quiet when the machine is put back', async () => {
     const { api } = renderViewer({ viewStateKey: KEY });
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
+    dragState();
     await waitFor(() => expect(api().viewModified).toBe(true));
 
     act(() => api().resetMachine());

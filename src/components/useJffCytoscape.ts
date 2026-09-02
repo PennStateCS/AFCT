@@ -474,6 +474,16 @@ export function useJffCytoscape({
   const undoStack = useRef<ArrangementSnapshot[]>([]);
   const redoStack = useRef<ArrangementSnapshot[]>([]);
   /**
+   * The arrangement as it was when a state was picked up, held until the reader lets go.
+   *
+   * Clicking a state selects it and opens its properties, and picking one up is how a click
+   * starts, so recording the snapshot straight onto the undo stack made every click look like
+   * a rearrangement: the window said the drawing had been moved when nothing had. The snapshot
+   * still has to be taken at that moment, while the old positions are readable, so it waits
+   * here and is only committed if the state was actually dragged.
+   */
+  const grabbedArrangement = useRef<ArrangementSnapshot | null>(null);
+  /**
    * An arrangement waiting for the graph to be rebuilt before it can be applied.
    *
    * Stepping across a layout switch changes `honorPositions`, which `load` depends on, so the
@@ -691,6 +701,8 @@ export function useJffCytoscape({
           loadedSrc.current = src;
           undoStack.current = [];
           redoStack.current = [];
+          // A snapshot held from a state picked up in the old machine belongs to that machine.
+          grabbedArrangement.current = null;
           setUndoDepth(0);
           setRedoDepth(0);
         }
@@ -1235,12 +1247,38 @@ export function useJffCytoscape({
         cy.on('zoom pan resize', syncGridToGraph);
         syncGridToGraph();
 
-        // Snap on release rather than during the drag: the state follows the pointer exactly
-        // while it is held, then settles onto the lattice, which reads as landing rather than
-        // as the drag fighting back.
+        // A drag is one undoable step, so the snapshot is taken when the state is picked up
+        // rather than on every pixel of movement. `grab` fires once, at the start, and on a
+        // plain click as well, which is why the snapshot is only held here.
+        cy.on('grab', 'node', () => {
+          grabbedArrangement.current = readArrangement(cy, honorPositionsRef.current);
+        });
+
+        // Release. Two things happen here, both only when the state really moved: cytoscape
+        // fires `dragfree` on a drag and not on a click, so a click leaves the held snapshot
+        // uncommitted and the drawing unchanged.
+        //
+        // Snapping is on release rather than during the drag: the state follows the pointer
+        // exactly while it is held, then settles onto the lattice, which reads as landing
+        // rather than as the drag fighting back.
         cy.on('dragfree', 'node', (evt: any) => {
+          const before = grabbedArrangement.current;
+          grabbedArrangement.current = null;
+          if (before) {
+            undoStack.current.push(before);
+            // A new action makes the redo branch unreachable, as in any editor.
+            redoStack.current = [];
+            setUndoDepth(undoStack.current.length);
+            setRedoDepth(0);
+            // Write the view down again now that this counts as a rearrangement. Dragging a
+            // state and then holding it still schedules the write while the flag is still off,
+            // and release fires nothing else, so without this the saved view would have the
+            // new positions and say the drawing had not been touched.
+            rememberViewSoon();
+          }
+
           if (!snapToGridRef.current) return;
-          const node = evt.target;
+          const node = evt?.target;
           if (!node?.position || node.hasClass?.('note') || node.hasClass?.('start')) return;
           const at = node.position();
           if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.y)) return;
@@ -1248,18 +1286,6 @@ export function useJffCytoscape({
             x: Math.round(at.x / GRID_STEP) * GRID_STEP,
             y: Math.round(at.y / GRID_STEP) * GRID_STEP,
           });
-        });
-
-        // A drag is one undoable step, so the snapshot is taken when the state is picked up
-        // rather than on every pixel of movement. `grab` fires once, at the start.
-        cy.on('grab', 'node', () => {
-          const before = readArrangement(cy, honorPositionsRef.current);
-          if (!before) return;
-          undoStack.current.push(before);
-          // A new action makes the redo branch unreachable, as in any editor.
-          redoStack.current = [];
-          setUndoDepth(undoStack.current.length);
-          setRedoDepth(0);
         });
 
         // Keep the label and loop geometry, and the initial-state marker, following a
@@ -1543,6 +1569,7 @@ export function useJffCytoscape({
       // place that means to throw it away.
       undoStack.current = [];
       redoStack.current = [];
+      grabbedArrangement.current = null;
       setUndoDepth(0);
       setRedoDepth(0);
       setHonorPositions(honorPositionsDefault);
