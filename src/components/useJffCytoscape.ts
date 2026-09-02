@@ -456,6 +456,19 @@ export function useJffCytoscape({
    * Each entry is a whole snapshot rather than a diff. A machine has tens of states, not
    * thousands, so copying every position is cheaper than the bookkeeping a diff would need.
    */
+  /**
+   * Whether anything about the drawing has been changed since it was opened.
+   *
+   * Kept because the difference between "this is the file" and "this is the file after I moved
+   * things about" is not visible, and a reader who has dragged three states apart to read an
+   * edge can reasonably wonder whether they have altered what a student submitted. They have
+   * not, and nothing here writes to the file.
+   *
+   * Derived from the undo history, plus whatever a refresh restored: undo everything and it
+   * goes quiet again. Switching the layout out and back leaves it on, which over-reports by
+   * one case and is not worth a position-by-position comparison to avoid.
+   */
+  const [restoredModified, setRestoredModified] = useState(false);
   const [undoDepth, setUndoDepth] = useState(0);
   const [redoDepth, setRedoDepth] = useState(0);
   const undoStack = useRef<ArrangementSnapshot[]>([]);
@@ -502,6 +515,9 @@ export function useJffCytoscape({
 
   const viewStateKeyRef = useRef(viewStateKey);
   viewStateKeyRef.current = viewStateKey;
+  // Read by the writer, which runs from a cytoscape event rather than from a render.
+  const viewModifiedRef = useRef(false);
+  viewModifiedRef.current = undoDepth > 0 || restoredModified;
 
   /* ── following another pane's camera ────────────────────────────────── */
 
@@ -569,6 +585,7 @@ export function useJffCytoscape({
         pan: { x: pan.x, y: pan.y },
         positions: arrangement.positions,
         honorPositions: arrangement.honorPositions,
+        modified: viewModifiedRef.current,
       });
     } catch {
       // A graph mid-teardown, or storage refusing. Neither is worth interrupting a reader.
@@ -608,6 +625,9 @@ export function useJffCytoscape({
         const ids = cy.nodes().map((node: any) => node.id());
         if (!viewStateFits(saved, ids)) return false;
         applyArrangement(cy, { positions: saved.positions, honorPositions: saved.honorPositions });
+        // A refresh does not undo the reader's rearranging, so it must not quietly forget it
+        // happened either.
+        if (saved.modified) setRestoredModified(true);
         cy.zoom(saved.zoom);
         cy.pan(saved.pan);
         return true;
@@ -1518,6 +1538,7 @@ export function useJffCytoscape({
       // The rebuild below will not put the discarded arrangement back: `hasRestored` is
       // already set, since restoring happens on the first load and only there.
       clearViewState(viewStateKeyRef.current);
+      setRestoredModified(false);
       // The rebuild below keeps the history now, since it is the same file. Reset is the one
       // place that means to throw it away.
       undoStack.current = [];
@@ -1536,6 +1557,8 @@ export function useJffCytoscape({
     toggleNotes: () => setShowNotes((on) => !on),
     snapToGrid,
     toggleSnapToGrid: () => setSnapToGrid((on) => !on),
+    /** Whether the drawing has been rearranged since it was opened. */
+    viewModified: undoDepth > 0 || restoredModified,
     canUndo: undoDepth > 0,
     canRedo: redoDepth > 0,
     undo: () => step(undoStack, redoStack),

@@ -12,6 +12,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   describeMachine,
   type MachineDescription,
@@ -37,7 +46,19 @@ import {
   useRegisterViewerActions,
   useViewerChromePresent,
 } from '@/components/viewer/viewer-actions';
-import { Grid, Copy, Minus, Plus, Scan, Undo2, Redo2, RotateCcw, X } from 'lucide-react';
+import {
+  Grid,
+  Copy,
+  Minus,
+  Plus,
+  Scan,
+  Undo2,
+  Redo2,
+  RotateCcw,
+  PencilLine,
+  FileDown,
+  X,
+} from 'lucide-react';
 
 /**
  * Fallback grid colour, used only if `--grid-color` is somehow absent.
@@ -355,6 +376,7 @@ export function JffCytoscapeViewer({
 }) {
   // `resolvedTheme` rather than `theme`: the latter is "system" for most people, which says
   // nothing about which colours are actually on screen.
+  const [resetOpen, setResetOpen] = useState(false);
   const { resolvedTheme } = useTheme();
   const isDark = darkMode ?? resolvedTheme === 'dark';
   // The cytoscape engine (fetch/parse/layout/interaction + zoom/export actions) lives in
@@ -365,6 +387,7 @@ export function JffCytoscapeViewer({
     failure,
     phase,
     retry,
+    viewModified,
     type,
     honorPositions,
     toggleHonorPositions,
@@ -492,6 +515,44 @@ export function JffCytoscapeViewer({
         <div className="flex min-w-0 items-center gap-2">
           {/* Title is shown in the dialog header above; only the type label lives here. */}
           <TypeBadge t={type} />
+          {/*
+            Whether the drawing has been rearranged, and what to do about it.
+
+            Quiet on purpose: it sits beside the type label rather than announcing itself, and
+            it is only there once something has actually been moved. What it answers is a
+            question nobody asks out loud: dragging three states apart to read an edge looks
+            like editing, and a reader has no way of knowing from the screen that the file they
+            were sent is untouched. It says so, and offers the two things they might want next.
+          */}
+          {viewModified ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground h-6 gap-1 px-2 text-xs font-normal"
+                >
+                  <PencilLine className="h-3 w-3" aria-hidden="true" />
+                  View changed
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-w-xs">
+                <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+                  You have moved things about. The submitted file is unchanged, and nothing here
+                  writes to it.
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => void downloadCurrent()}>
+                  <FileDown aria-hidden="true" />
+                  Download this arrangement
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setResetOpen(true)}>
+                  <RotateCcw aria-hidden="true" />
+                  Put it back
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           {/* View controls */}
@@ -639,6 +700,21 @@ export function JffCytoscapeViewer({
         of x.jff, image" and nothing else, with no text alternative either, because there is
         nothing parsed to describe.
       */}
+      {/* The same question the standalone window's menu asks, for the same reason: a reader can
+          spend a while pulling a crowded machine apart and there is no undo once the history
+          has gone with it. */}
+      <ConfirmDialog
+        open={resetOpen}
+        title="Put the machine back?"
+        description="The states return to where the file has them, and the layout, the zoom and the undo history for this machine are forgotten. The submitted file is not changed."
+        confirmText="Put it back"
+        onConfirm={() => {
+          resetMachine();
+          setResetOpen(false);
+        }}
+        onCancel={() => setResetOpen(false)}
+      />
+
       {failure ? (
         <div role="alert" className="px-4 py-6 text-sm" data-testid="viewer-failure">
           <p className="text-foreground font-semibold">{failure.title}</p>

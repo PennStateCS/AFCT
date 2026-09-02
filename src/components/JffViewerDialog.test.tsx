@@ -4,6 +4,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import JffViewerDialog, { JffCytoscapeViewer } from './JffViewerDialog';
@@ -1223,5 +1224,64 @@ describe('two panes, one of which cannot open its file', () => {
     await waitFor(() =>
       expect(within(left).getByRole('img').getAttribute('aria-label')).toMatch(/Diagram of/),
     );
+  });
+});
+
+describe('telling a reader they have not changed the file', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  const drag = () => {
+    const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
+      (() => void) | undefined;
+    act(() => grab?.());
+  };
+
+  it('says nothing about a file nobody has touched', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    expect(screen.queryByRole('button', { name: /view changed/i })).toBeNull();
+  });
+
+  it('appears once something has been moved', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    drag();
+    expect(await screen.findByRole('button', { name: /view changed/i })).toBeInTheDocument();
+  });
+
+  it('says the submitted file is unchanged, which is the whole point of it', async () => {
+    // Dragging three states apart to read an edge looks like editing, and nothing else on
+    // screen says otherwise.
+    const user = userEvent.setup();
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    drag();
+    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+
+    expect(await screen.findByText(/submitted file is unchanged/i)).toBeInTheDocument();
+  });
+
+  it('offers the arrangement as a download', async () => {
+    const user = userEvent.setup();
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    drag();
+    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /download this arrangement/i }));
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+  });
+
+  it('asks before putting the machine back, since the history goes with it', async () => {
+    const user = userEvent.setup();
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    drag();
+    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /put it back/i }));
+
+    expect(await screen.findByText(/Put the machine back\?/i)).toBeInTheDocument();
+    // Still there: nothing happens until the reader says so.
+    expect(screen.getByRole('button', { name: /view changed/i })).toBeInTheDocument();
   });
 });

@@ -1176,13 +1176,11 @@ describe('what a pane says while it is opening a machine, and when it cannot', (
   });
 
   it('does not offer to try again when the answer will be the same', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValue({
-        ok: false,
-        status: 403,
-        statusText: 'Forbidden',
-      }) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+    }) as unknown as typeof fetch;
     const { api } = renderViewer();
     await waitFor(() => expect(api().failure).not.toBeNull());
     expect(api().failure?.retryable).toBe(false);
@@ -1215,5 +1213,104 @@ describe('what a pane says while it is opening a machine, and when it cannot', (
 
     await waitFor(() => expect(api().failure).toBeNull());
     await waitFor(() => expect(api().type).toBe('fa'));
+  });
+});
+
+describe('saying that the drawing has been rearranged', () => {
+  const KEY = 'submissions:machine.jff';
+  const STORAGE_KEY = `afct.viewer.view.${KEY}`;
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('says nothing about a file nobody has touched', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    expect(api().viewModified).toBe(false);
+  });
+
+  it('speaks up once a state has been moved', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers['grab']?.({}));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('speaks up when the layout is switched, which moves every state', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().toggleHonorPositions());
+    await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('goes quiet again once the reader has undone what they did', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers['grab']?.({}));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().undo());
+    await waitFor(() => expect(api().viewModified).toBe(false));
+  });
+
+  it('remembers across a refresh that something was moved', async () => {
+    // The rearranging survives a reload, so the note that explains it has to as well.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        modified: true,
+      }),
+    );
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('writes down whether anything was moved, so the next visit knows', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).modified).toBe(false);
+
+    act(() => lastCy().handlers['grab']?.({}));
+    act(() => lastCy().handlers['viewport position']?.({}));
+    await waitFor(() =>
+      expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).modified).toBe(true),
+    );
+  });
+
+  it('goes quiet when a rearrangement carried over from a refresh is put back', async () => {
+    // The other direction: here the flag came from storage rather than from this session's
+    // undo history, so clearing the history is not enough to answer it.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        modified: true,
+      }),
+    );
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().resetMachine());
+    await waitFor(() => expect(api().viewModified).toBe(false));
+  });
+
+  it('goes quiet when the machine is put back', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers['grab']?.({}));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().resetMachine());
+    await waitFor(() => expect(api().viewModified).toBe(false));
   });
 });
