@@ -1078,6 +1078,23 @@ describe('keeping the canvas in step with its container', () => {
     await waitFor(() => expect(lastCy().fitCalls).toBeGreaterThan(fitsBefore));
   });
 
+  it('centres the machine on request without touching the scale', async () => {
+    // The other half of Fit: a reader who zoomed in on a corner and panned off the machine
+    // wants it back in front of them at the scale they chose, not the whole thing at once.
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const cy = lastCy();
+    cy.zoom(2.5);
+    cy.centerCalls = 0;
+    const fitsBefore = cy.fitCalls;
+
+    act(() => api().center());
+
+    expect(cy.centerCalls).toBe(1);
+    expect(cy.fitCalls).toBe(fitsBefore);
+    expect(cy.zoomLevel).toBe(2.5);
+  });
+
   it('does not recentre the whole machine, which would be a different place', async () => {
     renderViewer();
     await waitFor(() => expect(observers.length).toBeGreaterThan(0));

@@ -51,6 +51,7 @@ import {
   Copy,
   Minus,
   Plus,
+  Crosshair,
   Scan,
   Undo2,
   Redo2,
@@ -409,6 +410,7 @@ export function JffCytoscapeViewer({
     setZoom,
     zoomRange,
     fit,
+    center,
     downloadSVG,
     downloadPNG,
     downloadCurrent,
@@ -459,6 +461,7 @@ export function JffCytoscapeViewer({
       toggleNotes,
       toggleSnapToGrid,
       fitToWindow: fit,
+      centerInWindow: center,
       showTextRepresentation: () => setShowText(true),
       // Set rather than toggled, so the menu's two options are a choice between states and
       // selecting the one already showing does nothing.
@@ -672,6 +675,20 @@ export function JffCytoscapeViewer({
             >
               <Scan className="h-4 w-4 sm:mr-2" />
               <span className="sr-only sm:not-sr-only">Fit</span>
+            </Button>
+            {/* Beside Fit because they answer the same question, "I have lost the machine",
+                differently: Fit brings all of it back and gives up the reader's magnification,
+                this brings it back at the scale they chose. */}
+            <Button
+              size="sm"
+              variant="outline"
+              className={cn(controlBtnClass, 'h-8 shrink-0')}
+              onClick={center}
+              title="Center automaton in view"
+              aria-label="Center automaton in view"
+            >
+              <Crosshair className="h-4 w-4 sm:mr-2" />
+              <span className="sr-only sm:not-sr-only">Center</span>
             </Button>
           </div>
 

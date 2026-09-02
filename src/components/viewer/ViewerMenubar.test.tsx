@@ -29,6 +29,7 @@ const actions = {
   setAsDrawn: vi.fn(),
   setAutoArranged: vi.fn(),
   resetMachine: vi.fn(),
+  centerInWindow: vi.fn(),
 };
 
 /** Stands in for a rendered machine that publishes its actions and its view state. */
@@ -303,6 +304,24 @@ describe('View, Fit to window', () => {
     // fireEvent for the same jsdom reason as the export case above.
     fireEvent.click(await screen.findByRole('menuitem', { name: /fit to window/i }));
     expect(actions.fitToWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the viewer to centre the machine, which is the other half of it', async () => {
+    // Two ways out of being lost on a large machine, and they are not the same: this one
+    // keeps whatever the reader had zoomed to.
+    const user = userEvent.setup();
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" />
+      </ViewerActionsProvider>,
+    );
+    actions.fitToWindow.mockClear();
+
+    await user.click(screen.getByRole('menuitem', { name: 'View' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /center in window/i }));
+    expect(actions.centerInWindow).toHaveBeenCalledTimes(1);
+    expect(actions.fitToWindow).not.toHaveBeenCalled();
   });
 
   it('is unavailable when nothing is drawn', async () => {

@@ -433,6 +433,17 @@ describe('the zoom slider', () => {
     expect(screen.getByRole('group', { name: 'Zoom' })).not.toContainElement(fitButton);
   });
 
+  it('offers Center beside Fit, since the two are asked for in the same moment', () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    const centerButton = screen.getByRole('button', { name: 'Center automaton in view' });
+    expect(centerButton).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Zoom' })).not.toContainElement(centerButton);
+    // Immediately after Fit, so the pair reads as one choice rather than two scattered ones.
+    expect(
+      screen.getByRole('button', { name: 'Fit automaton to view' }).nextElementSibling,
+    ).toBe(centerButton);
+  });
+
   it('announces its value as a spoken percentage, not a track position', () => {
     // A bare value announces "62", which is where the thumb sits and means nothing. Percent
     // is spelled out because how a screen reader pronounces the symbol varies.
@@ -466,6 +477,33 @@ describe('what the viewer publishes to a menu', () => {
     h.cy.resize.mockClear();
     act(() => run?.('fitToWindow'));
     expect(h.cy.resize).toHaveBeenCalled();
+  });
+
+  it('wires Center in window to a centring that leaves the zoom alone', async () => {
+    let run: ((name: 'centerInWindow') => void) | null = null;
+    function Probe() {
+      run = useViewerActions().run;
+      return null;
+    }
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" />
+        <Probe />
+      </ViewerActionsProvider>,
+    );
+
+    await waitForEngine();
+    h.cy.center.mockClear();
+    h.cy.zoom.mockClear();
+    h.cy.resize.mockClear();
+    act(() => run?.('centerInWindow'));
+
+    expect(h.cy.center).toHaveBeenCalled();
+    // Not a fit, and not a scale change: the reader keeps the magnification they set. Fit
+    // resizes the canvas on its way through, which is what tells the two apart here, and
+    // setting the zoom would mean calling it with a value rather than reading it.
+    expect(h.cy.resize).not.toHaveBeenCalled();
+    expect(h.cy.zoom).not.toHaveBeenCalledWith(expect.anything());
   });
 });
 

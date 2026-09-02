@@ -1630,6 +1630,25 @@ export function useJffCytoscape({
         : null,
     zoomRange,
     fit: () => onResizeRef.current?.(),
+    /**
+     * Bring the machine back to the middle of the pane, at the scale the reader chose.
+     *
+     * Fit is the wrong tool when somebody has zoomed in deliberately: it takes them back out
+     * to the whole machine. This moves the camera and nothing else, which is what a reader who
+     * has panned off the edge of a large automaton actually wants.
+     *
+     * Centred on everything rather than on the states alone, which is what Fit measures too:
+     * an edge label or a note hanging off one side is part of what has to be on screen.
+     */
+    center: () => {
+      const cy = cyRef.current;
+      if (!cy) return;
+      try {
+        cy.center(cy.elements());
+      } catch {
+        // A graph mid-teardown. There is nothing on screen to centre.
+      }
+    },
     downloadSVG,
     downloadCurrent,
     copySVG,
