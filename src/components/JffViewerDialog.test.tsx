@@ -858,6 +858,21 @@ describe('clicking a transition', () => {
     expect(screen.queryByRole('group', { name: /transition from/i })).toBeNull();
   });
 
+  it('offers what it reads as a box that can be typed in', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapEdge('0', '1');
+
+    const reads = await screen.findAllByLabelText('Reads');
+    fireEvent.change(reads[0]!, { target: { value: 'x' } });
+
+    expect(reads[0]).toHaveValue('x');
+    expect(await screen.findByRole('button', { name: /file changed/i })).toBeInTheDocument();
+    // A finite automaton reads and nothing else: no stack, no tape.
+    expect(screen.queryByLabelText('Pops')).toBeNull();
+    expect(screen.queryByLabelText('Writes')).toBeNull();
+  });
+
   it('shows one panel at a time, not a state and a transition together', async () => {
     // Both are driven by the same click, so the previous one has to give way rather than the
     // two stacking in the same corner.

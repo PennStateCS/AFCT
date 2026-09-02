@@ -1219,6 +1219,57 @@ describe('choosing which states are final', () => {
   });
 });
 
+describe('changing what a transition reads', () => {
+  const KEY = 'submissions:machine.jff';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('redraws the line from the transitions behind it', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const edge = lastCy().edgeList.find(
+      (e) => e.data('source') === '0' && e.data('target') === '1',
+    );
+    const before = edge?.data('label');
+
+    act(() => api().setTransitionField(0, 'read', 'x'));
+
+    await waitFor(() => expect(edge?.data('label')).not.toBe(before));
+    expect(String(edge?.data('label'))).toContain('x');
+    expect(api().viewModified).toBe(true);
+  });
+
+  it('leaves the other transitions on the same line alone', async () => {
+    // Two transitions between the same pair are drawn as one line carrying both labels, so the
+    // label is worked out again from all of them rather than replaced by the one that changed.
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().setTransitionField(0, 'read', 'x'));
+
+    await waitFor(() => expect(api().parsed?.transitions[0]?.read).toBe('x'));
+    expect(api().parsed?.transitions[1]?.read).not.toBe('x');
+  });
+
+  it('survives a rebuild and is written down for the next visit', async () => {
+    const { api, rerender } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().setTransitionField(0, 'read', 'x'));
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).transitions,
+      ).toEqual({ '0': { read: 'x' } }),
+    );
+
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(api().parsed?.transitions[0]?.read).toBe('x'));
+  });
+});
+
 describe('putting a machine back the way it opened', () => {
   const KEY = 'submissions:machine.jff';
   const STORAGE_KEY = `afct.viewer.view.${KEY}`;

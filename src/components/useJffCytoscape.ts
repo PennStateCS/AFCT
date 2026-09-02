@@ -36,6 +36,7 @@ import {
   type ViewerViewState,
 } from '@/lib/viewer-view-state';
 import {
+  bundleEdges,
   describeMachine,
   describeEdge,
   describeState,
@@ -385,6 +386,27 @@ function applyFinalStates(parsed: Parsed, finals: Record<string, boolean>): Pars
   };
 }
 
+/**
+ * The machine with the reader's changes to transitions applied.
+ *
+ * Keyed by a transition's place in the file, which is the only stable thing about it: two
+ * transitions between the same pair of states are told apart by nothing else, and they are drawn
+ * as one line.
+ */
+function applyTransitionEdits(
+  parsed: Parsed,
+  edits: Record<number, Partial<Parsed['transitions'][number]>>,
+): Parsed {
+  if (Object.keys(edits).length === 0) return parsed;
+  return {
+    ...parsed,
+    transitions: parsed.transitions.map((transition) => {
+      const edit = edits[transition.__idx];
+      return edit ? { ...transition, ...edit } : transition;
+    }),
+  };
+}
+
 /** Read the current arrangement out of the graph. */
 function readArrangement(cy: any, honorPositions: boolean): ArrangementSnapshot | null {
   try {
@@ -548,6 +570,17 @@ export function useJffCytoscape({
   );
   const initialOverrideRef = useRef(initialOverride);
   initialOverrideRef.current = initialOverride;
+  /**
+   * What the reader has changed about transitions, by the transition's place in the file.
+   *
+   * Held outside the parsed machine like the renamings, so a rebuild keeps it, and written down
+   * with the view, so a refresh does.
+   */
+  const [transitionEdits, setTransitionEdits] = useState<
+    Record<number, Partial<Parsed['transitions'][number]>>
+  >(savedView?.transitions ?? {});
+  const transitionEditsRef = useRef(transitionEdits);
+  transitionEditsRef.current = transitionEdits;
   /** Which states the reader has made final, or unmade. Same handling as the two above. */
   const [finalOverrides, setFinalOverrides] = useState<Record<string, boolean>>(
     savedView?.finals ?? {},
@@ -659,6 +692,15 @@ export function useJffCytoscape({
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
   /**
+   * Put the label geometry back in step, for a change that is not a drag.
+   *
+   * The offsets that keep a transition's label clear of its line, and a self-loop's of its
+   * state, are worked out from the label itself, so editing what a transition reads has to run
+   * them again. The functions belong to the graph currently loaded, which is why this is a ref
+   * the load fills in rather than something callable from out here.
+   */
+  const refreshLabelGeometryRef = useRef<(() => void) | null>(null);
+  /**
    * The size the canvas had when it was last drawn.
    *
    * Kept here rather than read from cytoscape when a resize arrives, because by then it is no
@@ -681,7 +723,8 @@ export function useJffCytoscape({
     restoredModified ||
     Object.keys(renames).length > 0 ||
     initialOverride !== undefined ||
-    Object.keys(finalOverrides).length > 0;
+    Object.keys(finalOverrides).length > 0 ||
+    Object.keys(transitionEdits).length > 0;
 
   /* ── following another pane's camera ────────────────────────────────── */
 
@@ -760,6 +803,7 @@ export function useJffCytoscape({
         renames: renamesRef.current,
         initialState: initialOverrideRef.current,
         finals: finalOverridesRef.current,
+        transitions: transitionEditsRef.current,
       });
     } catch {
       // A graph mid-teardown, or storage refusing. Neither is worth interrupting a reader.
@@ -907,9 +951,12 @@ export function useJffCytoscape({
         }
         // Whatever the reader has renamed, put back over the file's own names. Every load
         // re-reads the file, so this is where a rename survives a rebuild.
-        parsed = applyFinalStates(
-          applyInitialState(applyRenames(parsed, renamesRef.current), initialOverrideRef.current),
-          finalOverridesRef.current,
+        parsed = applyTransitionEdits(
+          applyFinalStates(
+            applyInitialState(applyRenames(parsed, renamesRef.current), initialOverrideRef.current),
+            finalOverridesRef.current,
+          ),
+          transitionEditsRef.current,
         );
         setPhase('drawing');
         setType(parsed.type);
@@ -1313,6 +1360,13 @@ export function useJffCytoscape({
 
         // Expose fitAndResize for Fit button and initial layout
         onResizeRef.current = () => void fitAndResize();
+        refreshLabelGeometryRef.current = () => {
+          void (async () => {
+            await updateEdgeLabelMargins();
+            await selfLoopGeometry();
+            repositionStartNodes(cy);
+          })();
+        };
         setTimeout(() => {
           void (async () => {
             try {
@@ -1826,6 +1880,7 @@ export function useJffCytoscape({
       setRenames({});
       setInitialOverride(undefined);
       setFinalOverrides({});
+      setTransitionEdits({});
       setHonorPositions(honorPositionsDefault);
       // The rebuild puts every state back where its author had it.
       setReloadNonce((n) => n + 1);
@@ -1878,6 +1933,51 @@ export function useJffCytoscape({
         repositionStartNodes(cy);
       } catch {
         // A graph mid-teardown. The choice is kept, and the next load draws it.
+      }
+    },
+    /**
+     * Change one part of one transition, on screen only.
+     *
+     * Which parts there are depends on the machine: `read` for a finite automaton, plus `pop`
+     * and `push` for a pushdown automaton, or `write` and `move` for a Turing machine. The panel
+     * asks `transitionFields` and offers exactly those.
+     *
+     * Transitions between the same two states are drawn as one line carrying all their labels,
+     * so the line's whole label is worked out again from the transitions behind it rather than
+     * patched, and the geometry that keeps that label clear of the line is run again after.
+     */
+    setTransitionField: (
+      index: number,
+      field: 'read' | 'write' | 'move' | 'pop' | 'push',
+      value: string,
+    ) => {
+      setTransitionEdits((current) => ({
+        ...current,
+        [index]: { ...current[index], [field]: value },
+      }));
+      if (!parsed) return;
+      const next = applyTransitionEdits(parsed, { [index]: { [field]: value } });
+      setParsed(next);
+
+      const edited = next.transitions.find((transition) => transition.__idx === index);
+      const cy = cyRef.current;
+      if (!edited || !cy) return;
+      try {
+        const bundled = bundleEdges(
+          next.transitions.filter((t) => t.from === edited.from && t.to === edited.to),
+          next.type,
+          epsSymbol,
+        )[0];
+        const edge = cy
+          .edges()
+          .filter(
+            (e: any) => e.data('source') === edited.from && e.data('target') === edited.to,
+          )?.[0];
+        if (!edge || bundled === undefined) return;
+        edge.data('label', bundled.label);
+        refreshLabelGeometryRef.current?.();
+      } catch {
+        // A graph mid-teardown. The change is kept, and the next load draws it.
       }
     },
     /**

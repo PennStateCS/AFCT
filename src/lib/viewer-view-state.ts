@@ -81,6 +81,23 @@ export type ViewerViewState = {
    * keeps the file's own answer.
    */
   finals?: Record<string, boolean>;
+  /**
+   * What the reader has changed about transitions, by a transition's place in the file.
+   *
+   * Only the fields they touched, and only the ones their machine type has: a finite automaton's
+   * transition reads, a pushdown automaton's also pops and pushes, a Turing machine's writes and
+   * moves.
+   */
+  transitions?: Record<number, ViewerTransitionEdit>;
+};
+
+/** The parts of a transition a reader can change. */
+export type ViewerTransitionEdit = {
+  read?: string;
+  write?: string;
+  move?: string;
+  pop?: string;
+  push?: string;
 };
 
 const PREFIX = 'afct.viewer.view.';
@@ -126,6 +143,18 @@ function isViewState(value: unknown): value is ViewerViewState {
     if (!Object.values(s.finals as Record<string, unknown>).every((v) => typeof v === 'boolean')) {
       return false;
     }
+  }
+  if (s.transitions !== undefined) {
+    if (!s.transitions || typeof s.transitions !== 'object') return false;
+    const edits = Object.values(s.transitions as Record<string, unknown>);
+    const isEdit = (edit: unknown) =>
+      !!edit &&
+      typeof edit === 'object' &&
+      Object.entries(edit as Record<string, unknown>).every(
+        ([key, value]) =>
+          ['read', 'write', 'move', 'pop', 'push'].includes(key) && typeof value === 'string',
+      );
+    if (!edits.every(isEdit)) return false;
   }
   if (s.renames !== undefined) {
     if (!s.renames || typeof s.renames !== 'object') return false;

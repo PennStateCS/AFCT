@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 import { useTheme } from 'next-themes';
 import {
   Dialog,
@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   describeMachine,
+  transitionFields,
   type MachineDescription,
   type MachineType,
   type EdgeDescription,
@@ -359,7 +360,28 @@ function StateProperties({
  * Plural on purpose: parallel transitions between the same two states are drawn as one line, so
  * clicking it asks about all of them.
  */
-function TransitionProperties({ edge, onClose }: { edge: EdgeDescription; onClose: () => void }) {
+const TRANSITION_FIELD_LABEL: Record<string, string> = {
+  read: 'Reads',
+  pop: 'Pops',
+  push: 'Pushes',
+  write: 'Writes',
+  move: 'Moves',
+};
+
+function TransitionProperties({
+  edge,
+  fields,
+  onEdit,
+  onClose,
+}: {
+  edge: EdgeDescription;
+  /** The parts a transition of this machine has: a PDA pops and pushes, a TM writes and moves. */
+  fields: Array<'read' | 'pop' | 'push' | 'write' | 'move'>;
+  onEdit: (index: number, field: 'read' | 'pop' | 'push' | 'write' | 'move', value: string) => void;
+  onClose: () => void;
+}) {
+  const fieldIdPrefix = useId();
+
   return (
     <PropertiesPanel
       label={`Properties of the transition from ${edge.from} to ${edge.to}`}
@@ -382,22 +404,42 @@ function TransitionProperties({ edge, onClose }: { edge: EdgeDescription; onClos
         </div>
       ) : null}
 
-      <dl className="space-y-2 text-xs">
-        <div>
-          <dt className="text-muted-foreground">
-            {edge.labels.length === 1 ? 'Reads' : `Reads (${edge.labels.length})`}
-          </dt>
-          <dd>
-            <ul className="list-none space-y-0.5">
-              {edge.labels.map((line, i) => (
-                <li key={`${line}-${i}`} className="font-mono">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </dd>
+      {/* One block per transition, because parallel transitions between the same two states are
+          drawn as a single line: clicking it asks about all of them, and each is edited on its
+          own. The boxes offered are the ones the machine type has, so a Turing machine gets what
+          it writes and which way it moves and a finite automaton does not. */}
+      <div className="space-y-3">
+        <div className="text-muted-foreground text-xs">
+          {edge.transitions.length === 1
+            ? 'Transition'
+            : `Transitions (${edge.transitions.length})`}
         </div>
-      </dl>
+        {edge.transitions.map((transition) => (
+          <div
+            key={transition.index}
+            className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 rounded-md border p-2"
+          >
+            {fields.map((field) => {
+              const fieldId = `${fieldIdPrefix}-${transition.index}-${field}`;
+              return (
+                <Fragment key={field}>
+                  <Label htmlFor={fieldId} className="text-muted-foreground text-xs font-normal">
+                    {TRANSITION_FIELD_LABEL[field]}
+                  </Label>
+                  <Input
+                    id={fieldId}
+                    value={transition[field] ?? ''}
+                    onChange={(event) => onEdit(transition.index, field, event.target.value)}
+                    className="h-7 font-mono text-sm"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </Fragment>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </PropertiesPanel>
   );
 }
@@ -513,6 +555,7 @@ export function JffCytoscapeViewer({
     renameState,
     setInitialState,
     setFinalState,
+    setTransitionField,
     zoomIn,
     zoomOut,
     zoom,
@@ -943,7 +986,12 @@ export function JffCytoscapeViewer({
             onClose={clearSelectedState}
           />
         ) : selectedTransition ? (
-          <TransitionProperties edge={selectedTransition} onClose={clearSelectedState} />
+          <TransitionProperties
+            edge={selectedTransition}
+            fields={transitionFields(type)}
+            onEdit={setTransitionField}
+            onClose={clearSelectedState}
+          />
         ) : null}
       </div>
 

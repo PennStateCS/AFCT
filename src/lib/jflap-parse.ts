@@ -402,6 +402,27 @@ export function describeState(parsed: Parsed, id: string, eps: string): StateDes
   };
 }
 
+/**
+ * One of the transitions behind a drawn edge, with the fields its machine type uses.
+ *
+ * Which fields those are is the whole point: a finite automaton's transition reads a symbol, a
+ * pushdown automaton's also pops and pushes, and a Turing machine's writes and moves. `index` is
+ * the transition's place in the file, which is what identifies it when one of several between
+ * the same two states is edited.
+ */
+export type TransitionDescription = {
+  index: number;
+  /** What the drawing shows for this one transition. */
+  label: string;
+  read: string;
+  /** PDA only. */
+  pop?: string;
+  push?: string;
+  /** TM only. */
+  write?: string;
+  move?: string;
+};
+
 /** The transitions drawn as one edge between a pair of states. */
 export type EdgeDescription = {
   from: string;
@@ -410,7 +431,19 @@ export type EdgeDescription = {
   selfLoop: boolean;
   /** One entry per transition, already formatted for the machine's type. */
   labels: string[];
+  /** The same transitions in their parts, for a panel that lets them be changed. */
+  transitions: TransitionDescription[];
 };
+
+/** The parts of a transition a reader can change, which differ by machine type. */
+export type TransitionField = 'read' | 'pop' | 'push' | 'write' | 'move';
+
+/** The fields a transition of this machine type actually has. */
+export function transitionFields(type: MachineType): TransitionField[] {
+  if (type === 'pda') return ['read', 'pop', 'push'];
+  if (type === 'tm') return ['read', 'write', 'move'];
+  return ['read'];
+}
 
 /**
  * Describe the edge between two states.
@@ -432,14 +465,22 @@ export function describeEdge(
   const nameById = new Map(parsed.states.map((st) => [st.id, st.name || st.id]));
   const nameOf = (id: string) => nameById.get(id) ?? id;
 
-  const labels = [...parsed.transitions]
+  const matching = [...parsed.transitions]
     .sort((a, b) => a.__idx - b.__idx)
-    .filter((t) => t.from === from && t.to === to)
-    .map((t) => labelFor(t, parsed.type, eps));
+    .filter((t) => t.from === from && t.to === to);
 
-  if (labels.length === 0) return null;
+  if (matching.length === 0) return null;
 
-  return { from: nameOf(from), to: nameOf(to), selfLoop: from === to, labels };
+  const labels = matching.map((t) => labelFor(t, parsed.type, eps));
+  const transitions = matching.map((t) => ({
+    index: t.__idx,
+    label: labelFor(t, parsed.type, eps),
+    read: t.read ?? '',
+    ...(parsed.type === 'pda' ? { pop: t.pop ?? '', push: t.push ?? '' } : {}),
+    ...(parsed.type === 'tm' ? { write: t.write ?? '', move: t.move ?? '' } : {}),
+  }));
+
+  return { from: nameOf(from), to: nameOf(to), selfLoop: from === to, labels, transitions };
 }
 
 export function describeMachine(parsed: Parsed, eps: string): MachineDescription {
