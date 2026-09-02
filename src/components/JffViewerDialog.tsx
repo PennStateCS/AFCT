@@ -702,6 +702,9 @@ export function JffCytoscapeViewer({
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+            {/* The same rule the toolbar uses elsewhere, so the zoom controls read as one group
+                and Fit and Center as another rather than as one long row of buttons. */}
+            <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
             {/* Outside the group: it sets the zoom rather than nudging it, and it is the one
                 control here somebody reaches for without knowing what the current value is.
                 The label drops below `sm`, where the icon and the tooltip carry it. */}
