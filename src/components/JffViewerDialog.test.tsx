@@ -711,6 +711,39 @@ describe('clicking a state', () => {
     expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
   });
 
+  it('says what was clicked in the header, not just its name', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const panel = await screen.findByRole('group', { name: /properties of state/i });
+    expect(panel).toHaveTextContent(/State\s+q0/);
+  });
+
+  it('closes on Escape from the keyboard, since it is not a modal that traps it', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const close = await screen.findByRole('button', { name: /close state properties/i });
+    close.focus();
+
+    fireEvent.keyDown(close, { key: 'Escape' });
+
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
+  });
+
+  it('sits beside the drawing rather than inside it, which is what lets it dock', async () => {
+    // The canvas is a `role="img"`, so anything inside it is unreachable to a screen reader,
+    // and the docked layout needs the panel to be a flex sibling of the drawing's column.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const panel = await screen.findByRole('group', { name: /properties of state/i });
+    const canvas = screen.getByRole('img');
+
+    expect(canvas).not.toContainElement(panel);
+    expect(panel.parentElement).toBe(canvas.parentElement?.parentElement);
+  });
+
   it('shows nothing for the start marker, which is scenery rather than a state', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
@@ -767,6 +800,17 @@ describe('clicking a transition', () => {
     tapEdge('0', '1');
     const panel = await screen.findByRole('group', { name: /transition from/i });
     expect(panel).toHaveTextContent('Reads');
+  });
+
+  it('names the pair in the header and closes under its own name', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapEdge('0', '1');
+    const panel = await screen.findByRole('group', { name: /transition from/i });
+    expect(panel).toHaveTextContent(/Transition\s+q0\s*→\s*q1/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close transition properties' }));
+    expect(screen.queryByRole('group', { name: /transition from/i })).toBeNull();
   });
 
   it('shows one panel at a time, not a state and a transition together', async () => {
