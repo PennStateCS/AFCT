@@ -30,6 +30,7 @@ import {
   readViewState,
   writeViewState,
   viewStateFits,
+  type ViewerSelection,
   type ViewerViewport,
   type ViewerViewState,
 } from '@/lib/viewer-view-state';
@@ -310,6 +311,19 @@ function isFinitePoint(value: any): value is { x: number; y: number } {
   return !!value && Number.isFinite(value.x) && Number.isFinite(value.y);
 }
 
+/**
+ * Dim the machine around one element and light up what it touches.
+ *
+ * Shared by the click that selects something and the restore that puts a selection back after a
+ * refresh, so the drawing looks the same either way round rather than coming back with an open
+ * properties panel and nothing marked on the canvas.
+ */
+function highlightElement(cy: any, ele: any): void {
+  const neighborhood = ele.closedNeighborhood ? ele.closedNeighborhood() : ele.neighborhood();
+  cy.elements().addClass('faded');
+  neighborhood.addClass('highlighted').removeClass('faded');
+}
+
 /** Read the current arrangement out of the graph. */
 function readArrangement(cy: any, honorPositions: boolean): ArrangementSnapshot | null {
   try {
@@ -436,6 +450,35 @@ export function useJffCytoscape({
   // assigned by the bundler and would not survive a re-parse, while the pair is the machine's
   // own identity for it.
   const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
+  /**
+   * What is selected, in the shape the remembered view stores.
+   *
+   * A ref because the writer reads only refs: it runs from a debounce and from `pagehide`, and
+   * a closure from the first render would always write "nothing selected".
+   */
+  /**
+   * Whether the graph on screen has had its remembered view put back.
+   *
+   * False from the moment a load starts until that load has restored (or decided not to), which
+   * is the window in which a write would record a view nobody asked for.
+   */
+  const viewRestored = useRef(false);
+  /**
+   * Which load owns the graph.
+   *
+   * Two can be in flight at once: a theme change or a layout switch starts one while the last
+   * is still fetching or still in its final frame. Without a way to tell them apart the older
+   * one carried on and acted on the newer one's graph, and the sequence that showed it was
+   * ordinary use: it wrote the fit the new graph had opened at over the remembered view, and
+   * the restore that came a moment later read it back and stayed there.
+   */
+  const loadGeneration = useRef(0);
+  const selectionRef = useRef<ViewerSelection | null>(null);
+  selectionRef.current = selectedStateId
+    ? { kind: 'state', id: selectedStateId }
+    : selectedEdge
+      ? { kind: 'transition', from: selectedEdge.from, to: selectedEdge.to }
+      : null;
   // Read by the load path, which runs outside React's render and would otherwise capture the
   // value from whenever the effect that started it was created.
   const showNotesRef = useRef(showNotes);
@@ -596,6 +639,12 @@ export function useJffCytoscape({
   /** Write down where the reader is looking and where they have put the states. */
   const rememberView = useCallback(() => {
     if (!viewStateKeyRef.current) return;
+    // Not while a graph is being built. The writer is debounced, so a wheel or a drag from just
+    // before a rebuild can come due after the new graph exists and before its remembered view
+    // has been put back: it would then write the fit the rebuild opened at, and the restore a
+    // moment later would read that and stay there. What is in storage is already this machine's
+    // view; the load writes it again when it has finished.
+    if (!viewRestored.current) return;
     const cy = cyRef.current;
     if (!cy) return;
     try {
@@ -610,6 +659,7 @@ export function useJffCytoscape({
         positions: arrangement.positions,
         honorPositions: arrangement.honorPositions,
         modified: viewModifiedRef.current,
+        selection: selectionRef.current,
       });
     } catch {
       // A graph mid-teardown, or storage refusing. Neither is worth interrupting a reader.
@@ -640,6 +690,44 @@ export function useJffCytoscape({
    */
   const [reloadNonce, setReloadNonce] = useState(0);
 
+  /**
+   * Put the properties panel back on whatever it was open on.
+   *
+   * The panel answers a click, and a refresh is not a click, so without this a reader who
+   * reloaded came back to the machine they had left and no panel: the one thing on screen that
+   * had said which state they were reading about. Silent when the machine no longer has what
+   * was selected, which is what a file replaced under the same name would give.
+   */
+  const restoreSelection = useCallback((cy: any, selection: ViewerSelection | null) => {
+    if (!selection) return;
+    try {
+      if (selection.kind === 'state') {
+        const node = cy.getElementById(selection.id);
+        if (!node || node.empty?.() || node.length === 0) return;
+        setSelectedStateId(selection.id);
+        setSelectedEdge(null);
+        highlightElement(cy, node);
+        return;
+      }
+      // By its two ends, since that is how it was written down. Works on a cytoscape collection
+      // and on a plain array alike: both filter, both index.
+      const match = cy
+        .edges()
+        .filter(
+          (edge: any) =>
+            edge.data('source') === selection.from && edge.data('target') === selection.to,
+        );
+      const edge = match?.[0];
+      if (!edge) return;
+      setSelectedStateId(null);
+      setSelectedEdge({ from: selection.from, to: selection.to });
+      highlightElement(cy, edge);
+    } catch {
+      // An engine mid-teardown, or one a test has not told about selections. The machine is
+      // still there; only the panel is missing.
+    }
+  }, []);
+
   const restoreSavedView = useCallback(
     (cy: any): boolean => {
       if (skipRestore.current) {
@@ -666,6 +754,7 @@ export function useJffCytoscape({
         if (saved.modified) setRestoredModified(true);
         cy.zoom(saved.zoom);
         cy.pan(saved.pan);
+        restoreSelection(cy, saved.selection ?? null);
         return true;
       } catch {
         // An engine that does not offer these, which is every one of them in a test that has
@@ -673,14 +762,19 @@ export function useJffCytoscape({
         return false;
       }
     },
-    // Refs only, so this is built once.
-    [],
+    // Refs only, plus a callback that is itself built once.
+    [restoreSelection],
   );
 
   const load = useMemo(
     () => async () => {
       setFailure(null);
       setPhase('fetching');
+      // Nothing is written down again until this load has decided what the view should be.
+      viewRestored.current = false;
+      const generation = ++loadGeneration.current;
+      /** False once a later load has taken over: this one must then touch nothing. */
+      const isCurrent = () => generation === loadGeneration.current;
       // Before anything else, and before any await. A second load onto a viewer that is
       // already showing something (React re-running effects in development, or the source
       // changing) would otherwise start with the graph visible, and the new machine would be
@@ -739,6 +833,9 @@ export function useJffCytoscape({
         }
 
         const cytoscape = await ensureCytoscapeReady();
+        // A newer load is already building. Constructing a second engine here would leave one
+        // of them unowned, still listening to the container and never destroyed.
+        if (!isCurrent()) return;
 
         if (cyRef.current) {
           cyRef.current.destroy();
@@ -1110,12 +1207,13 @@ export function useJffCytoscape({
         setTimeout(() => {
           void (async () => {
             try {
+              if (!isCurrent()) return;
               // Fit first either way: it sizes the canvas and settles the layout, and the
               // centring it does is what keeps the machine in view at 100% rather than off in
               // a corner. Only then is the scale set back to 1:1, if that was asked for.
               await fitAndResize();
               const current = cyRef.current;
-              if (!current) return;
+              if (!current || !isCurrent()) return;
               // An undo that crossed a layout switch, waiting for this rebuild. It wins over
               // everything else here: it is the reader asking for a particular arrangement
               // back, and for the view not to move while they get it.
@@ -1142,10 +1240,14 @@ export function useJffCytoscape({
               // canvas while cytoscape may still be redrawing it, which is the tail of the
               // flash rather than its cause.
               await nextFrame();
+              // Not if a newer load has taken over in the meantime: revealing, and above all
+              // writing the view down, belong to whichever load owns the graph now.
+              if (!isCurrent()) return;
               // In a `finally` so a layout that throws still reveals the graph. A machine
               // drawn wrongly is recoverable; one that never appears is not.
               setSettled(true);
               setPhase('ready');
+              viewRestored.current = true;
               // Write the opening view down now, so a reader who changes nothing and refreshes
               // still comes back to the same picture. Whatever the step above decided is
               // already on the graph, so this records that rather than overwriting it.
@@ -1240,11 +1342,7 @@ export function useJffCytoscape({
           setSelectedEdge(
             isNode ? null : { from: ele.data?.('source') ?? '', to: ele.data?.('target') ?? '' },
           );
-          const neighborhood = ele.closedNeighborhood
-            ? ele.closedNeighborhood()
-            : ele.neighborhood();
-          cy.elements().addClass('faded');
-          neighborhood.addClass('highlighted').removeClass('faded');
+          highlightElement(cy, ele);
         });
 
         /**
@@ -1336,6 +1434,20 @@ export function useJffCytoscape({
     // The last two never change identity, so they cost nothing here.
     [src, epsSymbol, darkMode, honorPositions, rememberView, restoreSavedView],
   );
+
+  /**
+   * Write the view down when the selection changes.
+   *
+   * Nothing else does: the debounced writer answers the camera and the arrangement, and
+   * clicking a state moves neither, so a panel opened and then refreshed away came back and a
+   * panel closed and then refreshed came back open. Only once the machine is on screen, or the
+   * clearing that every load starts with would erase the selection that load is about to
+   * restore.
+   */
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    rememberView();
+  }, [phase, selectedStateId, selectedEdge, rememberView]);
 
   /**
    * Write the view down on the way out.

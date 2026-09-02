@@ -840,6 +840,111 @@ describe('remembering the view across a refresh', () => {
     expect(saved()?.zoom).toBe(3);
   });
 
+  it('writes down which properties panel is open, and that one was closed', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(saved()).not.toBeNull());
+
+    act(() => lastCy().handlers.tap({ target: lastCy().byId('0') }));
+    await waitFor(() => expect(saved()?.selection).toEqual({ kind: 'state', id: '0' }));
+
+    act(() => api().clearSelectedState());
+    await waitFor(() => expect(saved()?.selection).toBeNull());
+  });
+
+  it('opens the panel again on the state it was open on', async () => {
+    // A refresh is not a click, so without this a reader came back to the machine they left and
+    // no panel: the one thing on screen saying which state they were reading about.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        selection: { kind: 'state', id: '0' },
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+
+    await waitFor(() => expect(api().selectedState?.name).toBe('q0'));
+    // And the drawing agrees: an open panel with nothing marked on the canvas is worse than no
+    // panel at all.
+    expect(lastCy().byId('0')?.hasClass('highlighted')).toBe(true);
+    expect(lastCy().byId('1')?.hasClass('faded')).toBe(true);
+  });
+
+  it('opens the panel again on the transition it was open on', async () => {
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        selection: { kind: 'transition', from: '0', to: '1' },
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+
+    await waitFor(() => expect(api().selectedTransition?.from).toBe('q0'));
+    expect(api().selectedTransition?.to).toBe('q1');
+  });
+
+  it('ignores a selection the machine no longer has', async () => {
+    // The same file name can hold a different machine, and a panel about a state that is not
+    // there would describe nothing.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        selection: { kind: 'state', id: 'q7' },
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    expect(api().selectedState).toBeNull();
+  });
+
+  it('lets the newest load have the last word on the view', async () => {
+    // Two loads in flight: a rebuild starts while the one before it is still in its final
+    // frame. The older one used to finish by writing down the view of the graph it no longer
+    // owned, which was the fit the new one had just opened at, and the restore that followed
+    // read that back, losing the reader's zoom and positions.
+    //
+    // The exact interleaving that does the damage cannot be forced from here, so this is the
+    // scenario rather than a proof of the guard: it failed about one full-suite run in ten
+    // before each load was told which graph is its own.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 3,
+        pan: { x: 42, y: -7 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+      }),
+    );
+
+    const { rerender } = renderViewer({ viewStateKey: KEY });
+    // As soon as the first graph exists, before its load has finished: that is the window.
+    await waitFor(() => expect(instances).toHaveLength(1));
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+    expect(saved()?.zoom).toBe(3);
+  });
+
   it('does not put the old positions back when the layout is switched', async () => {
     // The regression this guards: the restore ran at the end of every load, and switching to
     // Auto-arranged is a load, so the layout engine placed the states and the remembered

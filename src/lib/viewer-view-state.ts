@@ -21,6 +21,18 @@
  */
 export type ViewerViewport = { zoom: number; pan: { x: number; y: number } };
 
+/**
+ * What the reader had open, so the properties panel comes back with the view.
+ *
+ * A transition is named by its two ends rather than by an element id, because the ids the
+ * drawing uses are positional (`e3-q0-q1`) and would move if the file were reordered. The pair
+ * is what the panel asks about anyway: parallel transitions between the same two states are one
+ * line on the canvas.
+ */
+export type ViewerSelection =
+  | { kind: 'state'; id: string }
+  | { kind: 'transition'; from: string; to: string };
+
 /** Where every state sits, plus the camera looking at it. */
 export type ViewerViewState = {
   /** Bumped when the shape changes, so an old entry is ignored rather than misread. */
@@ -37,6 +49,13 @@ export type ViewerViewState = {
    * the flag, and the worst it costs is an indicator that stays quiet for one session.
    */
   modified?: boolean;
+  /**
+   * The state or transition whose properties were open, if any.
+   *
+   * Optional for the same reason as `modified`: an entry written before this existed still
+   * opens, and the worst it costs is a panel the reader has to click again.
+   */
+  selection?: ViewerSelection | null;
 };
 
 const PREFIX = 'afct.viewer.view.';
@@ -52,6 +71,14 @@ const isPoint = (value: unknown): value is { x: number; y: number } => {
   );
 };
 
+function isSelection(value: unknown): value is ViewerSelection {
+  if (!value || typeof value !== 'object') return false;
+  const sel = value as Record<string, unknown>;
+  if (sel.kind === 'state') return typeof sel.id === 'string' && sel.id.length > 0;
+  if (sel.kind === 'transition') return typeof sel.from === 'string' && typeof sel.to === 'string';
+  return false;
+}
+
 /** Reject anything that is not ours: the key is editable, and an old shape is not. */
 function isViewState(value: unknown): value is ViewerViewState {
   if (!value || typeof value !== 'object') return false;
@@ -61,6 +88,7 @@ function isViewState(value: unknown): value is ViewerViewState {
   if (!isPoint(s.pan)) return false;
   if (typeof s.honorPositions !== 'boolean') return false;
   if (s.modified !== undefined && typeof s.modified !== 'boolean') return false;
+  if (s.selection !== undefined && s.selection !== null && !isSelection(s.selection)) return false;
   if (!s.positions || typeof s.positions !== 'object') return false;
   return Object.values(s.positions as Record<string, unknown>).every(isPoint);
 }
