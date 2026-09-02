@@ -243,10 +243,28 @@ class FakeCy {
   height() {
     return this.viewHeight;
   }
+  /**
+   * Call every handler registered for an event.
+   *
+   * Cytoscape reports a viewport change whether a person or the code caused it, and the
+   * handlers are registered under names like `'viewport position'`, so a token match is what
+   * matches them. Without this the fake stayed silent when the code moved the camera, and the
+   * guard against a linked pane reporting back the camera it was just handed was unreachable.
+   */
+  emit(name: string) {
+    for (const [key, handler] of Object.entries(this.handlers)) {
+      if (key.split(' ').includes(name)) handler({ target: this });
+    }
+  }
+
   zoomLevel = 1;
   /** A getter and a setter on one name, as cytoscape's is. */
   zoom(next?: number) {
-    if (typeof next === 'number') this.zoomLevel = next;
+    if (typeof next === 'number' && next !== this.zoomLevel) {
+      this.zoomLevel = next;
+      this.emit('zoom');
+      this.emit('viewport');
+    }
     return this.zoomLevel;
   }
   minZoom() {
@@ -260,7 +278,11 @@ class FakeCy {
   // feature was silently absent here rather than tested.
   panPosition: Pos = { x: 0, y: 0 };
   pan(next?: Pos) {
-    if (next) this.panPosition = { ...next };
+    if (next && (next.x !== this.panPosition.x || next.y !== this.panPosition.y)) {
+      this.panPosition = { ...next };
+      this.emit('pan');
+      this.emit('viewport');
+    }
     return this.panPosition;
   }
   panningEnabled() {}
@@ -313,16 +335,17 @@ function Harness(props: Parameters<typeof useJffCytoscape>[0] & { onApi?: (a: un
 
 const renderViewer = (props: Partial<Parameters<typeof useJffCytoscape>[0]> = {}) => {
   let latest: ReturnType<typeof useJffCytoscape>;
-  const view = render(
-    <Harness
-      src="/api/files/machine.jff"
-      {...props}
-      onApi={(a) => {
-        latest = a as ReturnType<typeof useJffCytoscape>;
-      }}
-    />,
-  );
-  return { ...view, api: () => latest };
+  const onApi = (a: unknown) => {
+    latest = a as ReturnType<typeof useJffCytoscape>;
+  };
+  const view = render(<Harness src="/api/files/machine.jff" {...props} onApi={onApi} />);
+  return {
+    ...view,
+    api: () => latest,
+    /** Re-render with different options, as the window does when the link is switched on. */
+    rerender: (next: Partial<Parameters<typeof useJffCytoscape>[0]> = {}) =>
+      view.rerender(<Harness src="/api/files/machine.jff" {...props} {...next} onApi={onApi} />),
+  };
 };
 
 const lastCy = () => instances[instances.length - 1];
@@ -1052,5 +1075,79 @@ describe('undoing a layout switch', () => {
     act(() => api().undo());
     expect(lastCy().byId('0')?.position()).toEqual(before);
     expect(instances).toHaveLength(1);
+  });
+});
+
+describe("linking one pane's camera to the other", () => {
+  it('reports where it is being looked at as soon as it starts driving', async () => {
+    // Otherwise turning the link on does nothing until the reader happens to scroll, and it
+    // reads as a control that did not work.
+    const onViewportChange = vi.fn();
+    renderViewer({ onViewportChange });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    await waitFor(() => expect(onViewportChange).toHaveBeenCalled());
+  });
+
+  it('reports again when the reader moves', async () => {
+    const onViewportChange = vi.fn();
+    renderViewer({ onViewportChange });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    onViewportChange.mockClear();
+
+    lastCy().zoom(2.5);
+    lastCy().pan({ x: -30, y: 12 });
+    act(() => lastCy().handlers['viewport']?.({}));
+
+    expect(onViewportChange).toHaveBeenCalledWith({ zoom: 2.5, pan: { x: -30, y: 12 } });
+  });
+
+  it("takes the other pane's camera when it is the one following", async () => {
+    const { rerender } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    rerender({ linkedViewport: { zoom: 3, pan: { x: 40, y: -8 } } });
+
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+    expect(lastCy().panPosition).toEqual({ x: 40, y: -8 });
+  });
+
+  it('does not report the camera it was just given', async () => {
+    // Cytoscape reports a move whether a person or this code caused it. Reporting one back
+    // would have the two panes talking past each other.
+    const onViewportChange = vi.fn();
+    const { rerender } = renderViewer({ onViewportChange });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    onViewportChange.mockClear();
+
+    // Both props at once, which the window never does: it gives a pane one or the other. This
+    // is the guard's whole subject, so the test has to set up the case it guards against.
+    rerender({ onViewportChange, linkedViewport: { zoom: 3, pan: { x: 40, y: -8 } } });
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+
+    expect(onViewportChange).not.toHaveBeenCalled();
+  });
+
+  it('starts reporting when the link is switched on, not on the next scroll', async () => {
+    // The graph is built after the first render, so an effect that reported on mount found
+    // nothing there. This is the case it exists for: the link turned on later.
+    const onViewportChange = vi.fn();
+    const { rerender, api } = renderViewer();
+    // Settled, not merely constructed: the load reports once at the end of its own run, and
+    // rerendering before that finished would be answered by the load rather than by the
+    // effect this is about.
+    await waitFor(() => expect(api().settled).toBe(true));
+
+    rerender({ onViewportChange });
+
+    await waitFor(() => expect(onViewportChange).toHaveBeenCalled());
+  });
+
+  it('says nothing at all when nobody is listening', async () => {
+    // Every viewer in a dialog, and every pane while the two are not linked.
+    renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    lastCy().zoom(2);
+    // No handler to call and nothing to report to; this must simply not throw.
+    expect(() => act(() => lastCy().handlers['viewport']?.({}))).not.toThrow();
   });
 });

@@ -3,6 +3,7 @@
 import { JffCytoscapeViewer } from '@/components/JffViewerDialog';
 import { CfgViewerContent } from '@/components/dialogs/CfgViewerDialog';
 import { RegexViewerContent } from '@/components/dialogs/RegexViewerDialog';
+import type { ViewerViewport } from '@/lib/viewer-view-state';
 
 /** Problem types drawn by the JFLAP (cytoscape) viewer; the rest have their own. */
 const JFF_PROBLEM_TYPES = ['FA', 'PDA', 'TM'];
@@ -21,6 +22,8 @@ export function ViewerClient({
   title,
   epsSymbol,
   viewStateKey,
+  onViewportChange,
+  linkedViewport,
 }: {
   src: string;
   problemType: string;
@@ -31,6 +34,10 @@ export function ViewerClient({
    * where the reader was. Only the drawn machines have anything to remember.
    */
   viewStateKey?: string | null;
+  /** Report where this machine is being looked at, for a linked pane. */
+  onViewportChange?: ((viewport: ViewerViewport) => void) | null;
+  /** Follow another pane's camera. */
+  linkedViewport?: ViewerViewport | null;
 }) {
   if (JFF_PROBLEM_TYPES.includes(problemType)) {
     return (
@@ -45,6 +52,8 @@ export function ViewerClient({
         // it, matching JFLAP. Fit is a click away for anything that does not fit.
         initialZoom="actual"
         viewStateKey={viewStateKey}
+        onViewportChange={onViewportChange}
+        linkedViewport={linkedViewport}
       />
     );
   }

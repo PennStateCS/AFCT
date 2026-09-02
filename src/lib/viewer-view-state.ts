@@ -13,6 +13,14 @@
  * view of it, and losing it costs a reader one fit.
  */
 
+/**
+ * The camera: how far in, and where over the machine.
+ *
+ * Its own type because it travels on its own when two panes are linked, without the positions
+ * that the rest of the remembered view carries.
+ */
+export type ViewerViewport = { zoom: number; pan: { x: number; y: number } };
+
 /** Where every state sits, plus the camera looking at it. */
 export type ViewerViewState = {
   /** Bumped when the shape changes, so an old entry is ignored rather than misread. */

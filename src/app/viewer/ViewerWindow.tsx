@@ -8,7 +8,7 @@ import { ViewerActionsGate, ViewerActionsProvider } from '@/components/viewer/vi
 import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
 import { viewerFileSrc } from '@/lib/viewer-link';
 import type { ViewerProperties } from '@/lib/viewer-properties';
-import { clearViewState } from '@/lib/viewer-view-state';
+import { clearViewState, type ViewerViewport } from '@/lib/viewer-view-state';
 import { tabKey, VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
 import {
   activeTab,
@@ -114,6 +114,16 @@ export function ViewerWindow({
    * files, and the audit trail from recording a dozen views nobody made.
    */
   const [opened, setOpened] = useState<string[]>([]);
+  /**
+   * Whether the two halves share one camera.
+   *
+   * Off unless asked for: two machines that are not versions of each other rarely sit in the
+   * same place, so moving one would drag the other somewhere useless. Comparing two attempts
+   * at the same problem is the case it is for.
+   */
+  const [linkViews, setLinkViews] = useState(false);
+  /** Where the pane that is driving is looking, for the other one to follow. */
+  const [sharedViewport, setSharedViewport] = useState<ViewerViewport | null>(null);
 
   /** Put the keyboard on a tab button, wherever in the strips it now is. */
   const focusTab = (key: string) => {
@@ -421,6 +431,11 @@ export function ViewerWindow({
     if (target) focusTab(tabKey(target));
   };
 
+  // Linking is only meaningful with something to link to, and only the pane the reader is
+  // working in drives: one direction at a time, so the two cannot chase each other.
+  const canLinkViews = panes === 2;
+  const linked = linkViews && canLinkViews;
+
   const close = (tab: ViewerTab) => {
     const key = tabKey(tab);
     // Worked out before the tab goes, since afterwards there is no place in the strip to
@@ -454,6 +469,9 @@ export function ViewerWindow({
           properties={properties[tabKey(focused)] ?? null}
           onMoveToOtherSide={moveToOtherSide}
           canMoveToOtherSide={canMoveToOtherSide}
+          linkViews={linkViews}
+          canLinkViews={canLinkViews}
+          onToggleLinkViews={() => setLinkViews((on) => !on)}
         />
 
         {/* Which half the menu bar acts on, for a reader who cannot see the marked strip.
@@ -603,6 +621,16 @@ export function ViewerWindow({
                       title={tab.title}
                       epsSymbol={tab.eps}
                       viewStateKey={tabKey(tab)}
+                      // Exactly one of these two, and only on a machine that is on screen: the
+                      // pane being worked in reports where it is looking, and the other one
+                      // follows. A hidden tab does neither, or it would come back showing a
+                      // view of a machine nobody chose for it.
+                      onViewportChange={
+                        linked && visible && pane === layout.focused ? setSharedViewport : null
+                      }
+                      linkedViewport={
+                        linked && visible && pane !== layout.focused ? sharedViewport : null
+                      }
                     />
                   </ViewerActionsGate>
                 </div>

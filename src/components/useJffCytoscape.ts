@@ -24,6 +24,7 @@ import {
   readViewState,
   writeViewState,
   viewStateFits,
+  type ViewerViewport,
   type ViewerViewState,
 } from '@/lib/viewer-view-state';
 import {
@@ -230,6 +231,16 @@ export type UseJffCytoscapeOptions = {
    * passes nothing and stays what it was: a look at a file, forgotten when it closes.
    */
   viewStateKey?: string | null;
+  /**
+   * Say where this machine is being looked at, so another pane can follow it.
+   *
+   * Set only on the pane the reader is working in, and only while the two are linked. The
+   * follower receives `linkedViewport` instead; one direction at a time, so there is no
+   * argument about which pane wins and no chance of the two chasing each other.
+   */
+  onViewportChange?: ((viewport: ViewerViewport) => void) | null;
+  /** Follow this camera. Set only on the pane that is not driving. */
+  linkedViewport?: ViewerViewport | null;
 };
 
 /**
@@ -345,6 +356,8 @@ export function useJffCytoscape({
   darkMode = false,
   honorPositionsDefault = false,
   viewStateKey = null,
+  onViewportChange = null,
+  linkedViewport = null,
 }: UseJffCytoscapeOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any | null>(null);
@@ -469,6 +482,56 @@ export function useJffCytoscape({
 
   const viewStateKeyRef = useRef(viewStateKey);
   viewStateKeyRef.current = viewStateKey;
+
+  /* ── following another pane's camera ────────────────────────────────── */
+
+  const onViewportChangeRef = useRef(onViewportChange);
+  onViewportChangeRef.current = onViewportChange;
+  /**
+   * True while a camera from elsewhere is being applied.
+   *
+   * Cytoscape reports a viewport change whether a person or this code caused it, so without
+   * this the follower would report the camera it was just given and the two panes would talk
+   * past each other.
+   */
+  const applyingViewport = useRef(false);
+
+  /** Tell whoever is listening where this machine is being looked at. */
+  const reportViewport = () => {
+    const report = onViewportChangeRef.current;
+    const cy = cyRef.current;
+    if (!report || !cy || applyingViewport.current) return;
+    try {
+      const zoom = cy.zoom();
+      const pan = cy.pan();
+      if (!Number.isFinite(zoom) || zoom <= 0 || !isFinitePoint(pan)) return;
+      report({ zoom, pan: { x: pan.x, y: pan.y } });
+    } catch {
+      // A graph mid-teardown. There is nothing to report about it.
+    }
+  };
+
+  // Take the other pane's camera. Not while this pane is the one driving, which is what the
+  // caller decides by giving one of the two props and not the other.
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !linkedViewport) return;
+    applyingViewport.current = true;
+    try {
+      cy.zoom(linkedViewport.zoom);
+      cy.pan(linkedViewport.pan);
+    } catch {
+      // A graph mid-teardown.
+    } finally {
+      applyingViewport.current = false;
+    }
+  }, [linkedViewport]);
+
+  // Say where this pane is as soon as it becomes the one driving, so linking the two takes
+  // effect immediately rather than on the reader's next scroll.
+  useEffect(() => {
+    if (onViewportChange) reportViewport();
+  }, [onViewportChange]);
 
   /** Write down where the reader is looking and where they have put the states. */
   const rememberView = useCallback(() => {
@@ -987,6 +1050,9 @@ export function useJffCytoscape({
               // still comes back to the same picture. Nothing above this can lose the saved
               // view: it was read into `savedView` before the first render.
               rememberView();
+              // And, if this pane is driving a linked one, where it ended up. The effect that
+              // reports when the link is switched on cannot: at mount there is no graph yet.
+              reportViewport();
             }
           })();
         }, 0);
@@ -999,6 +1065,10 @@ export function useJffCytoscape({
         // view it had.
         const rememberViewSoon = debounce(rememberView, 400);
         cy.on('viewport position', rememberViewSoon);
+
+        // Undebounced, unlike remembering: a linked pane that lagged a fraction of a second
+        // behind the one being dragged would read as broken rather than as linked.
+        cy.on('viewport', reportViewport);
 
         /**
          * Keep the canvas in step with its container without touching the zoom.

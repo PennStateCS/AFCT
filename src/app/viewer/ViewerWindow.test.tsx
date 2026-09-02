@@ -13,11 +13,34 @@ const mounts = new Map<string, number>();
 // given, so switching tabs can be seen to switch machines, and count its own mounts, which is
 // how "the zoom survived" is checked without a layout engine to zoom.
 vi.mock('./ViewerClient', () => ({
-  ViewerClient: ({ src }: { src: string }) => {
+  ViewerClient: ({
+    src,
+    onViewportChange,
+    linkedViewport,
+  }: {
+    src: string;
+    onViewportChange?: ((v: { zoom: number; pan: { x: number; y: number } }) => void) | null;
+    linkedViewport?: { zoom: number; pan: { x: number; y: number } } | null;
+  }) => {
     React.useEffect(() => {
       mounts.set(src, (mounts.get(src) ?? 0) + 1);
     }, [src]);
-    return <div data-testid="viewer" data-src={src} />;
+    return (
+      <div
+        data-testid="viewer"
+        data-src={src}
+        // Which end of a link this machine is on, and what it has been told to follow.
+        data-role={onViewportChange ? 'driving' : linkedViewport ? 'following' : 'alone'}
+        data-following={linkedViewport ? JSON.stringify(linkedViewport) : ''}
+      >
+        <button
+          type="button"
+          onClick={() => onViewportChange?.({ zoom: 2.5, pan: { x: -30, y: 12 } })}
+        >
+          {`report ${src}`}
+        </button>
+      </div>
+    );
   },
 }));
 vi.mock('@/components/viewer/ViewerMenubar', () => ({
@@ -26,11 +49,17 @@ vi.mock('@/components/viewer/ViewerMenubar', () => ({
     properties,
     onMoveToOtherSide,
     canMoveToOtherSide,
+    linkViews,
+    onToggleLinkViews,
+    canLinkViews,
   }: {
     downloadHref: string;
     properties?: { rows: { label: string; value: string }[] } | null;
     onMoveToOtherSide?: () => void;
     canMoveToOtherSide?: boolean;
+    linkViews?: boolean;
+    onToggleLinkViews?: () => void;
+    canLinkViews?: boolean;
   }) => (
     <div
       data-testid="menubar"
@@ -39,6 +68,14 @@ vi.mock('@/components/viewer/ViewerMenubar', () => ({
     >
       <button type="button" disabled={!canMoveToOtherSide} onClick={onMoveToOtherSide}>
         Move to other side
+      </button>
+      <button
+        type="button"
+        disabled={!canLinkViews}
+        aria-pressed={linkViews}
+        onClick={onToggleLinkViews}
+      >
+        Link the two views
       </button>
     </div>
   ),
@@ -845,5 +882,112 @@ describe('the tab strip as a tabs widget', () => {
     renderWindow([tab('a.jff'), tab('b.jff')], 0);
     const closers = screen.getAllByRole('button', { name: /^Close / });
     expect(closers.map((c) => c.getAttribute('tabindex'))).toEqual(['0', '-1']);
+  });
+});
+
+describe('linking the two views', () => {
+  const splitLayout = (): ViewerLayout => ({
+    tabs: [tab('a.jff'), tab('b.jff')],
+    panes: { 'submissions:b.jff': 1 },
+    active: ['submissions:a.jff', 'submissions:b.jff'],
+    focused: 0,
+  });
+
+  const renderSplit = () =>
+    render(<ViewerWindow initialLayout={splitLayout()} initialProperties={{}} />);
+
+  const link = () => fireEvent.click(screen.getByRole('button', { name: 'Link the two views' }));
+  /** The driving pane saying where it is looking, which the real viewer does on its own. */
+  const reportFrom = (file: string) =>
+    fireEvent.click(screen.getByRole('button', { name: `report /api/files/submissions/${file}` }));
+  const roleOf = (file: string) =>
+    screen
+      .getAllByTestId('viewer')
+      .find((v) => v.getAttribute('data-src')?.includes(file))!
+      .getAttribute('data-role');
+
+  it('is off until it is asked for', () => {
+    // Two machines that are not versions of each other rarely sit in the same place, so
+    // moving one would drag the other somewhere useless.
+    renderSplit();
+    expect(roleOf('a.jff')).toBe('alone');
+    expect(roleOf('b.jff')).toBe('alone');
+  });
+
+  it('is not offered while there is only one machine on screen', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    expect(screen.getByRole('button', { name: 'Link the two views' })).toBeDisabled();
+  });
+
+  it('makes the pane being worked in drive, and the other follow', () => {
+    // One direction at a time, so the two cannot chase each other.
+    renderSplit();
+    link();
+    reportFrom('a.jff');
+    expect(roleOf('a.jff')).toBe('driving');
+    expect(roleOf('b.jff')).toBe('following');
+  });
+
+  it('hands the follower the camera the driver reports', () => {
+    renderSplit();
+    link();
+    fireEvent.click(screen.getByRole('button', { name: 'report /api/files/submissions/a.jff' }));
+
+    const following = screen
+      .getAllByTestId('viewer')
+      .find((v) => v.getAttribute('data-src')?.includes('b.jff'))!
+      .getAttribute('data-following');
+    expect(JSON.parse(following!)).toEqual({ zoom: 2.5, pan: { x: -30, y: 12 } });
+  });
+
+  it('swaps which one drives when the reader moves to the other pane', () => {
+    renderSplit();
+    link();
+    reportFrom('a.jff');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'b.jff' }));
+    expect(roleOf('b.jff')).toBe('driving');
+    expect(roleOf('a.jff')).toBe('following');
+  });
+
+  it('lets go when it is switched off again', () => {
+    renderSplit();
+    link();
+    reportFrom('a.jff');
+    link();
+    expect(roleOf('a.jff')).toBe('alone');
+    expect(roleOf('b.jff')).toBe('alone');
+  });
+
+  it('leaves a tab that is not on screen out of it', () => {
+    // A hidden tab given somebody else's camera would come back showing a view of a machine
+    // nobody chose for it, and would write that view down as its own.
+    render(
+      <ViewerWindow
+        initialLayout={{
+          tabs: [tab('a.jff'), tab('b.jff'), tab('c.jff')],
+          panes: { 'submissions:b.jff': 1, 'submissions:c.jff': 1 },
+          active: ['submissions:a.jff', 'submissions:b.jff'],
+          focused: 0,
+        }}
+        initialProperties={{}}
+      />,
+    );
+    // b.jff has been on screen, so it stays mounted; c.jff takes its place in that pane.
+    fireEvent.click(screen.getByRole('tab', { name: 'c.jff' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'a.jff' }));
+    link();
+    reportFrom('a.jff');
+
+    expect(roleOf('c.jff')).toBe('following');
+    expect(roleOf('b.jff')).toBe('alone');
+  });
+
+  it('links nothing once the window is back to one pane', () => {
+    renderSplit();
+    link();
+    reportFrom('a.jff');
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+    expect(roleOf('a.jff')).toBe('alone');
   });
 });

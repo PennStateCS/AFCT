@@ -31,6 +31,7 @@ import {
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
 import type { ViewerWindowTarget } from '@/lib/viewer-tabs';
+import type { ViewerViewport } from '@/lib/viewer-view-state';
 import {
   useRegisterViewerActions,
   useViewerChromePresent,
@@ -305,6 +306,8 @@ export function JffCytoscapeViewer({
   viewStateKey = null,
   windowTarget,
   onOpenedInWindow,
+  onViewportChange,
+  linkedViewport,
 }: {
   src: string;
   title?: string;
@@ -330,6 +333,10 @@ export function JffCytoscapeViewer({
   windowTarget?: ViewerWindowTarget | null;
   /** Called once the file is on its way to the standalone window. */
   onOpenedInWindow?: () => void;
+  /** Report where this machine is being looked at, for a linked pane. See useJffCytoscape. */
+  onViewportChange?: ((viewport: ViewerViewport) => void) | null;
+  /** Follow another pane's camera. See useJffCytoscape. */
+  linkedViewport?: ViewerViewport | null;
 }) {
   // `resolvedTheme` rather than `theme`: the latter is "system" for most people, which says
   // nothing about which colours are actually on screen.
@@ -377,6 +384,8 @@ export function JffCytoscapeViewer({
     honorPositionsDefault,
     initialZoom,
     viewStateKey,
+    onViewportChange,
+    linkedViewport,
   });
 
   // Non-visual alternative. The canvas is unreadable to a screen reader, and reading
