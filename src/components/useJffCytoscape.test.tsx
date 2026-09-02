@@ -126,6 +126,14 @@ function collection(els: FakeEl[]): Collection {
 /** An absent element: cytoscape answers with an empty collection, not null. */
 const MISSING = { empty: () => true, position: () => ({ x: 0, y: 0 }), style: () => ({}) };
 
+/**
+ * The size a graph is built at.
+ *
+ * Mutable so a test can build one in a container that has no box yet, which is the case the
+ * pan that keeps the reader's spot has to refuse to act on.
+ */
+const builtAt = { width: 800, height: 600 };
+
 class FakeCy {
   nodeList: FakeEl[] = [];
   edgeList: FakeEl[] = [];
@@ -229,14 +237,14 @@ class FakeCy {
    * The size cytoscape thinks it has, and the size its container actually is.
    *
    * Two of them because that is how the real thing behaves: `width()` answers from a cached
-   * measurement and only `resize()` goes back to the DOM. Collapsing them into one would let a
-   * resize handler read the new size before it asked for it, which is exactly the mistake the
-   * code under test must not make.
+   * measurement and only `resize()` goes back to the DOM. Cytoscape watches the container
+   * itself, though, so in a browser something else has usually called `resize()` before the
+   * viewer's own handler runs: see the resize helper below, which is what makes that true here.
    */
-  containerWidth = 800;
-  containerHeight = 600;
-  viewWidth = 800;
-  viewHeight = 600;
+  containerWidth = builtAt.width;
+  containerHeight = builtAt.height;
+  viewWidth = builtAt.width;
+  viewHeight = builtAt.height;
   width() {
     return this.viewWidth;
   }
@@ -371,6 +379,8 @@ const originalFetch = global.fetch;
 beforeEach(() => {
   vi.clearAllMocks();
   instances.length = 0;
+  builtAt.width = 800;
+  builtAt.height = 600;
   cytoscapeMock.fn.mockImplementation((config: { elements?: Array<Record<string, unknown>> }) => {
     const cy = new FakeCy(config);
     instances.push(cy);
@@ -947,6 +957,11 @@ describe('keeping the canvas in step with its container', () => {
   });
 
   const resize = async () => {
+    // Cytoscape watches the container itself and calls its own `resize` on a shorter debounce
+    // than the viewer's, so by the time the viewer's handler runs the graph already knows its
+    // new size. Without this the test asked the viewer to compare two readings it would never
+    // get in a browser, and passed while a split pane left its machine half off the side.
+    lastCy()?.resize();
     for (const fire of observers) fire();
     // The handler is debounced, so nothing has happened yet.
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -1002,6 +1017,23 @@ describe('keeping the canvas in step with its container', () => {
     expect(after.x).toBeCloseTo(centre.x, 6);
     expect(after.y).toBeCloseTo(centre.y, 6);
     expect(cy.zoomLevel).toBe(2);
+  });
+
+  it('does not move the view when the canvas had no size to compare against', async () => {
+    // A container measured before it had a box would otherwise read as a change the width of a
+    // whole pane, and throw the machine sideways the first time it was looked at.
+    builtAt.width = 0;
+    builtAt.height = 0;
+    renderViewer();
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    const cy = lastCy();
+    cy.containerWidth = 800;
+    cy.containerHeight = 600;
+    const pan = { ...cy.panPosition };
+
+    await resize();
+
+    expect(cy.panPosition).toEqual(pan);
   });
 
   it('leaves Fit to window fitting and centring, which is what it is for', async () => {

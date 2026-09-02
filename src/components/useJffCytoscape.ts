@@ -292,7 +292,10 @@ function panKeepingCentre(
   pan: { x: number; y: number },
 ): { x: number; y: number } | null {
   if (!(zoom > 0) || !isFinitePoint(pan)) return null;
-  if (![before.width, before.height, after.width, after.height].every((n) => Number.isFinite(n))) {
+  // Every dimension has to be a real, positive size. A zero one means the canvas was measured
+  // while it had no box, and treating that as the old size would shove the view half a
+  // container sideways the first time the reader saw the machine.
+  if (![before.width, before.height, after.width, after.height].every((n) => n > 0)) {
     return null;
   }
   const centre = {
@@ -520,6 +523,17 @@ export function useJffCytoscape({
 
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
+  /**
+   * The size the canvas had when it was last drawn.
+   *
+   * Kept here rather than read from cytoscape when a resize arrives, because by then it is no
+   * longer the old size: cytoscape watches the container itself and calls its own `resize`
+   * about half a debounce ahead of this one, so both readings came back the same and the pan
+   * that keeps the reader's spot in the middle worked out to no move at all. Splitting the
+   * window left each machine sitting where it had been in the full width, half of it off the
+   * side of its pane.
+   */
+  const canvasSize = useRef<{ width: number; height: number } | null>(null);
 
   /* ── remembering the view across a refresh ──────────────────────────── */
 
@@ -1162,22 +1176,23 @@ export function useJffCytoscape({
           const current = cyRef.current;
           if (!current) return;
           try {
-            const before = { width: current.width(), height: current.height() };
+            const before = canvasSize.current;
             const zoom = current.zoom();
             const pan = { ...current.pan() };
             current.resize();
-            const next = panKeepingCentre(
-              before,
-              { width: current.width(), height: current.height() },
-              zoom,
-              pan,
-            );
+            const after = { width: current.width(), height: current.height() };
+            canvasSize.current = after;
+            if (!before) return;
+            const next = panKeepingCentre(before, after, zoom, pan);
             if (next) current.pan(next);
           } catch {
             // A graph mid-teardown. Nothing to resize.
           }
         }, 160);
         if (typeof ResizeObserver === 'function' && containerRef.current) {
+          // The size to compare the next one against. Read now, while it is still the size the
+          // machine was drawn at.
+          canvasSize.current = { width: cy.width(), height: cy.height() };
           const observer = new ResizeObserver(resizeKeepingZoom);
           observer.observe(containerRef.current);
           (cy as any).__resizeObserver = observer;
