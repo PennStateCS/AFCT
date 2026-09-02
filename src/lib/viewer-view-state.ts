@@ -64,6 +64,23 @@ export type ViewerViewState = {
    * entry written before this existed still opens.
    */
   renames?: Record<string, string>;
+  /**
+   * The state the reader has made the initial one, if they have said anything about it.
+   *
+   * Absent means the file's own answer stands. A string is the state they chose, and null is
+   * "none", which is what unticking the box asks for. Three answers rather than two, because
+   * "they have not touched it" and "they have taken it away" are different things to come back
+   * to after a refresh.
+   */
+  initialState?: string | null;
+  /**
+   * Which states the reader has made final, or unmade, by state id.
+   *
+   * A map rather than a single id, because unlike the initial state a machine can have any
+   * number of final ones: this says what the reader changed, and every state it does not name
+   * keeps the file's own answer.
+   */
+  finals?: Record<string, boolean>;
 };
 
 const PREFIX = 'afct.viewer.view.';
@@ -97,6 +114,19 @@ function isViewState(value: unknown): value is ViewerViewState {
   if (typeof s.honorPositions !== 'boolean') return false;
   if (s.modified !== undefined && typeof s.modified !== 'boolean') return false;
   if (s.selection !== undefined && s.selection !== null && !isSelection(s.selection)) return false;
+  if (
+    s.initialState !== undefined &&
+    s.initialState !== null &&
+    typeof s.initialState !== 'string'
+  ) {
+    return false;
+  }
+  if (s.finals !== undefined) {
+    if (!s.finals || typeof s.finals !== 'object') return false;
+    if (!Object.values(s.finals as Record<string, unknown>).every((v) => typeof v === 'boolean')) {
+      return false;
+    }
+  }
   if (s.renames !== undefined) {
     if (!s.renames || typeof s.renames !== 'object') return false;
     if (!Object.values(s.renames as Record<string, unknown>).every((v) => typeof v === 'string')) {

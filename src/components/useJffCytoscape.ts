@@ -345,6 +345,46 @@ function applyRenames(parsed: Parsed, renames: Record<string, string>): Parsed {
   };
 }
 
+/**
+ * The machine with the reader's choice of initial state applied.
+ *
+ * A machine has one initial state, which is what JFLAP draws the arrow into and what everything
+ * here already assumes: the summary says "Initial state: q0", not a list. So choosing one takes
+ * it away from whichever state had it, and `null` leaves the machine without one, which is what
+ * unticking the box asks for.
+ *
+ * `undefined` means the reader has not said, and the file's own answer stands.
+ */
+function applyInitialState(parsed: Parsed, initial: string | null | undefined): Parsed {
+  if (initial === undefined) return parsed;
+  return {
+    ...parsed,
+    states: parsed.states.map((state) =>
+      state.initial === (state.id === initial)
+        ? state
+        : { ...state, initial: state.id === initial },
+    ),
+  };
+}
+
+/**
+ * The machine with the reader's choice of final states applied.
+ *
+ * Unlike the initial state there is nothing to take away from anybody: any number of states can
+ * be final, and a machine with none is a perfectly ordinary one that accepts nothing. So this is
+ * a map of the states the reader has changed, and every state it does not name keeps the file's
+ * own answer.
+ */
+function applyFinalStates(parsed: Parsed, finals: Record<string, boolean>): Parsed {
+  if (Object.keys(finals).length === 0) return parsed;
+  return {
+    ...parsed,
+    states: parsed.states.map((state) =>
+      state.id in finals ? { ...state, final: finals[state.id]! } : state,
+    ),
+  };
+}
+
 /** Read the current arrangement out of the graph. */
 function readArrangement(cy: any, honorPositions: boolean): ArrangementSnapshot | null {
   try {
@@ -498,6 +538,22 @@ export function useJffCytoscape({
   const [renames, setRenames] = useState<Record<string, string>>(savedView?.renames ?? {});
   const renamesRef = useRef(renames);
   renamesRef.current = renames;
+  /**
+   * Which state the reader has made initial, held the same way as the renamings and for the
+   * same reasons: outside the parsed file, so a rebuild keeps it, and written down with the
+   * view, so a refresh does.
+   */
+  const [initialOverride, setInitialOverride] = useState<string | null | undefined>(
+    savedView?.initialState,
+  );
+  const initialOverrideRef = useRef(initialOverride);
+  initialOverrideRef.current = initialOverride;
+  /** Which states the reader has made final, or unmade. Same handling as the two above. */
+  const [finalOverrides, setFinalOverrides] = useState<Record<string, boolean>>(
+    savedView?.finals ?? {},
+  );
+  const finalOverridesRef = useRef(finalOverrides);
+  finalOverridesRef.current = finalOverrides;
   const viewRestored = useRef(false);
   /**
    * Which load owns the graph.
@@ -620,7 +676,12 @@ export function useJffCytoscape({
   viewStateKeyRef.current = viewStateKey;
   // Read by the writer, which runs from a cytoscape event rather than from a render.
   const viewModifiedRef = useRef(false);
-  viewModifiedRef.current = undoDepth > 0 || restoredModified || Object.keys(renames).length > 0;
+  viewModifiedRef.current =
+    undoDepth > 0 ||
+    restoredModified ||
+    Object.keys(renames).length > 0 ||
+    initialOverride !== undefined ||
+    Object.keys(finalOverrides).length > 0;
 
   /* ── following another pane's camera ────────────────────────────────── */
 
@@ -697,6 +758,8 @@ export function useJffCytoscape({
         modified: viewModifiedRef.current,
         selection: selectionRef.current,
         renames: renamesRef.current,
+        initialState: initialOverrideRef.current,
+        finals: finalOverridesRef.current,
       });
     } catch {
       // A graph mid-teardown, or storage refusing. Neither is worth interrupting a reader.
@@ -844,7 +907,10 @@ export function useJffCytoscape({
         }
         // Whatever the reader has renamed, put back over the file's own names. Every load
         // re-reads the file, so this is where a rename survives a rebuild.
-        parsed = applyRenames(parsed, renamesRef.current);
+        parsed = applyFinalStates(
+          applyInitialState(applyRenames(parsed, renamesRef.current), initialOverrideRef.current),
+          finalOverridesRef.current,
+        );
         setPhase('drawing');
         setType(parsed.type);
         setParsed(parsed);
@@ -1755,8 +1821,11 @@ export function useJffCytoscape({
       grabbedArrangement.current = null;
       setUndoDepth(0);
       setRedoDepth(0);
-      // Including the names: "the way the file opened" means the author's, not the reader's.
+      // Including the names and which state is initial: "the way the file opened" means the
+      // author's answers, not the reader's.
       setRenames({});
+      setInitialOverride(undefined);
+      setFinalOverrides({});
       setHonorPositions(honorPositionsDefault);
       // The rebuild puts every state back where its author had it.
       setReloadNonce((n) => n + 1);
@@ -1780,6 +1849,59 @@ export function useJffCytoscape({
     clearSelectedState: () => {
       setSelectedStateId(null);
       setSelectedEdge(null);
+    },
+    /**
+     * Make a state the initial one, or take the marker away with `null`.
+     *
+     * One at a time: a machine has a single initial state, so this moves the arrow rather than
+     * adding another. On screen only, like renaming, and the same three places follow: the
+     * drawing, everything that describes the machine, and the arrangement a reader downloads.
+     */
+    setInitialState: (id: string | null) => {
+      setInitialOverride(id);
+      setParsed((current) => (current ? applyInitialState(current, id) : current));
+      const cy = cyRef.current;
+      if (!cy) return;
+      try {
+        cy.nodes().forEach((node: any) => {
+          if (node.hasClass?.('start') || node.hasClass?.('note')) return;
+          node.data('initial', node.id() === id ? 1 : 0);
+        });
+        if (id === null) {
+          // The markers are made one per initial state, so with none left there is nothing to
+          // move the old one to: it has to go.
+          cy.nodes()
+            .filter((node: any) => node.hasClass?.('start'))
+            .forEach((node: any) => node.remove?.());
+          return;
+        }
+        repositionStartNodes(cy);
+      } catch {
+        // A graph mid-teardown. The choice is kept, and the next load draws it.
+      }
+    },
+    /**
+     * Make a state final, or stop it being one.
+     *
+     * Any number of states can be final, so this says nothing about the others. The double
+     * circle JFLAP draws is a class on the node here, and the initial-state marker has to clear
+     * whichever border the state ends up with, so the marker is placed again afterwards.
+     */
+    setFinalState: (id: string, final: boolean) => {
+      setFinalOverrides((current) => ({ ...current, [id]: final }));
+      setParsed((current) => (current ? applyFinalStates(current, { [id]: final }) : current));
+      const cy = cyRef.current;
+      if (!cy) return;
+      try {
+        const node = cy.getElementById(id);
+        if (!node || node.empty?.()) return;
+        node.data('final', final ? 1 : 0);
+        if (final) node.addClass('final');
+        else node.removeClass('final');
+        repositionStartNodes(cy);
+      } catch {
+        // A graph mid-teardown. The choice is kept, and the next load draws it.
+      }
     },
     /**
      * Give a state a different name, on screen only.

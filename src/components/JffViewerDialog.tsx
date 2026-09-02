@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -242,10 +243,14 @@ function PropertiesPanel({
 function StateProperties({
   state,
   onRename,
+  onSetInitial,
+  onSetFinal,
   onClose,
 }: {
   state: StateDescription;
   onRename: (id: string, name: string) => void;
+  onSetInitial: (id: string | null) => void;
+  onSetFinal: (id: string, final: boolean) => void;
   onClose: () => void;
 }) {
   // Seeded once per state: the call site keys this component by id, so moving to another state
@@ -254,6 +259,8 @@ function StateProperties({
   // Unique per rendered panel, not per state: both halves of a split window can be showing the
   // same file, and two boxes with the same id would leave one label pointing at the other's.
   const nameFieldId = useId();
+  const initialFieldId = useId();
+  const finalFieldId = useId();
 
   return (
     <PropertiesPanel
@@ -284,20 +291,33 @@ function StateProperties({
         />
       </div>
 
-      {state.initial || state.final ? (
-        <div className="flex flex-wrap gap-1">
-          {state.initial ? (
-            <Badge variant="outline" className="text-xs">
-              Initial
-            </Badge>
-          ) : null}
-          {state.final ? (
-            <Badge variant="outline" className="text-xs">
-              Final
-            </Badge>
-          ) : null}
-        </div>
-      ) : null}
+      {/* A machine has one initial state, so ticking this moves the arrow off whichever state
+          had it rather than giving the machine two. Unticking leaves it with none, which is a
+          machine that cannot run: allowed here because this is a drawing being marked up, and
+          the submitted file is not being touched either way. */}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={initialFieldId}
+          checked={state.initial}
+          onCheckedChange={(checked) => onSetInitial(checked === true ? state.id : null)}
+        />
+        <Label htmlFor={initialFieldId} className="text-xs font-normal">
+          Initial state
+        </Label>
+      </div>
+
+      {/* Any number of states can be final, so unlike the box above this says nothing about the
+          others. It is the double circle JFLAP draws. */}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={finalFieldId}
+          checked={state.final}
+          onCheckedChange={(checked) => onSetFinal(state.id, checked === true)}
+        />
+        <Label htmlFor={finalFieldId} className="text-xs font-normal">
+          Final state
+        </Label>
+      </div>
 
       <dl className="space-y-2 text-xs">
         <div>
@@ -491,6 +511,8 @@ export function JffCytoscapeViewer({
     selectedTransition,
     clearSelectedState,
     renameState,
+    setInitialState,
+    setFinalState,
     zoomIn,
     zoomOut,
     zoom,
@@ -916,6 +938,8 @@ export function JffCytoscapeViewer({
             key={selectedState.id}
             state={selectedState}
             onRename={renameState}
+            onSetInitial={setInitialState}
+            onSetFinal={setFinalState}
             onClose={clearSelectedState}
           />
         ) : selectedTransition ? (

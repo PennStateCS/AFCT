@@ -1109,6 +1109,116 @@ describe('renaming a state', () => {
   });
 });
 
+describe('choosing which state is initial', () => {
+  const KEY = 'submissions:machine.jff';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('moves the marker rather than giving the machine two initial states', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    expect(api().parsed?.states.filter((st) => st.initial).map((st) => st.id)).toEqual(['0']);
+
+    act(() => api().setInitialState('1'));
+
+    await waitFor(() =>
+      expect(api().parsed?.states.filter((st) => st.initial).map((st) => st.id)).toEqual(['1']),
+    );
+    expect(lastCy().byId('1')?.data('initial')).toBe(1);
+    expect(lastCy().byId('0')?.data('initial')).toBe(0);
+  });
+
+  it('leaves the machine without one when the box is unticked', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().setInitialState(null));
+
+    await waitFor(() => expect(api().parsed?.states.some((st) => st.initial)).toBe(false));
+    expect(api().viewModified).toBe(true);
+  });
+
+  it('survives a rebuild and a refresh, like the names do', async () => {
+    const { api, rerender } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().setInitialState('1'));
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).initialState,
+      ).toBe('1'),
+    );
+
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('1')?.data('initial')).toBe(1));
+    expect(lastCy().byId('0')?.data('initial')).toBe(0);
+  });
+
+  it('is given up when the machine is put back the way it opened', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().setInitialState('1'));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().resetMachine());
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('0')?.data('initial')).toBe(1));
+    expect(api().viewModified).toBe(false);
+  });
+});
+
+describe('choosing which states are final', () => {
+  const KEY = 'submissions:machine.jff';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('marks one without saying anything about the others', async () => {
+    // Unlike the initial state: a machine can have any number of final states, or none.
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().setFinalState('0', true));
+
+    await waitFor(() =>
+      expect(api().parsed?.states.filter((st) => st.final).map((st) => st.id)).toEqual(['0', '1']),
+    );
+    expect(lastCy().byId('0')?.hasClass('final')).toBe(true);
+    expect(api().viewModified).toBe(true);
+  });
+
+  it('takes the double circle away again', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().setFinalState('1', false));
+
+    await waitFor(() => expect(lastCy().byId('1')?.hasClass('final')).toBe(false));
+    expect(api().parsed?.states.some((st) => st.final)).toBe(false);
+  });
+
+  it('survives a rebuild and is written down for the next visit', async () => {
+    const { api, rerender } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().setFinalState('0', true));
+    await waitFor(() =>
+      expect(JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).finals).toEqual({
+        '0': true,
+      }),
+    );
+
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('0')?.hasClass('final')).toBe(true));
+  });
+});
+
 describe('putting a machine back the way it opened', () => {
   const KEY = 'submissions:machine.jff';
   const STORAGE_KEY = `afct.viewer.view.${KEY}`;

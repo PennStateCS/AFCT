@@ -772,6 +772,23 @@ describe('clicking a state', () => {
     expect(field).toHaveValue('');
   });
 
+  it('offers Initial and Final as boxes that can be ticked', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+
+    const initial = await screen.findByLabelText('Initial state');
+    const final = screen.getByLabelText('Final state');
+    // q0 is the initial state in the fixture and q1 is the final one.
+    expect(initial).toBeChecked();
+    expect(final).not.toBeChecked();
+
+    fireEvent.click(final);
+
+    expect(await screen.findByRole('button', { name: /file changed/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Final state')).toBeChecked();
+  });
+
   it('shows nothing for the start marker, which is scenery rather than a state', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
