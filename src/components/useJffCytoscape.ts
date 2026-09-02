@@ -20,6 +20,12 @@ import {
 } from '@/lib/jflap-layout';
 import { toJflapXml } from '@/lib/jflap-write';
 import {
+  failureForContent,
+  failureForNetwork,
+  failureForStatus,
+  type ViewerLoadFailure,
+} from '@/lib/viewer-load-failure';
+import {
   clearViewState,
   readViewState,
   writeViewState,
@@ -362,7 +368,21 @@ export function useJffCytoscape({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
+  /**
+   * Why this machine did not open, or null while nothing is wrong.
+   *
+   * A failure rather than a message, because the chrome has to decide whether to offer a
+   * retry, and "was it worth trying again" is not something to work out by reading a string.
+   */
+  const [failure, setFailure] = useState<ViewerLoadFailure | null>(null);
+  /**
+   * How far the load has got, so a pane can say what it is doing.
+   *
+   * Worth naming the steps rather than showing one spinner: fetching a file and reading a
+   * machine out of it fail for different reasons, and with two panes on screen one can be
+   * still fetching while the other has already given up.
+   */
+  const [phase, setPhase] = useState<'fetching' | 'parsing' | 'drawing' | 'ready'>('fetching');
   /**
    * What was remembered about this file, read once.
    *
@@ -603,18 +623,39 @@ export function useJffCytoscape({
 
   const load = useMemo(
     () => async () => {
-      setError(null);
+      setFailure(null);
+      setPhase('fetching');
       // Before anything else, and before any await. A second load onto a viewer that is
       // already showing something (React re-running effects in development, or the source
       // changing) would otherwise start with the graph visible, and the new machine would be
       // painted un-fitted for the moment before its own layout settles. That is the flash.
       setSettled(false);
       try {
-        const res = await fetch(src);
-        if (!res.ok) throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
+        // Told apart on purpose: a request that never got an answer is worth trying again,
+        // and one that was refused is not.
+        let res: Response;
+        try {
+          res = await fetch(src);
+        } catch {
+          setFailure(failureForNetwork());
+          return;
+        }
+        if (!res.ok) {
+          setFailure(failureForStatus(res.status));
+          return;
+        }
         const text = await res.text();
 
-        const parsed = parseJflap(text);
+        setPhase('parsing');
+        let parsed: Parsed;
+        try {
+          parsed = parseJflap(text);
+        } catch {
+          // The bytes arrived and are not a machine. Reading them again will not change that.
+          setFailure(failureForContent());
+          return;
+        }
+        setPhase('drawing');
         setType(parsed.type);
         setParsed(parsed);
         setSelectedStateId(null);
@@ -1046,6 +1087,7 @@ export function useJffCytoscape({
               // In a `finally` so a layout that throws still reveals the graph. A machine
               // drawn wrongly is recoverable; one that never appears is not.
               setSettled(true);
+              setPhase('ready');
               // Write the opening view down now, so a reader who changes nothing and refreshes
               // still comes back to the same picture. Nothing above this can lose the saved
               // view: it was read into `savedView` before the first render.
@@ -1212,8 +1254,10 @@ export function useJffCytoscape({
           repositionStartNodes(cy);
         });
       } catch (e: any) {
+        // Anything past the parse: building or laying out the graph. Logged because unlike
+        // the cases above it is a bug rather than a thing that happens.
         console.error(e);
-        setError(e?.message || 'Failed to render .jff');
+        setFailure(failureForContent());
       }
     },
     // The last two never change identity, so they cost nothing here.
@@ -1441,7 +1485,10 @@ export function useJffCytoscape({
   return {
     containerRef,
     settled,
-    error,
+    failure,
+    phase,
+    /** Ask for the file again. Only worth offering when the failure says it is. */
+    retry: () => setReloadNonce((n) => n + 1),
     type,
     parsed,
     honorPositions,

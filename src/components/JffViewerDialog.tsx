@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 import {
   describeMachine,
   type MachineDescription,
@@ -36,7 +37,7 @@ import {
   useRegisterViewerActions,
   useViewerChromePresent,
 } from '@/components/viewer/viewer-actions';
-import { Grid, Copy, Minus, Plus, Scan, Undo2, Redo2, X } from 'lucide-react';
+import { Grid, Copy, Minus, Plus, Scan, Undo2, Redo2, RotateCcw, X } from 'lucide-react';
 
 /**
  * Fallback grid colour, used only if `--grid-color` is somehow absent.
@@ -49,6 +50,20 @@ import { Grid, Copy, Minus, Plus, Scan, Undo2, Redo2, X } from 'lucide-react';
  * the theming anyway, live, without any of this.
  */
 const GRID_COLOR_FALLBACK = '#0f172a';
+
+/**
+ * What each step of opening a machine is called on screen.
+ *
+ * Three of them because they fail for different reasons and take different lengths of time: a
+ * large submission spends most of its wait in the fetch, and a large machine most of it in the
+ * layout. "Loading" for both tells the reader nothing about which.
+ */
+const PHASE_LABEL = {
+  fetching: 'Loading the file',
+  parsing: 'Reading the machine',
+  drawing: 'Drawing the machine',
+  ready: '',
+} as const;
 
 /**
  * The machine written out: states, transitions and any notes.
@@ -347,7 +362,9 @@ export function JffCytoscapeViewer({
   const {
     containerRef,
     settled,
-    error,
+    failure,
+    phase,
+    retry,
     type,
     honorPositions,
     toggleHonorPositions,
@@ -622,10 +639,17 @@ export function JffCytoscapeViewer({
         of x.jff, image" and nothing else, with no text alternative either, because there is
         nothing parsed to describe.
       */}
-      {error ? (
-        <p role="alert" className="text-destructive px-3 py-2 text-sm">
-          {error}
-        </p>
+      {failure ? (
+        <div role="alert" className="px-4 py-6 text-sm" data-testid="viewer-failure">
+          <p className="text-foreground font-semibold">{failure.title}</p>
+          <p className="text-muted-foreground mt-1 max-w-prose">{failure.detail}</p>
+          {failure.retryable ? (
+            <Button size="sm" variant="outline" className="mt-3" onClick={retry}>
+              <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+              Try again
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {/* The rendered graph. role="img" + a description keeps a screen reader from
@@ -660,7 +684,7 @@ export function JffCytoscapeViewer({
           )}
           role="img"
           aria-label={
-            error
+            failure
               ? 'The diagram could not be drawn'
               : title
                 ? `Diagram of ${title}`
@@ -668,6 +692,18 @@ export function JffCytoscapeViewer({
           }
           aria-describedby={description ? summaryId : undefined}
         />
+        {/* What this pane is doing, over the prepared canvas rather than instead of it. Named
+            steps rather than one spinner: with two machines on screen, one can still be
+            fetching while the other is already drawing, and "loading" for both says less than
+            either of them could. */}
+        {!failure && phase !== 'ready' ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+            data-testid="viewer-loading"
+          >
+            <LoadingSpinner label={PHASE_LABEL[phase]} fullScreen={false} className="min-h-0" />
+          </div>
+        ) : null}
         {selectedState ? (
           <StateProperties state={selectedState} onClose={clearSelectedState} />
         ) : selectedTransition ? (

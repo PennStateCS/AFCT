@@ -3,7 +3,7 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import JffViewerDialog, { JffCytoscapeViewer } from './JffViewerDialog';
@@ -181,7 +181,7 @@ describe('JffCytoscapeViewer — load & error', () => {
       text: async () => '',
     });
     render(<JffCytoscapeViewer src="/api/files/solutions/x.jff" />);
-    expect(await screen.findByText(/Failed to fetch: 404/)).toBeInTheDocument();
+    expect(await screen.findByText(/not there any more/i)).toBeInTheDocument();
     // The engine is never constructed on a failed fetch.
     expect(h.ctor).not.toHaveBeenCalled();
   });
@@ -1111,7 +1111,10 @@ describe('the way to the standalone window', () => {
     const onOpenChange = vi.fn();
     // A real `window.open` returns the window it opened, or null when the browser blocked it.
     // Returning nothing stood for "blocked", which is now a case the button handles.
-    vi.stubGlobal('open', vi.fn(() => ({ focus: vi.fn() })));
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => ({ focus: vi.fn() })),
+    );
     render(
       <JffViewerDialog
         open
@@ -1123,5 +1126,102 @@ describe('the way to the standalone window', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /open in the viewer/i }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('what a pane shows while it opens, and when it cannot', () => {
+  const SRC = '/api/files/submissions/abc.jff';
+
+  it('says which step it is on rather than just spinning', async () => {
+    // A large submission spends its wait in the fetch and a large machine in the layout, and
+    // with two panes on screen one can be in each.
+    let release: (value: unknown) => void = () => {};
+    fetchImpl = () => new Promise((resolve) => (release = resolve));
+
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    expect(await screen.findByText('Loading the file')).toBeInTheDocument();
+
+    release(okText(FA_JFF));
+    await waitFor(() => expect(screen.queryByTestId('viewer-loading')).toBeNull());
+  });
+
+  it('offers a way back when trying again could work', async () => {
+    fetchImpl = async () => ({ ...okText(''), ok: false, status: 503, statusText: 'Unavailable' });
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+
+    const failure = await screen.findByTestId('viewer-failure');
+    expect(failure.textContent).toMatch(/server could not send/i);
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+  });
+
+  it('does not offer one when it could not', async () => {
+    // A button that cannot help is worse than no button: it invites somebody to keep pressing.
+    fetchImpl = async () => ({ ...okText(''), ok: false, status: 403, statusText: 'Forbidden' });
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+
+    const failure = await screen.findByTestId('viewer-failure');
+    expect(failure.textContent).toMatch(/not yours to open/i);
+    expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+  });
+
+  it('draws the machine once a retry works', async () => {
+    let attempt = 0;
+    fetchImpl = async () => {
+      attempt += 1;
+      return attempt === 1
+        ? { ...okText(''), ok: false, status: 503, statusText: 'Unavailable' }
+        : okText(FA_JFF);
+    };
+
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }));
+
+    await waitFor(() => expect(screen.queryByTestId('viewer-failure')).toBeNull());
+    await waitForEngine();
+  });
+
+  it('says the diagram could not be drawn, rather than describing one that is not there', async () => {
+    fetchImpl = async () => okText('<structure><oops');
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+
+    await screen.findByTestId('viewer-failure');
+    expect(screen.getByRole('img').getAttribute('aria-label')).toMatch(/could not be drawn/i);
+  });
+});
+
+describe('two panes, one of which cannot open its file', () => {
+  it('leaves the working one working, and explains only the one that failed', async () => {
+    // The reason these states are per pane at all: a window showing two machines can have one
+    // of them fine and the other refused, and one message for the window would be wrong about
+    // half of it.
+    fetchImpl = async (url: string) =>
+      url.includes('good.jff')
+        ? okText(FA_JFF)
+        : { ...okText(''), ok: false, status: 403, statusText: 'Forbidden' };
+
+    render(
+      <>
+        <div data-testid="left">
+          <JffCytoscapeViewer src="/api/files/submissions/good.jff" title="good.jff" />
+        </div>
+        <div data-testid="right">
+          <JffCytoscapeViewer src="/api/files/submissions/secret.jff" title="secret.jff" />
+        </div>
+      </>,
+    );
+
+    // Exactly one explanation, in the pane it belongs to.
+    const failures = await screen.findAllByTestId('viewer-failure');
+    expect(failures).toHaveLength(1);
+    expect(screen.getByTestId('right')).toContainElement(failures[0]!);
+    expect(failures[0]!.textContent).toMatch(/not yours to open/i);
+
+    // And the other pane still drew its machine.
+    await waitForEngine();
+    const left = screen.getByTestId('left');
+    expect(within(left).queryByTestId('viewer-failure')).toBeNull();
+    await waitFor(() =>
+      expect(within(left).getByRole('img').getAttribute('aria-label')).toMatch(/Diagram of/),
+    );
   });
 });

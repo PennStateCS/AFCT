@@ -376,7 +376,7 @@ describe('loading the machine', () => {
     const { api } = renderViewer();
 
     await waitFor(() => expect(api().type).toBe('fa'));
-    expect(api().error).toBeNull();
+    expect(api().failure).toBeNull();
     expect(api().parsed?.states).toHaveLength(2);
   });
 
@@ -398,7 +398,10 @@ describe('loading the machine', () => {
 
     const { api } = renderViewer();
 
-    await waitFor(() => expect(api().error).toMatch(/404/));
+    // No status code in it: the reader cannot act on a number, and one in a message reads as
+    // a fault they caused.
+    await waitFor(() => expect(api().failure?.title).toMatch(/not there any more/i));
+    expect(api().failure?.retryable).toBe(false);
     expect(cytoscapeMock.fn).not.toHaveBeenCalled();
   });
 
@@ -407,7 +410,9 @@ describe('loading the machine', () => {
 
     const { api } = renderViewer();
 
-    await waitFor(() => expect(api().error).toMatch(/Invalid JFLAP/i));
+    await waitFor(() => expect(api().failure?.title).toMatch(/not a machine/i));
+    // The same bytes will not parse the second time.
+    expect(api().failure?.retryable).toBe(false);
     expect(cytoscapeMock.fn).not.toHaveBeenCalled();
   });
 
@@ -1149,5 +1154,66 @@ describe("linking one pane's camera to the other", () => {
     lastCy().zoom(2);
     // No handler to call and nothing to report to; this must simply not throw.
     expect(() => act(() => lastCy().handlers['viewport']?.({}))).not.toThrow();
+  });
+});
+
+describe('what a pane says while it is opening a machine, and when it cannot', () => {
+  it('starts by saying it is fetching, and ends by saying it is done', async () => {
+    const { api } = renderViewer();
+    expect(api().phase).toBe('fetching');
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    expect(api().failure).toBeNull();
+  });
+
+  it('tells a refusal apart from a request that never got an answer', async () => {
+    // One is worth trying again and the other is not, and the reader can only tell if the
+    // viewer does.
+    global.fetch = vi.fn().mockRejectedValue(new Error('offline')) as unknown as typeof fetch;
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().failure).not.toBeNull());
+    expect(api().failure?.retryable).toBe(true);
+    expect(api().failure?.title).toMatch(/could not be reached/i);
+  });
+
+  it('does not offer to try again when the answer will be the same', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+      }) as unknown as typeof fetch;
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().failure).not.toBeNull());
+    expect(api().failure?.retryable).toBe(false);
+    expect(api().failure?.title).toMatch(/not yours to open/i);
+  });
+
+  it('builds no graph out of a file it could not fetch', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 500, statusText: 'Boom' }) as unknown as typeof fetch;
+    renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(0));
+    expect(cytoscapeMock.fn).not.toHaveBeenCalled();
+  });
+
+  it('opens the machine when a retry succeeds', async () => {
+    // The case the retry exists for: the server was briefly unhappy, not the file.
+    let attempt = 0;
+    global.fetch = vi.fn().mockImplementation(() => {
+      attempt += 1;
+      return attempt === 1
+        ? Promise.resolve({ ok: false, status: 503, statusText: 'Unavailable' })
+        : Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => faXml });
+    }) as unknown as typeof fetch;
+
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().failure?.retryable).toBe(true));
+
+    act(() => api().retry());
+
+    await waitFor(() => expect(api().failure).toBeNull());
+    await waitFor(() => expect(api().type).toBe('fa'));
   });
 });
