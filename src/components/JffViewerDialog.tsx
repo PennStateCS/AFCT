@@ -576,7 +576,7 @@ export function JffCytoscapeViewer({
                   className="text-muted-foreground h-6 gap-1 px-2 text-xs font-normal"
                 >
                   <PencilLine className="h-3 w-3" aria-hidden="true" />
-                  View changed
+                  File changed
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-w-xs">

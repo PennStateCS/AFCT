@@ -1330,14 +1330,14 @@ describe('telling a reader they have not changed the file', () => {
   it('says nothing about a file nobody has touched', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
-    expect(screen.queryByRole('button', { name: /view changed/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /file changed/i })).toBeNull();
   });
 
   it('appears once something has been moved', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     drag();
-    expect(await screen.findByRole('button', { name: /view changed/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /file changed/i })).toBeInTheDocument();
   });
 
   it('stays away when a state was only clicked to read its properties', async () => {
@@ -1349,7 +1349,7 @@ describe('telling a reader they have not changed the file', () => {
       (() => void) | undefined;
     act(() => grab?.());
 
-    expect(screen.queryByRole('button', { name: /view changed/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /file changed/i })).toBeNull();
   });
 
   it('says the submitted file is unchanged, which is the whole point of it', async () => {
@@ -1359,7 +1359,7 @@ describe('telling a reader they have not changed the file', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     drag();
-    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+    await user.click(await screen.findByRole('button', { name: /file changed/i }));
 
     expect(await screen.findByText(/submitted file is unchanged/i)).toBeInTheDocument();
   });
@@ -1369,7 +1369,7 @@ describe('telling a reader they have not changed the file', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     drag();
-    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+    await user.click(await screen.findByRole('button', { name: /file changed/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /download this arrangement/i }));
 
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
@@ -1380,11 +1380,11 @@ describe('telling a reader they have not changed the file', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     drag();
-    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+    await user.click(await screen.findByRole('button', { name: /file changed/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /put it back/i }));
 
     expect(await screen.findByText(/Put the machine back\?/i)).toBeInTheDocument();
     // Still there: nothing happens until the reader says so.
-    expect(screen.getByRole('button', { name: /view changed/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /file changed/i })).toBeInTheDocument();
   });
 });
