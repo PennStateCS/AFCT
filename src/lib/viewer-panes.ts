@@ -133,17 +133,24 @@ export const focusPane = (layout: ViewerLayout, pane: PaneIndex): ViewerLayout =
  *
  * Opening something twice must not produce two identical tabs: the reader would have no way to
  * tell them apart, and the two would share one remembered view.
+ *
+ * Returns whichever tab had to close to make room, so the caller can say so. Dropping one
+ * without a word left somebody's work missing from the strip with nothing to explain it.
  */
-export function openTab(layout: ViewerLayout, next: ViewerTab): ViewerLayout {
+export function openTab(
+  layout: ViewerLayout,
+  next: ViewerTab,
+): { layout: ViewerLayout; evicted: ViewerTab | null } {
   const existing = layout.tabs.find((tab) => sameTab(tab, next));
-  if (existing) return selectTab(layout, tabKey(existing));
+  if (existing) return { layout: selectTab(layout, tabKey(existing)), evicted: null };
 
   let tabs = [...layout.tabs, next];
   let panes = { ...layout.panes, [tabKey(next)]: layout.focused };
+  let evicted: ViewerTab | null = null;
   if (tabs.length > MAX_VIEWER_TABS) {
     // Full. Drop the oldest rather than refusing, which would look like the button broke.
-    // `settle` handles the case where that was the last tab on one side.
-    const evicted = tabs[0];
+    // `settleLayout` handles the case where that was the last tab on one side.
+    evicted = tabs[0] ?? null;
     tabs = tabs.slice(1);
     panes = { ...panes };
     if (evicted) delete panes[tabKey(evicted)];
@@ -151,7 +158,7 @@ export function openTab(layout: ViewerLayout, next: ViewerTab): ViewerLayout {
 
   const active: [string | null, string | null] = [...layout.active];
   active[layout.focused] = tabKey(next);
-  return settleLayout({ ...layout, tabs, panes, active });
+  return { layout: settleLayout({ ...layout, tabs, panes, active }), evicted };
 }
 
 /** Close a tab. A pane left with nothing closes with it. */

@@ -9,7 +9,14 @@ import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
 import { viewerFileSrc } from '@/lib/viewer-link';
 import type { ViewerProperties } from '@/lib/viewer-properties';
 import { clearViewState, type ViewerViewport } from '@/lib/viewer-view-state';
-import { tabKey, VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
+import { showToast } from '@/lib/toast';
+import {
+  MAX_VIEWER_TABS,
+  tabKey,
+  VIEWER_ALIVE_KEY,
+  VIEWER_CHANNEL,
+  type ViewerTab,
+} from '@/lib/viewer-tabs';
 import {
   activeTab,
   applyDrop,
@@ -125,6 +132,15 @@ export function ViewerWindow({
   /** Where the pane that is driving is looking, for the other one to follow. */
   const [sharedViewport, setSharedViewport] = useState<ViewerViewport | null>(null);
 
+  /**
+   * The layout as it is right now, for a handler that must read it and act on what it finds.
+   *
+   * A `setLayout` updater cannot: it has to stay pure, and opening a tab that pushes the
+   * window over its limit needs to raise a toast about what it closed.
+   */
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+
   /** Put the keyboard on a tab button, wherever in the strips it now is. */
   const focusTab = (key: string) => {
     document.querySelector<HTMLElement>(`[data-tab-key="${CSS.escape(key)}"]`)?.focus();
@@ -210,7 +226,25 @@ export function ViewerWindow({
   // A file sent from another window lands in the pane the menu bar is on, which is the one
   // the reader was last working in.
   const receiveTab = useCallback((next: ViewerTab) => {
-    setLayout((current) => openTab(current, next));
+    const before = layoutRef.current;
+    const { layout: after, evicted } = openTab(before, next);
+    setLayout(after);
+    if (!evicted) return;
+
+    // The window holds a fixed number of files, so opening one when it is full closes another.
+    // That used to happen in silence: somebody came back to a strip with a file missing from
+    // it and nothing to say where it had gone.
+    //
+    // The remembered view of the closed file is deliberately left in place, unlike closing a
+    // tab by hand. Nobody asked for this one to go, so undoing brings it back as it was rather
+    // than as a fresh copy of the file.
+    showToast.warning(`Closed ${evicted.name} to make room`, {
+      description: `The viewer holds ${MAX_VIEWER_TABS} files at once, and ${next.name} needed a place.`,
+      action: {
+        label: 'Undo',
+        onClick: () => setLayout(before),
+      },
+    });
   }, []);
 
   useEffect(() => {

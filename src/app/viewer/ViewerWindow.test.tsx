@@ -43,6 +43,9 @@ vi.mock('./ViewerClient', () => ({
     );
   },
 }));
+vi.mock('@/lib/toast', () => ({
+  showToast: { warning: vi.fn(), error: vi.fn(), success: vi.fn(), info: vi.fn() },
+}));
 vi.mock('@/components/viewer/ViewerMenubar', () => ({
   ViewerMenubar: ({
     downloadHref,
@@ -81,6 +84,8 @@ vi.mock('@/components/viewer/ViewerMenubar', () => ({
   ),
 }));
 
+import { MAX_VIEWER_TABS } from '@/lib/viewer-tabs';
+import { showToast } from '@/lib/toast';
 import type { ViewerLayout } from '@/lib/viewer-panes';
 import { ViewerWindow } from './ViewerWindow';
 
@@ -141,6 +146,8 @@ const renderWindow = (
 };
 
 beforeEach(() => {
+  // Shared across the file, so a test asserting something was NOT raised needs a clean count.
+  vi.mocked(showToast.warning).mockClear();
   mounts.clear();
   TestChannel.open = [];
   vi.stubGlobal('BroadcastChannel', TestChannel);
@@ -989,5 +996,70 @@ describe('linking the two views', () => {
     reportFrom('a.jff');
     fireEvent.click(screen.getByLabelText('Close b.jff'));
     expect(roleOf('a.jff')).toBe('alone');
+  });
+});
+
+describe('when a file arrives and the window is already full', () => {
+  const full = () => Array.from({ length: MAX_VIEWER_TABS }, (_, i) => tab(`f${i}.jff`));
+
+  const send = (t: ViewerTab) => {
+    const opener = new TestChannel(VIEWER_CHANNEL);
+    act(() => {
+      opener.postMessage({ type: 'open-tab', tab: t });
+    });
+    opener.close();
+  };
+
+  const names = () => screen.getAllByRole('tab').map((t) => t.textContent);
+
+  it('says which file it closed, and why', () => {
+    // It used to go in silence, so somebody came back to a strip with a file missing from it
+    // and nothing to say where it had gone.
+    renderWindow(full());
+    send(tab('new.jff'));
+
+    expect(showToast.warning).toHaveBeenCalledWith(
+      'Closed f0.jff to make room',
+      expect.objectContaining({ description: expect.stringContaining('new.jff') }),
+    );
+  });
+
+  it('offers to put it back', () => {
+    renderWindow(full());
+    send(tab('new.jff'));
+    expect(names()).not.toContain('f0.jff');
+
+    const options = vi.mocked(showToast.warning).mock.calls[0]![1] as {
+      action: { label: string; onClick: () => void };
+    };
+    expect(options.action.label).toBe('Undo');
+    act(() => options.action.onClick());
+
+    // Back exactly as it was: the closed file returns and the one that displaced it goes.
+    expect(names()).toContain('f0.jff');
+    expect(names()).not.toContain('new.jff');
+  });
+
+  it("keeps the closed file's remembered view, so undoing brings it back as it was", () => {
+    // Unlike closing a tab by hand, which is somebody deciding to discard an arrangement.
+    // Nobody asked for this one to go.
+    window.sessionStorage.setItem('afct.viewer.view.submissions:f0.jff', '{"v":1}');
+    renderWindow(full());
+    send(tab('new.jff'));
+
+    expect(window.sessionStorage.getItem('afct.viewer.view.submissions:f0.jff')).not.toBeNull();
+  });
+
+  it('says nothing when there was room', () => {
+    renderWindow([tab('a.jff')]);
+    send(tab('b.jff'));
+    expect(showToast.warning).not.toHaveBeenCalled();
+  });
+
+  it('says nothing when the file was already open', () => {
+    renderWindow(full());
+    send(tab('f3.jff'));
+    expect(showToast.warning).not.toHaveBeenCalled();
+    expect(names()).toHaveLength(MAX_VIEWER_TABS);
   });
 });

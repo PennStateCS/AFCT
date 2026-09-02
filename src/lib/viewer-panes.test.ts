@@ -38,7 +38,7 @@ const key = (file: string) => tabKey(tab(file));
 
 /** A window with these files open, all on the left, showing the first. */
 const layoutOf = (...files: string[]): ViewerLayout =>
-  files.reduce((layout, file) => openTab(layout, tab(file)), emptyLayout());
+  files.reduce((layout, file) => openTab(layout, tab(file)).layout, emptyLayout());
 
 const names = (tabs: ViewerTab[]) => tabs.map((t) => t.file);
 
@@ -54,9 +54,23 @@ describe('one pane, which is every window until somebody splits one', () => {
   it('selects a file that is already open rather than opening it twice', () => {
     // A second copy of one file would share its remembered view and its React key with the
     // first, and the reader would have no way to tell the two apart.
-    const layout = openTab(layoutOf('a.jff', 'b.jff'), tab('a.jff'));
+    const { layout } = openTab(layoutOf('a.jff', 'b.jff'), tab('a.jff'));
     expect(layout.tabs).toHaveLength(2);
     expect(activeTab(layout, 0)?.file).toBe('a.jff');
+  });
+
+  it('says which tab it had to close to make room', () => {
+    // Dropping one without a word left somebody's work missing from the strip with nothing to
+    // explain where it went.
+    const files = Array.from({ length: MAX_VIEWER_TABS }, (_, i) => `f${i}.jff`);
+    const { evicted } = openTab(layoutOf(...files), tab('one-more.jff'));
+    expect(evicted?.file).toBe('f0.jff');
+  });
+
+  it('closes nothing, and says so, while there is room', () => {
+    expect(openTab(layoutOf('a.jff'), tab('b.jff')).evicted).toBeNull();
+    // Nor when the file is already open, which selects it rather than adding anything.
+    expect(openTab(layoutOf('a.jff'), tab('a.jff')).evicted).toBeNull();
   });
 
   it('drops the oldest tab once the window is full', () => {
@@ -159,7 +173,7 @@ describe('moving a tab between two panes', () => {
     // The window is capped, so opening enough files can push the last one out of a pane.
     let layout = splitTabToSide(layoutOf('a.jff', 'b.jff'), key('a.jff'), 'left');
     expect(paneCount(layout)).toBe(2);
-    for (let i = 0; i < MAX_VIEWER_TABS; i += 1) layout = openTab(layout, tab(`f${i}.jff`));
+    for (let i = 0; i < MAX_VIEWER_TABS; i += 1) layout = openTab(layout, tab(`f${i}.jff`)).layout;
     expect(names(layout.tabs)).not.toContain('a.jff');
     expect(paneCount(layout)).toBe(1);
   });
