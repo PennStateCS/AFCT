@@ -49,6 +49,21 @@ describe('remembering how a machine was being looked at', () => {
   });
 });
 
+describe('an entry from before a field existed', () => {
+  it('still opens, because the view is worth more than the flag', () => {
+    // The version exists so a shape can grow without throwing away what a reader had on
+    // screen. An entry with no `modified` is one of those.
+    writeViewState('submissions:a.jff', STATE);
+    expect(readViewState('submissions:a.jff')?.modified).toBeUndefined();
+    expect(readViewState('submissions:a.jff')?.zoom).toBe(STATE.zoom);
+  });
+
+  it('keeps the flag when it is there', () => {
+    writeViewState('submissions:a.jff', { ...STATE, modified: true });
+    expect(readViewState('submissions:a.jff')?.modified).toBe(true);
+  });
+});
+
 describe('refusing an entry that is not ours', () => {
   const bad: [string, unknown][] = [
     ['not JSON at all', undefined],
@@ -59,6 +74,7 @@ describe('refusing an entry that is not ours', () => {
     ['a pan carrying NaN', { ...STATE, pan: { x: Number.NaN, y: 0 } }],
     ['a position that is not a point', { ...STATE, positions: { q0: 'over there' } }],
     ['a layout flag that is not a flag', { ...STATE, honorPositions: 'yes' }],
+    ['a modified flag that is not a flag', { ...STATE, modified: 'a bit' }],
   ];
 
   it.each(bad)('ignores %s', (_label, value) => {

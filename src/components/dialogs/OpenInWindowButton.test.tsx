@@ -6,7 +6,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { VIEWER_WINDOW_NAME } from '@/lib/viewer-link';
 import { VIEWER_ALIVE_KEY, VIEWER_ALIVE_TIMEOUT_MS, type ViewerTab } from '@/lib/viewer-tabs';
+import { showToast } from '@/lib/toast';
 import { OpenInWindowButton } from './OpenInWindowButton';
+
+vi.mock('@/lib/toast', () => ({
+  showToast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
+}));
 
 const posted: unknown[] = [];
 
@@ -44,8 +49,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const click = () => {
-  render(<OpenInWindowButton href={HREF} tab={TAB} />);
+const click = (onOpened?: () => void) => {
+  render(<OpenInWindowButton href={HREF} tab={TAB} onOpened={onOpened} />);
   fireEvent.click(screen.getByRole('button', { name: /open in the viewer/i }));
 };
 
@@ -89,5 +94,42 @@ describe('opening a file in the standalone viewer', () => {
     window.localStorage.setItem(VIEWER_ALIVE_KEY, String(Date.now()));
     click();
     expect(open).toHaveBeenCalledWith(HREF, VIEWER_WINDOW_NAME);
+  });
+});
+
+describe('when the browser blocks the window', () => {
+  it('leaves the panel open, since nothing replaced it', () => {
+    // `window.open` returns null for a blocked pop-up. Reporting success there closed the
+    // panel the reader was looking at and gave them nothing in its place.
+    const onOpened = vi.fn();
+    open.mockReturnValue(null);
+    click(onOpened);
+    expect(onOpened).not.toHaveBeenCalled();
+  });
+
+  it('says what happened and what to do about it', () => {
+    open.mockReturnValue(null);
+    click();
+    expect(showToast.error).toHaveBeenCalledWith(
+      'The viewer window was blocked',
+      expect.objectContaining({ description: expect.stringContaining('Allow pop-ups') }),
+    );
+  });
+
+  it('still closes the panel when a window did open', () => {
+    const onOpened = vi.fn();
+    click(onOpened);
+    expect(onOpened).toHaveBeenCalled();
+  });
+
+  it('closes the panel when an open window took the file, even if it will not come forward', () => {
+    // The tab has already gone over the channel by then, so the file arrived whatever the
+    // browser does about focus.
+    const onOpened = vi.fn();
+    window.localStorage.setItem(VIEWER_ALIVE_KEY, String(Date.now()));
+    open.mockReturnValue(null);
+    click(onOpened);
+    expect(posted).toEqual([{ type: 'open-tab', tab: TAB }]);
+    expect(onOpened).toHaveBeenCalled();
   });
 });

@@ -60,6 +60,9 @@ export function ViewerMenubar({
   properties,
   onMoveToOtherSide,
   canMoveToOtherSide = false,
+  linkViews = false,
+  onToggleLinkViews,
+  canLinkViews = false,
 }: {
   downloadHref: string;
   /** Null when the file is unknown or not this reader's to see. */
@@ -75,6 +78,16 @@ export function ViewerMenubar({
    */
   onMoveToOtherSide?: () => void;
   canMoveToOtherSide?: boolean;
+  /**
+   * Whether the two halves share one camera, and how to change that.
+   *
+   * A window concern like the move above, so it arrives as a prop: a machine knows nothing
+   * about the other one. Off unless asked for, because two unrelated machines rarely sit in
+   * the same place, and moving one would drag the other somewhere useless.
+   */
+  linkViews?: boolean;
+  onToggleLinkViews?: () => void;
+  canLinkViews?: boolean;
 }) {
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -212,6 +225,17 @@ export function ViewerMenubar({
                 Move to other side
               </MenubarItem>
             </>
+          ) : null}
+          {onToggleLinkViews ? (
+            // Greyed rather than hidden while there is only one machine on screen: an item
+            // that comes and goes reads as a bug, a greyed one reads as "not yet".
+            <MenubarCheckboxItem
+              checked={linkViews}
+              disabled={!canLinkViews}
+              onCheckedChange={onToggleLinkViews}
+            >
+              Link the two views
+            </MenubarCheckboxItem>
           ) : null}
         </MenubarContent>
       </MenubarMenu>

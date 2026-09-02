@@ -213,7 +213,10 @@ class FakeCy {
   destroy() {
     this.destroyed = true;
   }
-  resize() {}
+  resize() {
+    this.viewWidth = this.containerWidth;
+    this.viewHeight = this.containerHeight;
+  }
   centerCalls = 0;
   center() {
     this.centerCalls += 1;
@@ -222,10 +225,46 @@ class FakeCy {
   animate(opts: { zoom: number }) {
     this.animations.push(opts);
   }
+  /**
+   * The size cytoscape thinks it has, and the size its container actually is.
+   *
+   * Two of them because that is how the real thing behaves: `width()` answers from a cached
+   * measurement and only `resize()` goes back to the DOM. Collapsing them into one would let a
+   * resize handler read the new size before it asked for it, which is exactly the mistake the
+   * code under test must not make.
+   */
+  containerWidth = 800;
+  containerHeight = 600;
+  viewWidth = 800;
+  viewHeight = 600;
+  width() {
+    return this.viewWidth;
+  }
+  height() {
+    return this.viewHeight;
+  }
+  /**
+   * Call every handler registered for an event.
+   *
+   * Cytoscape reports a viewport change whether a person or the code caused it, and the
+   * handlers are registered under names like `'viewport position'`, so a token match is what
+   * matches them. Without this the fake stayed silent when the code moved the camera, and the
+   * guard against a linked pane reporting back the camera it was just handed was unreachable.
+   */
+  emit(name: string) {
+    for (const [key, handler] of Object.entries(this.handlers)) {
+      if (key.split(' ').includes(name)) handler({ target: this });
+    }
+  }
+
   zoomLevel = 1;
   /** A getter and a setter on one name, as cytoscape's is. */
   zoom(next?: number) {
-    if (typeof next === 'number') this.zoomLevel = next;
+    if (typeof next === 'number' && next !== this.zoomLevel) {
+      this.zoomLevel = next;
+      this.emit('zoom');
+      this.emit('viewport');
+    }
     return this.zoomLevel;
   }
   minZoom() {
@@ -239,7 +278,11 @@ class FakeCy {
   // feature was silently absent here rather than tested.
   panPosition: Pos = { x: 0, y: 0 };
   pan(next?: Pos) {
-    if (next) this.panPosition = { ...next };
+    if (next && (next.x !== this.panPosition.x || next.y !== this.panPosition.y)) {
+      this.panPosition = { ...next };
+      this.emit('pan');
+      this.emit('viewport');
+    }
     return this.panPosition;
   }
   panningEnabled() {}
@@ -292,16 +335,17 @@ function Harness(props: Parameters<typeof useJffCytoscape>[0] & { onApi?: (a: un
 
 const renderViewer = (props: Partial<Parameters<typeof useJffCytoscape>[0]> = {}) => {
   let latest: ReturnType<typeof useJffCytoscape>;
-  const view = render(
-    <Harness
-      src="/api/files/machine.jff"
-      {...props}
-      onApi={(a) => {
-        latest = a as ReturnType<typeof useJffCytoscape>;
-      }}
-    />,
-  );
-  return { ...view, api: () => latest };
+  const onApi = (a: unknown) => {
+    latest = a as ReturnType<typeof useJffCytoscape>;
+  };
+  const view = render(<Harness src="/api/files/machine.jff" {...props} onApi={onApi} />);
+  return {
+    ...view,
+    api: () => latest,
+    /** Re-render with different options, as the window does when the link is switched on. */
+    rerender: (next: Partial<Parameters<typeof useJffCytoscape>[0]> = {}) =>
+      view.rerender(<Harness src="/api/files/machine.jff" {...props} {...next} onApi={onApi} />),
+  };
 };
 
 const lastCy = () => instances[instances.length - 1];
@@ -332,7 +376,7 @@ describe('loading the machine', () => {
     const { api } = renderViewer();
 
     await waitFor(() => expect(api().type).toBe('fa'));
-    expect(api().error).toBeNull();
+    expect(api().failure).toBeNull();
     expect(api().parsed?.states).toHaveLength(2);
   });
 
@@ -354,7 +398,10 @@ describe('loading the machine', () => {
 
     const { api } = renderViewer();
 
-    await waitFor(() => expect(api().error).toMatch(/404/));
+    // No status code in it: the reader cannot act on a number, and one in a message reads as
+    // a fault they caused.
+    await waitFor(() => expect(api().failure?.title).toMatch(/not there any more/i));
+    expect(api().failure?.retryable).toBe(false);
     expect(cytoscapeMock.fn).not.toHaveBeenCalled();
   });
 
@@ -363,7 +410,9 @@ describe('loading the machine', () => {
 
     const { api } = renderViewer();
 
-    await waitFor(() => expect(api().error).toMatch(/Invalid JFLAP/i));
+    await waitFor(() => expect(api().failure?.title).toMatch(/not a machine/i));
+    // The same bytes will not parse the second time.
+    expect(api().failure?.retryable).toBe(false);
     expect(cytoscapeMock.fn).not.toHaveBeenCalled();
   });
 
@@ -913,13 +962,355 @@ describe('keeping the canvas in step with its container', () => {
     expect(lastCy().fitCalls).toBe(fitsBefore);
   });
 
-  it('re-centres, so a narrower pane does not cut the machine in half', async () => {
+  it('keeps what the reader was looking at in the middle', async () => {
+    // Halving a pane must not move them: somebody examining one corner of a large automaton
+    // splits the window and should still be looking at that corner, not back at the middle of
+    // a machine they had deliberately scrolled away from.
+    renderViewer();
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    const cy = lastCy();
+    cy.zoom(2);
+    // Panned well away from the middle, as a reader examining a corner would be.
+    cy.pan({ x: -1000, y: -400 });
+    // The model point under the centre of the viewport right now.
+    const centre = {
+      x: (cy.viewWidth / 2 - cy.panPosition.x) / cy.zoomLevel,
+      y: (cy.viewHeight / 2 - cy.panPosition.y) / cy.zoomLevel,
+    };
+
+    cy.containerWidth = 400; // the pane halved
+    await resize();
+
+    const after = {
+      x: (cy.viewWidth / 2 - cy.panPosition.x) / cy.zoomLevel,
+      y: (cy.viewHeight / 2 - cy.panPosition.y) / cy.zoomLevel,
+    };
+    expect(after.x).toBeCloseTo(centre.x, 6);
+    expect(after.y).toBeCloseTo(centre.y, 6);
+    expect(cy.zoomLevel).toBe(2);
+  });
+
+  it('leaves Fit to window fitting and centring, which is what it is for', async () => {
+    // Resizing keeps the reader where they are; Fit deliberately does not. The two must stay
+    // different, or the only way back to the whole machine is gone.
+    const { api } = renderViewer();
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    const fitsBefore = lastCy().fitCalls;
+    lastCy().pan({ x: -1000, y: -400 });
+
+    act(() => api().fit());
+
+    await waitFor(() => expect(lastCy().fitCalls).toBeGreaterThan(fitsBefore));
+  });
+
+  it('does not recentre the whole machine, which would be a different place', async () => {
     renderViewer();
     await waitFor(() => expect(observers.length).toBeGreaterThan(0));
     lastCy().centerCalls = 0;
+    lastCy().pan({ x: -1000, y: -400 });
 
     await resize();
 
-    expect(lastCy().centerCalls).toBeGreaterThan(0);
+    expect(lastCy().centerCalls).toBe(0);
+  });
+});
+
+describe('undoing a layout switch', () => {
+  /**
+   * The sequence a reader actually performs: drag a state on the drawn layout, switch to
+   * auto-arranged, then change their mind. Both the layout and the states they had moved have
+   * to come back.
+   *
+   * Switching the layout rebuilds the graph, because `honorPositions` is an input to the load.
+   * The step used to put the positions onto the graph it was about to throw away, so the
+   * layout returned and every manual position was silently lost.
+   */
+  it('brings back the positions the reader had arranged, not just the layout', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    // A state picked up and put down somewhere else, which is one undoable step.
+    act(() => lastCy().handlers['grab']?.({}));
+    lastCy().byId('0')?.position({ x: 640, y: 480 });
+    await waitFor(() => expect(api().canUndo).toBe(true));
+
+    act(() => api().toggleHonorPositions());
+    await waitFor(() => expect(api().honorPositions).toBe(false));
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+
+    act(() => api().undo());
+
+    await waitFor(() => expect(api().honorPositions).toBe(true));
+    await waitFor(() => expect(lastCy().byId('0')?.position()).toEqual({ x: 640, y: 480 }));
+  });
+
+  it('leaves the view where it was, since an undo moves the machine and not the camera', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers['grab']?.({}));
+    lastCy().byId('0')?.position({ x: 640, y: 480 });
+    await waitFor(() => expect(api().canUndo).toBe(true));
+
+    act(() => api().toggleHonorPositions());
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    // Where the reader is looking when they decide to undo. The rebuild the undo causes would
+    // otherwise refit and move them somewhere else.
+    lastCy().zoom(2.5);
+    lastCy().pan({ x: -60, y: 24 });
+
+    const built = instances.length;
+    act(() => api().undo());
+
+    // The undo rebuilds again, so wait for that graph before reading anything off it: the
+    // one before it already has these values and would answer yes to both.
+    await waitFor(() => expect(instances.length).toBeGreaterThan(built));
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(2.5));
+    expect(lastCy().panPosition).toEqual({ x: -60, y: 24 });
+  });
+
+  it('still restores within one layout, where no rebuild happens', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const before = { ...lastCy().byId('0')!.position() };
+
+    act(() => lastCy().handlers['grab']?.({}));
+    lastCy().byId('0')?.position({ x: 900, y: 900 });
+    await waitFor(() => expect(api().canUndo).toBe(true));
+
+    act(() => api().undo());
+    expect(lastCy().byId('0')?.position()).toEqual(before);
+    expect(instances).toHaveLength(1);
+  });
+});
+
+describe("linking one pane's camera to the other", () => {
+  it('reports where it is being looked at as soon as it starts driving', async () => {
+    // Otherwise turning the link on does nothing until the reader happens to scroll, and it
+    // reads as a control that did not work.
+    const onViewportChange = vi.fn();
+    renderViewer({ onViewportChange });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    await waitFor(() => expect(onViewportChange).toHaveBeenCalled());
+  });
+
+  it('reports again when the reader moves', async () => {
+    const onViewportChange = vi.fn();
+    renderViewer({ onViewportChange });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    onViewportChange.mockClear();
+
+    lastCy().zoom(2.5);
+    lastCy().pan({ x: -30, y: 12 });
+    act(() => lastCy().handlers['viewport']?.({}));
+
+    expect(onViewportChange).toHaveBeenCalledWith({ zoom: 2.5, pan: { x: -30, y: 12 } });
+  });
+
+  it("takes the other pane's camera when it is the one following", async () => {
+    const { rerender } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    rerender({ linkedViewport: { zoom: 3, pan: { x: 40, y: -8 } } });
+
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+    expect(lastCy().panPosition).toEqual({ x: 40, y: -8 });
+  });
+
+  it('does not report the camera it was just given', async () => {
+    // Cytoscape reports a move whether a person or this code caused it. Reporting one back
+    // would have the two panes talking past each other.
+    const onViewportChange = vi.fn();
+    const { rerender } = renderViewer({ onViewportChange });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    onViewportChange.mockClear();
+
+    // Both props at once, which the window never does: it gives a pane one or the other. This
+    // is the guard's whole subject, so the test has to set up the case it guards against.
+    rerender({ onViewportChange, linkedViewport: { zoom: 3, pan: { x: 40, y: -8 } } });
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+
+    expect(onViewportChange).not.toHaveBeenCalled();
+  });
+
+  it('starts reporting when the link is switched on, not on the next scroll', async () => {
+    // The graph is built after the first render, so an effect that reported on mount found
+    // nothing there. This is the case it exists for: the link turned on later.
+    const onViewportChange = vi.fn();
+    const { rerender, api } = renderViewer();
+    // Settled, not merely constructed: the load reports once at the end of its own run, and
+    // rerendering before that finished would be answered by the load rather than by the
+    // effect this is about.
+    await waitFor(() => expect(api().settled).toBe(true));
+
+    rerender({ onViewportChange });
+
+    await waitFor(() => expect(onViewportChange).toHaveBeenCalled());
+  });
+
+  it('says nothing at all when nobody is listening', async () => {
+    // Every viewer in a dialog, and every pane while the two are not linked.
+    renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    lastCy().zoom(2);
+    // No handler to call and nothing to report to; this must simply not throw.
+    expect(() => act(() => lastCy().handlers['viewport']?.({}))).not.toThrow();
+  });
+});
+
+describe('what a pane says while it is opening a machine, and when it cannot', () => {
+  it('starts by saying it is fetching, and ends by saying it is done', async () => {
+    const { api } = renderViewer();
+    expect(api().phase).toBe('fetching');
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    expect(api().failure).toBeNull();
+  });
+
+  it('tells a refusal apart from a request that never got an answer', async () => {
+    // One is worth trying again and the other is not, and the reader can only tell if the
+    // viewer does.
+    global.fetch = vi.fn().mockRejectedValue(new Error('offline')) as unknown as typeof fetch;
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().failure).not.toBeNull());
+    expect(api().failure?.retryable).toBe(true);
+    expect(api().failure?.title).toMatch(/could not be reached/i);
+  });
+
+  it('does not offer to try again when the answer will be the same', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+    }) as unknown as typeof fetch;
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().failure).not.toBeNull());
+    expect(api().failure?.retryable).toBe(false);
+    expect(api().failure?.title).toMatch(/not yours to open/i);
+  });
+
+  it('builds no graph out of a file it could not fetch', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 500, statusText: 'Boom' }) as unknown as typeof fetch;
+    renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(0));
+    expect(cytoscapeMock.fn).not.toHaveBeenCalled();
+  });
+
+  it('opens the machine when a retry succeeds', async () => {
+    // The case the retry exists for: the server was briefly unhappy, not the file.
+    let attempt = 0;
+    global.fetch = vi.fn().mockImplementation(() => {
+      attempt += 1;
+      return attempt === 1
+        ? Promise.resolve({ ok: false, status: 503, statusText: 'Unavailable' })
+        : Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => faXml });
+    }) as unknown as typeof fetch;
+
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().failure?.retryable).toBe(true));
+
+    act(() => api().retry());
+
+    await waitFor(() => expect(api().failure).toBeNull());
+    await waitFor(() => expect(api().type).toBe('fa'));
+  });
+});
+
+describe('saying that the drawing has been rearranged', () => {
+  const KEY = 'submissions:machine.jff';
+  const STORAGE_KEY = `afct.viewer.view.${KEY}`;
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('says nothing about a file nobody has touched', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    expect(api().viewModified).toBe(false);
+  });
+
+  it('speaks up once a state has been moved', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers['grab']?.({}));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('speaks up when the layout is switched, which moves every state', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().toggleHonorPositions());
+    await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('goes quiet again once the reader has undone what they did', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers['grab']?.({}));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().undo());
+    await waitFor(() => expect(api().viewModified).toBe(false));
+  });
+
+  it('remembers across a refresh that something was moved', async () => {
+    // The rearranging survives a reload, so the note that explains it has to as well.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        modified: true,
+      }),
+    );
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('writes down whether anything was moved, so the next visit knows', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).modified).toBe(false);
+
+    act(() => lastCy().handlers['grab']?.({}));
+    act(() => lastCy().handlers['viewport position']?.({}));
+    await waitFor(() =>
+      expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).modified).toBe(true),
+    );
+  });
+
+  it('goes quiet when a rearrangement carried over from a refresh is put back', async () => {
+    // The other direction: here the flag came from storage rather than from this session's
+    // undo history, so clearing the history is not enough to answer it.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        modified: true,
+      }),
+    );
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().resetMachine());
+    await waitFor(() => expect(api().viewModified).toBe(false));
+  });
+
+  it('goes quiet when the machine is put back', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers['grab']?.({}));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().resetMachine());
+    await waitFor(() => expect(api().viewModified).toBe(false));
   });
 });

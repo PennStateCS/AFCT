@@ -13,12 +13,38 @@ const mounts = new Map<string, number>();
 // given, so switching tabs can be seen to switch machines, and count its own mounts, which is
 // how "the zoom survived" is checked without a layout engine to zoom.
 vi.mock('./ViewerClient', () => ({
-  ViewerClient: ({ src }: { src: string }) => {
+  ViewerClient: ({
+    src,
+    onViewportChange,
+    linkedViewport,
+  }: {
+    src: string;
+    onViewportChange?: ((v: { zoom: number; pan: { x: number; y: number } }) => void) | null;
+    linkedViewport?: { zoom: number; pan: { x: number; y: number } } | null;
+  }) => {
     React.useEffect(() => {
       mounts.set(src, (mounts.get(src) ?? 0) + 1);
     }, [src]);
-    return <div data-testid="viewer" data-src={src} />;
+    return (
+      <div
+        data-testid="viewer"
+        data-src={src}
+        // Which end of a link this machine is on, and what it has been told to follow.
+        data-role={onViewportChange ? 'driving' : linkedViewport ? 'following' : 'alone'}
+        data-following={linkedViewport ? JSON.stringify(linkedViewport) : ''}
+      >
+        <button
+          type="button"
+          onClick={() => onViewportChange?.({ zoom: 2.5, pan: { x: -30, y: 12 } })}
+        >
+          {`report ${src}`}
+        </button>
+      </div>
+    );
   },
+}));
+vi.mock('@/lib/toast', () => ({
+  showToast: { warning: vi.fn(), error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 vi.mock('@/components/viewer/ViewerMenubar', () => ({
   ViewerMenubar: ({
@@ -26,11 +52,17 @@ vi.mock('@/components/viewer/ViewerMenubar', () => ({
     properties,
     onMoveToOtherSide,
     canMoveToOtherSide,
+    linkViews,
+    onToggleLinkViews,
+    canLinkViews,
   }: {
     downloadHref: string;
     properties?: { rows: { label: string; value: string }[] } | null;
     onMoveToOtherSide?: () => void;
     canMoveToOtherSide?: boolean;
+    linkViews?: boolean;
+    onToggleLinkViews?: () => void;
+    canLinkViews?: boolean;
   }) => (
     <div
       data-testid="menubar"
@@ -40,10 +72,20 @@ vi.mock('@/components/viewer/ViewerMenubar', () => ({
       <button type="button" disabled={!canMoveToOtherSide} onClick={onMoveToOtherSide}>
         Move to other side
       </button>
+      <button
+        type="button"
+        disabled={!canLinkViews}
+        aria-pressed={linkViews}
+        onClick={onToggleLinkViews}
+      >
+        Link the two views
+      </button>
     </div>
   ),
 }));
 
+import { MAX_VIEWER_TABS } from '@/lib/viewer-tabs';
+import { showToast } from '@/lib/toast';
 import type { ViewerLayout } from '@/lib/viewer-panes';
 import { ViewerWindow } from './ViewerWindow';
 
@@ -104,6 +146,8 @@ const renderWindow = (
 };
 
 beforeEach(() => {
+  // Shared across the file, so a test asserting something was NOT raised needs a clean count.
+  vi.mocked(showToast.warning).mockClear();
   mounts.clear();
   TestChannel.open = [];
   vi.stubGlobal('BroadcastChannel', TestChannel);
@@ -138,6 +182,16 @@ describe('the tab strip', () => {
     fireEvent.click(screen.getByLabelText('Close b.jff'));
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['a.jff']);
     expect(showing()).toContain('a.jff');
+  });
+
+  it('clears the link when the last tab is closed', () => {
+    // It still named the file that was just closed, so a refresh reopened it: a student's
+    // work fetched, and a view of it recorded, that nobody asked for.
+    renderWindow([tab('a.jff')]);
+    expect(window.location.search).toContain('a.jff');
+
+    fireEvent.click(screen.getByLabelText('Close a.jff'));
+    expect(window.location.search).toBe('');
   });
 
   it('says so plainly when the last tab is closed', () => {
@@ -741,5 +795,271 @@ describe('splitting without a mouse', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'a.jff' }));
     expect(screen.getByRole('status').textContent).toBe('The menu applies to the left pane.');
+  });
+});
+
+describe('the tab strip as a tabs widget', () => {
+  const tabs = () => screen.getAllByRole('tab');
+  const byName = (name: string) => screen.getByRole('tab', { name });
+
+  it('puts one stop per strip in the Tab sequence', () => {
+    // Tabbing through a dozen open files to reach the toolbar is not navigation. The arrows
+    // reach the rest.
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')], 1);
+    expect(tabs().map((t) => t.getAttribute('tabindex'))).toEqual(['-1', '0', '-1']);
+  });
+
+  it('moves along the strip with the arrows, and wraps', () => {
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')]);
+    byName('a.jff').focus();
+
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+    expect(document.activeElement?.textContent).toBe('b.jff');
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    expect(document.activeElement?.textContent).toBe('a.jff');
+    // Wrapping in both directions, as the pattern expects.
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    expect(document.activeElement?.textContent).toBe('c.jff');
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+    expect(document.activeElement?.textContent).toBe('a.jff');
+  });
+
+  it('jumps to the ends with Home and End', () => {
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')], 1);
+    byName('b.jff').focus();
+
+    fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    expect(document.activeElement?.textContent).toBe('c.jff');
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement?.textContent).toBe('a.jff');
+  });
+
+  it('moves focus without switching machines, since each tab is a whole graph', () => {
+    // Automatic activation would build and discard a graph for every tab crossed on the way
+    // to the one somebody wanted.
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    byName('a.jff').focus();
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+
+    expect(byName('a.jff').getAttribute('aria-selected')).toBe('true');
+    expect(showing()).toContain('a.jff');
+  });
+
+  it('says which machine each tab controls, and which tab names each machine', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    const panel = screen.getAllByRole('tabpanel')[0]!;
+    const controls = byName('a.jff').getAttribute('aria-controls');
+    expect(controls).toBe(panel.getAttribute('id'));
+    expect(panel.getAttribute('aria-labelledby')).toBe(byName('a.jff').getAttribute('id'));
+  });
+
+  it('keeps the keyboard in the strip when a tab is closed', () => {
+    // The button goes with the tab, so without this focus falls back to the document and
+    // somebody navigating by keyboard is returned to the top of the page.
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')], 1);
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+    expect(document.activeElement?.textContent).toBe('c.jff');
+  });
+
+  it('falls back to the tab before it when the last one is closed', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')], 1);
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+    expect(document.activeElement?.textContent).toBe('a.jff');
+  });
+
+  it('keeps the arrows inside one strip when the window is split', () => {
+    render(
+      <ViewerWindow
+        initialLayout={{
+          tabs: [tab('a.jff'), tab('b.jff'), tab('c.jff')],
+          panes: { 'submissions:c.jff': 1 },
+          active: ['submissions:a.jff', 'submissions:c.jff'],
+          focused: 0,
+        }}
+        initialProperties={{}}
+      />,
+    );
+    byName('a.jff').focus();
+    fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    // c.jff is in the other strip, which is its own tablist.
+    expect(document.activeElement?.textContent).toBe('b.jff');
+  });
+
+  it('keeps the close button out of the way of tabs it does not belong to', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')], 0);
+    const closers = screen.getAllByRole('button', { name: /^Close / });
+    expect(closers.map((c) => c.getAttribute('tabindex'))).toEqual(['0', '-1']);
+  });
+});
+
+describe('linking the two views', () => {
+  const splitLayout = (): ViewerLayout => ({
+    tabs: [tab('a.jff'), tab('b.jff')],
+    panes: { 'submissions:b.jff': 1 },
+    active: ['submissions:a.jff', 'submissions:b.jff'],
+    focused: 0,
+  });
+
+  const renderSplit = () =>
+    render(<ViewerWindow initialLayout={splitLayout()} initialProperties={{}} />);
+
+  const link = () => fireEvent.click(screen.getByRole('button', { name: 'Link the two views' }));
+  /** The driving pane saying where it is looking, which the real viewer does on its own. */
+  const reportFrom = (file: string) =>
+    fireEvent.click(screen.getByRole('button', { name: `report /api/files/submissions/${file}` }));
+  const roleOf = (file: string) =>
+    screen
+      .getAllByTestId('viewer')
+      .find((v) => v.getAttribute('data-src')?.includes(file))!
+      .getAttribute('data-role');
+
+  it('is off until it is asked for', () => {
+    // Two machines that are not versions of each other rarely sit in the same place, so
+    // moving one would drag the other somewhere useless.
+    renderSplit();
+    expect(roleOf('a.jff')).toBe('alone');
+    expect(roleOf('b.jff')).toBe('alone');
+  });
+
+  it('is not offered while there is only one machine on screen', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    expect(screen.getByRole('button', { name: 'Link the two views' })).toBeDisabled();
+  });
+
+  it('makes the pane being worked in drive, and the other follow', () => {
+    // One direction at a time, so the two cannot chase each other.
+    renderSplit();
+    link();
+    reportFrom('a.jff');
+    expect(roleOf('a.jff')).toBe('driving');
+    expect(roleOf('b.jff')).toBe('following');
+  });
+
+  it('hands the follower the camera the driver reports', () => {
+    renderSplit();
+    link();
+    fireEvent.click(screen.getByRole('button', { name: 'report /api/files/submissions/a.jff' }));
+
+    const following = screen
+      .getAllByTestId('viewer')
+      .find((v) => v.getAttribute('data-src')?.includes('b.jff'))!
+      .getAttribute('data-following');
+    expect(JSON.parse(following!)).toEqual({ zoom: 2.5, pan: { x: -30, y: 12 } });
+  });
+
+  it('swaps which one drives when the reader moves to the other pane', () => {
+    renderSplit();
+    link();
+    reportFrom('a.jff');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'b.jff' }));
+    expect(roleOf('b.jff')).toBe('driving');
+    expect(roleOf('a.jff')).toBe('following');
+  });
+
+  it('lets go when it is switched off again', () => {
+    renderSplit();
+    link();
+    reportFrom('a.jff');
+    link();
+    expect(roleOf('a.jff')).toBe('alone');
+    expect(roleOf('b.jff')).toBe('alone');
+  });
+
+  it('leaves a tab that is not on screen out of it', () => {
+    // A hidden tab given somebody else's camera would come back showing a view of a machine
+    // nobody chose for it, and would write that view down as its own.
+    render(
+      <ViewerWindow
+        initialLayout={{
+          tabs: [tab('a.jff'), tab('b.jff'), tab('c.jff')],
+          panes: { 'submissions:b.jff': 1, 'submissions:c.jff': 1 },
+          active: ['submissions:a.jff', 'submissions:b.jff'],
+          focused: 0,
+        }}
+        initialProperties={{}}
+      />,
+    );
+    // b.jff has been on screen, so it stays mounted; c.jff takes its place in that pane.
+    fireEvent.click(screen.getByRole('tab', { name: 'c.jff' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'a.jff' }));
+    link();
+    reportFrom('a.jff');
+
+    expect(roleOf('c.jff')).toBe('following');
+    expect(roleOf('b.jff')).toBe('alone');
+  });
+
+  it('links nothing once the window is back to one pane', () => {
+    renderSplit();
+    link();
+    reportFrom('a.jff');
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+    expect(roleOf('a.jff')).toBe('alone');
+  });
+});
+
+describe('when a file arrives and the window is already full', () => {
+  const full = () => Array.from({ length: MAX_VIEWER_TABS }, (_, i) => tab(`f${i}.jff`));
+
+  const send = (t: ViewerTab) => {
+    const opener = new TestChannel(VIEWER_CHANNEL);
+    act(() => {
+      opener.postMessage({ type: 'open-tab', tab: t });
+    });
+    opener.close();
+  };
+
+  const names = () => screen.getAllByRole('tab').map((t) => t.textContent);
+
+  it('says which file it closed, and why', () => {
+    // It used to go in silence, so somebody came back to a strip with a file missing from it
+    // and nothing to say where it had gone.
+    renderWindow(full());
+    send(tab('new.jff'));
+
+    expect(showToast.warning).toHaveBeenCalledWith(
+      'Closed f0.jff to make room',
+      expect.objectContaining({ description: expect.stringContaining('new.jff') }),
+    );
+  });
+
+  it('offers to put it back', () => {
+    renderWindow(full());
+    send(tab('new.jff'));
+    expect(names()).not.toContain('f0.jff');
+
+    const options = vi.mocked(showToast.warning).mock.calls[0]![1] as {
+      action: { label: string; onClick: () => void };
+    };
+    expect(options.action.label).toBe('Undo');
+    act(() => options.action.onClick());
+
+    // Back exactly as it was: the closed file returns and the one that displaced it goes.
+    expect(names()).toContain('f0.jff');
+    expect(names()).not.toContain('new.jff');
+  });
+
+  it("keeps the closed file's remembered view, so undoing brings it back as it was", () => {
+    // Unlike closing a tab by hand, which is somebody deciding to discard an arrangement.
+    // Nobody asked for this one to go.
+    window.sessionStorage.setItem('afct.viewer.view.submissions:f0.jff', '{"v":1}');
+    renderWindow(full());
+    send(tab('new.jff'));
+
+    expect(window.sessionStorage.getItem('afct.viewer.view.submissions:f0.jff')).not.toBeNull();
+  });
+
+  it('says nothing when there was room', () => {
+    renderWindow([tab('a.jff')]);
+    send(tab('b.jff'));
+    expect(showToast.warning).not.toHaveBeenCalled();
+  });
+
+  it('says nothing when the file was already open', () => {
+    renderWindow(full());
+    send(tab('f3.jff'));
+    expect(showToast.warning).not.toHaveBeenCalled();
+    expect(names()).toHaveLength(MAX_VIEWER_TABS);
   });
 });

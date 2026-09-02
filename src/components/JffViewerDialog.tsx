@@ -11,6 +11,16 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import LoadingSpinner from '@/components/ui/loading-spinner';
+import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   describeMachine,
   type MachineDescription,
@@ -31,11 +41,24 @@ import {
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import { OpenInWindowButton } from '@/components/dialogs/OpenInWindowButton';
 import type { ViewerWindowTarget } from '@/lib/viewer-tabs';
+import type { ViewerViewport } from '@/lib/viewer-view-state';
 import {
   useRegisterViewerActions,
   useViewerChromePresent,
 } from '@/components/viewer/viewer-actions';
-import { Grid, Copy, Minus, Plus, Scan, Undo2, Redo2, X } from 'lucide-react';
+import {
+  Grid,
+  Copy,
+  Minus,
+  Plus,
+  Scan,
+  Undo2,
+  Redo2,
+  RotateCcw,
+  PencilLine,
+  FileDown,
+  X,
+} from 'lucide-react';
 
 /**
  * Fallback grid colour, used only if `--grid-color` is somehow absent.
@@ -48,6 +71,20 @@ import { Grid, Copy, Minus, Plus, Scan, Undo2, Redo2, X } from 'lucide-react';
  * the theming anyway, live, without any of this.
  */
 const GRID_COLOR_FALLBACK = '#0f172a';
+
+/**
+ * What each step of opening a machine is called on screen.
+ *
+ * Three of them because they fail for different reasons and take different lengths of time: a
+ * large submission spends most of its wait in the fetch, and a large machine most of it in the
+ * layout. "Loading" for both tells the reader nothing about which.
+ */
+const PHASE_LABEL = {
+  fetching: 'Loading the file',
+  parsing: 'Reading the machine',
+  drawing: 'Drawing the machine',
+  ready: '',
+} as const;
 
 /**
  * The machine written out: states, transitions and any notes.
@@ -305,6 +342,8 @@ export function JffCytoscapeViewer({
   viewStateKey = null,
   windowTarget,
   onOpenedInWindow,
+  onViewportChange,
+  linkedViewport,
 }: {
   src: string;
   title?: string;
@@ -330,9 +369,14 @@ export function JffCytoscapeViewer({
   windowTarget?: ViewerWindowTarget | null;
   /** Called once the file is on its way to the standalone window. */
   onOpenedInWindow?: () => void;
+  /** Report where this machine is being looked at, for a linked pane. See useJffCytoscape. */
+  onViewportChange?: ((viewport: ViewerViewport) => void) | null;
+  /** Follow another pane's camera. See useJffCytoscape. */
+  linkedViewport?: ViewerViewport | null;
 }) {
   // `resolvedTheme` rather than `theme`: the latter is "system" for most people, which says
   // nothing about which colours are actually on screen.
+  const [resetOpen, setResetOpen] = useState(false);
   const { resolvedTheme } = useTheme();
   const isDark = darkMode ?? resolvedTheme === 'dark';
   // The cytoscape engine (fetch/parse/layout/interaction + zoom/export actions) lives in
@@ -340,7 +384,10 @@ export function JffCytoscapeViewer({
   const {
     containerRef,
     settled,
-    error,
+    failure,
+    phase,
+    retry,
+    viewModified,
     type,
     honorPositions,
     toggleHonorPositions,
@@ -377,6 +424,8 @@ export function JffCytoscapeViewer({
     honorPositionsDefault,
     initialZoom,
     viewStateKey,
+    onViewportChange,
+    linkedViewport,
   });
 
   // Non-visual alternative. The canvas is unreadable to a screen reader, and reading
@@ -466,6 +515,44 @@ export function JffCytoscapeViewer({
         <div className="flex min-w-0 items-center gap-2">
           {/* Title is shown in the dialog header above; only the type label lives here. */}
           <TypeBadge t={type} />
+          {/*
+            Whether the drawing has been rearranged, and what to do about it.
+
+            Quiet on purpose: it sits beside the type label rather than announcing itself, and
+            it is only there once something has actually been moved. What it answers is a
+            question nobody asks out loud: dragging three states apart to read an edge looks
+            like editing, and a reader has no way of knowing from the screen that the file they
+            were sent is untouched. It says so, and offers the two things they might want next.
+          */}
+          {viewModified ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground h-6 gap-1 px-2 text-xs font-normal"
+                >
+                  <PencilLine className="h-3 w-3" aria-hidden="true" />
+                  View changed
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-w-xs">
+                <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
+                  You have moved things about. The submitted file is unchanged, and nothing here
+                  writes to it.
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => void downloadCurrent()}>
+                  <FileDown aria-hidden="true" />
+                  Download this arrangement
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setResetOpen(true)}>
+                  <RotateCcw aria-hidden="true" />
+                  Put it back
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           {/* View controls */}
@@ -613,10 +700,32 @@ export function JffCytoscapeViewer({
         of x.jff, image" and nothing else, with no text alternative either, because there is
         nothing parsed to describe.
       */}
-      {error ? (
-        <p role="alert" className="text-destructive px-3 py-2 text-sm">
-          {error}
-        </p>
+      {/* The same question the standalone window's menu asks, for the same reason: a reader can
+          spend a while pulling a crowded machine apart and there is no undo once the history
+          has gone with it. */}
+      <ConfirmDialog
+        open={resetOpen}
+        title="Put the machine back?"
+        description="The states return to where the file has them, and the layout, the zoom and the undo history for this machine are forgotten. The submitted file is not changed."
+        confirmText="Put it back"
+        onConfirm={() => {
+          resetMachine();
+          setResetOpen(false);
+        }}
+        onCancel={() => setResetOpen(false)}
+      />
+
+      {failure ? (
+        <div role="alert" className="px-4 py-6 text-sm" data-testid="viewer-failure">
+          <p className="text-foreground font-semibold">{failure.title}</p>
+          <p className="text-muted-foreground mt-1 max-w-prose">{failure.detail}</p>
+          {failure.retryable ? (
+            <Button size="sm" variant="outline" className="mt-3" onClick={retry}>
+              <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+              Try again
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {/* The rendered graph. role="img" + a description keeps a screen reader from
@@ -651,7 +760,7 @@ export function JffCytoscapeViewer({
           )}
           role="img"
           aria-label={
-            error
+            failure
               ? 'The diagram could not be drawn'
               : title
                 ? `Diagram of ${title}`
@@ -659,6 +768,18 @@ export function JffCytoscapeViewer({
           }
           aria-describedby={description ? summaryId : undefined}
         />
+        {/* What this pane is doing, over the prepared canvas rather than instead of it. Named
+            steps rather than one spinner: with two machines on screen, one can still be
+            fetching while the other is already drawing, and "loading" for both says less than
+            either of them could. */}
+        {!failure && phase !== 'ready' ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+            data-testid="viewer-loading"
+          >
+            <LoadingSpinner label={PHASE_LABEL[phase]} fullScreen={false} className="min-h-0" />
+          </div>
+        ) : null}
         {selectedState ? (
           <StateProperties state={selectedState} onClose={clearSelectedState} />
         ) : selectedTransition ? (

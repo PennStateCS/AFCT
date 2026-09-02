@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,15 @@ import { ViewerActionsGate, ViewerActionsProvider } from '@/components/viewer/vi
 import { ViewerMenubar } from '@/components/viewer/ViewerMenubar';
 import { viewerFileSrc } from '@/lib/viewer-link';
 import type { ViewerProperties } from '@/lib/viewer-properties';
-import { clearViewState } from '@/lib/viewer-view-state';
-import { tabKey, VIEWER_ALIVE_KEY, VIEWER_CHANNEL, type ViewerTab } from '@/lib/viewer-tabs';
+import { clearViewState, type ViewerViewport } from '@/lib/viewer-view-state';
+import { showToast } from '@/lib/toast';
+import {
+  MAX_VIEWER_TABS,
+  tabKey,
+  VIEWER_ALIVE_KEY,
+  VIEWER_CHANNEL,
+  type ViewerTab,
+} from '@/lib/viewer-tabs';
 import {
   activeTab,
   applyDrop,
@@ -28,6 +35,7 @@ import {
   paneOf,
   selectTab,
   splitTabToSide,
+  tabToFocusAfterClosing,
   tabsInPane,
   type DropTarget,
   type PaneIndex,
@@ -94,6 +102,12 @@ export function ViewerWindow({
   /** Properties for the tabs the window opened with, loaded on the server. */
   initialProperties: Record<string, ViewerProperties | null>;
 }) {
+  // Unique per window, so the tab and panel ids below cannot collide with anything else on
+  // the page and are stable across renders.
+  const ids = useId();
+  const tabId = (key: string) => `${ids}tab-${key}`;
+  const panelId = (key: string) => `${ids}panel-${key}`;
+
   const [layout, setLayout] = useState(initialLayout);
   const [properties, setProperties] =
     useState<Record<string, ViewerProperties | null>>(initialProperties);
@@ -107,6 +121,30 @@ export function ViewerWindow({
    * files, and the audit trail from recording a dozen views nobody made.
    */
   const [opened, setOpened] = useState<string[]>([]);
+  /**
+   * Whether the two halves share one camera.
+   *
+   * Off unless asked for: two machines that are not versions of each other rarely sit in the
+   * same place, so moving one would drag the other somewhere useless. Comparing two attempts
+   * at the same problem is the case it is for.
+   */
+  const [linkViews, setLinkViews] = useState(false);
+  /** Where the pane that is driving is looking, for the other one to follow. */
+  const [sharedViewport, setSharedViewport] = useState<ViewerViewport | null>(null);
+
+  /**
+   * The layout as it is right now, for a handler that must read it and act on what it finds.
+   *
+   * A `setLayout` updater cannot: it has to stay pure, and opening a tab that pushes the
+   * window over its limit needs to raise a toast about what it closed.
+   */
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+
+  /** Put the keyboard on a tab button, wherever in the strips it now is. */
+  const focusTab = (key: string) => {
+    document.querySelector<HTMLElement>(`[data-tab-key="${CSS.escape(key)}"]`)?.focus();
+  };
 
   const panes = paneCount(layout);
   const focused = focusedTab(layout);
@@ -144,8 +182,11 @@ export function ViewerWindow({
 
   // The URL follows the layout, so a refresh restores this set and the link can be handed on.
   useEffect(() => {
-    if (layout.tabs.length === 0) return;
-    window.history.replaceState(null, '', `?${layoutToSearch(layout)}`);
+    // Closing the last tab clears it rather than leaving it alone. The link still named the
+    // file that was just closed, so a refresh reopened it, which also fetched a student's
+    // work and recorded a view of it that nobody asked for.
+    const search = layout.tabs.length === 0 ? '' : `?${layoutToSearch(layout)}`;
+    window.history.replaceState(null, '', `${window.location.pathname}${search}`);
   }, [layout]);
 
   /**
@@ -185,7 +226,25 @@ export function ViewerWindow({
   // A file sent from another window lands in the pane the menu bar is on, which is the one
   // the reader was last working in.
   const receiveTab = useCallback((next: ViewerTab) => {
-    setLayout((current) => openTab(current, next));
+    const before = layoutRef.current;
+    const { layout: after, evicted } = openTab(before, next);
+    setLayout(after);
+    if (!evicted) return;
+
+    // The window holds a fixed number of files, so opening one when it is full closes another.
+    // That used to happen in silence: somebody came back to a strip with a file missing from
+    // it and nothing to say where it had gone.
+    //
+    // The remembered view of the closed file is deliberately left in place, unlike closing a
+    // tab by hand. Nobody asked for this one to go, so undoing brings it back as it was rather
+    // than as a fresh copy of the file.
+    showToast.warning(`Closed ${evicted.name} to make room`, {
+      description: `The viewer holds ${MAX_VIEWER_TABS} files at once, and ${next.name} needed a place.`,
+      action: {
+        label: 'Undo',
+        onClick: () => setLayout(before),
+      },
+    });
   }, []);
 
   useEffect(() => {
@@ -359,20 +418,65 @@ export function ViewerWindow({
     setFocusAfterMove(key);
   };
 
-  /** A tab to put keyboard focus on once it has been re-rendered into its new strip. */
+  /**
+   * A tab to put keyboard focus on once the strips have been re-rendered.
+   *
+   * Used after a move, where the button is unmounted from one strip and mounted in the other,
+   * and after a close, where it is removed outright. Either way focus would otherwise fall
+   * back to the document and leave somebody navigating by keyboard at the top of the page.
+   */
   const [focusAfterMove, setFocusAfterMove] = useState<string | null>(null);
   useEffect(() => {
     if (!focusAfterMove) return;
-    const button = document.querySelector<HTMLElement>(
-      `[data-tab-key="${CSS.escape(focusAfterMove)}"]`,
-    );
-    button?.focus();
+    focusTab(focusAfterMove);
     setFocusAfterMove(null);
   }, [focusAfterMove, layout]);
 
+  /**
+   * Arrow, Home and End move within one strip, as the tabs pattern expects.
+   *
+   * Focus only, not selection: each tab holds a whole machine, and stepping across four of
+   * them to reach the fifth would build and throw away three graphs on the way. Enter or Space
+   * on the button selects, which is what it already did.
+   */
+  const onTabKeyDown = (event: React.KeyboardEvent, pane: PaneIndex, key: string) => {
+    const inPane = tabsInPane(layout, pane);
+    const at = inPane.findIndex((tab) => tabKey(tab) === key);
+    if (at < 0 || inPane.length === 0) return;
+    let next: number;
+    switch (event.key) {
+      case 'ArrowRight':
+        next = (at + 1) % inPane.length;
+        break;
+      case 'ArrowLeft':
+        next = (at - 1 + inPane.length) % inPane.length;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = inPane.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    const target = inPane[next];
+    if (target) focusTab(tabKey(target));
+  };
+
+  // Linking is only meaningful with something to link to, and only the pane the reader is
+  // working in drives: one direction at a time, so the two cannot chase each other.
+  const canLinkViews = panes === 2;
+  const linked = linkViews && canLinkViews;
+
   const close = (tab: ViewerTab) => {
     const key = tabKey(tab);
+    // Worked out before the tab goes, since afterwards there is no place in the strip to
+    // count from.
+    const neighbour = tabToFocusAfterClosing(layout, key);
     setLayout((current) => closeTab(current, key));
+    if (neighbour) setFocusAfterMove(neighbour);
     // Closing already unmounts it, since it leaves the tab list. This just keeps the list
     // from accumulating files nobody has open any more.
     setOpened((current) => current.filter((k) => k !== key));
@@ -399,6 +503,9 @@ export function ViewerWindow({
           properties={properties[tabKey(focused)] ?? null}
           onMoveToOtherSide={moveToOtherSide}
           canMoveToOtherSide={canMoveToOtherSide}
+          linkViews={linkViews}
+          canLinkViews={canLinkViews}
+          onToggleLinkViews={() => setLinkViews((on) => !on)}
         />
 
         {/* Which half the menu bar acts on, for a reader who cannot see the marked strip.
@@ -465,9 +572,16 @@ export function ViewerWindow({
                     <button
                       type="button"
                       role="tab"
+                      id={tabId(tabKey(tab))}
                       aria-selected={selected}
+                      aria-controls={panelId(tabKey(tab))}
+                      // Roving: one stop per strip in the Tab sequence, and the arrows move
+                      // between them. Tabbing through a dozen open files to reach the toolbar
+                      // is not navigation.
+                      tabIndex={selected ? 0 : -1}
                       data-tab-key={tabKey(tab)}
                       {...dragProps(tab)}
+                      onKeyDown={(event) => onTabKeyDown(event, pane, tabKey(tab))}
                       onClick={() => setLayout((current) => selectTab(current, tabKey(tab)))}
                       className="min-w-0 truncate px-3 py-1.5 text-sm font-semibold"
                       title={tab.title}
@@ -479,6 +593,10 @@ export function ViewerWindow({
                       size="sm"
                       variant="ghost"
                       className="h-5 w-5 shrink-0 p-0"
+                      // In the Tab sequence only for the tab on screen, so tabbing out of a
+                      // strip does not walk through a close button for every open file. The
+                      // arrows reach the others, and their close buttons with them.
+                      tabIndex={selected ? 0 : -1}
                       onClick={() => close(tab)}
                       aria-label={`Close ${tab.name}`}
                     >
@@ -521,6 +639,9 @@ export function ViewerWindow({
               return (
                 <div
                   key={tabKey(tab)}
+                  role="tabpanel"
+                  id={panelId(tabKey(tab))}
+                  aria-labelledby={tabId(tabKey(tab))}
                   className={cn('absolute', paneRectClass(pane, panes), !visible && 'invisible')}
                   // Out of the accessibility tree and out of the tab order while hidden, so a
                   // reader is not walked through a dozen machines they cannot see.
@@ -534,6 +655,16 @@ export function ViewerWindow({
                       title={tab.title}
                       epsSymbol={tab.eps}
                       viewStateKey={tabKey(tab)}
+                      // Exactly one of these two, and only on a machine that is on screen: the
+                      // pane being worked in reports where it is looking, and the other one
+                      // follows. A hidden tab does neither, or it would come back showing a
+                      // view of a machine nobody chose for it.
+                      onViewportChange={
+                        linked && visible && pane === layout.focused ? setSharedViewport : null
+                      }
+                      linkedViewport={
+                        linked && visible && pane !== layout.focused ? sharedViewport : null
+                      }
                     />
                   </ViewerActionsGate>
                 </div>

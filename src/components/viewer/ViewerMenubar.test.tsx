@@ -848,3 +848,55 @@ describe('the keyboard route to a split', () => {
     expect(screen.queryByRole('menuitem', { name: /move to other side/i })).toBeNull();
   });
 });
+
+describe('linking the two views', () => {
+  const openView = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByRole('menuitem', { name: 'View' }));
+
+  const renderMenu = (props: Record<string, unknown>) =>
+    render(
+      <ViewerActionsProvider>
+        <FakeViewer />
+        <ViewerMenubar downloadHref="/x?download=1" {...props} />
+      </ViewerActionsProvider>,
+    );
+
+  it('shows whether the two are linked, and switches it', async () => {
+    const user = userEvent.setup();
+    const onToggleLinkViews = vi.fn();
+    renderMenu({ onToggleLinkViews, canLinkViews: true, linkViews: false });
+    await openView(user);
+
+    const item = await screen.findByRole('menuitemcheckbox', { name: /link the two views/i });
+    expect(item).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(item);
+    expect(onToggleLinkViews).toHaveBeenCalled();
+  });
+
+  it('shows it ticked when they are', async () => {
+    const user = userEvent.setup();
+    renderMenu({ onToggleLinkViews: vi.fn(), canLinkViews: true, linkViews: true });
+    await openView(user);
+    expect(
+      await screen.findByRole('menuitemcheckbox', { name: /link the two views/i }),
+    ).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('greys it out while there is only one machine on screen', async () => {
+    // Greyed rather than hidden: an item that comes and goes reads as a bug.
+    const user = userEvent.setup();
+    renderMenu({ onToggleLinkViews: vi.fn(), canLinkViews: false });
+    await openView(user);
+    expect(
+      await screen.findByRole('menuitemcheckbox', { name: /link the two views/i }),
+    ).toHaveAttribute('data-disabled');
+  });
+
+  it('is absent where there are no panes at all', async () => {
+    // The panel viewer over a page has one machine and nothing to link it to.
+    const user = userEvent.setup();
+    renderMenu({});
+    await openView(user);
+    expect(screen.queryByRole('menuitemcheckbox', { name: /link the two views/i })).toBeNull();
+  });
+});

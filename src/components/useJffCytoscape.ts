@@ -20,10 +20,17 @@ import {
 } from '@/lib/jflap-layout';
 import { toJflapXml } from '@/lib/jflap-write';
 import {
+  failureForContent,
+  failureForNetwork,
+  failureForStatus,
+  type ViewerLoadFailure,
+} from '@/lib/viewer-load-failure';
+import {
   clearViewState,
   readViewState,
   writeViewState,
   viewStateFits,
+  type ViewerViewport,
   type ViewerViewState,
 } from '@/lib/viewer-view-state';
 import {
@@ -230,6 +237,16 @@ export type UseJffCytoscapeOptions = {
    * passes nothing and stays what it was: a look at a file, forgotten when it closes.
    */
   viewStateKey?: string | null;
+  /**
+   * Say where this machine is being looked at, so another pane can follow it.
+   *
+   * Set only on the pane the reader is working in, and only while the two are linked. The
+   * follower receives `linkedViewport` instead; one direction at a time, so there is no
+   * argument about which pane wins and no chance of the two chasing each other.
+   */
+  onViewportChange?: ((viewport: ViewerViewport) => void) | null;
+  /** Follow this camera. Set only on the pane that is not driving. */
+  linkedViewport?: ViewerViewport | null;
 };
 
 /**
@@ -255,6 +272,35 @@ type ArrangementSnapshot = {
   positions: Record<string, { x: number; y: number }>;
   honorPositions: boolean;
 };
+
+/**
+ * The pan that keeps whatever was in the middle of the viewport in the middle of it.
+ *
+ * Resizing changes how much canvas there is, not what the reader is looking at. Recentring the
+ * whole machine instead moves them somewhere they never asked to be: somebody examining one
+ * corner of a large automaton drags the window, or splits the pane, and finds themselves back
+ * at the middle of a machine they had deliberately scrolled away from.
+ *
+ * Cytoscape's pan is in rendered pixels and its zoom scales model units, so the model point at
+ * the centre is `(size / 2 - pan) / zoom`. Putting the same point back at the centre of the
+ * new size is that solved the other way round. Zoom is untouched.
+ */
+function panKeepingCentre(
+  before: { width: number; height: number },
+  after: { width: number; height: number },
+  zoom: number,
+  pan: { x: number; y: number },
+): { x: number; y: number } | null {
+  if (!(zoom > 0) || !isFinitePoint(pan)) return null;
+  if (![before.width, before.height, after.width, after.height].every((n) => Number.isFinite(n))) {
+    return null;
+  }
+  const centre = {
+    x: (before.width / 2 - pan.x) / zoom,
+    y: (before.height / 2 - pan.y) / zoom,
+  };
+  return { x: after.width / 2 - centre.x * zoom, y: after.height / 2 - centre.y * zoom };
+}
 
 /** A point cytoscape will accept: both halves present and real numbers. */
 function isFinitePoint(value: any): value is { x: number; y: number } {
@@ -316,11 +362,27 @@ export function useJffCytoscape({
   darkMode = false,
   honorPositionsDefault = false,
   viewStateKey = null,
+  onViewportChange = null,
+  linkedViewport = null,
 }: UseJffCytoscapeOptions) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<any | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
+  /**
+   * Why this machine did not open, or null while nothing is wrong.
+   *
+   * A failure rather than a message, because the chrome has to decide whether to offer a
+   * retry, and "was it worth trying again" is not something to work out by reading a string.
+   */
+  const [failure, setFailure] = useState<ViewerLoadFailure | null>(null);
+  /**
+   * How far the load has got, so a pane can say what it is doing.
+   *
+   * Worth naming the steps rather than showing one spinner: fetching a file and reading a
+   * machine out of it fail for different reasons, and with two panes on screen one can be
+   * still fetching while the other has already given up.
+   */
+  const [phase, setPhase] = useState<'fetching' | 'parsing' | 'drawing' | 'ready'>('fetching');
   /**
    * What was remembered about this file, read once.
    *
@@ -394,10 +456,39 @@ export function useJffCytoscape({
    * Each entry is a whole snapshot rather than a diff. A machine has tens of states, not
    * thousands, so copying every position is cheaper than the bookkeeping a diff would need.
    */
+  /**
+   * Whether anything about the drawing has been changed since it was opened.
+   *
+   * Kept because the difference between "this is the file" and "this is the file after I moved
+   * things about" is not visible, and a reader who has dragged three states apart to read an
+   * edge can reasonably wonder whether they have altered what a student submitted. They have
+   * not, and nothing here writes to the file.
+   *
+   * Derived from the undo history, plus whatever a refresh restored: undo everything and it
+   * goes quiet again. Switching the layout out and back leaves it on, which over-reports by
+   * one case and is not worth a position-by-position comparison to avoid.
+   */
+  const [restoredModified, setRestoredModified] = useState(false);
   const [undoDepth, setUndoDepth] = useState(0);
   const [redoDepth, setRedoDepth] = useState(0);
   const undoStack = useRef<ArrangementSnapshot[]>([]);
   const redoStack = useRef<ArrangementSnapshot[]>([]);
+  /**
+   * An arrangement waiting for the graph to be rebuilt before it can be applied.
+   *
+   * Stepping across a layout switch changes `honorPositions`, which `load` depends on, so the
+   * graph is torn down and built again. Applying the snapshot before that happened put the
+   * positions onto a graph that was about to be discarded, and the step appeared to restore
+   * the layout while silently losing every state the reader had moved under it. The camera
+   * rides along for the same reason: the rebuild refits, and an undo should not move the view.
+   */
+  /** The file the graph currently holds, so a rebuild of the same one is recognised. */
+  const loadedSrc = useRef<string | null>(null);
+  const pendingArrangement = useRef<{
+    snapshot: ArrangementSnapshot;
+    zoom: number;
+    pan: { x: number; y: number };
+  } | null>(null);
 
   // Customization variables
   const FIT_PADDING = 80;
@@ -424,6 +515,59 @@ export function useJffCytoscape({
 
   const viewStateKeyRef = useRef(viewStateKey);
   viewStateKeyRef.current = viewStateKey;
+  // Read by the writer, which runs from a cytoscape event rather than from a render.
+  const viewModifiedRef = useRef(false);
+  viewModifiedRef.current = undoDepth > 0 || restoredModified;
+
+  /* ── following another pane's camera ────────────────────────────────── */
+
+  const onViewportChangeRef = useRef(onViewportChange);
+  onViewportChangeRef.current = onViewportChange;
+  /**
+   * True while a camera from elsewhere is being applied.
+   *
+   * Cytoscape reports a viewport change whether a person or this code caused it, so without
+   * this the follower would report the camera it was just given and the two panes would talk
+   * past each other.
+   */
+  const applyingViewport = useRef(false);
+
+  /** Tell whoever is listening where this machine is being looked at. */
+  const reportViewport = () => {
+    const report = onViewportChangeRef.current;
+    const cy = cyRef.current;
+    if (!report || !cy || applyingViewport.current) return;
+    try {
+      const zoom = cy.zoom();
+      const pan = cy.pan();
+      if (!Number.isFinite(zoom) || zoom <= 0 || !isFinitePoint(pan)) return;
+      report({ zoom, pan: { x: pan.x, y: pan.y } });
+    } catch {
+      // A graph mid-teardown. There is nothing to report about it.
+    }
+  };
+
+  // Take the other pane's camera. Not while this pane is the one driving, which is what the
+  // caller decides by giving one of the two props and not the other.
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !linkedViewport) return;
+    applyingViewport.current = true;
+    try {
+      cy.zoom(linkedViewport.zoom);
+      cy.pan(linkedViewport.pan);
+    } catch {
+      // A graph mid-teardown.
+    } finally {
+      applyingViewport.current = false;
+    }
+  }, [linkedViewport]);
+
+  // Say where this pane is as soon as it becomes the one driving, so linking the two takes
+  // effect immediately rather than on the reader's next scroll.
+  useEffect(() => {
+    if (onViewportChange) reportViewport();
+  }, [onViewportChange]);
 
   /** Write down where the reader is looking and where they have put the states. */
   const rememberView = useCallback(() => {
@@ -441,6 +585,7 @@ export function useJffCytoscape({
         pan: { x: pan.x, y: pan.y },
         positions: arrangement.positions,
         honorPositions: arrangement.honorPositions,
+        modified: viewModifiedRef.current,
       });
     } catch {
       // A graph mid-teardown, or storage refusing. Neither is worth interrupting a reader.
@@ -480,6 +625,9 @@ export function useJffCytoscape({
         const ids = cy.nodes().map((node: any) => node.id());
         if (!viewStateFits(saved, ids)) return false;
         applyArrangement(cy, { positions: saved.positions, honorPositions: saved.honorPositions });
+        // A refresh does not undo the reader's rearranging, so it must not quietly forget it
+        // happened either.
+        if (saved.modified) setRestoredModified(true);
         cy.zoom(saved.zoom);
         cy.pan(saved.pan);
         return true;
@@ -495,28 +643,57 @@ export function useJffCytoscape({
 
   const load = useMemo(
     () => async () => {
-      setError(null);
+      setFailure(null);
+      setPhase('fetching');
       // Before anything else, and before any await. A second load onto a viewer that is
       // already showing something (React re-running effects in development, or the source
       // changing) would otherwise start with the graph visible, and the new machine would be
       // painted un-fitted for the moment before its own layout settles. That is the flash.
       setSettled(false);
       try {
-        const res = await fetch(src);
-        if (!res.ok) throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
+        // Told apart on purpose: a request that never got an answer is worth trying again,
+        // and one that was refused is not.
+        let res: Response;
+        try {
+          res = await fetch(src);
+        } catch {
+          setFailure(failureForNetwork());
+          return;
+        }
+        if (!res.ok) {
+          setFailure(failureForStatus(res.status));
+          return;
+        }
         const text = await res.text();
 
-        const parsed = parseJflap(text);
+        setPhase('parsing');
+        let parsed: Parsed;
+        try {
+          parsed = parseJflap(text);
+        } catch {
+          // The bytes arrived and are not a machine. Reading them again will not change that.
+          setFailure(failureForContent());
+          return;
+        }
+        setPhase('drawing');
         setType(parsed.type);
         setParsed(parsed);
         setSelectedStateId(null);
         setSelectedEdge(null);
         // A different file is a different machine. Keeping the old history would let undo
         // apply one machine's positions to another's states.
-        undoStack.current = [];
-        redoStack.current = [];
-        setUndoDepth(0);
-        setRedoDepth(0);
+        //
+        // Only for a different file, though. Switching between the drawn and the auto-arranged
+        // layout rebuilds this same machine, and clearing here made the switch itself
+        // impossible to undo: the step that recorded it was thrown away by the rebuild it
+        // caused. Reset clears the history itself, since there it is the point.
+        if (loadedSrc.current !== src) {
+          loadedSrc.current = src;
+          undoStack.current = [];
+          redoStack.current = [];
+          setUndoDepth(0);
+          setRedoDepth(0);
+        }
         const elements = toElements(parsed, epsSymbol, honorPositions);
 
         if (!containerRef.current) {
@@ -901,6 +1078,17 @@ export function useJffCytoscape({
               await fitAndResize();
               const current = cyRef.current;
               if (!current) return;
+              // An undo that crossed a layout switch, waiting for this rebuild. It wins over
+              // everything else here: it is the reader asking for a particular arrangement
+              // back, and for the view not to move while they get it.
+              const pending = pendingArrangement.current;
+              if (pending) {
+                pendingArrangement.current = null;
+                applyArrangement(current, pending.snapshot);
+                current.zoom(pending.zoom);
+                current.pan(pending.pan);
+                return;
+              }
               // A remembered view wins over both, because it is where the reader was.
               if (restoreSavedView(current)) return;
               if (initialZoomRef.current !== 'actual') return;
@@ -919,10 +1107,14 @@ export function useJffCytoscape({
               // In a `finally` so a layout that throws still reveals the graph. A machine
               // drawn wrongly is recoverable; one that never appears is not.
               setSettled(true);
+              setPhase('ready');
               // Write the opening view down now, so a reader who changes nothing and refreshes
               // still comes back to the same picture. Nothing above this can lose the saved
               // view: it was read into `savedView` before the first render.
               rememberView();
+              // And, if this pane is driving a linked one, where it ended up. The effect that
+              // reports when the link is switched on cannot: at mount there is no graph yet.
+              reportViewport();
             }
           })();
         }, 0);
@@ -935,6 +1127,10 @@ export function useJffCytoscape({
         // view it had.
         const rememberViewSoon = debounce(rememberView, 400);
         cy.on('viewport position', rememberViewSoon);
+
+        // Undebounced, unlike remembering: a linked pane that lagged a fraction of a second
+        // behind the one being dragged would read as broken rather than as linked.
+        cy.on('viewport', reportViewport);
 
         /**
          * Keep the canvas in step with its container without touching the zoom.
@@ -954,8 +1150,17 @@ export function useJffCytoscape({
           const current = cyRef.current;
           if (!current) return;
           try {
+            const before = { width: current.width(), height: current.height() };
+            const zoom = current.zoom();
+            const pan = { ...current.pan() };
             current.resize();
-            current.center(current.elements());
+            const next = panKeepingCentre(
+              before,
+              { width: current.width(), height: current.height() },
+              zoom,
+              pan,
+            );
+            if (next) current.pan(next);
           } catch {
             // A graph mid-teardown. Nothing to resize.
           }
@@ -1069,8 +1274,10 @@ export function useJffCytoscape({
           repositionStartNodes(cy);
         });
       } catch (e: any) {
+        // Anything past the parse: building or laying out the graph. Logged because unlike
+        // the cases above it is a bug rather than a thing that happens.
         console.error(e);
-        setError(e?.message || 'Failed to render .jff');
+        setFailure(failureForContent());
       }
     },
     // The last two never change identity, so they cost nothing here.
@@ -1115,10 +1322,18 @@ export function useJffCytoscape({
     const current = readArrangement(cy, honorPositions);
     if (current) to.current.push(current);
 
-    // The layout first: switching it re-runs the engine and would otherwise overwrite the
-    // positions restored below.
-    if (snapshot.honorPositions !== honorPositions) setHonorPositions(snapshot.honorPositions);
-    applyArrangement(cy, snapshot);
+    if (snapshot.honorPositions !== honorPositions) {
+      // Switching the layout rebuilds the graph, so the positions cannot be put back on this
+      // one: they are handed to the load that is about to run instead.
+      try {
+        pendingArrangement.current = { snapshot, zoom: cy.zoom(), pan: { ...cy.pan() } };
+      } catch {
+        pendingArrangement.current = { snapshot, zoom: 1, pan: { x: 0, y: 0 } };
+      }
+      setHonorPositions(snapshot.honorPositions);
+    } else {
+      applyArrangement(cy, snapshot);
+    }
 
     setUndoDepth(undoStack.current.length);
     setRedoDepth(redoStack.current.length);
@@ -1290,7 +1505,10 @@ export function useJffCytoscape({
   return {
     containerRef,
     settled,
-    error,
+    failure,
+    phase,
+    /** Ask for the file again. Only worth offering when the failure says it is. */
+    retry: () => setReloadNonce((n) => n + 1),
     type,
     parsed,
     honorPositions,
@@ -1320,9 +1538,15 @@ export function useJffCytoscape({
       // The rebuild below will not put the discarded arrangement back: `hasRestored` is
       // already set, since restoring happens on the first load and only there.
       clearViewState(viewStateKeyRef.current);
+      setRestoredModified(false);
+      // The rebuild below keeps the history now, since it is the same file. Reset is the one
+      // place that means to throw it away.
+      undoStack.current = [];
+      redoStack.current = [];
+      setUndoDepth(0);
+      setRedoDepth(0);
       setHonorPositions(honorPositionsDefault);
-      // The rebuild does the rest: reading the file again puts every state back where its
-      // author had it, and clearing the undo history is already part of loading a machine.
+      // The rebuild puts every state back where its author had it.
       setReloadNonce((n) => n + 1);
     },
     zoomIn,
@@ -1333,6 +1557,8 @@ export function useJffCytoscape({
     toggleNotes: () => setShowNotes((on) => !on),
     snapToGrid,
     toggleSnapToGrid: () => setSnapToGrid((on) => !on),
+    /** Whether the drawing has been rearranged since it was opened. */
+    viewModified: undoDepth > 0 || restoredModified,
     canUndo: undoDepth > 0,
     canRedo: redoDepth > 0,
     undo: () => step(undoStack, redoStack),

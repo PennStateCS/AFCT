@@ -133,17 +133,24 @@ export const focusPane = (layout: ViewerLayout, pane: PaneIndex): ViewerLayout =
  *
  * Opening something twice must not produce two identical tabs: the reader would have no way to
  * tell them apart, and the two would share one remembered view.
+ *
+ * Returns whichever tab had to close to make room, so the caller can say so. Dropping one
+ * without a word left somebody's work missing from the strip with nothing to explain it.
  */
-export function openTab(layout: ViewerLayout, next: ViewerTab): ViewerLayout {
+export function openTab(
+  layout: ViewerLayout,
+  next: ViewerTab,
+): { layout: ViewerLayout; evicted: ViewerTab | null } {
   const existing = layout.tabs.find((tab) => sameTab(tab, next));
-  if (existing) return selectTab(layout, tabKey(existing));
+  if (existing) return { layout: selectTab(layout, tabKey(existing)), evicted: null };
 
   let tabs = [...layout.tabs, next];
   let panes = { ...layout.panes, [tabKey(next)]: layout.focused };
+  let evicted: ViewerTab | null = null;
   if (tabs.length > MAX_VIEWER_TABS) {
     // Full. Drop the oldest rather than refusing, which would look like the button broke.
-    // `settle` handles the case where that was the last tab on one side.
-    const evicted = tabs[0];
+    // `settleLayout` handles the case where that was the last tab on one side.
+    evicted = tabs[0] ?? null;
     tabs = tabs.slice(1);
     panes = { ...panes };
     if (evicted) delete panes[tabKey(evicted)];
@@ -151,7 +158,7 @@ export function openTab(layout: ViewerLayout, next: ViewerTab): ViewerLayout {
 
   const active: [string | null, string | null] = [...layout.active];
   active[layout.focused] = tabKey(next);
-  return settleLayout({ ...layout, tabs, panes, active });
+  return { layout: settleLayout({ ...layout, tabs, panes, active }), evicted };
 }
 
 /** Close a tab. A pane left with nothing closes with it. */
@@ -263,6 +270,23 @@ export function insertionIndexAt(
   if (rects.length === 0) return 0;
   if (!Number.isFinite(clientX) || !rects.some((rect) => rect.width > 0)) return null;
   return rects.filter((rect) => rect.left + rect.width / 2 < clientX).length;
+}
+
+/**
+ * The tab keyboard focus should go to when one is closed.
+ *
+ * The next tab along in the same strip, or the one before it when the last was closed. Null
+ * when that strip is now empty, and the caller has nothing sensible to move to. Without this
+ * the closed button is removed from the page and focus falls back to the document, which
+ * leaves somebody navigating by keyboard at the top with no idea where they were.
+ */
+export function tabToFocusAfterClosing(layout: ViewerLayout, key: string): string | null {
+  const pane = paneOf(layout, key);
+  const inPane = tabsInPane(layout, pane);
+  const at = inPane.findIndex((tab) => tabKey(tab) === key);
+  if (at < 0) return null;
+  const next = inPane[at + 1] ?? inPane[at - 1];
+  return next ? tabKey(next) : null;
 }
 
 /* ── where a dragged tab would land ─────────────────────────────────────── */

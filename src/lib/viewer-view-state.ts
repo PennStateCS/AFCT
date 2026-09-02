@@ -13,6 +13,14 @@
  * view of it, and losing it costs a reader one fit.
  */
 
+/**
+ * The camera: how far in, and where over the machine.
+ *
+ * Its own type because it travels on its own when two panes are linked, without the positions
+ * that the rest of the remembered view carries.
+ */
+export type ViewerViewport = { zoom: number; pan: { x: number; y: number } };
+
 /** Where every state sits, plus the camera looking at it. */
 export type ViewerViewState = {
   /** Bumped when the shape changes, so an old entry is ignored rather than misread. */
@@ -22,6 +30,13 @@ export type ViewerViewState = {
   positions: Record<string, { x: number; y: number }>;
   /** Whether the reader was on the drawn layout or the auto-arranged one. */
   honorPositions: boolean;
+  /**
+   * Whether the reader had moved anything, as opposed to looking at the file as it came.
+   *
+   * Optional so an entry written before this existed still opens: the view is worth more than
+   * the flag, and the worst it costs is an indicator that stays quiet for one session.
+   */
+  modified?: boolean;
 };
 
 const PREFIX = 'afct.viewer.view.';
@@ -45,6 +60,7 @@ function isViewState(value: unknown): value is ViewerViewState {
   if (typeof s.zoom !== 'number' || !Number.isFinite(s.zoom) || s.zoom <= 0) return false;
   if (!isPoint(s.pan)) return false;
   if (typeof s.honorPositions !== 'boolean') return false;
+  if (s.modified !== undefined && typeof s.modified !== 'boolean') return false;
   if (!s.positions || typeof s.positions !== 'object') return false;
   return Object.values(s.positions as Record<string, unknown>).every(isPoint);
 }
