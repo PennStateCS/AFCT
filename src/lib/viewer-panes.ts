@@ -206,6 +206,65 @@ export function moveTabToPane(layout: ViewerLayout, key: string, pane: PaneIndex
   });
 }
 
+/**
+ * Put a tab in a pane, at a place in that pane's strip.
+ *
+ * `before` is the tab it should sit in front of, or null for the end of that strip. The window
+ * keeps one list across both panes and `tabsInPane` filters it, so moving within the global
+ * list is all the per-pane order needs.
+ */
+export function moveTabBefore(
+  layout: ViewerLayout,
+  key: string,
+  before: string | null,
+  pane: PaneIndex,
+): ViewerLayout {
+  const moving = layout.tabs.find((tab) => tabKey(tab) === key);
+  if (!moving || key === before) return layout;
+
+  const rest = layout.tabs.filter((tab) => tabKey(tab) !== key);
+  let at: number;
+  if (before) {
+    at = rest.findIndex((tab) => tabKey(tab) === before);
+    if (at < 0) return layout;
+  } else {
+    // The end of that pane's own tabs, which is not the end of the list when the other pane's
+    // tabs come after them.
+    const last = rest.reduce(
+      (found, tab, i) => (paneOf(layout, tabKey(tab)) === pane ? i : found),
+      -1,
+    );
+    at = last + 1;
+  }
+
+  const tabs = [...rest.slice(0, at), moving, ...rest.slice(at)];
+  const active: [string | null, string | null] = [...layout.active];
+  active[pane] = key;
+  return settleLayout({
+    ...layout,
+    tabs,
+    panes: { ...layout.panes, [key]: pane },
+    active,
+    focused: pane,
+  });
+}
+
+/**
+ * Which gap in a strip a pointer is over, given where each tab is.
+ *
+ * The count of tabs whose middle is left of the pointer, which is the index a drop would
+ * insert at. Null when nothing can be measured: jsdom reports every element as zero-sized, and
+ * an answer derived from that would be arithmetic rather than a place on screen.
+ */
+export function insertionIndexAt(
+  clientX: number,
+  rects: readonly { left: number; width: number }[],
+): number | null {
+  if (rects.length === 0) return 0;
+  if (!Number.isFinite(clientX) || !rects.some((rect) => rect.width > 0)) return null;
+  return rects.filter((rect) => rect.left + rect.width / 2 < clientX).length;
+}
+
 /* ── where a dragged tab would land ─────────────────────────────────────── */
 
 /** What a drop at a given place would do. */

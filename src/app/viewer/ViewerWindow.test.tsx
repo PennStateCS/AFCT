@@ -451,6 +451,122 @@ describe('dragging a tab to one side', () => {
   });
 });
 
+describe('reordering the tabs by dragging them along a strip', () => {
+  const TYPE = 'application/x-afct-viewer-tab';
+  const transfer = (types: string[] = [TYPE]) => ({
+    types,
+    setData: vi.fn(),
+    dropEffect: '',
+    effectAllowed: '',
+  });
+
+  /**
+   * Lay the tabs out, since jsdom does not.
+   *
+   * Each tab button 100 wide from x=0, and the strip starting at x=0. Without this every
+   * element measures zero and the gap the pointer is over is arithmetic over nothing.
+   */
+  const layOutTabs = () =>
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const key = this.getAttribute('data-tab-key');
+      if (key) {
+        const index = [...document.querySelectorAll('[data-tab-key]')].indexOf(this);
+        return {
+          left: index * 100,
+          width: 100,
+          right: index * 100 + 100,
+          top: 0,
+          height: 30,
+        } as DOMRect;
+      }
+      return { left: 0, width: 800, right: 800, top: 0, height: 600 } as DOMRect;
+    });
+
+  const strip = () => screen.getAllByRole('tablist')[0]!;
+  const order = () => screen.getAllByRole('tab').map((t) => t.textContent);
+
+  const dragOverStripAt = (x: number) => {
+    const event = createEvent.dragOver(strip(), { dataTransfer: transfer() });
+    Object.defineProperty(event, 'clientX', { value: x });
+    fireEvent(strip(), event);
+  };
+
+  it('moves a tab to where it was dropped', () => {
+    const rects = layOutTabs();
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')]);
+    expect(order()).toEqual(['a.jff', 'b.jff', 'c.jff']);
+
+    fireEvent.dragStart(screen.getByRole('tab', { name: 'c.jff' }), { dataTransfer: transfer() });
+    // Left of a.jff's middle, so in front of it.
+    dragOverStripAt(20);
+    fireEvent.drop(strip(), { dataTransfer: transfer() });
+
+    expect(order()).toEqual(['c.jff', 'a.jff', 'b.jff']);
+    rects.mockRestore();
+  });
+
+  it('moves one to the end', () => {
+    const rects = layOutTabs();
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')]);
+
+    fireEvent.dragStart(screen.getByRole('tab', { name: 'a.jff' }), { dataTransfer: transfer() });
+    dragOverStripAt(290);
+    fireEvent.drop(strip(), { dataTransfer: transfer() });
+
+    expect(order()).toEqual(['b.jff', 'c.jff', 'a.jff']);
+    rects.mockRestore();
+  });
+
+  it('shows where the tab would go', () => {
+    const rects = layOutTabs();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    fireEvent.dragStart(screen.getByRole('tab', { name: 'b.jff' }), { dataTransfer: transfer() });
+
+    expect(screen.queryByTestId('viewer-tab-insertion')).toBeNull();
+    dragOverStripAt(20);
+    expect(screen.getByTestId('viewer-tab-insertion')).toBeTruthy();
+    rects.mockRestore();
+  });
+
+  it('does not move the machines in the page when the tabs are reordered', () => {
+    // React keeps the same component when a keyed child is reordered, so nothing is rebuilt
+    // either way and a mount count would say nothing here. What reordering does move is the
+    // node: a canvas moved in the DOM drops whatever had keyboard focus inside it and repaints.
+    // So the body renders in the order the machines were first opened, never in tab order.
+    const rects = layOutTabs();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    // Both on screen at some point, so both are mounted and the order is worth comparing.
+    fireEvent.click(screen.getByRole('tab', { name: 'b.jff' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'a.jff' }));
+    const before = screen.getAllByTestId('viewer').map((v) => v.getAttribute('data-src'));
+    expect(before).toHaveLength(2);
+
+    fireEvent.dragStart(screen.getByRole('tab', { name: 'b.jff' }), { dataTransfer: transfer() });
+    dragOverStripAt(20);
+    fireEvent.drop(strip(), { dataTransfer: transfer() });
+
+    expect(order()).toEqual(['b.jff', 'a.jff']);
+    expect(screen.getAllByTestId('viewer').map((v) => v.getAttribute('data-src'))).toEqual(before);
+    rects.mockRestore();
+  });
+
+  it('leaves a drag from somewhere else alone', () => {
+    const rects = layOutTabs();
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    fireEvent.dragStart(screen.getByRole('tab', { name: 'b.jff' }), { dataTransfer: transfer() });
+
+    const event = createEvent.dragOver(strip(), { dataTransfer: transfer(['Files']) });
+    Object.defineProperty(event, 'clientX', { value: 20 });
+    fireEvent(strip(), event);
+
+    expect(screen.queryByTestId('viewer-tab-insertion')).toBeNull();
+    expect(event.defaultPrevented).toBe(false);
+    rects.mockRestore();
+  });
+});
+
 describe('a window split into two panes', () => {
   // Nothing on screen can make a split yet: the drag lands in a later step. What is being
   // checked here is the rendering the split will drive, and the one property everything else

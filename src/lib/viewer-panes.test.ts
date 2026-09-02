@@ -11,6 +11,8 @@ import {
   focusedTab,
   isShowing,
   layoutToSearch,
+  insertionIndexAt,
+  moveTabBefore,
   moveTabToPane,
   openTab,
   paneAtPoint,
@@ -223,6 +225,82 @@ describe('where a dragged tab would land', () => {
     const layout = layoutOf('a.jff', 'b.jff');
     const target = dropZone(850, rect, 1)!;
     expect(names(tabsInPane(applyDrop(layout, key('b.jff'), target), 1))).toEqual(['b.jff']);
+  });
+});
+
+describe('reordering the tabs in a strip', () => {
+  it('puts a tab in front of another', () => {
+    const layout = moveTabBefore(
+      layoutOf('a.jff', 'b.jff', 'c.jff'),
+      key('c.jff'),
+      key('a.jff'),
+      0,
+    );
+    expect(names(tabsInPane(layout, 0))).toEqual(['c.jff', 'a.jff', 'b.jff']);
+  });
+
+  it('puts one at the end when there is nothing to sit in front of', () => {
+    const layout = moveTabBefore(layoutOf('a.jff', 'b.jff', 'c.jff'), key('a.jff'), null, 0);
+    expect(names(tabsInPane(layout, 0))).toEqual(['b.jff', 'c.jff', 'a.jff']);
+  });
+
+  it('does nothing when a tab is dropped in front of itself', () => {
+    const layout = layoutOf('a.jff', 'b.jff');
+    expect(moveTabBefore(layout, key('a.jff'), key('a.jff'), 0)).toBe(layout);
+  });
+
+  it('reorders and changes side in one move', () => {
+    // Dragging a tab from one strip into a place in the other is both at once.
+    const split = splitTabToSide(layoutOf('a.jff', 'b.jff', 'c.jff'), key('c.jff'), 'right');
+    const layout = moveTabBefore(split, key('a.jff'), key('c.jff'), 1);
+    expect(names(tabsInPane(layout, 0))).toEqual(['b.jff']);
+    expect(names(tabsInPane(layout, 1))).toEqual(['a.jff', 'c.jff']);
+  });
+
+  it('lands at the end of its own pane, not the end of the window', () => {
+    // The list spans both panes, so "last" for the left strip is not the last entry in it.
+    const split = splitTabToSide(layoutOf('a.jff', 'b.jff', 'c.jff'), key('c.jff'), 'right');
+    const layout = moveTabBefore(split, key('a.jff'), null, 0);
+    expect(names(tabsInPane(layout, 0))).toEqual(['b.jff', 'a.jff']);
+    expect(names(tabsInPane(layout, 1))).toEqual(['c.jff']);
+  });
+
+  it('shows the tab it moved, and focuses the strip it landed in', () => {
+    const split = splitTabToSide(layoutOf('a.jff', 'b.jff', 'c.jff'), key('c.jff'), 'right');
+    const layout = moveTabBefore(split, key('a.jff'), key('c.jff'), 1);
+    expect(layout.focused).toBe(1);
+    expect(activeTab(layout, 1)?.file).toBe('a.jff');
+  });
+
+  it('ignores a tab, or a neighbour, that is not open', () => {
+    const layout = layoutOf('a.jff', 'b.jff');
+    expect(moveTabBefore(layout, key('gone.jff'), key('a.jff'), 0)).toBe(layout);
+    expect(moveTabBefore(layout, key('a.jff'), key('gone.jff'), 0)).toBe(layout);
+  });
+});
+
+describe('which gap in a strip a pointer is over', () => {
+  const rects = [
+    { left: 0, width: 100 },
+    { left: 100, width: 100 },
+    { left: 200, width: 100 },
+  ];
+
+  it('counts the tabs whose middle the pointer has passed', () => {
+    expect(insertionIndexAt(10, rects)).toBe(0);
+    expect(insertionIndexAt(60, rects)).toBe(1);
+    expect(insertionIndexAt(160, rects)).toBe(2);
+    expect(insertionIndexAt(280, rects)).toBe(3);
+  });
+
+  it('is the first place in an empty strip', () => {
+    expect(insertionIndexAt(10, [])).toBe(0);
+  });
+
+  it('says nothing when nothing can be measured', () => {
+    // Every element is zero-sized in jsdom. Counting midpoints of nothing gives a number, and
+    // a number here would be a place on screen the reader never pointed at.
+    expect(insertionIndexAt(10, [{ left: 0, width: 0 }])).toBeNull();
   });
 });
 

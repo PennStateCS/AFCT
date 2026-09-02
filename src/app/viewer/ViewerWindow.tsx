@@ -15,7 +15,9 @@ import {
   applyDrop,
   closeTab,
   focusedTab,
+  insertionIndexAt,
   isShowing,
+  moveTabBefore,
   moveTabToPane,
   layoutToSearch,
   dropZone,
@@ -115,6 +117,21 @@ export function ViewerWindow({
     [layout],
   );
   const showingKeys = showing.map(tabKey).join('|');
+
+  /**
+   * The order the machines are rendered in, which is not the order of the tabs.
+   *
+   * `opened` is append-only: a key joins it the first time its tab is looked at and never
+   * moves. Rendering the body in that order means neither dragging a tab to the other side nor
+   * dragging it along its own strip moves a single node in the DOM, so nothing is unmounted
+   * and nothing inside a machine loses keyboard focus. The strips show the tab order; the body
+   * shows whatever was mounted first, which nobody can see anyway.
+   */
+  const mountOrder = useMemo(() => {
+    const keys = [...opened];
+    for (const tab of showing) if (!keys.includes(tabKey(tab))) keys.push(tabKey(tab));
+    return keys;
+  }, [opened, showing]);
 
   useEffect(() => {
     if (!showingKeys) return;
@@ -219,6 +236,10 @@ export function ViewerWindow({
   const draggingKey = useRef<string | null>(null);
   /** Where a drop would land right now, which is what the outline draws. */
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  /** Where a drop into a strip would put the tab, which is what the caret draws. */
+  const [insertion, setInsertion] = useState<{ pane: PaneIndex; index: number; x: number } | null>(
+    null,
+  );
   const focusFromPoint = (clientX: number) => {
     const rect = bodyRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -240,6 +261,55 @@ export function ViewerWindow({
     onDragEnd: () => {
       draggingKey.current = null;
       setDropTarget(null);
+      setInsertion(null);
+    },
+  });
+
+  /**
+   * Dropping a tab into a strip, which both reorders it and decides which side it is on.
+   *
+   * The gap is worked out from where the tabs actually are, so it follows whatever the strip
+   * has done with them: they truncate, and the strip scrolls when there are many.
+   */
+  const stripDragProps = (pane: PaneIndex) => ({
+    onDragOver: (event: React.DragEvent<HTMLDivElement>) => {
+      if (!draggingKey.current || !event.dataTransfer.types.includes(TAB_DRAG_TYPE)) return;
+      // Without this the browser refuses the drop and `onDrop` never fires at all.
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const strip = event.currentTarget;
+      const tabs = [...strip.querySelectorAll('[data-tab-key]')];
+      const rects = tabs.map((tab) => tab.getBoundingClientRect());
+      const index = insertionIndexAt(event.clientX, rects);
+      if (index === null) {
+        setInsertion(null);
+        return;
+      }
+      // Against the leading edge of the tab it would sit in front of, or the trailing edge of
+      // the last one. Relative to the strip's content, so it stays put when the strip scrolls.
+      const stripRect = strip.getBoundingClientRect();
+      const edge = rects[index]?.left ?? rects[rects.length - 1]?.right ?? stripRect.left;
+      setInsertion({ pane, index, x: edge - stripRect.left + strip.scrollLeft });
+      // A tab dropped into a strip lands in a strip, never as a split.
+      setDropTarget(null);
+    },
+    onDragLeave: (event: React.DragEvent<HTMLDivElement>) => {
+      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+      setInsertion(null);
+    },
+    onDrop: (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const key = draggingKey.current;
+      const at = insertion;
+      draggingKey.current = null;
+      setInsertion(null);
+      setDropTarget(null);
+      if (!key || !at) return;
+      setLayout((current) => {
+        const inPane = tabsInPane(current, at.pane).filter((tab) => tabKey(tab) !== key);
+        const before = inPane[at.index] ?? null;
+        return moveTabBefore(current, key, before ? tabKey(before) : null, at.pane);
+      });
     },
   });
 
@@ -347,7 +417,7 @@ export function ViewerWindow({
             <div
               key={pane}
               className={cn(
-                'flex min-w-0 items-end gap-1 overflow-x-auto px-3 pt-2',
+                'relative flex min-w-0 items-end gap-1 overflow-x-auto px-3 pt-2',
                 panes === 1 ? 'flex-1' : 'w-1/2',
                 // The divider between the two halves, carried by the left strip so it lines
                 // up with the one down the body below it.
@@ -359,7 +429,18 @@ export function ViewerWindow({
               )}
               role="tablist"
               aria-label={panes === 1 ? 'Open files' : PANE_NAMES[pane]}
+              {...stripDragProps(pane)}
             >
+              {/* Where the tab would go. Drawn in the strip rather than between the tabs so
+                  nothing moves under the pointer while the reader is aiming at a gap. */}
+              {insertion?.pane === pane ? (
+                <div
+                  className="bg-primary pointer-events-none absolute bottom-0 z-10 w-0.5"
+                  style={{ left: insertion.x, top: '0.5rem' }}
+                  aria-hidden="true"
+                  data-testid="viewer-tab-insertion"
+                />
+              ) : null}
               {tabsInPane(layout, pane).map((tab) => {
                 const selected = isShowing(layout, tab);
                 return (
@@ -431,8 +512,9 @@ export function ViewerWindow({
           data-testid="viewer-body"
           {...bodyDragProps}
         >
-          {layout.tabs
-            .filter((tab) => opened.includes(tabKey(tab)) || isShowing(layout, tab))
+          {mountOrder
+            .map((key) => layout.tabs.find((tab) => tabKey(tab) === key))
+            .filter((tab) => tab !== undefined)
             .map((tab) => {
               const pane = paneOf(layout, tabKey(tab));
               const visible = isShowing(layout, tab);
