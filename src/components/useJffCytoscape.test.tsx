@@ -811,6 +811,35 @@ describe('remembering the view across a refresh', () => {
     expect(lastCy().byId('0')?.position()).toEqual({ x: 500, y: 500 });
   });
 
+  it('puts the view back when the graph is rebuilt, not only on the first load', async () => {
+    // The graph is rebuilt for more than a refresh: the theme changes, and React replays
+    // effects on mount in development, which loads the machine twice. Restoring on the first
+    // load and never again left the rebuild at the plain fit, and the write that follows a
+    // load then put that over the entry, so a refresh came back to nothing remembered.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 3,
+        pan: { x: 42, y: -7 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+      }),
+    );
+
+    const { rerender } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+    expect(lastCy().panPosition).toEqual({ x: 42, y: -7 });
+    expect(lastCy().byId('0')?.position()).toEqual({ x: 500, y: 500 });
+    // And the entry still says where the reader was, rather than where the rebuild fitted.
+    expect(saved()?.zoom).toBe(3);
+  });
+
   it('does not put the old positions back when the layout is switched', async () => {
     // The regression this guards: the restore ran at the end of every load, and switching to
     // Auto-arranged is a load, so the layout engine placed the states and the remembered

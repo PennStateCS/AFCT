@@ -624,13 +624,13 @@ export function useJffCytoscape({
    * not have. The caller then opens the file the ordinary way.
    */
   /**
-   * The remembered view belongs to the first load and nothing after it.
+   * Skip the next restore, once.
    *
-   * Switching between the drawn and the auto-arranged layout rebuilds the graph, and without
-   * this the restore ran again at the end of that rebuild and put the old positions straight
-   * back over the layout engine's. Choosing Auto-arranged appeared to do nothing at all.
+   * Reset throws the remembered view away and rebuilds, but a debounced write from a drag a
+   * moment earlier can still be in flight and would put the entry back between the two. This
+   * says "the rebuild you are about to do was asked for, do not restore anything into it".
    */
-  const hasRestored = useRef(false);
+  const skipRestore = useRef(false);
 
   /**
    * Bumped to rebuild the graph when nothing `load` depends on has changed.
@@ -642,9 +642,21 @@ export function useJffCytoscape({
 
   const restoreSavedView = useCallback(
     (cy: any): boolean => {
-      const saved = savedView;
-      if (!saved || hasRestored.current) return false;
-      hasRestored.current = true;
+      if (skipRestore.current) {
+        skipRestore.current = false;
+        return false;
+      }
+      // Read now rather than at mount, because the graph is rebuilt for more reasons than a
+      // refresh: React replays effects in development, and switching the theme rebuilds too.
+      // Restoring only on the very first load meant the second one landed on the plain fit and
+      // then wrote that over the reader's remembered view, so a refresh lost the zoom and the
+      // positions in development and after any theme change.
+      const saved = readViewState(viewStateKeyRef.current);
+      if (!saved) return false;
+      // The positions belong to the layout they were saved from. Switching between the drawn
+      // and the auto-arranged layout is a rebuild too, and dropping the other layout's
+      // positions over the engine's work made Auto-arranged look like it did nothing.
+      if (saved.honorPositions !== honorPositionsRef.current) return false;
       try {
         const ids = cy.nodes().map((node: any) => node.id());
         if (!viewStateFits(saved, ids)) return false;
@@ -661,8 +673,8 @@ export function useJffCytoscape({
         return false;
       }
     },
-    // Read once at mount and never replaced, so this is built once.
-    [savedView],
+    // Refs only, so this is built once.
+    [],
   );
 
   const load = useMemo(
@@ -1135,8 +1147,8 @@ export function useJffCytoscape({
               setSettled(true);
               setPhase('ready');
               // Write the opening view down now, so a reader who changes nothing and refreshes
-              // still comes back to the same picture. Nothing above this can lose the saved
-              // view: it was read into `savedView` before the first render.
+              // still comes back to the same picture. Whatever the step above decided is
+              // already on the graph, so this records that rather than overwriting it.
               rememberView();
               // And, if this pane is driving a linked one, where it ended up. The effect that
               // reports when the link is switched on cannot: at mount there is no graph yet.
@@ -1576,8 +1588,9 @@ export function useJffCytoscape({
      * is being discarded is the reader's own rearranging of the drawing.
      */
     resetMachine: () => {
-      // The rebuild below will not put the discarded arrangement back: `hasRestored` is
-      // already set, since restoring happens on the first load and only there.
+      // The rebuild below opens the file as its author drew it, rather than restoring what is
+      // being thrown away here.
+      skipRestore.current = true;
       clearViewState(viewStateKeyRef.current);
       setRestoredModified(false);
       // The rebuild below keeps the history now, since it is the same file. Reset is the one
