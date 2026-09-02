@@ -29,6 +29,44 @@ export const NODE_DIAMETER = 58;
 export const STATE_BORDER_WIDTH = 2;
 export const FINAL_STATE_BORDER_WIDTH = 6;
 
+/** The size a state's name is drawn at when it fits, which is nearly always. */
+export const STATE_FONT_SIZE = 16;
+
+/**
+ * The smallest a state's name is allowed to shrink to.
+ *
+ * Past this the name stops being readable and shrinking it further only trades one unreadable
+ * label for another, so a very long name is allowed to overflow the circle instead. The
+ * properties panel is where a name that long is meant to be read.
+ */
+export const STATE_FONT_MIN_SIZE = 9;
+
+/**
+ * The size to draw a state's name at so it stays inside the circle.
+ *
+ * States are a fixed 58px across, the way JFLAP draws them, so a name longer than about five
+ * characters ran out over the edge and into the machine around it. Renaming a state from the
+ * properties panel made that ordinary rather than rare: "start" fits, "accepting" does not.
+ *
+ * The width of a string is estimated rather than measured. Measuring means a canvas context and
+ * a font that has finished loading, and this is called for every state on every restyle, while
+ * being wrong by a few percent costs nothing here: the answer is a font size for a label that
+ * has a couple of pixels of slack either side. `WIDTH_PER_EM` is the average advance of a
+ * digit-and-letter mix in the UI sans face, which is what state names are.
+ */
+export function stateFontSize(label: string, diameter: number = NODE_DIAMETER): number {
+  const text = String(label ?? '');
+  if (text.length === 0) return STATE_FONT_SIZE;
+  const WIDTH_PER_EM = 0.6;
+  // The chord across the middle of the circle, less the border it would sit on and a little
+  // air either side. Not the full diameter: a label that touches the circle reads as a mistake.
+  const usable = diameter - 2 * STATE_BORDER_WIDTH - 8;
+  const longestLine = Math.max(...text.split('\n').map((line) => line.length));
+  const fits = usable / (longestLine * WIDTH_PER_EM);
+  if (fits >= STATE_FONT_SIZE) return STATE_FONT_SIZE;
+  return Math.max(STATE_FONT_MIN_SIZE, Math.floor(fits));
+}
+
 /** How far a transition label sits off its edge, in pixels. */
 export const EDGE_LABEL_GAP = 12;
 

@@ -319,6 +319,7 @@ vi.mock('cytoscape-svg', () => ({ default: () => {} }));
 
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
 import { describeState } from '@/lib/jflap-parse';
+import { STATE_FONT_SIZE } from '@/lib/jflap-layout';
 import type { ViewerViewState } from '@/lib/viewer-view-state';
 
 /* ─────────────────────────────── the fixture ─────────────────────────────── */
@@ -994,6 +995,24 @@ describe('remembering the view across a refresh', () => {
     const { api } = renderViewer();
     await waitFor(() => expect(api().type).toBe('fa'));
     expect(window.sessionStorage.length).toBe(0);
+  });
+});
+
+describe('the size a state name is drawn at', () => {
+  const nodeFontSize = (label: string) => {
+    const rule = lastCy().styleSheet.find((r) => r.selector === 'node');
+    const size = rule?.style['font-size'] as ((node: unknown) => number) | undefined;
+    return size?.({ data: () => label });
+  };
+
+  it('asks per state rather than fixing one size for all of them', async () => {
+    // Cytoscape re-runs a function mapper when the element's data changes, which is what makes
+    // a state renamed in the properties panel come back at a size that fits.
+    renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    expect(nodeFontSize('q0')).toBe(STATE_FONT_SIZE);
+    expect(nodeFontSize('accepting')).toBeLessThan(STATE_FONT_SIZE);
   });
 });
 

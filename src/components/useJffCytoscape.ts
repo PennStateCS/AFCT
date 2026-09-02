@@ -13,6 +13,7 @@ import {
   LABEL_LINE_HEIGHT,
   LOOP_REACH,
   NODE_DIAMETER,
+  stateFontSize,
   NOTE_FONT_SIZE,
   NOTE_MAX_WIDTH,
   START_MARKER_SIZE,
@@ -923,7 +924,10 @@ export function useJffCytoscape({
                 'border-width': STATE_BORDER_WIDTH,
                 label: 'data(label)',
                 'font-family': uiFontFamily,
-                'font-size': 16,
+                // Shrinks to fit rather than running out over the circle. A function of the
+                // element, so a state renamed from the properties panel is re-measured: setting
+                // `data` marks the style dirty and cytoscape asks again.
+                'font-size': (node: any) => stateFontSize(String(node.data('label') ?? '')),
                 color: STATE_TEXT,
                 'text-valign': 'center',
                 'text-halign': 'center',
