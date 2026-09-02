@@ -518,7 +518,7 @@ export function ViewerWindow({
 
         {/* One strip per pane, side by side. Tabs carry the white of the menu bar above and
             the grey of the toolbar below, so the selected one reads as the label of what is
-            on screen. */}
+            on screen, and the strip behind them is quieter than either. */}
         <div className="bg-card flex shrink-0">
           {(panes === 1 ? ([0] as const) : ([0, 1] as const)).map((pane) => (
             <div
@@ -529,10 +529,11 @@ export function ViewerWindow({
                 // The divider between the two halves, carried by the left strip so it lines
                 // up with the one down the body below it.
                 panes === 2 && pane === 0 && 'border-border border-r',
-                // The half that is not being acted on sits back. A background change rather
-                // than dimmed labels: the tab names are already the quietest text here and
-                // fading them further would put them under the contrast floor.
-                panes === 2 && pane !== layout.focused && 'bg-muted/60',
+                // The same fill under every strip, split or not. It used to mark the half the
+                // menus were not acting on, which made a strip's colour mean one thing in a
+                // split window and nothing at all in a single one. The bar over the file the
+                // menus act on says that instead, and says it the same way in both.
+                'bg-muted/60',
               )}
               role="tablist"
               aria-label={panes === 1 ? 'Open files' : PANE_NAMES[pane]}
@@ -558,13 +559,13 @@ export function ViewerWindow({
                       selected
                         ? 'bg-background border-b-0'
                         : 'bg-card text-muted-foreground hover:bg-muted border-transparent',
-                      // Which half the menu bar is acting on. A bar along the top of that
-                      // pane's open file, the way an editor marks its active group: with two
-                      // machines on screen, "which one does Reset mean" needs an answer that
-                      // is not a guess. Drawn rather than bordered so nothing shifts by a
-                      // pixel when focus moves, and only when the window is actually split.
-                      panes === 2 &&
-                        selected &&
+                      // The file the menus are acting on. A bar along the top of it, the way an
+                      // editor marks its active group. With two machines on screen it answers
+                      // "which one does Reset mean", which is otherwise a guess; with one it is
+                      // the same mark on the same thing rather than a decoration that appears
+                      // out of nowhere when the window is split. Drawn rather than bordered so
+                      // nothing shifts by a pixel when focus moves.
+                      selected &&
                         pane === layout.focused &&
                         "after:bg-primary after:absolute after:inset-x-0 after:top-0 after:h-[3px] after:rounded-t-md after:content-['']",
                     )}
