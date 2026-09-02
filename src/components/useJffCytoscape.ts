@@ -256,6 +256,35 @@ type ArrangementSnapshot = {
   honorPositions: boolean;
 };
 
+/**
+ * The pan that keeps whatever was in the middle of the viewport in the middle of it.
+ *
+ * Resizing changes how much canvas there is, not what the reader is looking at. Recentring the
+ * whole machine instead moves them somewhere they never asked to be: somebody examining one
+ * corner of a large automaton drags the window, or splits the pane, and finds themselves back
+ * at the middle of a machine they had deliberately scrolled away from.
+ *
+ * Cytoscape's pan is in rendered pixels and its zoom scales model units, so the model point at
+ * the centre is `(size / 2 - pan) / zoom`. Putting the same point back at the centre of the
+ * new size is that solved the other way round. Zoom is untouched.
+ */
+function panKeepingCentre(
+  before: { width: number; height: number },
+  after: { width: number; height: number },
+  zoom: number,
+  pan: { x: number; y: number },
+): { x: number; y: number } | null {
+  if (!(zoom > 0) || !isFinitePoint(pan)) return null;
+  if (![before.width, before.height, after.width, after.height].every((n) => Number.isFinite(n))) {
+    return null;
+  }
+  const centre = {
+    x: (before.width / 2 - pan.x) / zoom,
+    y: (before.height / 2 - pan.y) / zoom,
+  };
+  return { x: after.width / 2 - centre.x * zoom, y: after.height / 2 - centre.y * zoom };
+}
+
 /** A point cytoscape will accept: both halves present and real numbers. */
 function isFinitePoint(value: any): value is { x: number; y: number } {
   return !!value && Number.isFinite(value.x) && Number.isFinite(value.y);
@@ -398,6 +427,22 @@ export function useJffCytoscape({
   const [redoDepth, setRedoDepth] = useState(0);
   const undoStack = useRef<ArrangementSnapshot[]>([]);
   const redoStack = useRef<ArrangementSnapshot[]>([]);
+  /**
+   * An arrangement waiting for the graph to be rebuilt before it can be applied.
+   *
+   * Stepping across a layout switch changes `honorPositions`, which `load` depends on, so the
+   * graph is torn down and built again. Applying the snapshot before that happened put the
+   * positions onto a graph that was about to be discarded, and the step appeared to restore
+   * the layout while silently losing every state the reader had moved under it. The camera
+   * rides along for the same reason: the rebuild refits, and an undo should not move the view.
+   */
+  /** The file the graph currently holds, so a rebuild of the same one is recognised. */
+  const loadedSrc = useRef<string | null>(null);
+  const pendingArrangement = useRef<{
+    snapshot: ArrangementSnapshot;
+    zoom: number;
+    pan: { x: number; y: number };
+  } | null>(null);
 
   // Customization variables
   const FIT_PADDING = 80;
@@ -513,10 +558,18 @@ export function useJffCytoscape({
         setSelectedEdge(null);
         // A different file is a different machine. Keeping the old history would let undo
         // apply one machine's positions to another's states.
-        undoStack.current = [];
-        redoStack.current = [];
-        setUndoDepth(0);
-        setRedoDepth(0);
+        //
+        // Only for a different file, though. Switching between the drawn and the auto-arranged
+        // layout rebuilds this same machine, and clearing here made the switch itself
+        // impossible to undo: the step that recorded it was thrown away by the rebuild it
+        // caused. Reset clears the history itself, since there it is the point.
+        if (loadedSrc.current !== src) {
+          loadedSrc.current = src;
+          undoStack.current = [];
+          redoStack.current = [];
+          setUndoDepth(0);
+          setRedoDepth(0);
+        }
         const elements = toElements(parsed, epsSymbol, honorPositions);
 
         if (!containerRef.current) {
@@ -901,6 +954,17 @@ export function useJffCytoscape({
               await fitAndResize();
               const current = cyRef.current;
               if (!current) return;
+              // An undo that crossed a layout switch, waiting for this rebuild. It wins over
+              // everything else here: it is the reader asking for a particular arrangement
+              // back, and for the view not to move while they get it.
+              const pending = pendingArrangement.current;
+              if (pending) {
+                pendingArrangement.current = null;
+                applyArrangement(current, pending.snapshot);
+                current.zoom(pending.zoom);
+                current.pan(pending.pan);
+                return;
+              }
               // A remembered view wins over both, because it is where the reader was.
               if (restoreSavedView(current)) return;
               if (initialZoomRef.current !== 'actual') return;
@@ -954,8 +1018,17 @@ export function useJffCytoscape({
           const current = cyRef.current;
           if (!current) return;
           try {
+            const before = { width: current.width(), height: current.height() };
+            const zoom = current.zoom();
+            const pan = { ...current.pan() };
             current.resize();
-            current.center(current.elements());
+            const next = panKeepingCentre(
+              before,
+              { width: current.width(), height: current.height() },
+              zoom,
+              pan,
+            );
+            if (next) current.pan(next);
           } catch {
             // A graph mid-teardown. Nothing to resize.
           }
@@ -1115,10 +1188,18 @@ export function useJffCytoscape({
     const current = readArrangement(cy, honorPositions);
     if (current) to.current.push(current);
 
-    // The layout first: switching it re-runs the engine and would otherwise overwrite the
-    // positions restored below.
-    if (snapshot.honorPositions !== honorPositions) setHonorPositions(snapshot.honorPositions);
-    applyArrangement(cy, snapshot);
+    if (snapshot.honorPositions !== honorPositions) {
+      // Switching the layout rebuilds the graph, so the positions cannot be put back on this
+      // one: they are handed to the load that is about to run instead.
+      try {
+        pendingArrangement.current = { snapshot, zoom: cy.zoom(), pan: { ...cy.pan() } };
+      } catch {
+        pendingArrangement.current = { snapshot, zoom: 1, pan: { x: 0, y: 0 } };
+      }
+      setHonorPositions(snapshot.honorPositions);
+    } else {
+      applyArrangement(cy, snapshot);
+    }
 
     setUndoDepth(undoStack.current.length);
     setRedoDepth(redoStack.current.length);
@@ -1320,9 +1401,14 @@ export function useJffCytoscape({
       // The rebuild below will not put the discarded arrangement back: `hasRestored` is
       // already set, since restoring happens on the first load and only there.
       clearViewState(viewStateKeyRef.current);
+      // The rebuild below keeps the history now, since it is the same file. Reset is the one
+      // place that means to throw it away.
+      undoStack.current = [];
+      redoStack.current = [];
+      setUndoDepth(0);
+      setRedoDepth(0);
       setHonorPositions(honorPositionsDefault);
-      // The rebuild does the rest: reading the file again puts every state back where its
-      // author had it, and clearing the undo history is already part of loading a machine.
+      // The rebuild puts every state back where its author had it.
       setReloadNonce((n) => n + 1);
     },
     zoomIn,

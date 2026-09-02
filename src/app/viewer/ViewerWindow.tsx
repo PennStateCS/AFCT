@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ import {
   paneOf,
   selectTab,
   splitTabToSide,
+  tabToFocusAfterClosing,
   tabsInPane,
   type DropTarget,
   type PaneIndex,
@@ -94,6 +95,12 @@ export function ViewerWindow({
   /** Properties for the tabs the window opened with, loaded on the server. */
   initialProperties: Record<string, ViewerProperties | null>;
 }) {
+  // Unique per window, so the tab and panel ids below cannot collide with anything else on
+  // the page and are stable across renders.
+  const ids = useId();
+  const tabId = (key: string) => `${ids}tab-${key}`;
+  const panelId = (key: string) => `${ids}panel-${key}`;
+
   const [layout, setLayout] = useState(initialLayout);
   const [properties, setProperties] =
     useState<Record<string, ViewerProperties | null>>(initialProperties);
@@ -107,6 +114,11 @@ export function ViewerWindow({
    * files, and the audit trail from recording a dozen views nobody made.
    */
   const [opened, setOpened] = useState<string[]>([]);
+
+  /** Put the keyboard on a tab button, wherever in the strips it now is. */
+  const focusTab = (key: string) => {
+    document.querySelector<HTMLElement>(`[data-tab-key="${CSS.escape(key)}"]`)?.focus();
+  };
 
   const panes = paneCount(layout);
   const focused = focusedTab(layout);
@@ -144,8 +156,11 @@ export function ViewerWindow({
 
   // The URL follows the layout, so a refresh restores this set and the link can be handed on.
   useEffect(() => {
-    if (layout.tabs.length === 0) return;
-    window.history.replaceState(null, '', `?${layoutToSearch(layout)}`);
+    // Closing the last tab clears it rather than leaving it alone. The link still named the
+    // file that was just closed, so a refresh reopened it, which also fetched a student's
+    // work and recorded a view of it that nobody asked for.
+    const search = layout.tabs.length === 0 ? '' : `?${layoutToSearch(layout)}`;
+    window.history.replaceState(null, '', `${window.location.pathname}${search}`);
   }, [layout]);
 
   /**
@@ -359,20 +374,60 @@ export function ViewerWindow({
     setFocusAfterMove(key);
   };
 
-  /** A tab to put keyboard focus on once it has been re-rendered into its new strip. */
+  /**
+   * A tab to put keyboard focus on once the strips have been re-rendered.
+   *
+   * Used after a move, where the button is unmounted from one strip and mounted in the other,
+   * and after a close, where it is removed outright. Either way focus would otherwise fall
+   * back to the document and leave somebody navigating by keyboard at the top of the page.
+   */
   const [focusAfterMove, setFocusAfterMove] = useState<string | null>(null);
   useEffect(() => {
     if (!focusAfterMove) return;
-    const button = document.querySelector<HTMLElement>(
-      `[data-tab-key="${CSS.escape(focusAfterMove)}"]`,
-    );
-    button?.focus();
+    focusTab(focusAfterMove);
     setFocusAfterMove(null);
   }, [focusAfterMove, layout]);
 
+  /**
+   * Arrow, Home and End move within one strip, as the tabs pattern expects.
+   *
+   * Focus only, not selection: each tab holds a whole machine, and stepping across four of
+   * them to reach the fifth would build and throw away three graphs on the way. Enter or Space
+   * on the button selects, which is what it already did.
+   */
+  const onTabKeyDown = (event: React.KeyboardEvent, pane: PaneIndex, key: string) => {
+    const inPane = tabsInPane(layout, pane);
+    const at = inPane.findIndex((tab) => tabKey(tab) === key);
+    if (at < 0 || inPane.length === 0) return;
+    let next: number;
+    switch (event.key) {
+      case 'ArrowRight':
+        next = (at + 1) % inPane.length;
+        break;
+      case 'ArrowLeft':
+        next = (at - 1 + inPane.length) % inPane.length;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = inPane.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    const target = inPane[next];
+    if (target) focusTab(tabKey(target));
+  };
+
   const close = (tab: ViewerTab) => {
     const key = tabKey(tab);
+    // Worked out before the tab goes, since afterwards there is no place in the strip to
+    // count from.
+    const neighbour = tabToFocusAfterClosing(layout, key);
     setLayout((current) => closeTab(current, key));
+    if (neighbour) setFocusAfterMove(neighbour);
     // Closing already unmounts it, since it leaves the tab list. This just keeps the list
     // from accumulating files nobody has open any more.
     setOpened((current) => current.filter((k) => k !== key));
@@ -465,9 +520,16 @@ export function ViewerWindow({
                     <button
                       type="button"
                       role="tab"
+                      id={tabId(tabKey(tab))}
                       aria-selected={selected}
+                      aria-controls={panelId(tabKey(tab))}
+                      // Roving: one stop per strip in the Tab sequence, and the arrows move
+                      // between them. Tabbing through a dozen open files to reach the toolbar
+                      // is not navigation.
+                      tabIndex={selected ? 0 : -1}
                       data-tab-key={tabKey(tab)}
                       {...dragProps(tab)}
+                      onKeyDown={(event) => onTabKeyDown(event, pane, tabKey(tab))}
                       onClick={() => setLayout((current) => selectTab(current, tabKey(tab)))}
                       className="min-w-0 truncate px-3 py-1.5 text-sm font-semibold"
                       title={tab.title}
@@ -479,6 +541,10 @@ export function ViewerWindow({
                       size="sm"
                       variant="ghost"
                       className="h-5 w-5 shrink-0 p-0"
+                      // In the Tab sequence only for the tab on screen, so tabbing out of a
+                      // strip does not walk through a close button for every open file. The
+                      // arrows reach the others, and their close buttons with them.
+                      tabIndex={selected ? 0 : -1}
                       onClick={() => close(tab)}
                       aria-label={`Close ${tab.name}`}
                     >
@@ -521,6 +587,9 @@ export function ViewerWindow({
               return (
                 <div
                   key={tabKey(tab)}
+                  role="tabpanel"
+                  id={panelId(tabKey(tab))}
+                  aria-labelledby={tabId(tabKey(tab))}
                   className={cn('absolute', paneRectClass(pane, panes), !visible && 'invisible')}
                   // Out of the accessibility tree and out of the tab order while hidden, so a
                   // reader is not walked through a dozen machines they cannot see.

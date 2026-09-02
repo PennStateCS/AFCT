@@ -265,6 +265,23 @@ export function insertionIndexAt(
   return rects.filter((rect) => rect.left + rect.width / 2 < clientX).length;
 }
 
+/**
+ * The tab keyboard focus should go to when one is closed.
+ *
+ * The next tab along in the same strip, or the one before it when the last was closed. Null
+ * when that strip is now empty, and the caller has nothing sensible to move to. Without this
+ * the closed button is removed from the page and focus falls back to the document, which
+ * leaves somebody navigating by keyboard at the top with no idea where they were.
+ */
+export function tabToFocusAfterClosing(layout: ViewerLayout, key: string): string | null {
+  const pane = paneOf(layout, key);
+  const inPane = tabsInPane(layout, pane);
+  const at = inPane.findIndex((tab) => tabKey(tab) === key);
+  if (at < 0) return null;
+  const next = inPane[at + 1] ?? inPane[at - 1];
+  return next ? tabKey(next) : null;
+}
+
 /* ── where a dragged tab would land ─────────────────────────────────────── */
 
 /** What a drop at a given place would do. */

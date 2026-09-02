@@ -1109,7 +1109,9 @@ describe('the way to the standalone window', () => {
     // Otherwise the reader has to dismiss a panel showing the same machine before they can
     // use the window they just asked for.
     const onOpenChange = vi.fn();
-    vi.stubGlobal('open', vi.fn());
+    // A real `window.open` returns the window it opened, or null when the browser blocked it.
+    // Returning nothing stood for "blocked", which is now a case the button handles.
+    vi.stubGlobal('open', vi.fn(() => ({ focus: vi.fn() })));
     render(
       <JffViewerDialog
         open

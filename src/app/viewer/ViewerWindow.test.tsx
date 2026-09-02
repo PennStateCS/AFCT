@@ -140,6 +140,16 @@ describe('the tab strip', () => {
     expect(showing()).toContain('a.jff');
   });
 
+  it('clears the link when the last tab is closed', () => {
+    // It still named the file that was just closed, so a refresh reopened it: a student's
+    // work fetched, and a view of it recorded, that nobody asked for.
+    renderWindow([tab('a.jff')]);
+    expect(window.location.search).toContain('a.jff');
+
+    fireEvent.click(screen.getByLabelText('Close a.jff'));
+    expect(window.location.search).toBe('');
+  });
+
   it('says so plainly when the last tab is closed', () => {
     renderWindow([tab('a.jff')]);
     fireEvent.click(screen.getByLabelText('Close a.jff'));
@@ -741,5 +751,99 @@ describe('splitting without a mouse', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'a.jff' }));
     expect(screen.getByRole('status').textContent).toBe('The menu applies to the left pane.');
+  });
+});
+
+describe('the tab strip as a tabs widget', () => {
+  const tabs = () => screen.getAllByRole('tab');
+  const byName = (name: string) => screen.getByRole('tab', { name });
+
+  it('puts one stop per strip in the Tab sequence', () => {
+    // Tabbing through a dozen open files to reach the toolbar is not navigation. The arrows
+    // reach the rest.
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')], 1);
+    expect(tabs().map((t) => t.getAttribute('tabindex'))).toEqual(['-1', '0', '-1']);
+  });
+
+  it('moves along the strip with the arrows, and wraps', () => {
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')]);
+    byName('a.jff').focus();
+
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+    expect(document.activeElement?.textContent).toBe('b.jff');
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    expect(document.activeElement?.textContent).toBe('a.jff');
+    // Wrapping in both directions, as the pattern expects.
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowLeft' });
+    expect(document.activeElement?.textContent).toBe('c.jff');
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+    expect(document.activeElement?.textContent).toBe('a.jff');
+  });
+
+  it('jumps to the ends with Home and End', () => {
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')], 1);
+    byName('b.jff').focus();
+
+    fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    expect(document.activeElement?.textContent).toBe('c.jff');
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement?.textContent).toBe('a.jff');
+  });
+
+  it('moves focus without switching machines, since each tab is a whole graph', () => {
+    // Automatic activation would build and discard a graph for every tab crossed on the way
+    // to the one somebody wanted.
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    byName('a.jff').focus();
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowRight' });
+
+    expect(byName('a.jff').getAttribute('aria-selected')).toBe('true');
+    expect(showing()).toContain('a.jff');
+  });
+
+  it('says which machine each tab controls, and which tab names each machine', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')]);
+    const panel = screen.getAllByRole('tabpanel')[0]!;
+    const controls = byName('a.jff').getAttribute('aria-controls');
+    expect(controls).toBe(panel.getAttribute('id'));
+    expect(panel.getAttribute('aria-labelledby')).toBe(byName('a.jff').getAttribute('id'));
+  });
+
+  it('keeps the keyboard in the strip when a tab is closed', () => {
+    // The button goes with the tab, so without this focus falls back to the document and
+    // somebody navigating by keyboard is returned to the top of the page.
+    renderWindow([tab('a.jff'), tab('b.jff'), tab('c.jff')], 1);
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+    expect(document.activeElement?.textContent).toBe('c.jff');
+  });
+
+  it('falls back to the tab before it when the last one is closed', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')], 1);
+    fireEvent.click(screen.getByLabelText('Close b.jff'));
+    expect(document.activeElement?.textContent).toBe('a.jff');
+  });
+
+  it('keeps the arrows inside one strip when the window is split', () => {
+    render(
+      <ViewerWindow
+        initialLayout={{
+          tabs: [tab('a.jff'), tab('b.jff'), tab('c.jff')],
+          panes: { 'submissions:c.jff': 1 },
+          active: ['submissions:a.jff', 'submissions:c.jff'],
+          focused: 0,
+        }}
+        initialProperties={{}}
+      />,
+    );
+    byName('a.jff').focus();
+    fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    // c.jff is in the other strip, which is its own tablist.
+    expect(document.activeElement?.textContent).toBe('b.jff');
+  });
+
+  it('keeps the close button out of the way of tabs it does not belong to', () => {
+    renderWindow([tab('a.jff'), tab('b.jff')], 0);
+    const closers = screen.getAllByRole('button', { name: /^Close / });
+    expect(closers.map((c) => c.getAttribute('tabindex'))).toEqual(['0', '-1']);
   });
 });

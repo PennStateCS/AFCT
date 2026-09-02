@@ -213,7 +213,10 @@ class FakeCy {
   destroy() {
     this.destroyed = true;
   }
-  resize() {}
+  resize() {
+    this.viewWidth = this.containerWidth;
+    this.viewHeight = this.containerHeight;
+  }
   centerCalls = 0;
   center() {
     this.centerCalls += 1;
@@ -221,6 +224,24 @@ class FakeCy {
   animations: Array<{ zoom: number }> = [];
   animate(opts: { zoom: number }) {
     this.animations.push(opts);
+  }
+  /**
+   * The size cytoscape thinks it has, and the size its container actually is.
+   *
+   * Two of them because that is how the real thing behaves: `width()` answers from a cached
+   * measurement and only `resize()` goes back to the DOM. Collapsing them into one would let a
+   * resize handler read the new size before it asked for it, which is exactly the mistake the
+   * code under test must not make.
+   */
+  containerWidth = 800;
+  containerHeight = 600;
+  viewWidth = 800;
+  viewHeight = 600;
+  width() {
+    return this.viewWidth;
+  }
+  height() {
+    return this.viewHeight;
   }
   zoomLevel = 1;
   /** A getter and a setter on one name, as cytoscape's is. */
@@ -913,13 +934,123 @@ describe('keeping the canvas in step with its container', () => {
     expect(lastCy().fitCalls).toBe(fitsBefore);
   });
 
-  it('re-centres, so a narrower pane does not cut the machine in half', async () => {
+  it('keeps what the reader was looking at in the middle', async () => {
+    // Halving a pane must not move them: somebody examining one corner of a large automaton
+    // splits the window and should still be looking at that corner, not back at the middle of
+    // a machine they had deliberately scrolled away from.
+    renderViewer();
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    const cy = lastCy();
+    cy.zoom(2);
+    // Panned well away from the middle, as a reader examining a corner would be.
+    cy.pan({ x: -1000, y: -400 });
+    // The model point under the centre of the viewport right now.
+    const centre = {
+      x: (cy.viewWidth / 2 - cy.panPosition.x) / cy.zoomLevel,
+      y: (cy.viewHeight / 2 - cy.panPosition.y) / cy.zoomLevel,
+    };
+
+    cy.containerWidth = 400; // the pane halved
+    await resize();
+
+    const after = {
+      x: (cy.viewWidth / 2 - cy.panPosition.x) / cy.zoomLevel,
+      y: (cy.viewHeight / 2 - cy.panPosition.y) / cy.zoomLevel,
+    };
+    expect(after.x).toBeCloseTo(centre.x, 6);
+    expect(after.y).toBeCloseTo(centre.y, 6);
+    expect(cy.zoomLevel).toBe(2);
+  });
+
+  it('leaves Fit to window fitting and centring, which is what it is for', async () => {
+    // Resizing keeps the reader where they are; Fit deliberately does not. The two must stay
+    // different, or the only way back to the whole machine is gone.
+    const { api } = renderViewer();
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    const fitsBefore = lastCy().fitCalls;
+    lastCy().pan({ x: -1000, y: -400 });
+
+    act(() => api().fit());
+
+    await waitFor(() => expect(lastCy().fitCalls).toBeGreaterThan(fitsBefore));
+  });
+
+  it('does not recentre the whole machine, which would be a different place', async () => {
     renderViewer();
     await waitFor(() => expect(observers.length).toBeGreaterThan(0));
     lastCy().centerCalls = 0;
+    lastCy().pan({ x: -1000, y: -400 });
 
     await resize();
 
-    expect(lastCy().centerCalls).toBeGreaterThan(0);
+    expect(lastCy().centerCalls).toBe(0);
+  });
+});
+
+describe('undoing a layout switch', () => {
+  /**
+   * The sequence a reader actually performs: drag a state on the drawn layout, switch to
+   * auto-arranged, then change their mind. Both the layout and the states they had moved have
+   * to come back.
+   *
+   * Switching the layout rebuilds the graph, because `honorPositions` is an input to the load.
+   * The step used to put the positions onto the graph it was about to throw away, so the
+   * layout returned and every manual position was silently lost.
+   */
+  it('brings back the positions the reader had arranged, not just the layout', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    // A state picked up and put down somewhere else, which is one undoable step.
+    act(() => lastCy().handlers['grab']?.({}));
+    lastCy().byId('0')?.position({ x: 640, y: 480 });
+    await waitFor(() => expect(api().canUndo).toBe(true));
+
+    act(() => api().toggleHonorPositions());
+    await waitFor(() => expect(api().honorPositions).toBe(false));
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+
+    act(() => api().undo());
+
+    await waitFor(() => expect(api().honorPositions).toBe(true));
+    await waitFor(() => expect(lastCy().byId('0')?.position()).toEqual({ x: 640, y: 480 }));
+  });
+
+  it('leaves the view where it was, since an undo moves the machine and not the camera', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers['grab']?.({}));
+    lastCy().byId('0')?.position({ x: 640, y: 480 });
+    await waitFor(() => expect(api().canUndo).toBe(true));
+
+    act(() => api().toggleHonorPositions());
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    // Where the reader is looking when they decide to undo. The rebuild the undo causes would
+    // otherwise refit and move them somewhere else.
+    lastCy().zoom(2.5);
+    lastCy().pan({ x: -60, y: 24 });
+
+    const built = instances.length;
+    act(() => api().undo());
+
+    // The undo rebuilds again, so wait for that graph before reading anything off it: the
+    // one before it already has these values and would answer yes to both.
+    await waitFor(() => expect(instances.length).toBeGreaterThan(built));
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(2.5));
+    expect(lastCy().panPosition).toEqual({ x: -60, y: 24 });
+  });
+
+  it('still restores within one layout, where no rebuild happens', async () => {
+    const { api } = renderViewer({ honorPositionsDefault: true });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const before = { ...lastCy().byId('0')!.position() };
+
+    act(() => lastCy().handlers['grab']?.({}));
+    lastCy().byId('0')?.position({ x: 900, y: 900 });
+    await waitFor(() => expect(api().canUndo).toBe(true));
+
+    act(() => api().undo());
+    expect(lastCy().byId('0')?.position()).toEqual(before);
+    expect(instances).toHaveLength(1);
   });
 });

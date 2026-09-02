@@ -21,6 +21,7 @@ import {
   readLayout,
   selectTab,
   splitTabToSide,
+  tabToFocusAfterClosing,
   tabsInPane,
   type ViewerLayout,
 } from './viewer-panes';
@@ -397,5 +398,29 @@ describe('housekeeping the layout does for itself', () => {
     );
     expect(layout.panes).toEqual({ 'submissions:a.jff': 0 });
     expect(paneOf(layout, key('b.jff'))).toBe(0);
+  });
+});
+
+describe('where the keyboard goes when a tab is closed', () => {
+  it('moves to the next tab along', () => {
+    expect(tabToFocusAfterClosing(layoutOf('a.jff', 'b.jff', 'c.jff'), key('b.jff'))).toBe(
+      key('c.jff'),
+    );
+  });
+
+  it('moves back one when the last was closed', () => {
+    expect(tabToFocusAfterClosing(layoutOf('a.jff', 'b.jff'), key('b.jff'))).toBe(key('a.jff'));
+  });
+
+  it('stays inside the same pane', () => {
+    // The other strip is a separate tablist, and jumping across it would move somebody to a
+    // different machine than the one they were working with.
+    const split = splitTabToSide(layoutOf('a.jff', 'b.jff'), key('b.jff'), 'right');
+    expect(tabToFocusAfterClosing(split, key('b.jff'))).toBeNull();
+  });
+
+  it('says nothing when there is nothing left in that strip', () => {
+    expect(tabToFocusAfterClosing(layoutOf('a.jff'), key('a.jff'))).toBeNull();
+    expect(tabToFocusAfterClosing(layoutOf('a.jff'), key('gone.jff'))).toBeNull();
   });
 });

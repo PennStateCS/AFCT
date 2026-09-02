@@ -2,6 +2,7 @@
 
 import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { showToast } from '@/lib/toast';
 import { VIEWER_WINDOW_NAME } from '@/lib/viewer-link';
 import {
   VIEWER_ALIVE_KEY,
@@ -66,6 +67,9 @@ export function OpenInWindowButton({
           channel.close();
           // An empty URL returns the existing window without navigating it, which is what
           // brings it forward without throwing away the tabs it already has.
+          // The tab has already been asked for over the channel, so the panel closes whether
+          // or not the window can be brought forward: a browser that refuses to focus it has
+          // still received the file.
           window.open('', VIEWER_WINDOW_NAME)?.focus();
           onOpened?.();
           return;
@@ -74,7 +78,17 @@ export function OpenInWindowButton({
         // Deliberately no `noopener`: it makes the browser treat the name as `_blank`, so the
         // window could never be found again and every file would get a window of its own. The
         // viewer is same-origin, so the handle it keeps is ours either way.
-        window.open(href, VIEWER_WINDOW_NAME);
+        const opened = window.open(href, VIEWER_WINDOW_NAME);
+        if (!opened) {
+          // A blocked pop-up returns null. `onOpened` closes the panel, so calling it here
+          // took away the machine the reader was looking at and gave them nothing back, with
+          // no clue why. The toast is an error, which announces assertively.
+          showToast.error('The viewer window was blocked', {
+            description:
+              'Your browser stopped this site opening a window. Allow pop-ups for this site, then try again.',
+          });
+          return;
+        }
         onOpened?.();
       }}
     >
