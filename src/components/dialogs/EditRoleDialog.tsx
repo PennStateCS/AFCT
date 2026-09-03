@@ -228,8 +228,12 @@ export function EditRoleDialog({
             <LoadingSpinner label="Loading" fullScreen={false} className="min-h-40" />
           ) : roster ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-20 w-20">
+              {/* flex-wrap and min-w-0 below: the avatar, the name block and the Delete Photo
+                  button are wider than a phone-width dialog together, and the button was
+                  being cut in half by the dialog's own overflow-x-hidden. It drops to its
+                  own line now instead. */}
+              <div className="flex flex-wrap items-center gap-4">
+                <Avatar className="h-20 w-20 shrink-0">
                   <AvatarImage
                     src={avatarPreview || undefined}
                     alt="User Avatar"
@@ -246,12 +250,14 @@ export function EditRoleDialog({
                   </AvatarFallback>
                 </Avatar>
 
-                <div>
+                <div className="min-w-0">
                   <div className="text-muted-foreground text-sm">Name</div>
-                  <div className="font-medium">
+                  <div className="font-medium break-words">
                     {roster.user.firstName} {roster.user.lastName}
                   </div>
-                  <div className="text-muted-foreground text-xs">{roster.user.email}</div>
+                  <div className="text-muted-foreground text-xs break-words">
+                    {roster.user.email}
+                  </div>
                 </div>
 
                 {/* Delete avatar button: visible to course FACULTY, ADMIN, or site ADMIN */}
