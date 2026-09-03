@@ -24,7 +24,14 @@ const uploadsDir = path.join('/private', 'uploads', 'solutions');
 /** The parts of the source problem a copy carries over. */
 type CopyableSource = Pick<
   Problem,
-  'fileName' | 'originalFileName' | 'type' | 'maxStates' | 'isDeterministic'
+  | 'fileName'
+  | 'originalFileName'
+  | 'type'
+  | 'maxStates'
+  | 'isDeterministic'
+  // The fingerprints of the answer key, carried with the file they describe.
+  | 'answerContentHash'
+  | 'answerShapeHash'
 >;
 
 export type ProblemCopyResult = {
@@ -91,6 +98,11 @@ export async function copyProblemInto(opts: {
         fileName: newFileName,
         // Only carry the display name when a file was actually copied.
         originalFileName: newFileName ? (opts.source.originalFileName ?? null) : null,
+        // Likewise the fingerprints: they describe that file, and they are what lets the
+        // similarity check recognise a student handing in the instructor's own answer. A copy
+        // without them is a solution the check cannot see.
+        answerContentHash: newFileName ? (opts.source.answerContentHash ?? null) : null,
+        answerShapeHash: newFileName ? (opts.source.answerShapeHash ?? null) : null,
         courseId: opts.courseId,
       },
     });
@@ -153,6 +165,12 @@ export const assignmentProblemSelect = {
       isDeterministic: true,
       fileName: true,
       originalFileName: true,
+      // The fingerprints of the answer key, carried with the file they describe. Without
+      // them a copied problem has a solution on disk that the similarity check cannot
+      // recognise, so a student handing in the instructor's own answer would go unnoticed
+      // in every copied or imported course.
+      answerContentHash: true,
+      answerShapeHash: true,
     },
   },
 } as const;
@@ -175,6 +193,8 @@ type SourceProblemLink = {
     | 'isDeterministic'
     | 'fileName'
     | 'originalFileName'
+    | 'answerContentHash'
+    | 'answerShapeHash'
   >;
 };
 
@@ -215,6 +235,14 @@ export async function attachCopiedProblems(
         isDeterministic: p.isDeterministic,
         fileName: key.fileName,
         originalFileName: key.originalFileName,
+        // Only alongside a file that was actually copied. A fingerprint on a problem with no
+        // answer key would describe a file this row does not have.
+        ...(key.fileName
+          ? {
+              answerContentHash: p.answerContentHash,
+              answerShapeHash: p.answerShapeHash,
+            }
+          : {}),
         courseId: opts.courseId,
       },
     });

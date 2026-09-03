@@ -336,6 +336,62 @@ describe('POST /api/courses/[id]/duplicate', () => {
     );
   });
 
+  it('assigns a copied assignment to everyone, whatever the source restricted it to', async () => {
+    // The audience names students and groups of the source course, and none of them are on
+    // the copy's roster, so the rows cannot come across. Carrying the flag without them left
+    // an assignment restricted to a few people restricted to nobody: assigned to no student
+    // in the new course, and invisible to all of them.
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'Group work',
+        dueDate: new Date(),
+        assignedToEveryone: false,
+        // A group assignment: the set belongs to the source course, and the copy has none.
+        groupSetId: 'gs1',
+        // Deliberately on in the source, to prove the copy does not inherit it.
+        ltiAutoSync: true,
+        problems: [],
+      },
+    ]);
+
+    const tx = {
+      course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
+      roster: { create: vi.fn(), createMany: vi.fn() },
+      assignment: { create: vi.fn().mockResolvedValue({ id: 'new-a1' }) },
+      assignmentProblem: { createMany: vi.fn() },
+      problem: { create: vi.fn() },
+    };
+    prismaMock.$transaction.mockImplementation(async (cb: (client: typeof tx) => unknown) =>
+      cb(tx),
+    );
+
+    const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
+      method: 'POST',
+      body: JSON.stringify(makePayload({ copyMode: 'assignments' })),
+    });
+
+    const res = await POST(req, { params: Promise.resolve({ id: 'c1' }) });
+
+    expect(res.status).toBe(201);
+    expect(tx.assignment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          assignedToEveryone: true,
+          // Individual, since the group set is the source course's.
+          groupSetId: null,
+          // A new course is connected to no LMS. Carrying the source's choice meant a copy
+          // that would start publishing grades the day somebody linked the course.
+          ltiAutoSync: false,
+        }),
+      }),
+    );
+  });
+
   it('copies faculty and TAs when requested', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });

@@ -33,10 +33,14 @@ The available copy modes are:
 
 The new course gets a new registration code, selected Faculty and TA roster entries, and no student enrollments. It starts unpublished.
 
-Duplication intentionally resets several assignment-level values:
+What a copied assignment keeps: its dates, its late-work settings, whether missing work scores zero, and, where problems are copied with it, what each problem is worth, how many attempts it allows, whether the autograder runs, and whether feedback is shown.
 
-- Copied assignments start unpublished and do not retain group mode or late-work settings.
-- When problems are copied with assignments, the links use default points, attempt limits, and automatic-grading settings rather than the source assignment's overrides.
+What duplication resets, because the copy is a new course with new people:
+
+- Every copied assignment starts unpublished and assigned to everyone. Who an assignment was limited to names students and groups of the old course, and none of them are on the new roster.
+- A group assignment is copied as an individual one, since group sets belong to the course they were made in.
+- Sending grades to an LMS is off, whatever the source said. The new course is connected to nothing yet, and the setting would otherwise come alive the day somebody linked it.
+- Date exceptions are not carried, for the same reason as the audience.
 
 Review every copied assignment, problem link, deadline, and answer file before publishing the new course.
 
