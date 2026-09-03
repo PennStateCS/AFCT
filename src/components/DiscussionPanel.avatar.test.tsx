@@ -62,4 +62,20 @@ describe('the avatar when the panel is narrow', () => {
 
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
   });
+
+  /*
+   * The line under a bubble used to be one nowrap row clipped by overflow-hidden, so in a
+   * narrow column the timestamp took the width and the name was truncated to nothing: a
+   * comment with a time and no author. jsdom cannot measure that, so what this holds is the
+   * rule that lets it wrap instead.
+   */
+  it('lets the author and the time take two lines rather than clipping one', () => {
+    render(<DiscussionPanel {...props} />);
+
+    const meta = screen.getByText('Ada Lovelace').parentElement;
+    expect(meta?.className).toContain('flex-wrap');
+    expect(meta?.className).not.toContain('overflow-hidden');
+    // The time never shrinks; it moves.
+    expect(screen.getByText('a while ago').className).toContain('shrink-0');
+  });
 });

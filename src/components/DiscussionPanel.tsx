@@ -251,9 +251,18 @@ export default function DiscussionPanel({
                             {comment.content}
                           </p>
 
-                          <div className="mt-1 flex items-center justify-between gap-1 overflow-hidden whitespace-nowrap">
-                            <span className="text-muted-foreground truncate text-xs">{name}</span>
-                            <span className={`text-muted-foreground text-xs ${metaAlign}`}>
+                          {/* Wraps rather than clips. In a narrow column (the grade panel is
+                              30% of the workspace) the timestamp took the whole line and the
+                              name was truncated away to nothing, so a comment showed a time
+                              and no author. The name still truncates if it alone is too long;
+                              the timestamp never shrinks, it moves to its own line. */}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span className="text-muted-foreground min-w-0 truncate text-xs">
+                              {name}
+                            </span>
+                            <span
+                              className={`text-muted-foreground ml-auto shrink-0 text-xs ${metaAlign}`}
+                            >
                               {formatDateTime(comment.createdAt)}
                             </span>
                           </div>
