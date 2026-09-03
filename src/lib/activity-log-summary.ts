@@ -9,6 +9,8 @@
  * summary from fields it does not understand. Add cases as actions gain metadata worth reading.
  */
 
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
+
 type Metadata = Record<string, unknown> | null | undefined;
 
 const num = (meta: Metadata, key: string): number =>
@@ -1461,6 +1463,15 @@ export function describeActivitySentence(entry: {
  */
 export function formatActivityDetails(entry: {
   action: string;
+  /**
+   * The zone to read the timestamp in: the viewer's own, resolved from their profile.
+   *
+   * Left out, this read the browser's instead, so the "When" line disagreed with the title of
+   * the dialog around it and with the row it was opened from, both of which are in the zone the
+   * viewer chose. An audit entry that states the wrong hour is worse than one that states none.
+   */
+  timeZone?: string;
+  hour12?: boolean;
   /** The actor, for the sentence at the top. See describeActivitySentence. */
   userDisplayName?: string | null;
   timestamp?: string | Date | null;
@@ -1484,7 +1495,14 @@ export function formatActivityDetails(entry: {
   const head: DetailRow[] = [
     { label: 'Action', value: entry.action.replace(/_/g, ' ') },
     ...(entry.timestamp
-      ? [{ label: 'When', value: new Date(entry.timestamp).toLocaleString() }]
+      ? [
+          {
+            label: 'When',
+            value: entry.timeZone
+              ? formatDateTimeInTimeZone(entry.timestamp, entry.timeZone, entry.hour12 ?? true)
+              : new Date(entry.timestamp).toLocaleString(),
+          },
+        ]
       : []),
     ...(entry.severity ? [{ label: 'Severity', value: entry.severity }] : []),
     ...(entry.category ? [{ label: 'Category', value: entry.category }] : []),

@@ -82,9 +82,11 @@ export function MaxPointsCell({
 export function DueDateCell({
   assignment,
   timeZone,
+  hour12 = true,
 }: {
   assignment: AssignmentWithProblemCount;
   timeZone: string;
+  hour12?: boolean;
 }) {
   const overrides = assignment.overrides ?? [];
   const everyoneLabel = assignment.assignedToEveryone === false ? 'Everyone else' : 'Everyone';
@@ -94,7 +96,7 @@ export function DueDateCell({
       {/* With per-student overrides the single base date is misleading, so show only
           the badge; its popover lists every effective date. */}
       {overrides.length === 0 ? (
-        <CompactDate value={assignment.dueDate} timeZone={timeZone} />
+        <CompactDate value={assignment.dueDate} timeZone={timeZone} hour12={hour12} />
       ) : (
         <Popover>
           <PopoverTrigger asChild>
@@ -117,7 +119,7 @@ export function DueDateCell({
               <li className="flex items-baseline justify-between gap-3">
                 <span className="text-muted-foreground truncate">{everyoneLabel}</span>
                 <span className="shrink-0">
-                  <CompactDate value={assignment.dueDate} timeZone={timeZone} />
+                  <CompactDate value={assignment.dueDate} timeZone={timeZone} hour12={hour12} />
                 </span>
               </li>
               {overrides.map((o: AssignmentOverrideSummary, i) => {
@@ -129,12 +131,12 @@ export function DueDateCell({
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="truncate font-medium">{o.studentName}</span>
                       <span className="shrink-0">
-                        <CompactDate value={effDue} timeZone={timeZone} />
+                        <CompactDate value={effDue} timeZone={timeZone} hour12={hour12} />
                       </span>
                     </div>
                     {effCutoff && (
                       <span className="text-muted-foreground">
-                        late until <CompactDate value={effCutoff} timeZone={timeZone} />
+                        late until <CompactDate value={effCutoff} timeZone={timeZone} hour12={hour12} />
                       </span>
                     )}
                   </li>
@@ -187,11 +189,12 @@ function renderFieldValue(
   field: OverrideField,
   value: Date | string | boolean | null,
   timeZone: string,
+  hour12 = true,
 ) {
   if (field === 'allowLateSubmissions') {
     return <span>{value ? 'Yes' : 'No'}</span>;
   }
-  return <CompactDate value={value as Date | string | null} timeZone={timeZone} />;
+  return <CompactDate value={value as Date | string | null} timeZone={timeZone} hour12={hour12} />;
 }
 
 export function OverrideAwareCell({
@@ -199,11 +202,13 @@ export function OverrideAwareCell({
   timeZone,
   field,
   label,
+  hour12 = true,
 }: {
   assignment: AssignmentWithProblemCount;
   timeZone: string;
   field: OverrideField;
   label: string;
+  hour12?: boolean;
 }) {
   const overrides = assignment.overrides ?? [];
   const everyoneLabel = assignment.assignedToEveryone === false ? 'Everyone else' : 'Everyone';
@@ -220,7 +225,7 @@ export function OverrideAwareCell({
   const isMultiple = overrides.length > 0 && distinct.size > 1;
 
   if (!isMultiple) {
-    return renderFieldValue(field, baseValue, timeZone);
+    return renderFieldValue(field, baseValue, timeZone, hour12);
   }
 
   return (
@@ -243,7 +248,7 @@ export function OverrideAwareCell({
               <span className={`truncate ${i === 0 ? 'text-muted-foreground' : 'font-medium'}`}>
                 {r.name}
               </span>
-              <span className="shrink-0">{renderFieldValue(field, r.value, timeZone)}</span>
+              <span className="shrink-0">{renderFieldValue(field, r.value, timeZone, hour12)}</span>
             </li>
           ))}
         </ul>
@@ -369,6 +374,7 @@ export function useAssignmentColumns(
   handlePublishToggle: (assignmentId: string, newValue: boolean) => void,
   timeZone: string,
   onDuplicate?: (assignment: DuplicateSourceAssignment) => void,
+  hour12 = true,
 ): ColumnDef<AssignmentWithProblemCount>[] {
   return [
     {
@@ -387,7 +393,9 @@ export function useAssignmentColumns(
     {
       accessorKey: 'dueDate',
       header: 'Due Date',
-      cell: ({ row }) => <DueDateCell assignment={row.original} timeZone={timeZone} />,
+      cell: ({ row }) => (
+        <DueDateCell assignment={row.original} timeZone={timeZone} hour12={hour12} />
+      ),
     },
     {
       accessorKey: 'unlockAt',
@@ -396,6 +404,7 @@ export function useAssignmentColumns(
         <OverrideAwareCell
           assignment={row.original}
           timeZone={timeZone}
+          hour12={hour12}
           field="unlockAt"
           label="Available From"
         />
@@ -433,6 +442,7 @@ export function useAssignmentColumns(
         <OverrideAwareCell
           assignment={row.original}
           timeZone={timeZone}
+          hour12={hour12}
           field="allowLateSubmissions"
           label="Allow Late"
         />
@@ -447,6 +457,7 @@ export function useAssignmentColumns(
         <OverrideAwareCell
           assignment={row.original}
           timeZone={timeZone}
+          hour12={hour12}
           field="lateCutoff"
           label="Late Cutoff"
         />

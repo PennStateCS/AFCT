@@ -122,6 +122,7 @@ export const columns = (
   onCourseDeleted: () => void,
   onCourseDuplicated: () => void,
   timeZone: string,
+  hour12 = true,
 ): ColumnDef<CourseWithFaculty>[] => [
   {
     accessorKey: 'name',
@@ -190,13 +191,13 @@ export const columns = (
     accessorKey: 'startDate',
     meta: { priority: 4 },
     header: 'Start Date',
-    cell: ({ row }) => <CompactDate value={row.original.startDate} timeZone={timeZone} />,
+    cell: ({ row }) => <CompactDate value={row.original.startDate} timeZone={timeZone} hour12={hour12} />,
   },
   {
     accessorKey: 'endDate',
     meta: { priority: 4 },
     header: 'End Date',
-    cell: ({ row }) => <CompactDate value={row.original.endDate} timeZone={timeZone} />,
+    cell: ({ row }) => <CompactDate value={row.original.endDate} timeZone={timeZone} hour12={hour12} />,
   },
   {
     id: 'instructor',

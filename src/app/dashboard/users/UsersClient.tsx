@@ -52,7 +52,7 @@ export default function UsersClient() {
   const [importOpen, setImportOpen] = useState(false);
   const createMounted = useMountedOnce(open);
   const importMounted = useMountedOnce(importOpen);
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
 
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -133,7 +133,10 @@ export default function UsersClient() {
     void refetch();
   }, [refetch]);
 
-  const columns = useMemo(() => getUserColumns(refresh, timezone), [refresh, timezone]);
+  const columns = useMemo(
+    () => getUserColumns(refresh, timezone, hour12),
+    [refresh, timezone, hour12],
+  );
 
   const handlePaginationChange: OnChangeFn<PaginationState> = (updater) => {
     const next = typeof updater === 'function' ? updater({ pageIndex, pageSize }) : updater;
