@@ -48,12 +48,29 @@ describe('a long step name on a narrow screen', () => {
   it('lets the label give way rather than the layout', () => {
     render(<Stepper steps={['Details', 'Faculty & TAs', 'Review']} current={1} />);
 
-    const label = screen.getByText('Faculty & TAs');
-    // Truncation is what keeps the text inside its own box.
+    const label = screen.getAllByText('Faculty & TAs').find((el) => el.tagName === 'SPAN')!;
+    // Truncation is what keeps the text inside its own box on a narrow dialog.
     expect(label.className).toContain('truncate');
     // And the box it is in has to be allowed to shrink, or truncation never engages.
     expect(label.closest('button')?.className).toContain('min-w-0');
     expect(label.closest('button')?.className).not.toContain('shrink-0');
+  });
+
+  it('names the current step on a line of its own, for screens that cannot carry it inline', () => {
+    // Five names never fit a phone, and cutting the current one to "Facult…" is not an
+    // answer. Below `sm` the row is numbers only and this line says where you are.
+    render(<Stepper steps={['Details', 'Faculty & TAs', 'Review']} current={1} />);
+
+    const caption = screen.getAllByText('Faculty & TAs').find((el) => el.tagName === 'P')!;
+    expect(caption.className).toContain('sm:hidden');
+    // Centred, or it sits under the first circle and reads as that step's label.
+    expect(caption.className).toContain('text-center');
+    // Said twice to a screen reader otherwise: the step buttons carry the name already.
+    expect(caption).toHaveAttribute('aria-hidden', 'true');
+    // And the inline copy is the one that hides on a phone.
+    const inline = screen.getAllByText('Faculty & TAs').find((el) => el.tagName === 'SPAN')!;
+    expect(inline.className).toContain('hidden');
+    expect(inline.className).toContain('sm:inline');
   });
 
   it('keeps the step circle its full size, since only the text may give', () => {

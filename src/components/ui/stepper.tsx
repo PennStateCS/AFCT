@@ -71,13 +71,15 @@ export function Stepper({ steps, current, onStepClick, className }: StepperProps
                 {/* On narrow screens only the current step keeps its label; the
                     rest collapse to numbered circles so five steps fit a phone.
                     (The button's aria-label always carries the full name.) */}
+                {/* Every label is inline from `sm` up and none of them are below it: five
+                    names never fit a phone, and the current one alone still had to be cut
+                    to "Facult…". The current step's name goes on its own line underneath
+                    instead (see below), where it has the width to be read. Truncation stays
+                    as the backstop for a narrow dialog on a wide screen. */}
                 <span
                   className={cn(
-                    // Truncates rather than overflowing. A wizard's step names are short, so
-                    // this only bites on the narrowest screens, and an ellipsis is a better
-                    // answer there than text crossing a rule or sitting on a number.
-                    'truncate text-xs font-medium',
-                    isCurrent ? 'text-foreground' : 'text-muted-foreground hidden sm:inline',
+                    'hidden truncate text-xs font-medium sm:inline',
+                    isCurrent ? 'text-foreground' : 'text-muted-foreground',
                     clickable && 'hover:text-foreground',
                   )}
                 >
@@ -88,6 +90,17 @@ export function Stepper({ steps, current, onStepClick, className }: StepperProps
           );
         })}
       </ol>
+      {/* The current step's name, on a line of its own, for the screens too narrow to carry it
+          beside the numbers. Centred rather than left-aligned: under the first circle it read
+          as that step's label, whichever step you were actually on. Hidden from assistive tech,
+          because each step button already says "Step 3: Faculty & TAs" and the wizards announce
+          the change in a live region, so reading this too would say it twice. */}
+      <p
+        aria-hidden="true"
+        className="text-foreground mt-1.5 text-center text-xs font-medium sm:hidden"
+      >
+        {steps[current]}
+      </p>
     </nav>
   );
 }
