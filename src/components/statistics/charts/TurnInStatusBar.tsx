@@ -27,10 +27,10 @@ type Props = {
 // On time reads as settled, a late revision as worth a look, late as the thing a late policy
 // is about, and nothing submitted as absent rather than as an offence.
 const TURN_IN_STYLE: Record<TurnInStateKey, string> = {
-  'on-time': 'bg-badge-success',
-  'revised-late': 'bg-badge-warning',
-  late: 'bg-badge-danger',
-  missing: 'bg-badge-neutral',
+  'on-time': 'bg-status-success-solid',
+  'revised-late': 'bg-status-warning-solid',
+  late: 'bg-status-danger-solid',
+  missing: 'bg-status-neutral-solid',
 };
 
 /**

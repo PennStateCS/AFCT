@@ -19,15 +19,17 @@ type Props = {
   unitPlural: string;
 };
 
-// Semantic-but-restrained colours from the app's badge palette (full light/dark support).
-// completed = positive, processing = informational, pending = warning (in the queue),
-// failed = destructive, missing = muted.
+// The solid status fills, which is the family meant for a filled swatch. These bars used the
+// badge palette, whose colours are the *text* weight of each state: dark green, near-black red,
+// navy. At the size of a status bar that read as heavy rather than as meaning, and it is not
+// what those tokens are for. The meanings are unchanged: completed = positive, processing =
+// informational, pending = warning (in the queue), failed = destructive, missing = muted.
 const STATUS_STYLE: Record<StatusKey, string> = {
-  completed: 'bg-badge-success',
-  processing: 'bg-badge-info',
-  pending: 'bg-badge-warning',
-  failed: 'bg-badge-danger',
-  missing: 'bg-badge-neutral',
+  completed: 'bg-status-success-solid',
+  processing: 'bg-status-info-solid',
+  pending: 'bg-status-warning-solid',
+  failed: 'bg-status-danger-solid',
+  missing: 'bg-status-neutral-solid',
 };
 
 /**

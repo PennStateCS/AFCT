@@ -27,10 +27,10 @@ type Props = {
 // graded = settled, regrade needed = worth another look, awaiting grading = waiting on a
 // person, nothing submitted = muted, because nobody can grade what is not there.
 const GRADING_STYLE: Record<GradingStateKey, string> = {
-  graded: 'bg-badge-success',
-  'graded-stale': 'bg-badge-warning',
-  'ungraded-submitted': 'bg-badge-info',
-  'ungraded-missing': 'bg-badge-neutral',
+  graded: 'bg-status-success-solid',
+  'graded-stale': 'bg-status-warning-solid',
+  'ungraded-submitted': 'bg-status-info-solid',
+  'ungraded-missing': 'bg-status-neutral-solid',
 };
 
 /**

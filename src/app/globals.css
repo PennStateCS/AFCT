@@ -280,26 +280,28 @@
      BLENDED colour, not this value. At the old token and the old /50 the rendered ring was
      1.74:1 on the card. Now 3.57:1 on the card, 3.48:1 on the canvas, 3.39:1 on muted. */
   --ring: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
-  /* Six categorical hues, deliberately spread around the wheel. The old set had two
-     oranges, a yellow and two teals, so a five-series chart came out as "warm, warm,
-     warm, cold, cold" and the legend did all the work. Cobalt first, because it is the
-     app's own accent and a single-series chart should look like it belongs here. */
-  --chart-1: oklch(0.5461 0.2152 262.8809); /* #2563EB cobalt */
-  --chart-2: oklch(0.5413 0.2466 293.009); /* #7C3AED violet */
-  --chart-3: oklch(0.6461 0.1943 41.1158); /* #EA580C orange */
-  --chart-4: oklch(0.5858 0.222 17.5846); /* #E11D48 rose */
-  --chart-5: oklch(0.5538 0.1207 66.4416); /* #A16207 gold, 4.9:1 on the card */
-  --chart-6: oklch(0.6271 0.1699 149.2138); /* #16A34A green */
+  /* Six categorical hues, deliberately spread around the wheel, and all of them muted. The
+     saturated set they replace put full cobalt on every single-series chart, so a page of
+     histograms shouted as loudly as the buttons on it. These sit a step back: same six
+     positions on the wheel, roughly half the chroma, every one of them at least 3.7:1 on
+     the card. Cobalt itself (--primary) is left for what should actually draw the eye, a
+     reference line or a selected bar, and is no longer the default fill for a quantity. */
+  --chart-1: oklch(0.5461 0.1057 262.9194); /* #4F6FAE steel blue, 5.0:1 on the card */
+  --chart-2: oklch(0.5316 0.1125 290.8796); /* #6D5FA8 violet, 5.5:1 */
+  --chart-3: oklch(0.6237 0.1361 49.5959); /* #C76B32 orange, 3.8:1 */
+  --chart-4: oklch(0.5822 0.14 9.8782); /* #BE5268 rose, 4.6:1 */
+  --chart-5: oklch(0.6039 0.1011 79.9482); /* #A17A32 gold, 3.9:1 */
+  --chart-6: oklch(0.5817 0.0877 153.2399); /* #4F8A62 green, 4.1:1 */
 
   /* One blue ramp, light to dark, for anything where colour is a quantity: the activity
      heatmap and the attempts-to-solve bars. Both used to fake this with one hue at four
      or five opacities, which put the lightest step at 1.3:1 on the card. Explicit steps
      instead, so each one is a decision. */
   --chart-sequential-1: oklch(0.9705 0.0142 254.6042); /* #EFF6FF */
-  --chart-sequential-2: oklch(0.8823 0.0571 254.1284); /* #BFDBFE */
-  --chart-sequential-3: oklch(0.7137 0.1434 254.624); /* #60A5FA */
-  --chart-sequential-4: oklch(0.5461 0.2152 262.8809); /* #2563EB */
-  --chart-sequential-5: oklch(0.4244 0.1809 265.6377); /* #1E40AF */
+  --chart-sequential-2: oklch(0.9151 0.0435 255.4703); /* #DBEAFE */
+  --chart-sequential-3: oklch(0.7889 0.1077 253.7386); /* #93C5FD */
+  --chart-sequential-4: oklch(0.6231 0.188 259.8145); /* #3B82F6 */
+  --chart-sequential-5: oklch(0.4882 0.2172 264.3763); /* #1D4ED8 */
   /* The sidebar is a dark surface in BOTH themes, so every token here is written for
      light text on it. Three levels that have to stay apart: the rail, a barely-lighter
      hover, and the sky accent for the current page. */
@@ -436,9 +438,13 @@
     0.6271 0.1699 149.214
   ); /* green-600, chosen so the white glyph clears 3:1 */
   --status-warning-solid: oklch(0.6658 0.1574 58.318); /* amber-600, same */
-  --status-danger-solid: oklch(0.6368 0.2078 25.331);
-  --status-info-solid: oklch(0.6231 0.188 259.815);
-  --status-neutral-solid: oklch(0.551 0.0234 264.364);
+  /* red-600 rather than red-500: on a bar the size of a status chart the lighter red read as
+     an alarm, and white on this is 4.8:1 against 3.8:1. */
+  --status-danger-solid: oklch(0.5771 0.2152 27.325); /* #DC2626 */
+  --status-info-solid: oklch(0.6231 0.188 259.815); /* #3B82F6 */
+  /* Slate rather than a neutral grey, which is the family the rest of the app's chrome is
+     built from, and the same value dark mode already uses. */
+  --status-neutral-solid: oklch(0.5544 0.0407 257.4166); /* #64748B */
 
   /* Active-tab accent: cobalt, aligned with --primary and the vertical local-navigation
      rails. Light mode uses primary itself, which clears WCAG AA 4.5:1 for 14px active-tab
@@ -613,12 +619,12 @@
      reader's understanding of the chart breaks when they flip the theme. The old dark set
      reordered the palette outright (chart-2 went from teal to green, chart-4 from yellow
      to violet), which did exactly that. */
-  --chart-1: oklch(0.7137 0.1434 254.624); /* #60A5FA cobalt */
-  --chart-2: oklch(0.709 0.1592 293.5412); /* #A78BFA violet */
-  --chart-3: oklch(0.7576 0.159 55.9344); /* #FB923C orange */
-  --chart-4: oklch(0.7192 0.169 13.428); /* #FB7185 rose */
-  --chart-5: oklch(0.8606 0.1731 91.9357); /* #FACC15 gold */
-  --chart-6: oklch(0.8003 0.1821 151.711); /* #4ADE80 green */
+  --chart-1: oklch(0.69 0.1057 262.9194); /* #789BDD steel blue, 6.0:1 on the card */
+  --chart-2: oklch(0.697 0.1125 290.8796); /* #9E91DE violet, 6.0:1 */
+  --chart-3: oklch(0.701 0.1361 49.5959); /* #E1834B orange, 6.0:1 */
+  --chart-4: oklch(0.706 0.14 9.8782); /* #E9788C rose, 6.0:1 */
+  --chart-5: oklch(0.692 0.1011 79.9482); /* #BD954E gold, 6.0:1 */
+  --chart-6: oklch(0.678 0.0877 153.2399); /* #6CA87E green, 6.0:1 */
 
   /* Low to high is still low to high; what flips is which end is dark. "Darker means
      more" cannot work on a dark card, where the darkest step would be the background.
