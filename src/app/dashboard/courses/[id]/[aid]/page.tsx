@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { AssignmentWithDetails } from '@/lib/assignment-details';
 import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
+import { effectiveDeadline } from '@/lib/effective-deadline';
 
 export const metadata: Metadata = {
   title: 'Assignment',
@@ -53,6 +54,26 @@ export default async function AssignmentPage({ params }: PageProps) {
         courseId,
       },
       include: {
+        // The exceptions that apply to this viewer: their own row, and the row for a group
+        // they are in. Resolved into the dates below, because the payload this page renders
+        // from is the assignment as it stands and a student is held to their own deadline.
+        overrides: {
+          where: {
+            OR: [
+              { userId: session.user.id },
+              { studentGroup: { memberships: { some: { userId: session.user.id } } } },
+            ],
+          },
+          select: {
+            targetType: true,
+            userId: true,
+            groupId: true,
+            unlockAt: true,
+            dueDate: true,
+            lateCutoff: true,
+            allowLateSubmissions: true,
+          },
+        },
         problems: {
           select: {
             maxPoints: true,
@@ -97,8 +118,32 @@ export default async function AssignmentPage({ params }: PageProps) {
           return sum + (Number.isFinite(value) ? value : 0);
         }, 0);
 
+        // What this viewer is actually held to. Staff keep the assignment's own dates, which
+        // are the ones they set; a student sees their own extension, which is the whole point
+        // of granting one. The overrides themselves are not part of the payload.
+        const { overrides, ...assignmentFields } = assignment;
+        const eff = effectiveDeadline(
+          {
+            unlockAt: assignment.unlockAt,
+            dueDate: assignment.dueDate,
+            allowLateSubmissions: assignment.allowLateSubmissions,
+            lateCutoff: assignment.lateCutoff,
+          },
+          overrides,
+          session.user.id,
+          overrides.map((o) => o.groupId).filter((gid): gid is string => gid != null),
+        );
+
         initialAssignment = {
-          ...assignment,
+          ...assignmentFields,
+          ...(isStaff
+            ? {}
+            : {
+                unlockAt: eff.unlockAt,
+                dueDate: eff.dueDate,
+                lateCutoff: eff.lateCutoff,
+                allowLateSubmissions: eff.allowLateSubmissions,
+              }),
           maxPoints: totalProblemPoints,
           problems: assignment.problems.map((ap) => ({
             problem: ap.problem,

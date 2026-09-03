@@ -323,6 +323,19 @@ export const GET = withCourseAuth(
       // Return structured assignment matching the frontend's expected format
       return NextResponse.json({
         ...assignmentData,
+        // The dates this caller is actually held to. Spreading the row alone gave a student the
+        // assignment's own dates, so an extension granted to them or to their group showed here
+        // as the original deadline: every other student surface resolved it and this one, the
+        // page they open to do the work, did not. Staff keep the base dates; they set those, and
+        // the exceptions are listed to them separately.
+        ...(isStaff
+          ? {}
+          : {
+              unlockAt: eff.unlockAt,
+              dueDate: eff.dueDate,
+              lateCutoff: eff.lateCutoff,
+              allowLateSubmissions: eff.allowLateSubmissions,
+            }),
         description: locked ? null : av.description,
         // The rich document carries the same content as the plain text, so it has to be
         // withheld under the same lock. Spreading the row would otherwise hand a student the
