@@ -19,13 +19,13 @@ interface StudentAssignmentCardProps {
  * its own border, because a row is a real object you click.
  */
 export function StudentAssignmentCard({ course }: StudentAssignmentCardProps) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const limitText = (value: string, max = 140) =>
     value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
   const publishedAssignments = course.assignments.filter((assignment) => assignment.isPublished);
   const stamp = (date: Date) =>
-    `${formatDateInTimeZone(date, timezone)} at ${formatTimeInTimeZone(date, timezone)}`;
+    `${formatDateInTimeZone(date, timezone)} at ${formatTimeInTimeZone(date, timezone, hour12)}`;
 
   return (
     <section className="space-y-6" aria-labelledby="student-assignments-title">

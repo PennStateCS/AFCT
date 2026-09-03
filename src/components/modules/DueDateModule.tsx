@@ -65,7 +65,7 @@ function dueLabel(dueDate: string | Date, timezone: string): string {
 }
 
 export function DueDateModule({ assignments }: Props) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const now = new Date();
 
   const upcoming = assignments
@@ -166,7 +166,7 @@ export function DueDateModule({ assignments }: Props) {
                           <span aria-hidden="true"> {'·'} </span>
                         </>
                       )}
-                      <span>{formatTimeInTimeZone(assignment.dueDate, timezone)}</span>
+                      <span>{formatTimeInTimeZone(assignment.dueDate, timezone, hour12)}</span>
                     </div>
                   </div>
 

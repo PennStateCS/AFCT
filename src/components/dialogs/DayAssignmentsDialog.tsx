@@ -40,7 +40,7 @@ export default function DayAssignmentsDialog({
 }: Props) {
   // Use the provided `date` prop directly. If it's a string, fall back to `new Date(date)`.
   const parsedDate = date instanceof Date ? date : date ? new Date(date) : undefined;
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
 
   const handlePrev = () => {
     if (!parsedDate) return;
@@ -123,7 +123,7 @@ export default function DayAssignmentsDialog({
                       </div>
                       <div className="text-xs opacity-90">{a.course.name}</div>
                       <div className="mt-1 text-xs opacity-80">
-                        {formatDateTimeInTimeZone(a.dueDate, timezone)}
+                        {formatDateTimeInTimeZone(a.dueDate, timezone, hour12)}
                       </div>
                     </Link>
                   </li>

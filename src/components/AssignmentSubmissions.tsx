@@ -132,7 +132,7 @@ export default function AssignmentSubmissions({
   // Students for review: includes DROPPED students (labeled), since staff still review
   // their submitted work. Its own query key ('students', 'all') so it doesn't collide
   // with the active-only list GroupsCard/audience pickers share.
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const assignmentShellQuery = useQuery<{
     dueDate?: string | Date;
     allowLateSubmissions?: boolean;
@@ -446,6 +446,7 @@ export default function AssignmentSubmissions({
 
             <ReviewStrip
               className="mt-4"
+              hour12={hour12}
               students={students}
               selectedIndex={selectedIndex}
               onSelectStudent={handleSelectChange}

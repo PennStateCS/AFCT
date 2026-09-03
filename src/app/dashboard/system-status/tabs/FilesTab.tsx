@@ -31,7 +31,7 @@ export default function FilesTab({
   autoRefresh: boolean;
 }) {
   const queryClient = useQueryClient();
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const { data, isLoading } = useStatusQuery<FilesStatusResponse>({
     queryKey: queryKeys.admin.statusFiles(),
     path: apiPaths.admin.statusFiles(),
@@ -119,13 +119,14 @@ export default function FilesTab({
       abandonedFileColumns({
         labels,
         timeZone: timezone,
+        hour12,
         onDelete: onDeleteFile,
         deleting:
           deletingCategory && deletingFileName
             ? { category: deletingCategory, fileName: deletingFileName }
             : null,
       }),
-    [labels, timezone, onDeleteFile, deletingCategory, deletingFileName],
+    [labels, timezone, hour12, onDeleteFile, deletingCategory, deletingFileName],
   );
 
   if (isLoading || !data || !files) {

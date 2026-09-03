@@ -67,7 +67,7 @@ export function AssignmentSimilarityPanel({
 } = {}) {
   const subject: ReviewSubject = groupAssignment ? 'group' : 'student';
   const { id: courseId, aid: assignmentId } = useParams<{ id: string; aid: string }>();
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const [showCommon, setShowCommon] = useState(false);
   // Which problems the reader has opened. Closed is the starting point for all of them.
   const [openProblems, setOpenProblems] = useState<Record<string, boolean>>({});
@@ -99,7 +99,9 @@ export function AssignmentSimilarityPanel({
   };
   const formatTime = (iso: string) => {
     const date = parseValidDate(iso);
-    return date ? `${formatTimeInTimeZone(date, timezone)} ${zoneAbbrev(date, timezone)}` : '';
+    return date
+      ? `${formatTimeInTimeZone(date, timezone, hour12)} ${zoneAbbrev(date, timezone)}`
+      : '';
   };
   const formatFull = (iso: string) => `${formatDay(iso)} ${formatTime(iso)}`.trim();
 

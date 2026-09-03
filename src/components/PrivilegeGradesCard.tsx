@@ -95,7 +95,7 @@ const DEFAULT_PAGE_SIZE = 10;
 export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
   const VISIBILITY_REFRESH_MS = 60_000;
   const { data: session } = useSession();
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const queryClient = useQueryClient();
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const exportMounted = useMountedOnce(exportDialogOpen);
@@ -467,7 +467,7 @@ export function PrivilegeGradesCard({ courseId }: { courseId: string }) {
           </div>
           {lastUpdated ? (
             <div className="text-muted-foreground text-xs">
-              Last updated: {formatTimeInTimeZone(lastUpdated, timezone)}
+              Last updated: {formatTimeInTimeZone(lastUpdated, timezone, hour12)}
             </div>
           ) : null}
         </div>
