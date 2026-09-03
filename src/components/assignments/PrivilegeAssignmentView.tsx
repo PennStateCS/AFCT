@@ -816,12 +816,16 @@ export default function AssignmentDashboardPage({
             className="animate-fade-in-up transition-opacity duration-300"
           >
             <div className="space-y-4">
-              <div className="flex w-full items-center justify-between">
+              {/* flex-wrap and a gap: the heading and the two buttons do not fit on one line
+                  on a phone, and justify-between alone just pushed the buttons off the edge. */}
+              <div className="flex w-full flex-wrap items-center justify-between gap-2">
                 <h2 className="flex items-center gap-2 text-xl font-semibold">
                   <FileText className="h-6 w-6" />
                   Problems
                 </h2>
-                <div className="flex items-center gap-2">
+                {/* flex-wrap: "Create Problem" and "Add Existing Problem" side by side are
+                    wider than a phone, and neither label shortens. */}
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="default"
                     aria-label="Create Problem"

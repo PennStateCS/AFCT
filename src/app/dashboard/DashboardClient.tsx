@@ -132,7 +132,10 @@ export default function DashboardClient({ sessionUser, courses, title }: Props) 
 
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="text-muted-foreground shrink-0 text-sm font-medium">
+                      {/* Not shrink-0: a long course code then refuses to wrap and the row
+                          runs off the card. The name beside it wraps to its own line first,
+                          so the code keeps its width whenever there is any to keep. */}
+                      <span className="text-muted-foreground min-w-0 text-sm font-medium break-words">
                         {course.code}
                       </span>
                       <span className="min-w-0 truncate font-medium">{course.name}</span>

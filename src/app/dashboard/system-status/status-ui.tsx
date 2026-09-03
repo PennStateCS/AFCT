@@ -98,9 +98,12 @@ export const Stat = ({
   onCopy?: () => void;
   copyAriaLabel?: string;
 }) => (
+  // min-w-0 on both halves: `break-words` lets a long value wrap but does NOT reduce the
+  // element's min-content width, so a 30-character migration name still pushed the row
+  // (and the page) sideways until the flex items were allowed to shrink.
   <div className="flex items-start justify-between gap-4">
-    <div className="text-muted-foreground text-sm">{label}</div>
-    <div className="text-right text-sm break-words">
+    <div className="text-muted-foreground min-w-0 text-sm">{label}</div>
+    <div className="min-w-0 text-right text-sm break-words">
       {value}
       {onCopy ? (
         <button
