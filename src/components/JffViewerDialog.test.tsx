@@ -789,6 +789,53 @@ describe('clicking a state', () => {
     expect(screen.getByLabelText('Final state')).toBeChecked();
   });
 
+  it('lists what touches the state, and opens a transition when one is clicked', async () => {
+    // The only other way to a transition's properties is clicking its line on the canvas, which
+    // is no way at all for somebody not using a mouse.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+
+    const rows = await screen.findAllByRole('button', { name: /^(Out|In):/ });
+    expect(rows.length).toBeGreaterThan(0);
+
+    fireEvent.click(rows[0]!);
+
+    expect(await screen.findByRole('group', { name: /transition from/i })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
+  });
+
+  it('offers where the state sits, and moves it when the numbers change', async () => {
+    // The drawing's coordinates, not the file's: typing one is how two states are lined up
+    // exactly, which dragging cannot do.
+    const pos = { x: 100, y: 200 };
+    const node = {
+      isNode: () => true,
+      hasClass: () => false,
+      id: () => '0',
+      empty: () => false,
+      data: () => undefined,
+      position: vi.fn((next?: { x: number; y: number }) => {
+        if (next) Object.assign(pos, next);
+        return pos;
+      }),
+      closedNeighborhood: () => ({ addClass: () => ({ removeClass: () => undefined }) }),
+    };
+    h.cy.getElementById.mockReturnValue(node);
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
+      ((evt: { target: unknown }) => void) | undefined;
+    act(() => tap?.({ target: node }));
+
+    const x = await screen.findByLabelText('X');
+    expect(x).toHaveValue(100);
+    fireEvent.focus(x);
+    fireEvent.change(x, { target: { value: '250' } });
+
+    expect(pos).toMatchObject({ x: 250, y: 200 });
+  });
+
   it('shows nothing for the start marker, which is scenery rather than a state', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();

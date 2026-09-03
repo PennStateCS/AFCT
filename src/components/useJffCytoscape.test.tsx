@@ -1040,6 +1040,51 @@ describe('the size a state name is drawn at', () => {
   });
 });
 
+describe('moving a state by typing its coordinates', () => {
+  it('says where the selected state is, and follows it when it is dragged', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const cy = lastCy();
+
+    act(() => cy.handlers.tap({ target: cy.byId('0') }));
+    await waitFor(() => expect(api().selectedStatePosition).toEqual(cy.byId('0')?.position()));
+
+    cy.byId('0')?.position({ x: 700, y: 400 });
+    await act(async () => {
+      await cy.handlers.position({ target: cy.byId('0') });
+    });
+
+    expect(api().selectedStatePosition).toEqual({ x: 700, y: 400 });
+  });
+
+  it('moves the state, and is one undoable step like a drag', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const cy = lastCy();
+    const before = { ...cy.byId('0')!.position() };
+    act(() => cy.handlers.tap({ target: cy.byId('0') }));
+
+    // Focus first, which is where the snapshot is taken, exactly as picking a state up is.
+    act(() => api().beginStateMove());
+    act(() => api().moveState('0', { x: 250, y: 250 }));
+
+    expect(cy.byId('0')?.position()).toEqual({ x: 250, y: 250 });
+    await waitFor(() => expect(api().canUndo).toBe(true));
+
+    act(() => api().undo());
+    expect(cy.byId('0')?.position()).toEqual(before);
+  });
+
+  it('records nothing when the boxes are only tabbed through', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().beginStateMove());
+
+    expect(api().canUndo).toBe(false);
+  });
+});
+
 describe('renaming a state', () => {
   const KEY = 'submissions:machine.jff';
 
@@ -1108,7 +1153,9 @@ describe('renaming a state', () => {
 
   it('writes the names down, so the next visit has them', async () => {
     const { api } = renderViewer({ viewStateKey: KEY });
-    await waitFor(() => expect(instances).toHaveLength(1));
+    // After the load has finished, so the write that carries the name has to be this change's
+    // own rather than the one the load ends with.
+    await waitFor(() => expect(api().phase).toBe('ready'));
 
     act(() => api().renameState('0', 'start'));
 
@@ -1166,7 +1213,7 @@ describe('choosing which state is initial', () => {
 
   it('survives a rebuild and a refresh, like the names do', async () => {
     const { api, rerender } = renderViewer({ viewStateKey: KEY });
-    await waitFor(() => expect(instances).toHaveLength(1));
+    await waitFor(() => expect(api().phase).toBe('ready'));
     act(() => api().setInitialState('1'));
     await waitFor(() =>
       expect(
@@ -1228,7 +1275,7 @@ describe('choosing which states are final', () => {
 
   it('survives a rebuild and is written down for the next visit', async () => {
     const { api, rerender } = renderViewer({ viewStateKey: KEY });
-    await waitFor(() => expect(instances).toHaveLength(1));
+    await waitFor(() => expect(api().phase).toBe('ready'));
     act(() => api().setFinalState('0', true));
     await waitFor(() =>
       expect(JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).finals).toEqual({
@@ -1279,7 +1326,7 @@ describe('changing what a transition reads', () => {
 
   it('survives a rebuild and is written down for the next visit', async () => {
     const { api, rerender } = renderViewer({ viewStateKey: KEY });
-    await waitFor(() => expect(instances).toHaveLength(1));
+    await waitFor(() => expect(api().phase).toBe('ready'));
     act(() => api().setTransitionField(0, 'read', 'x'));
     await waitFor(() =>
       expect(

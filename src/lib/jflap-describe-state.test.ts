@@ -52,3 +52,26 @@ describe('describeState', () => {
     expect(describeState(unnamed, '7', 'ε')?.name).toBeTruthy();
   });
 });
+
+describe("a state's transitions, as its panel lists them", () => {
+  it('gives each one its two ends, so a row can open that transition', () => {
+    const q0 = describeState(FA, '0', 'ε');
+    expect(q0?.links).toEqual([
+      { direction: 'out', from: '0', to: '1', other: 'q1', label: 'a' },
+      { direction: 'in', from: '1', to: '0', other: 'q1', label: 'ε' },
+    ]);
+  });
+
+  it('lists a self-loop once rather than as both a departure and an arrival', () => {
+    // It leaves and arrives at the same state; two rows would read as two transitions.
+    const q1 = describeState(FA, '1', 'ε');
+    const loops = q1?.links.filter((link) => link.from === '1' && link.to === '1');
+    expect(loops).toHaveLength(1);
+    expect(loops?.[0]?.direction).toBe('out');
+  });
+
+  it('keeps the order the file declares, which is the order the drawing uses', () => {
+    const q1 = describeState(FA, '1', 'ε');
+    expect(q1?.links.map((link) => link.label)).toEqual(['a', 'b', 'ε']);
+  });
+});

@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { useTheme } from 'next-themes';
 import {
   Dialog,
@@ -55,6 +55,7 @@ import {
   Copy,
   Minus,
   Plus,
+  ChevronRight,
   Crosshair,
   Scan,
   Undo2,
@@ -246,12 +247,21 @@ function StateProperties({
   onRename,
   onSetInitial,
   onSetFinal,
+  onOpenTransition,
+  position,
+  onMoveStart,
+  onMove,
   onClose,
 }: {
   state: StateDescription;
   onRename: (id: string, name: string) => void;
   onSetInitial: (id: string | null) => void;
   onSetFinal: (id: string, final: boolean) => void;
+  onOpenTransition: (from: string, to: string) => void;
+  /** Where the state is on the canvas now, which is not where the file has it once dragged. */
+  position: { x: number; y: number } | null;
+  onMoveStart: () => void;
+  onMove: (id: string, at: { x: number; y: number }) => void;
   onClose: () => void;
 }) {
   // Seeded once per state: the call site keys this component by id, so moving to another state
@@ -262,6 +272,8 @@ function StateProperties({
   const nameFieldId = useId();
   const initialFieldId = useId();
   const finalFieldId = useId();
+  const xFieldId = useId();
+  const yFieldId = useId();
 
   return (
     <PropertiesPanel
@@ -320,36 +332,92 @@ function StateProperties({
         </Label>
       </div>
 
-      <dl className="space-y-2 text-xs">
-        <div>
-          <dt className="text-muted-foreground">Out</dt>
-          <dd>
-            {state.outgoing.length === 0 ? (
-              <span className="text-muted-foreground">Nothing leaves this state</span>
-            ) : (
-              <ul className="list-none space-y-0.5">
-                {state.outgoing.map((line, i) => (
-                  <li key={`${line}-${i}`}>{line}</li>
-                ))}
-              </ul>
-            )}
-          </dd>
+      {/* Where it sits on the canvas. The drawing's own coordinates, the ones a drag moves it
+          through and the ones a downloaded arrangement carries, rather than the file's: those
+          are where its author put it and do not change when the reader moves it.
+
+          Typed rather than nudged, because the reason to type a coordinate at all is to line
+          two states up exactly, which dragging cannot do. */}
+      {position ? (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label htmlFor={xFieldId} className="text-muted-foreground text-xs font-normal">
+              X
+            </Label>
+            <Input
+              id={xFieldId}
+              type="number"
+              value={Math.round(position.x)}
+              onFocus={onMoveStart}
+              onChange={(event) => {
+                const x = Number(event.target.value);
+                if (Number.isFinite(x)) onMove(state.id, { x, y: position.y });
+              }}
+              className="h-8 font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={yFieldId} className="text-muted-foreground text-xs font-normal">
+              Y
+            </Label>
+            <Input
+              id={yFieldId}
+              type="number"
+              value={Math.round(position.y)}
+              onFocus={onMoveStart}
+              onChange={(event) => {
+                const y = Number(event.target.value);
+                if (Number.isFinite(y)) onMove(state.id, { x: position.x, y });
+              }}
+              className="h-8 font-mono text-sm"
+            />
+          </div>
         </div>
-        <div>
-          <dt className="text-muted-foreground">In</dt>
-          <dd>
-            {state.incoming.length === 0 ? (
-              <span className="text-muted-foreground">Nothing reaches this state</span>
-            ) : (
-              <ul className="list-none space-y-0.5">
-                {state.incoming.map((line, i) => (
-                  <li key={`${line}-${i}`}>{line}</li>
-                ))}
-              </ul>
-            )}
-          </dd>
+      ) : null}
+
+      {/* Everything that touches this state, as a list rather than two paragraphs of prose, and
+          each row a way into that transition's own properties: the canvas is the only other way
+          to reach one, and a canvas cannot be tabbed into. */}
+      <div className="space-y-1.5">
+        <div className="text-muted-foreground text-xs">
+          {state.links.length === 0 ? 'Transitions' : `Transitions (${state.links.length})`}
         </div>
-      </dl>
+        {state.links.length === 0 ? (
+          <p className="text-muted-foreground text-xs">Nothing touches this state</p>
+        ) : (
+          <ul className="divide-border divide-y rounded-md border">
+            {state.links.map((link, i) => (
+              <li key={`${link.from}-${link.to}-${link.label}-${i}`}>
+                <button
+                  type="button"
+                  onClick={() => onOpenTransition(link.from, link.to)}
+                  className="hover:bg-muted focus-visible:ring-ring/70 flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs focus-visible:ring-[3px] focus-visible:outline-none"
+                >
+                  <span className="text-muted-foreground shrink-0">
+                    {link.direction === 'out' ? 'Out:' : 'In:'}
+                  </span>
+                  <span className="min-w-0 flex-1 font-mono break-all">
+                    {link.direction === 'out' ? (
+                      <>
+                        on {link.label} <span aria-hidden="true">&rarr;</span>
+                        <span className="sr-only">to</span> {link.other}
+                      </>
+                    ) : (
+                      <>
+                        {link.other} <span aria-hidden="true">&rarr;</span> on {link.label}
+                      </>
+                    )}
+                  </span>
+                  <ChevronRight
+                    className="text-muted-foreground h-3.5 w-3.5 shrink-0"
+                    aria-hidden="true"
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </PropertiesPanel>
   );
 }
@@ -407,39 +475,39 @@ function TransitionProperties({
       {/* One block per transition, because parallel transitions between the same two states are
           drawn as a single line: clicking it asks about all of them, and each is edited on its
           own. The boxes offered are the ones the machine type has, so a Turing machine gets what
-          it writes and which way it moves and a finite automaton does not. */}
-      <div className="space-y-3">
-        <div className="text-muted-foreground text-xs">
-          {edge.transitions.length === 1
-            ? 'Transition'
-            : `Transitions (${edge.transitions.length})`}
+          it writes and which way it moves and a finite automaton does not.
+
+          Laid out like the state panel's Name, label over box: this is the same kind of thing,
+          and a second shape for it would read as a different one. */}
+      {edge.transitions.map((transition, i) => (
+        <div key={transition.index} className={cn('space-y-3', i > 0 && 'border-t pt-3')}>
+          {/* Only when there is more than one to tell apart, and it says which line of the
+              label on the drawing this block is. */}
+          {edge.transitions.length > 1 ? (
+            <div className="text-muted-foreground text-xs">
+              Transition {i + 1} of {edge.transitions.length}
+            </div>
+          ) : null}
+          {fields.map((field) => {
+            const fieldId = `${fieldIdPrefix}-${transition.index}-${field}`;
+            return (
+              <div key={field} className="space-y-1">
+                <Label htmlFor={fieldId} className="text-muted-foreground text-xs font-normal">
+                  {TRANSITION_FIELD_LABEL[field]}
+                </Label>
+                <Input
+                  id={fieldId}
+                  value={transition[field] ?? ''}
+                  onChange={(event) => onEdit(transition.index, field, event.target.value)}
+                  className="h-8 font-mono text-sm"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+            );
+          })}
         </div>
-        {edge.transitions.map((transition) => (
-          <div
-            key={transition.index}
-            className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5 rounded-md border p-2"
-          >
-            {fields.map((field) => {
-              const fieldId = `${fieldIdPrefix}-${transition.index}-${field}`;
-              return (
-                <Fragment key={field}>
-                  <Label htmlFor={fieldId} className="text-muted-foreground text-xs font-normal">
-                    {TRANSITION_FIELD_LABEL[field]}
-                  </Label>
-                  <Input
-                    id={fieldId}
-                    value={transition[field] ?? ''}
-                    onChange={(event) => onEdit(transition.index, field, event.target.value)}
-                    className="h-7 font-mono text-sm"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </Fragment>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+      ))}
     </PropertiesPanel>
   );
 }
@@ -556,6 +624,10 @@ export function JffCytoscapeViewer({
     setInitialState,
     setFinalState,
     setTransitionField,
+    selectTransition,
+    selectedStatePosition,
+    beginStateMove,
+    moveState,
     zoomIn,
     zoomOut,
     zoom,
@@ -983,6 +1055,10 @@ export function JffCytoscapeViewer({
             onRename={renameState}
             onSetInitial={setInitialState}
             onSetFinal={setFinalState}
+            onOpenTransition={selectTransition}
+            position={selectedStatePosition}
+            onMoveStart={beginStateMove}
+            onMove={moveState}
             onClose={clearSelectedState}
           />
         ) : selectedTransition ? (

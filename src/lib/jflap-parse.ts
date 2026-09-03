@@ -355,6 +355,24 @@ export function machineDescriptionText(description: MachineDescription): string 
   return lines.join('\n');
 }
 
+/**
+ * One transition touching a state, as the state's own panel lists it.
+ *
+ * Carries the transition's two ends as well as the text, so a row in that list can open the
+ * transition's own properties: the panel that shows it knows which state it is describing, not
+ * which line the reader wants next.
+ */
+export type StateLink = {
+  direction: 'out' | 'in';
+  /** The transition's ends, by id, which is what selects the drawn line. */
+  from: string;
+  to: string;
+  /** The state at the other end, by name. A self-loop's other end is the state itself. */
+  other: string;
+  /** What it reads, formatted for the machine's type. */
+  label: string;
+};
+
 /** One state, described for the panel that appears when a reader clicks it. */
 export type StateDescription = {
   id: string;
@@ -367,6 +385,13 @@ export type StateDescription = {
   incoming: string[];
   /** A self-loop appears in both lists; this is the count of distinct transitions touching it. */
   degree: number;
+  /**
+   * The same transitions as `outgoing` and `incoming`, in their parts and in one list.
+   *
+   * A self-loop is one entry here rather than two: it leaves and arrives at the same state, and
+   * a list that showed it twice would read as two transitions.
+   */
+  links: StateLink[];
 };
 
 /**
@@ -391,6 +416,17 @@ export function describeState(parsed: Parsed, id: string, eps: string): StateDes
     .filter((t) => t.to === id)
     .map((t) => `from ${nameOf(t.from)} on ${labelFor(t, parsed.type, eps)}`);
 
+  const links: StateLink[] = ordered
+    .filter((t) => t.from === id || t.to === id)
+    .map((t) => ({
+      // A self-loop is listed once, as something the state does rather than something done to it.
+      direction: t.from === id ? ('out' as const) : ('in' as const),
+      from: t.from,
+      to: t.to,
+      other: nameOf(t.from === id ? t.to : t.from),
+      label: labelFor(t, parsed.type, eps),
+    }));
+
   return {
     id: state.id,
     name: state.name || state.id,
@@ -399,6 +435,7 @@ export function describeState(parsed: Parsed, id: string, eps: string): StateDes
     outgoing,
     incoming,
     degree: ordered.filter((t) => t.from === id || t.to === id).length,
+    links,
   };
 }
 

@@ -548,6 +548,14 @@ export function useJffCytoscape({
   // own identity for it.
   const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
   /**
+   * Where the selected state is on the canvas right now.
+   *
+   * Not read from the parsed file: that says where its author put it, and the reader may have
+   * dragged it since. Kept in step by the same `position` event that moves the labels and the
+   * initial-state marker, so the boxes in the panel follow a drag rather than going stale.
+   */
+  const [selectedPosition, setSelectedPosition] = useState<{ x: number; y: number } | null>(null);
+  /**
    * What is selected, in the shape the remembered view stores.
    *
    * A ref because the writer reads only refs: it runs from a debounce and from `pagehide`, and
@@ -612,6 +620,9 @@ export function useJffCytoscape({
    * the restore that came a moment later read it back and stayed there.
    */
   const loadGeneration = useRef(0);
+  // Read by the graph's own event handlers, which are built once per load.
+  const selectedStateIdRef = useRef<string | null>(null);
+  selectedStateIdRef.current = selectedStateId;
   const selectionRef = useRef<ViewerSelection | null>(null);
   selectionRef.current = selectedStateId
     ? { kind: 'state', id: selectedStateId }
@@ -871,6 +882,8 @@ export function useJffCytoscape({
         if (!node || node.empty?.() || node.length === 0) return;
         setSelectedStateId(selection.id);
         setSelectedEdge(null);
+        const at = node.position?.();
+        setSelectedPosition(isFinitePoint(at) ? { x: at.x, y: at.y } : null);
         highlightElement(cy, node);
         return;
       }
@@ -885,12 +898,31 @@ export function useJffCytoscape({
       const edge = match?.[0];
       if (!edge) return;
       setSelectedStateId(null);
+      setSelectedPosition(null);
       setSelectedEdge({ from: selection.from, to: selection.to });
       highlightElement(cy, edge);
     } catch {
       // An engine mid-teardown, or one a test has not told about selections. The machine is
       // still there; only the panel is missing.
     }
+  }, []);
+
+  /**
+   * Turn the snapshot taken when a move began into an undo step.
+   *
+   * Shared by the two ways a state moves: dragging it, where the snapshot is taken as it is
+   * picked up, and typing its coordinates, where it is taken as the box takes focus. Both hold
+   * the snapshot until something actually moves, so a click or a stray focus records nothing.
+   */
+  const commitPendingMove = useCallback(() => {
+    const before = grabbedArrangement.current;
+    grabbedArrangement.current = null;
+    if (!before) return;
+    undoStack.current.push(before);
+    // A new action makes the redo branch unreachable, as in any editor.
+    redoStack.current = [];
+    setUndoDepth(undoStack.current.length);
+    setRedoDepth(0);
   }, []);
 
   const restoreSavedView = useCallback(
@@ -991,6 +1023,7 @@ export function useJffCytoscape({
         setParsed(parsed);
         setSelectedStateId(null);
         setSelectedEdge(null);
+        setSelectedPosition(null);
         // A different file is a different machine. Keeping the old history would let undo
         // apply one machine's positions to another's states.
         //
@@ -1518,6 +1551,7 @@ export function useJffCytoscape({
             // A click on empty canvas means "never mind", so the properties panel goes too.
             setSelectedStateId(null);
             setSelectedEdge(null);
+            setSelectedPosition(null);
             return;
           }
           const ele = evt.target;
@@ -1530,6 +1564,10 @@ export function useJffCytoscape({
           // One panel at a time: a state and an edge cannot both be what was just clicked.
           const isNode = ele.isNode?.() ?? false;
           setSelectedStateId(isNode ? (ele.id?.() ?? null) : null);
+          // Where it is now, for the panel's coordinate boxes. From the graph rather than the
+          // file: this is the point a drag moves, and the file's is where its author put it.
+          const at = isNode ? ele.position?.() : null;
+          setSelectedPosition(isFinitePoint(at) ? { x: at.x, y: at.y } : null);
           setSelectedEdge(
             isNode ? null : { from: ele.data?.('source') ?? '', to: ele.data?.('target') ?? '' },
           );
@@ -1578,14 +1616,9 @@ export function useJffCytoscape({
         // exactly while it is held, then settles onto the lattice, which reads as landing
         // rather than as the drag fighting back.
         cy.on('dragfree', 'node', (evt: any) => {
-          const before = grabbedArrangement.current;
-          grabbedArrangement.current = null;
-          if (before) {
-            undoStack.current.push(before);
-            // A new action makes the redo branch unreachable, as in any editor.
-            redoStack.current = [];
-            setUndoDepth(undoStack.current.length);
-            setRedoDepth(0);
+          const moved = grabbedArrangement.current !== null;
+          commitPendingMove();
+          if (moved) {
             // Write the view down again now that this counts as a rearrangement. Dragging a
             // state and then holding it still schedules the write while the flag is still off,
             // and release fires nothing else, so without this the saved view would have the
@@ -1611,6 +1644,10 @@ export function useJffCytoscape({
           const target = evt.target;
           if (!target?.isNode?.() || target.hasClass('start') || target.hasClass('note')) return;
 
+          if (target.id?.() === selectedStateIdRef.current) {
+            const at = target.position?.();
+            if (isFinitePoint(at)) setSelectedPosition({ x: at.x, y: at.y });
+          }
           await updateEdgeLabelMargins();
           await selfLoopGeometry();
           repositionStartNodes(cy);
@@ -1623,22 +1660,33 @@ export function useJffCytoscape({
       }
     },
     // The last two never change identity, so they cost nothing here.
-    [src, epsSymbol, darkMode, honorPositions, rememberView, restoreSavedView],
+    [src, epsSymbol, darkMode, honorPositions, rememberView, restoreSavedView, commitPendingMove],
   );
 
   /**
-   * Write the view down when the selection changes.
+   * Write the view down when something that is not the camera changes.
    *
-   * Nothing else does: the debounced writer answers the camera and the arrangement, and
-   * clicking a state moves neither, so a panel opened and then refreshed away came back and a
-   * panel closed and then refreshed came back open. Only once the machine is on screen, or the
-   * clearing that every load starts with would erase the selection that load is about to
-   * restore.
+   * The debounced writer answers the camera and the arrangement, which cytoscape reports; none
+   * of these move either. Without this a panel opened and then refreshed away came back, a panel
+   * closed came back open, and a state renamed a moment before a refresh was remembered only
+   * because the flush on the way out happened to catch it.
+   *
+   * Only once the machine is on screen, or the clearing that every load starts with would erase
+   * the selection that load is about to restore.
    */
   useEffect(() => {
     if (phase !== 'ready') return;
     rememberView();
-  }, [phase, selectedStateId, selectedEdge, rememberView]);
+  }, [
+    phase,
+    selectedStateId,
+    selectedEdge,
+    renames,
+    initialOverride,
+    finalOverrides,
+    transitionEdits,
+    rememberView,
+  ]);
 
   /**
    * Write the view down on the way out.
@@ -1932,6 +1980,56 @@ export function useJffCytoscape({
     clearSelectedState: () => {
       setSelectedStateId(null);
       setSelectedEdge(null);
+      setSelectedPosition(null);
+    },
+    /** Where the selected state sits on the canvas now, which a drag keeps in step. */
+    selectedStatePosition: selectedPosition,
+    /**
+     * Take a snapshot before the coordinates are typed into.
+     *
+     * The same bargain a drag makes: the arrangement is remembered as the box takes focus and
+     * only becomes an undo step if something actually moves, so tabbing through the panel
+     * records nothing.
+     */
+    beginStateMove: () => {
+      const cy = cyRef.current;
+      if (!cy) return;
+      grabbedArrangement.current = readArrangement(cy, honorPositionsRef.current);
+    },
+    /**
+     * Put a state at a given point, which is the panel's coordinate boxes.
+     *
+     * The drawing's own coordinates, the ones a drag moves it through and the ones "Download
+     * this arrangement" writes out, not the file's: those are where its author put it, and it
+     * may have been dragged since.
+     */
+    moveState: (id: string, at: { x: number; y: number }) => {
+      if (!isFinitePoint(at)) return;
+      const cy = cyRef.current;
+      if (!cy) return;
+      try {
+        const node = cy.getElementById(id);
+        if (!node || node.empty?.()) return;
+        commitPendingMove();
+        node.position({ x: at.x, y: at.y });
+        setSelectedPosition({ x: at.x, y: at.y });
+        refreshLabelGeometryRef.current?.();
+        rememberView();
+      } catch {
+        // A graph mid-teardown. Nothing to move.
+      }
+    },
+    /**
+     * Open a transition's properties, as if its line had been clicked.
+     *
+     * The rows in a state's panel are the way into the transitions around it, which a canvas
+     * cannot offer to somebody who is not using a mouse. Goes through the same restore path a
+     * refresh does, so the drawing dims around it exactly as a click would leave it.
+     */
+    selectTransition: (from: string, to: string) => {
+      const cy = cyRef.current;
+      if (!cy) return;
+      restoreSelection(cy, { kind: 'transition', from, to });
     },
     /**
      * Make a state the initial one, or take the marker away with `null`.
