@@ -18,7 +18,10 @@ function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="focus-visible:ring-ring/70 size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1"
+        // [&>div]:block! replaces the `display: table` Radix puts on its content wrapper.
+        // A table box shrink-wraps to its content, so anything relying on truncation inside
+        // a scroll area never truncated: it grew past the viewport and was clipped instead.
+        className="focus-visible:ring-ring/70 size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1 [&>div]:block!"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

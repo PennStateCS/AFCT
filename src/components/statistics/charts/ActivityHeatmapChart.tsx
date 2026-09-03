@@ -52,12 +52,16 @@ export function ActivityHeatmapChart({ matrix, max, unitPlural }: Props) {
   const { state, showAtEvent, hide } = useChartTooltip();
 
   return (
-    <div
-      className="w-full"
-      role="group"
-      aria-label={`When ${unitPlural} submit: activity by day of week and hour.`}
-    >
-      <div className="overflow-x-auto">
+    <div className="w-full">
+      {/* The group and its label moved onto the scrolling box: 24 hourly columns never fit a
+          phone, and a strip that scrolls sideways has to be reachable by keyboard. Same
+          treatment as the similarity timeline. */}
+      <div
+        tabIndex={0}
+        role="group"
+        aria-label={`When ${unitPlural} submit: activity by day of week and hour.`}
+        className="focus-visible:ring-ring overflow-x-auto focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none"
+      >
         <div
           className="grid min-w-[34rem] gap-[3px]"
           style={{ gridTemplateColumns: `2.25rem repeat(24, minmax(0, 1fr))` }}
