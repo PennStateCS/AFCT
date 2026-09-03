@@ -50,8 +50,10 @@ describe('the course Settings tab', () => {
     // Each field landed in the group it belongs to, not merely somewhere on the page.
     const dates = screen.getByRole('region', { name: 'Dates and timezone' });
     expect(within(dates).getByLabelText(/Course timezone/)).toBeInTheDocument();
-    expect(within(dates).getByLabelText(/Start Date/)).toBeInTheDocument();
-    expect(within(dates).getByLabelText(/End Date/)).toBeInTheDocument();
+    // The date fields are a date input and a time input under one label; either half
+    // proves the field landed in this section.
+    expect(within(dates).getByLabelText('Start Date & Time, date')).toBeInTheDocument();
+    expect(within(dates).getByLabelText('End Date & Time, date')).toBeInTheDocument();
   });
 
   /*

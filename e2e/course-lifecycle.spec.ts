@@ -10,8 +10,9 @@ import { signIn, unique } from './helpers';
  *   - Step 1 Details: #name, #code, #semester, #credits. `semester` has no default and
  *     silently blocks Next. `code` is format-validated ("CMPSC 221" style, letters then
  *     digits) so a prefix containing a digit is rejected.
- *   - Step 2 Schedule: #startDate, #endDate, #registrationOpenAt, #registrationCloseAt,
- *     all type=datetime-local, all required, none defaulted.
+ *   - Step 2 Schedule: startDate, endDate, registrationOpenAt, registrationCloseAt, each a
+ *     date box and a time box (labelled "<field>, date" / "<field>, time"), all required,
+ *     none defaulted.
  *   - Step 3 Faculty & TAs: at least one instructor required ("Pick at least one
  *     instructor."). The trigger's visible text is "Select faculty" but that is NOT its
  *     accessible name, so getByRole('button', { name: 'Select faculty' }) matches zero

@@ -368,7 +368,11 @@ jobs:
   e2e:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30, not 20: the suite itself runs in about 16 minutes, and a slow cold compile of the
+    # dev server on the runner (five minutes on one occasion) then took the whole job past
+    # the limit and cancelled it mid-run. Raise this again rather than trimming a real
+    # check, but if it ever needs 30 the suite has grown past what a smoke suite should be.
+    timeout-minutes: 30
 
     services:
       postgres:

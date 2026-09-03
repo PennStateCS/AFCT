@@ -32,13 +32,16 @@ test('the faculty picker scrolls inside the create-course dialog', async ({ page
   await dialog.getByRole('button', { name: 'Next' }).click();
 
   await expect(dialog.getByText('Step 2 of 5', { exact: false })).toBeAttached();
+  // Each date field is a date box and a time box (see DateTimeField), so both halves are
+  // named after the field.
   for (const field of [
     'Start Date & Time',
     'End Date & Time',
     'Self Registration Opens',
     'Self Registration Closes',
   ]) {
-    await dialog.getByLabel(field).fill('2026-09-01T09:00');
+    await dialog.getByLabel(`${field}, date`).fill('2026-09-01');
+    await dialog.getByLabel(`${field}, time`).fill('09:00');
   }
   await dialog.getByRole('button', { name: 'Next' }).click();
   await expect(dialog.getByText('Step 3 of 5', { exact: false })).toBeAttached();

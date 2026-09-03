@@ -430,7 +430,6 @@ export default function DuplicateCourseDialog({
                     name="startDate"
                     label="Start Date & Time"
                     error={errors.startDate?.message as string | undefined}
-                    showValidWhenSet
                   />
                   <CourseDateTimeField
                     control={control}
@@ -438,7 +437,7 @@ export default function DuplicateCourseDialog({
                     label="End Date & Time"
                     error={errors.endDate?.message as string | undefined}
                     min={startDateStr || undefined}
-                    showValidWhenSet
+                    defaultTime="23:59"
                   />
                 </div>
 
@@ -448,7 +447,6 @@ export default function DuplicateCourseDialog({
                     name="registrationOpenAt"
                     label="Self Registration Opens"
                     error={errors.registrationOpenAt?.message as string | undefined}
-                    showValidWhenSet
                   />
                   <CourseDateTimeField
                     control={control}
@@ -456,7 +454,7 @@ export default function DuplicateCourseDialog({
                     label="Self Registration Closes"
                     error={errors.registrationCloseAt?.message as string | undefined}
                     min={registrationOpenAtStr || undefined}
-                    showValidWhenSet
+                    defaultTime="23:59"
                   />
                 </div>
               </>

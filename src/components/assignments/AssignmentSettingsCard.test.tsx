@@ -1,9 +1,10 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { setDateTimeField, setNthDateTimeField } from '@/test/date-time-field';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Assignment } from '@prisma/client';
 
@@ -179,7 +180,7 @@ describe('AssignmentSettingsCard', () => {
   it('shows the wizard audience selector, schedule, and the date-overrides section', async () => {
     renderCard();
     expect(await screen.findByText('Assign to:')).toBeInTheDocument();
-    expect(screen.getByLabelText('Due')).toBeInTheDocument();
+    expect(screen.getByLabelText('Due, date')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /date overrides \(0\)/i })).toBeInTheDocument();
   });
 
@@ -251,9 +252,7 @@ describe('AssignmentSettingsCard', () => {
 
     // Give the override a due date (the base "Due" is labelled "Due"; the override one too,
     // so set "Available from" which is unique to the override row).
-    fireEvent.change(screen.getByLabelText('Available from'), {
-      target: { value: '2026-08-20T10:00' },
-    });
+    setDateTimeField('Available from', '2026-08-20T10:00');
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -272,16 +271,13 @@ describe('AssignmentSettingsCard', () => {
     await screen.findByRole('heading', { name: /date overrides \(1\)/i });
 
     // Available from is unique to the override row (the base field is "Available from (optional)").
-    fireEvent.change(screen.getByLabelText('Available from'), {
-      target: { value: '2026-08-01T09:00' },
-    });
+    setDateTimeField('Available from', '2026-08-01T09:00');
     // Two "Due" fields: base schedule (0) and this override (1).
-    fireEvent.change(screen.getAllByLabelText('Due')[1], { target: { value: '2026-08-25T23:59' } });
+    setNthDateTimeField('Due', 1, '2026-08-25T23:59');
     // Late policy -> allow, which reveals the override's Accept until.
     await user.selectOptions(screen.getByRole('combobox'), 'allow');
-    fireEvent.change(await screen.findByLabelText('Accept until (optional)'), {
-      target: { value: '2026-08-30T23:59' },
-    });
+    await screen.findByLabelText('Accept until (optional), date');
+    setDateTimeField('Accept until (optional)', '2026-08-30T23:59');
 
     await user.click(screen.getByRole('button', { name: /save changes/i }));
 
