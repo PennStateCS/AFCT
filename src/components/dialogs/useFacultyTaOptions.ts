@@ -12,6 +12,34 @@ export function getUserName(user: User): string {
 }
 
 /**
+ * The chosen people, named for a review line.
+ *
+ * The email is added only where the name alone would not say who: two members of staff called
+ * the same thing is ordinary in a university, and the picker shows every email precisely so the
+ * chooser can tell them apart. Repeating all of them here would make a summary line unreadable
+ * for the sake of the case that is not usually the one on screen.
+ *
+ * An id with nobody behind it (a list still loading, or somebody deleted since) is left as the
+ * id, which is what this did before and is at least traceable.
+ */
+export function namesForReview(ids: readonly string[], people: readonly RosterUser[]): string {
+  const chosen = ids.map((id) => ({ id, user: people.find((person) => person.id === id) }));
+  const seen = new Map<string, number>();
+  for (const { user } of chosen) {
+    if (!user) continue;
+    const name = getUserName(user);
+    seen.set(name, (seen.get(name) ?? 0) + 1);
+  }
+  return chosen
+    .map(({ id, user }) => {
+      if (!user) return id;
+      const name = getUserName(user);
+      return (seen.get(name) ?? 0) > 1 ? `${name} (${user.email})` : name;
+    })
+    .join(', ');
+}
+
+/**
  * Loads the faculty and TA option lists for the course create/duplicate wizards. Both
  * queries share the admin-users cache keys (so sibling dialogs dedupe onto one request),
  * fire only while `open`, and surface a load failure as a toast.

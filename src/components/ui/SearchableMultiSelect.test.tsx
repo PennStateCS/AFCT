@@ -189,3 +189,59 @@ describe('SearchableMultiSelect', () => {
     expect(screen.getByRole('button', { name: 'Faculty' })).toBeDisabled();
   });
 });
+
+describe('SearchableMultiSelect: telling two identical names apart', () => {
+  // Reported by Jeff: two members of staff with the same name, and a list of bare names asks
+  // whoever is assigning a course to guess which is which.
+  const twins = [
+    { id: 'b1', label: 'Bruce Wayne', description: 'bwayne@example.edu' },
+    { id: 'b2', label: 'Bruce Wayne', description: 'bruce.wayne@example.edu' },
+    { id: 'c1', label: 'Clark Kent', description: 'ckent@example.edu' },
+  ];
+
+  it('shows the second line under each name', () => {
+    render(
+      <SearchableMultiSelect label="Assign Faculty" items={twins} value={[]} onChange={vi.fn()} />,
+    );
+    expect(screen.getByText('bwayne@example.edu')).toBeInTheDocument();
+    expect(screen.getByText('bruce.wayne@example.edu')).toBeInTheDocument();
+  });
+
+  it('names each option by both, so a screen reader can tell them apart too', () => {
+    render(
+      <SearchableMultiSelect label="Assign Faculty" items={twins} value={[]} onChange={vi.fn()} />,
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Bruce Wayne (bwayne@example.edu)' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Bruce Wayne (bruce.wayne@example.edu)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('searches the second line as well as the name', async () => {
+    const user = userEvent.setup();
+    render(
+      <SearchableMultiSelect label="Assign Faculty" items={twins} value={[]} onChange={vi.fn()} />,
+    );
+
+    await user.type(screen.getByLabelText('Search...'), 'bruce.wayne@');
+
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(
+      screen.getByRole('checkbox', { name: 'Bruce Wayne (bruce.wayne@example.edu)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves an item with no second line exactly as it was', () => {
+    render(
+      <SearchableMultiSelect
+        label="Assign Faculty"
+        items={facultyItems}
+        value={[]}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('checkbox', { name: 'Ada Lovelace' })).toBeInTheDocument();
+  });
+});

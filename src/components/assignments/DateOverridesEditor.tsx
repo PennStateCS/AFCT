@@ -117,7 +117,13 @@ export function DateOverridesEditor({
         };
       }
       const s = students.find((x) => x.id === id);
-      return { id: `s:${id}`, label: s ? getStudentName(s) : 'Student' };
+      // The email under the name, for the same reason the faculty pickers carry one: two
+      // students called the same thing is ordinary, and this list decides whose deadline moves.
+      return {
+        id: `s:${id}`,
+        label: s ? getStudentName(s) : 'Student',
+        description: s?.email,
+      };
     });
 
   const addDateOverride = (rawId: string) => {
