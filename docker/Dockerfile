@@ -21,6 +21,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ git openssl ca-certificates
 
+# Do NOT upgrade the npm the base image ships (10.9.8), tempting though the security tab makes
+# it: most of the scanner's findings against this image are in the packages npm bundles. Both
+# the 11 and 12 lines stop running dependency install scripts by default, and this build needs
+# them: `@prisma/engines`, `esbuild` and `bcrypt` all install through one. Tried, and the
+# install "succeeded" with esbuild and the Prisma engines quietly unbuilt. Those findings are in
+# a build tool the running app never invokes, and they go when the base image ships a newer npm.
+
 # Install deps in their own layer so source edits don't invalidate the npm cache.
 COPY package*.json ./
 RUN npm ci --legacy-peer-deps --prefer-offline --no-audit --progress=false
