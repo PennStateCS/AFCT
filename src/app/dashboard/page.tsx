@@ -275,7 +275,10 @@ export default async function DashboardPage({
     // A fixed rail rather than a quarter of the viewport: at 25% the two modules kept
     // growing on a wide monitor while the courses beside them stayed the same size.
     // items-start keeps the rail from stretching to the left column's height.
-    <div className="grid w-full items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
+    // The single-column case needs minmax(0,1fr) spelled out: an implicit grid column is
+    // sized `auto`, whose minimum is the content's min-content width, so on a phone the
+    // registration-code boxes pushed the whole page 66px wider than the screen.
+    <div className="grid w-full grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
       <section className="min-w-0">
         {/* Replaces the sr-only "Dashboard" h1, and sits inside the left column so the
             rail starts level with it rather than below the whole greeting. The counts are

@@ -27,7 +27,10 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-header"
       className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        // grid-cols spelled out with minmax(0,...): an implicit column is sized `auto`, whose
+        // minimum is the content's min-content width, so a long unbroken title (or a row of
+        // pills that will not wrap) made every card header wider than its card on a phone.
+        "@container/card-header grid auto-rows-min grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto] items-start gap-1.5 px-6 has-data-[slot=card-action]:grid-cols-[minmax(0,1fr)_auto] [.border-b]:pb-6",
         className
       )}
       {...props}
@@ -49,7 +52,10 @@ function CardTitle({
       data-slot="card-title"
       role={role}
       aria-level={role === "heading" ? ariaLevel : undefined}
-      className={cn("text-base leading-none font-semibold", className)}
+      // break-words so a title made of one long token (an assignment named after a
+      // "Deterministicfiniteautomaton", a file name) breaks instead of painting out of
+      // the card and widening the page.
+      className={cn("text-base leading-none font-semibold break-words", className)}
       {...props}
     />
   )
