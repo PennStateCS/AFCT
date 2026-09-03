@@ -38,6 +38,9 @@ const source = {
   type: 'FA' as const,
   maxStates: 6,
   isDeterministic: true,
+  // The answer key's fingerprints, which travel with the file they describe.
+  answerContentHash: 'content-hash',
+  answerShapeHash: 'shape-hash',
 };
 
 beforeEach(() => {
@@ -178,5 +181,48 @@ describe('copying the answer keys for a whole assignment', () => {
     expect(byProblemId.size).toBe(0);
     expect(copiedPaths).toEqual([]);
     expect(fsMock.copyFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('the answer key fingerprints', () => {
+  /**
+   * The hashes are what let the similarity check say a student handed in the instructor's own
+   * solution. They are worked out when the file is uploaded, so a copy that took the file and
+   * left them behind had an answer key the check could not recognise, in every duplicated or
+   * imported course.
+   */
+  it('travel with the file they describe', async () => {
+    await copyProblemInto({ source, courseId: 'c2', title: 'Copy' });
+
+    expect(prismaMock.problem.create.mock.calls[0][0].data).toMatchObject({
+      answerContentHash: 'content-hash',
+      answerShapeHash: 'shape-hash',
+    });
+  });
+
+  it('are left behind when there is no file to describe', async () => {
+    await copyProblemInto({
+      source: { ...source, fileName: null },
+      courseId: 'c2',
+      title: 'Copy',
+    });
+
+    expect(prismaMock.problem.create.mock.calls[0][0].data).toMatchObject({
+      fileName: null,
+      answerContentHash: null,
+      answerShapeHash: null,
+    });
+  });
+
+  it('are left behind when the source file has gone missing', async () => {
+    fsMock.existsSync.mockReturnValue(false);
+
+    await copyProblemInto({ source, courseId: 'c2', title: 'Copy' });
+
+    expect(prismaMock.problem.create.mock.calls[0][0].data).toMatchObject({
+      fileName: null,
+      answerContentHash: null,
+      answerShapeHash: null,
+    });
   });
 });

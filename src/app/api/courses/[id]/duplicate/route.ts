@@ -345,12 +345,23 @@ export const POST = withAdminAuth(
             // stay individual creates), reusing the solution files copied above.
             const problemIdMap: Record<string, string> = {};
             for (const p of problemsToCopy) {
+              const copiedSolution = solutionByProblemId.get(p.id) ?? {};
               const created = await tx.problem.create({
                 data: {
                   title: p.title,
                   // Carry the rich description verbatim so a copy is not silently downgraded.
                   ...descriptionCopyData(p),
-                  ...(solutionByProblemId.get(p.id) ?? {}),
+                  ...copiedSolution,
+                  // The answer key's fingerprints, but only where its file was actually
+                  // copied. They are what lets the similarity check recognise a student
+                  // handing in the instructor's own solution, and a copied course was
+                  // starting without them.
+                  ...(copiedSolution.fileName
+                    ? {
+                        answerContentHash: p.answerContentHash,
+                        answerShapeHash: p.answerShapeHash,
+                      }
+                    : {}),
                   type: p.type ?? undefined,
                   maxStates: p.maxStates ?? undefined,
                   isDeterministic: p.isDeterministic ?? undefined,
@@ -380,13 +391,27 @@ export const POST = withAdminAuth(
                     ...descriptionCopyData(a),
                     dueDate: a.dueDate,
                     unlockAt: a.unlockAt,
-                    assignedToEveryone: a.assignedToEveryone,
-                    // The late policy and the LMS sync setting are the faculty member's
-                    // choices about this assignment, so a copy keeps them. They were being
-                    // dropped, which quietly turned late submissions off and grade sync on.
+                    // Audience and group mode do not survive the crossing, for the same
+                    // reason the import does not carry them: they name students, groups and
+                    // a group set that belong to the source course, and the copy has none of
+                    // those. Assigned to everyone, and individual.
+                    //
+                    // Carrying the flag while leaving the assignee rows behind, which is what
+                    // this did, made an assignment restricted to a few people into one
+                    // restricted to nobody: it was assigned to no student in the new course
+                    // and invisible to all of them.
+                    assignedToEveryone: true,
+                    groupSetId: null,
+                    // The late policy is the faculty member's choice about this assignment,
+                    // so a copy keeps it. It was being dropped, which quietly turned late
+                    // submissions off.
                     allowLateSubmissions: a.allowLateSubmissions,
                     lateCutoff: a.lateCutoff,
-                    ltiAutoSync: a.ltiAutoSync,
+                    // Off, whatever the source said. A new course is connected to no LMS, and
+                    // the import route treats the destination's situation as what matters: a
+                    // copy that quietly starts publishing grades the day somebody links the
+                    // course is the wrong kind of surprise.
+                    ltiAutoSync: false,
                     // Same reasoning, and the same trap: the column defaults to true, so a
                     // copy that omits it starts scoring zeros the original never scored.
                     missingWorkIsZero: a.missingWorkIsZero,
