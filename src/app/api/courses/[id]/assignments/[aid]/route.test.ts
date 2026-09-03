@@ -133,6 +133,129 @@ describe('GET /api/courses/[id]/[aid]', () => {
     expect(body.problems).toEqual([]);
   });
 
+  it("gives a student their own override's dates, not the assignment's", async () => {
+    // Reported by a student: a due-date override was set for them and the assignment still
+    // showed the original date. Every other student surface resolved it; this one returned the
+    // row as it stands and used the override only to decide whether the content was locked.
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Assignment',
+      description: 'Details',
+      isPublished: true,
+      unlockAt: null,
+      dueDate: new Date('2026-10-01T23:59:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      assignedToEveryone: true,
+      overrides: [
+        {
+          targetType: 'STUDENT',
+          userId: 'stu-1',
+          groupId: null,
+          unlockAt: null,
+          dueDate: new Date('2026-10-15T23:59:00.000Z'),
+          lateCutoff: null,
+          allowLateSubmissions: null,
+        },
+      ],
+      problems: [],
+      course: { name: 'Course', code: 'C1', isArchived: false },
+    });
+
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+    });
+
+    const body = await res.json();
+    expect(body.dueDate).toBe('2026-10-15T23:59:00.000Z');
+  });
+
+  it("gives a student their group's override too", async () => {
+    authMock.mockResolvedValue({ user: { id: 'stu-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Assignment',
+      isPublished: true,
+      unlockAt: null,
+      dueDate: new Date('2026-10-01T23:59:00.000Z'),
+      allowLateSubmissions: true,
+      lateCutoff: new Date('2026-10-03T23:59:00.000Z'),
+      assignedToEveryone: true,
+      // The select filters these to the caller's own and their groups', so a group row here
+      // is one of theirs.
+      overrides: [
+        {
+          targetType: 'GROUP',
+          userId: null,
+          groupId: 'g1',
+          unlockAt: null,
+          dueDate: new Date('2026-10-20T23:59:00.000Z'),
+          lateCutoff: new Date('2026-10-22T23:59:00.000Z'),
+          allowLateSubmissions: null,
+        },
+      ],
+      problems: [],
+      course: { name: 'Course', code: 'C1', isArchived: false },
+    });
+
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+    });
+
+    const body = await res.json();
+    expect(body.dueDate).toBe('2026-10-20T23:59:00.000Z');
+    expect(body.lateCutoff).toBe('2026-10-22T23:59:00.000Z');
+  });
+
+  it('leaves staff looking at the assignment as it stands', async () => {
+    // Staff set the base dates and manage the exceptions separately; showing them somebody
+    // else's extension in place of the assignment's own date would be a different bug.
+    authMock.mockResolvedValue({ user: { id: 'fac-1', role: 'FACULTY' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'FACULTY',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      title: 'Assignment',
+      isPublished: true,
+      unlockAt: null,
+      dueDate: new Date('2026-10-01T23:59:00.000Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+      assignedToEveryone: true,
+      overrides: [
+        {
+          targetType: 'STUDENT',
+          userId: 'fac-1',
+          groupId: null,
+          unlockAt: null,
+          dueDate: new Date('2026-10-15T23:59:00.000Z'),
+          lateCutoff: null,
+          allowLateSubmissions: null,
+        },
+      ],
+      problems: [],
+      course: { name: 'Course', code: 'C1', isArchived: false },
+    });
+
+    const res = await GET(new Request('http://localhost/api/courses/c1/assignments/a1'), {
+      params: Promise.resolve({ id: 'c1', aid: 'a1' }),
+    });
+
+    const body = await res.json();
+    expect(body.dueDate).toBe('2026-10-01T23:59:00.000Z');
+  });
+
   const assignmentWithAnswerFile = {
     id: 'a1',
     title: 'Assignment',
