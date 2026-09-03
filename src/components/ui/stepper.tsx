@@ -32,15 +32,14 @@ export function Stepper({ steps, current, onStepClick, className }: StepperProps
           const isCurrent = index === current;
           const clickable = isDone && !!onStepClick;
           return (
-            <li
-              key={label}
-              className={cn('flex items-center', index > 0 && 'min-w-0 flex-1')}
-            >
+            <li key={label} className={cn('flex min-w-0 items-center', index > 0 && 'flex-1')}>
               {index > 0 && (
                 <div
                   aria-hidden="true"
                   className={cn(
-                    'mx-2 h-px min-w-4 flex-1',
+                    // Narrower on a phone, where the labels need the room more than the rule
+                    // does. `shrink` so the connector gives way before the text does.
+                    'mx-1.5 h-px min-w-2 flex-1 shrink sm:mx-2 sm:min-w-4',
                     isDone || isCurrent ? 'bg-primary' : 'bg-border',
                   )}
                 />
@@ -52,7 +51,10 @@ export function Stepper({ steps, current, onStepClick, className }: StepperProps
                 aria-current={isCurrent ? 'step' : undefined}
                 aria-label={`Step ${index + 1}: ${label}${isDone ? ' (completed)' : ''}`}
                 className={cn(
-                  'flex shrink-0 items-center gap-1.5',
+                  // Shrinkable, not fixed: with `shrink-0` a long label like "Faculty & TAs"
+                  // could not give way, so it ran on under the next step's connector line and
+                  // over its number. The circle keeps its size; only the label gives.
+                  'flex min-w-0 items-center gap-1.5',
                   clickable ? 'cursor-pointer' : 'cursor-default',
                 )}
               >
@@ -71,10 +73,11 @@ export function Stepper({ steps, current, onStepClick, className }: StepperProps
                     (The button's aria-label always carries the full name.) */}
                 <span
                   className={cn(
-                    'text-xs font-medium whitespace-nowrap',
-                    isCurrent
-                      ? 'text-foreground'
-                      : 'text-muted-foreground hidden sm:inline',
+                    // Truncates rather than overflowing. A wizard's step names are short, so
+                    // this only bites on the narrowest screens, and an ellipsis is a better
+                    // answer there than text crossing a rule or sitting on a number.
+                    'truncate text-xs font-medium',
+                    isCurrent ? 'text-foreground' : 'text-muted-foreground hidden sm:inline',
                     clickable && 'hover:text-foreground',
                   )}
                 >
