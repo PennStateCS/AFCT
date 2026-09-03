@@ -120,7 +120,11 @@ export function AudienceSelect({
           ))
         )}
 
-        <Popover open={open} onOpenChange={setOpen}>
+        {/* `modal` for the same reason as the two searchable pickers: this list is scrollable
+            and the assignment wizard renders it inside a dialog, whose scroll lock permits only
+            its own subtree. Portalled outside it, every wheel and touchmove over the options was
+            swallowed, so on a phone the list could not be scrolled at all. */}
+        <Popover open={open} onOpenChange={setOpen} modal>
           <PopoverTrigger asChild>
             <button
               type="button"
