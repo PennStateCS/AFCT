@@ -6,6 +6,7 @@ import { MessageSquare, Send, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ConfirmDialog } from './dialogs/ConfirmDialog';
@@ -136,12 +137,16 @@ export default function DiscussionPanel({
 
   return (
     <>
+      {/* `@container/discussion` so the avatars answer to the width of the panel rather than of
+          the window. This panel sits in a submission's column, in a problem workspace and in a
+          dialog, and any of those can be narrow while the window is wide. */}
       <section
         ref={sectionRef}
         tabIndex={-1}
-        className={
-          frameless ? className : `border-border overflow-hidden rounded-md border ${className}`
-        }
+        className={cn(
+          '@container/discussion',
+          frameless ? className : `border-border overflow-hidden rounded-md border ${className}`,
+        )}
       >
         {!frameless ? (
           <header className="border-border bg-primary flex items-center gap-2 rounded-t-md border-b px-3 py-2">
@@ -179,8 +184,11 @@ export default function DiscussionPanel({
                   return (
                     <li key={comment.id} className={`flex ${row}`}>
                       <div className={`flex w-full items-start gap-2 ${wrapDir}`}>
-                        {/* avatar */}
-                        <div className="flex flex-col items-center gap-2">
+                        {/* The avatar is the first thing to go when the panel is narrow: it
+                            costs 48px of a bubble's width and says nothing the line under the
+                            bubble does not, which names the author in full. Below 24rem of
+                            panel the comments keep the width instead. */}
+                        <div className="hidden flex-col items-center gap-2 @[24rem]/discussion:flex">
                           <Avatar className="h-10 w-10">
                             <AvatarImage
                               src={authorAvatarSrc(comment.author)}
