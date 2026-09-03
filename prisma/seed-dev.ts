@@ -36,6 +36,7 @@ import {
   withRole,
 } from './seed-utils';
 import bcrypt from 'bcrypt';
+import { submissionContentHash, submissionShapeHash } from '@/lib/similarity/content-hash';
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
@@ -375,6 +376,20 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
     }
 
     const originalToStoredFileName = new Map<string, string>();
+    /**
+     * The answer key's fingerprints, by the file they came from.
+     *
+     * The app works these out when a solution file is uploaded, and the Similarity report reads
+     * them to say "this student handed in the instructor's own answer". A seeded database had
+     * the files and not the hashes, so that check could never fire here: the seed goes to the
+     * trouble of having six students submit the solution byte for byte, and the report had
+     * nothing to compare them against. Computed with the app's own functions, like the seeded
+     * submissions' hashes are.
+     */
+    const answerHashesByOriginalName = new Map<
+      string,
+      { content: string | null; shape: string | null }
+    >();
 
     for (const problemSeed of problemData) {
       if (!problemSeed.originalFileName) {
@@ -392,6 +407,12 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
 
       await fs.copyFile(sourcePath, destinationPath);
       originalToStoredFileName.set(problemSeed.originalFileName, storedFileName);
+
+      const answer = await fs.readFile(sourcePath, 'utf8');
+      answerHashesByOriginalName.set(problemSeed.originalFileName, {
+        content: submissionContentHash(answer),
+        shape: submissionShapeHash(answer),
+      });
     }
 
     // One row per distinct problem per course. `problemData` lists the flip-flop problems twice,
@@ -413,6 +434,13 @@ export const runDevelopmentSeed = async (prisma: PrismaClient) => {
             ? originalToStoredFileName.get(problemSeed.originalFileName)
             : undefined) ?? problemSeed.fileName,
         originalFileName: problemSeed.originalFileName,
+        // Only where there is a file to describe, which is how the upload path writes them.
+        answerContentHash: problemSeed.originalFileName
+          ? (answerHashesByOriginalName.get(problemSeed.originalFileName)?.content ?? null)
+          : null,
+        answerShapeHash: problemSeed.originalFileName
+          ? (answerHashesByOriginalName.get(problemSeed.originalFileName)?.shape ?? null)
+          : null,
         type: problemSeed.type,
         maxStates: problemSeed.maxStates,
         isDeterministic: problemSeed.isDeterministic,

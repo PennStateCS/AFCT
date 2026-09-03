@@ -774,9 +774,48 @@ async function seedAudienceAndOverrides(prisma: PrismaClient) {
     }
   }
 
+  const groupOverrides = await seedGroupOverride(prisma);
+
   console.log(
-    `[seed] extras: targeted one assignment at ${targeted} students, with 1 date override`,
+    `[seed] extras: targeted one assignment at ${targeted} students, with ${1 + groupOverrides} date overrides`,
   );
+}
+
+/**
+ * One extension granted to a whole group.
+ *
+ * The seed had only a student override, and a group one resolves down a different path: the row
+ * names a StudentGroup, and every member of it is held to the new date. That path has been wrong
+ * twice, once in what a student was shown and once in which assignments a list would even
+ * consider, and neither was visible locally because no seeded database had such a row in it.
+ *
+ * Granted on a group assignment, which is the only place the app itself would offer one.
+ */
+async function seedGroupOverride(prisma: PrismaClient): Promise<number> {
+  const groupAssignment = await prisma.assignment.findFirst({
+    where: { groupSetId: { not: null } },
+    select: { id: true, groupSetId: true },
+    orderBy: { title: 'asc' },
+  });
+  if (!groupAssignment?.groupSetId) return 0;
+
+  const group = await prisma.studentGroup.findFirst({
+    where: { groupSetId: groupAssignment.groupSetId, memberships: { some: {} } },
+    select: { id: true },
+    orderBy: { name: 'asc' },
+  });
+  if (!group) return 0;
+
+  await prisma.assignmentOverride.create({
+    data: {
+      targetType: 'GROUP',
+      assignmentId: groupAssignment.id,
+      groupId: group.id,
+      dueDate: new Date(Date.now() + 10 * DAY_MS),
+      allowLateSubmissions: true,
+    },
+  });
+  return 1;
 }
 
 /**
