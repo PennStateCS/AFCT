@@ -34,7 +34,7 @@ export const coursesListQueryKey = ['courses', 'list'] as const;
 export default function CoursesClient({ initialCourses }: { initialCourses: CourseWithRoster[] }) {
   const [open, setOpen] = useState(false);
   const createMounted = useMountedOnce(open);
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
 
   // Cached courses list: the SSR-provided list seeds the cache and is treated as
   // fresh, so navigating back to Courses is instant with no refetch on mount.
@@ -64,7 +64,10 @@ export default function CoursesClient({ initialCourses }: { initialCourses: Cour
     void queryClient.invalidateQueries({ queryKey: ['courses'] });
   }, [queryClient]);
 
-  const columnsMemo = useMemo(() => columns(refresh, refresh, timezone), [refresh, timezone]);
+  const columnsMemo = useMemo(
+    () => columns(refresh, refresh, timezone, hour12),
+    [refresh, timezone, hour12],
+  );
 
   return (
     // A work page, so it sits on the white surface rather than the slate canvas. Still

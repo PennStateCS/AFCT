@@ -1228,3 +1228,32 @@ describe('a password reset', () => {
     );
   });
 });
+
+describe('the time an entry states', () => {
+  /**
+   * The log is a disclosure record, so the hour it states has to be the hour the reader is
+   * working in. This read the browser's zone while the dialog's title and the row it was opened
+   * from both used the viewer's own, so one entry could show two different times.
+   */
+  it('reads the timestamp in the zone it is given', () => {
+    const text = formatActivityDetails({
+      action: 'LOGIN_SUCCESS',
+      timestamp: '2026-03-10T18:30:00.000Z',
+      timeZone: 'America/New_York',
+      hour12: true,
+    });
+
+    expect(text).toContain('02:30 PM');
+  });
+
+  it('answers in 24-hour time when that is what the installation uses', () => {
+    const text = formatActivityDetails({
+      action: 'LOGIN_SUCCESS',
+      timestamp: '2026-03-10T18:30:00.000Z',
+      timeZone: 'America/New_York',
+      hour12: false,
+    });
+
+    expect(text).toContain('14:30');
+  });
+});

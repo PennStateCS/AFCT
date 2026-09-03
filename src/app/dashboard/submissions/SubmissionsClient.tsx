@@ -97,7 +97,7 @@ export default function SubmissionsClient() {
   // This page spans every course, so there is no single course timezone to show dates in.
   // The viewer's own effective zone is the honest choice here; the course pages still show
   // each assignment in ITS course's zone.
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
 
   // The three cascading pickers, with their queries and their pruning. See
   // `use-submission-filters.ts`: a selected id is dropped as soon as the list it came from
@@ -271,7 +271,9 @@ export default function SubmissionsClient() {
         id: 'submittedAt',
         header: 'Submitted',
         accessorFn: (s) => new Date(s.submittedAt).getTime(),
-        cell: ({ row }) => <CompactDate value={row.original.submittedAt} timeZone={timezone} />,
+        cell: ({ row }) => (
+          <CompactDate value={row.original.submittedAt} timeZone={timezone} hour12={hour12} />
+        ),
         meta: { priority: 1 },
       },
       {
@@ -435,7 +437,9 @@ export default function SubmissionsClient() {
         id: 'due',
         header: 'Due',
         accessorFn: (s) => dueDateFor(s)?.getTime() ?? 0,
-        cell: ({ row }) => <CompactDate value={dueDateFor(row.original)} timeZone={timezone} />,
+        cell: ({ row }) => (
+          <CompactDate value={dueDateFor(row.original)} timeZone={timezone} hour12={hour12} />
+        ),
         meta: { priority: 3 },
       },
       {

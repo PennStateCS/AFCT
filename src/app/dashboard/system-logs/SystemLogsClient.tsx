@@ -95,7 +95,7 @@ const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 // Badge palette per severity level.
 export default function SystemLogsClient() {
   // The timezone every other table formats in, rather than the browser's.
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -178,18 +178,17 @@ export default function SystemLogsClient() {
         metadata: row.metadata as Record<string, unknown> | null,
         related: row.related ?? null,
         userAgent: row.userAgent ?? null,
+        // The zone this table formats in, so the detail and the row it came from agree.
+        timeZone: timezone,
+        hour12,
       }),
     );
     // The entry as it arrived, for the Copy JSON button: the rendered text above reads well
     // but renames things, and a bug report or a disclosure record wants the real field names.
     setSelectedJson(JSON.stringify(row, null, 2));
-    const formatted = new Date(row.timestamp).toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-    setTitle(formatted);
+    setTitle(formatDateTimeInTimeZone(row.timestamp, timezone, hour12));
     setViewerOpen(true);
-  }, []);
+  }, [timezone, hour12]);
 
   const handlePaginationChange: OnChangeFn<PaginationState> = (updater) => {
     const next = typeof updater === 'function' ? updater({ pageIndex, pageSize }) : updater;
@@ -218,7 +217,7 @@ export default function SystemLogsClient() {
         // "MM/DD/YY HH:MM AM" line. It also moves this column onto the effective timezone,
         // which is what the rest of the app formats in; it was reading the browser's.
         cell: ({ getValue }: { getValue: () => unknown }) => (
-          <CompactDate value={getValue() as string | null} timeZone={timezone} />
+          <CompactDate value={getValue() as string | null} timeZone={timezone} hour12={hour12} />
         ),
       },
       {
@@ -406,7 +405,7 @@ export default function SystemLogsClient() {
         },
       },
     ],
-    [handleViewerOpen, timezone],
+    [handleViewerOpen, timezone, hour12],
   );
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));

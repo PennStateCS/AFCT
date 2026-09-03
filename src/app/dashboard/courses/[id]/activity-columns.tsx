@@ -154,6 +154,7 @@ export const getActivityColumns = (
   timeZone: string,
   courseId: string,
   onViewDetails: (activity: ActivityLog) => void,
+  hour12 = true,
 ): ColumnDef<ActivityLog>[] => [
   {
     accessorKey: 'timestamp',
@@ -164,7 +165,9 @@ export const getActivityColumns = (
     // "MM/DD/YY HH:MM AM" line. It replaced a relative "5h ago" line, which read well on a
     // feed and badly in an audit trail, where the question is when something happened rather
     // than how long ago.
-    cell: ({ getValue }) => <CompactDate value={getValue() as string | null} timeZone={timeZone} />,
+    cell: ({ getValue }) => (
+      <CompactDate value={getValue() as string | null} timeZone={timeZone} hour12={hour12} />
+    ),
   },
   {
     accessorKey: 'severity',

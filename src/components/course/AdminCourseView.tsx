@@ -114,7 +114,7 @@ export function AdminCourseView({
   onCourseSaved,
   onPublishToggle,
 }: AdminCourseViewProps) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const assignmentCount = course.assignmentTotal ?? course.assignments.length;
   const problemCount = course.problemTotal ?? course.problems.length;
   // The whole roster's size, staff and students together. There is no local array to fall
@@ -133,6 +133,7 @@ export function AdminCourseView({
     onAssignmentPublishToggle,
     timezone,
     setDuplicateTarget,
+    hour12,
   );
 
   // The problem being duplicated (opens the dialog); null when closed.

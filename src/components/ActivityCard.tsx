@@ -56,7 +56,7 @@ interface ActivityCardProps {
  * audit trail that is worse than slow.
  */
 export function ActivityCard({ courseId }: ActivityCardProps) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
 
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -92,6 +92,9 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
           userAgent: activity.userAgent ?? null,
           metadata: activity.metadata,
           related: relatedRecords(activity),
+          // The same zone the table and this dialog's title use, rather than the browser's.
+          timeZone: timezone,
+          hour12,
         }),
       );
       // The entry as it arrived, for the Copy JSON button: the rendered text above reads well
@@ -101,14 +104,14 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
       setDetailsTitle(formatDateTimeInTimeZone(activity.timestamp, timezone));
       setDetailsOpen(true);
     },
-    [timezone],
+    [timezone, hour12],
   );
 
   // Memoize columns so a re-render doesn't recreate the array (and its cell
   // components), which would force DataTable and its rows to re-render.
   const columns = useMemo(
-    () => getActivityColumns(timezone, courseId, handleViewDetails),
-    [timezone, courseId, handleViewDetails],
+    () => getActivityColumns(timezone, courseId, handleViewDetails, hour12),
+    [timezone, courseId, handleViewDetails, hour12],
   );
 
   useEffect(() => {

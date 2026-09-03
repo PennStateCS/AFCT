@@ -67,6 +67,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { TEXT_LINK_CLASS } from '@/lib/link-styles';
+import { formatDateTimeInTimeZone } from '@/lib/date-format';
 
 /** Human "5m", "40s" for a millisecond duration. Coarse on purpose; this is a hint. */
 function formatRemaining(ms: number): string {
@@ -80,7 +81,15 @@ function formatRemaining(ms: number): string {
  * without a refetch, so the table stays honest as the clock runs. Renders nothing once
  * the lock is in the past or absent.
  */
-function LockedBadge({ lockedUntil }: { lockedUntil: Date | string | null }) {
+function LockedBadge({
+  lockedUntil,
+  timeZone,
+  hour12,
+}: {
+  lockedUntil: Date | string | null;
+  timeZone: string;
+  hour12: boolean;
+}) {
   const target = lockedUntil ? new Date(lockedUntil).getTime() : 0;
   const [now, setNow] = useState(() => Date.now());
 
@@ -94,7 +103,9 @@ function LockedBadge({ lockedUntil }: { lockedUntil: Date | string | null }) {
   if (remaining <= 0) return null;
 
   return (
-    <StatusBadge variant="warning" title={new Date(target).toLocaleString()}>
+    // The hour in the viewer's own zone, like every other time in this table. It read the
+    // browser's, so the tooltip and the columns beside it could disagree.
+    <StatusBadge variant="warning" title={formatDateTimeInTimeZone(target, timeZone, hour12)}>
       <Lock className="mr-1 h-3 w-3" aria-hidden="true" />
       Locked {formatRemaining(remaining)}
     </StatusBadge>
@@ -109,6 +120,7 @@ function isLockedNow(lockedUntil: Date | string | null): boolean {
 export function getUserColumns(
   onUserUpdate: () => void,
   timeZone: string,
+  hour12 = true,
 ): ColumnDef<UserListItem>[] {
   return [
     {
@@ -197,7 +209,11 @@ export function getUserColumns(
         return (
           <span className="flex items-center gap-1.5">
             <StatusBadge variant="success">Active</StatusBadge>
-            <LockedBadge lockedUntil={row.original.lockedUntil} />
+            <LockedBadge
+              lockedUntil={row.original.lockedUntil}
+              timeZone={timeZone}
+              hour12={hour12}
+            />
           </span>
         );
       },
@@ -262,13 +278,17 @@ export function getUserColumns(
       accessorKey: 'createdAt',
       header: 'Created At',
       meta: { priority: 4 },
-      cell: ({ row }) => <CompactDate value={row.original.createdAt} timeZone={timeZone} />,
+      cell: ({ row }) => (
+        <CompactDate value={row.original.createdAt} timeZone={timeZone} hour12={hour12} />
+      ),
     },
     {
       accessorKey: 'lastLogin',
       header: 'Last Login',
       meta: { priority: 3 },
-      cell: ({ row }) => <CompactDate value={row.original.lastLogin} timeZone={timeZone} />,
+      cell: ({ row }) => (
+        <CompactDate value={row.original.lastLogin} timeZone={timeZone} hour12={hour12} />
+      ),
     },
     {
       id: 'actions',
