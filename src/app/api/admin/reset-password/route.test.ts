@@ -73,7 +73,7 @@ describe('POST /api/admin/reset-password', () => {
 
   it('resets password and logs activity', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin', isAdmin: true } });
-    prismaMock.user.update.mockResolvedValue({ id: 'u1' });
+    prismaMock.user.update.mockResolvedValue({ id: 'u1', email: 'student@example.edu' });
 
     const req = new Request('http://localhost/api/admin/reset-password', {
       method: 'POST',
@@ -95,6 +95,9 @@ describe('POST /api/admin/reset-password', () => {
         action: 'RESET_PASSWORD',
         metadata: expect.objectContaining({
           targetUserId: 'u1',
+          // Whose password, not only that one was reset: an id alone left the entry
+          // unreadable to anybody auditing it.
+          targetEmail: 'student@example.edu',
           temporaryPassword: true,
         }),
       }),

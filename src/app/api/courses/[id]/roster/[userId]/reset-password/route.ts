@@ -64,7 +64,10 @@ export const POST = withCourseAuth(
     // a staff member or a global administrator, even if they happen to be enrolled.
     const targetRoster = await prisma.roster.findFirst({
       where: { courseId, userId },
-      select: { role: true, user: { select: { isAdmin: true } } },
+      // The email comes back so the log can say whose password was reset. An id alone made the
+      // entry unreadable: the log records that somebody's password was changed, and the one
+      // thing a reader needs from it is whose.
+      select: { role: true, user: { select: { isAdmin: true, email: true } } },
     });
 
     if (!targetRoster) {
@@ -77,7 +80,11 @@ export const POST = withCourseAuth(
         action: 'ROSTER_RESET_PASSWORD_DENIED',
         category: 'COURSE',
         courseId,
-        metadata: { targetUserId: userId, targetRole: targetRoster.role },
+        metadata: {
+          targetUserId: userId,
+          targetEmail: targetRoster.user.email,
+          targetRole: targetRoster.role,
+        },
       });
     }
 
@@ -112,6 +119,7 @@ export const POST = withCourseAuth(
         courseId,
         metadata: {
           targetUserId: userId,
+          targetEmail: targetRoster.user.email,
           temporaryPassword: Boolean(isTemporary),
         },
       });
