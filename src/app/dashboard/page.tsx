@@ -9,7 +9,7 @@ import { greetingFor } from '@/lib/greeting';
 import { DEFAULT_SYSTEM_TIMEZONE } from '@/lib/system-settings';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
-import { assignedToStudentWhere } from '@/lib/assignment-visibility';
+import { assignedToStudentWhere, overridesForStudentWhere } from '@/lib/assignment-visibility';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { LaunchNotice } from '@/components/lti/LaunchNotice';
 
@@ -180,7 +180,13 @@ export default async function DashboardPage({
               {
                 OR: [
                   { dueDate: { gt: now } },
-                  { overrides: { some: { userId: id, dueDate: { gt: now } } } },
+                  {
+                    overrides: {
+                      some: {
+                        AND: [overridesForStudentWhere(id), { dueDate: { gt: now } }],
+                      },
+                    },
+                  },
                 ],
               },
             ],
