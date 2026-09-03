@@ -413,7 +413,9 @@ export function useAssignmentColumns(
     },
     {
       accessorKey: 'maxPoints',
-      header: () => 'Points',
+      // A plain string, not a function: the card view can only read a string header, and a
+      // function sent it back to the column id, so the card row was labelled "maxPoints".
+      header: 'Points',
       meta: { priority: 2 },
       cell: ({ row }) => (
         <MaxPointsCell

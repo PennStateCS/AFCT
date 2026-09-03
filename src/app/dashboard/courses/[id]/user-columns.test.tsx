@@ -111,8 +111,8 @@ function renderManageCell(
     opts.viewerIsAdmin ?? false,
   ) as ColumnDef<User>[];
 
-  const manage = columns.find((c) => c.id === 'manage');
-  if (!manage) throw new Error('No manage column for this viewer');
+  const manage = columns.find((c) => c.id === 'actions');
+  if (!manage) throw new Error('No actions column for this viewer');
 
   const Cell = manage.cell as (ctx: unknown) => React.ReactElement;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -198,7 +198,7 @@ describe('roster Manage menu', () => {
   it('gives no Manage column to a viewer with no course role', () => {
     const columns = userColumns(vi.fn(), 'c1', false, null, false);
 
-    expect(columns.find((c) => c.id === 'manage')).toBeUndefined();
+    expect(columns.find((c) => c.id === 'actions')).toBeUndefined();
   });
 
   it('lets faculty remove a student who has no work', () => {
@@ -295,8 +295,8 @@ describe('roster mutations', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     const columns = userColumns(onChange, 'c1', false, 'FACULTY', false) as ColumnDef<User>[];
-    const manage = columns.find((c) => c.id === 'manage');
-    if (!manage) throw new Error('No manage column');
+    const manage = columns.find((c) => c.id === 'actions');
+    if (!manage) throw new Error('No actions column');
     const Cell = manage.cell as (ctx: unknown) => React.ReactElement;
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     render(

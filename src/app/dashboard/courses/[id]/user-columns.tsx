@@ -357,7 +357,9 @@ export const userColumns = (
   const cols: ColumnDef<User>[] = [
     {
       id: 'avatar',
-      meta: { priority: 4 },
+      // filterLabel is what the card view uses for the row's label; without it the label
+      // falls back to the column id and reads "avatar". Same wording as the admin table.
+      meta: { priority: 4, filterLabel: 'Profile Image' },
       header: () => <span className="sr-only">Avatar</span>,
       cell: ({ row }) => {
         const user = row.original;
@@ -447,7 +449,10 @@ export const userColumns = (
 
   if (viewerHasActions) {
     cols.push({
-      id: 'manage',
+      // 'actions' rather than 'manage': the card view moves a column with that id into the
+      // card's corner, the way every other table's row menu is presented. Under any other id
+      // it rendered as a labelled row instead.
+      id: 'actions',
       header: 'Actions',
       meta: { priority: 1 },
       cell: ({ row }) => (
