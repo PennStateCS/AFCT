@@ -34,6 +34,8 @@ export type ViewerActions = {
   showTextRepresentation: () => void;
   /** Scale and centre the machine so all of it is on screen. */
   fitToWindow: () => void;
+  /** Bring the machine back to the middle without changing the scale the reader set. */
+  centerInWindow: () => void;
   /** Draw the machine where the author put the states, rather than auto-arranging it. */
   setAsDrawn: () => void;
   /** Let the layout engine place the states. */

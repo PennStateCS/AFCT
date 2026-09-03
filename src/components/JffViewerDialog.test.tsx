@@ -433,6 +433,17 @@ describe('the zoom slider', () => {
     expect(screen.getByRole('group', { name: 'Zoom' })).not.toContainElement(fitButton);
   });
 
+  it('offers Center beside Fit, since the two are asked for in the same moment', () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    const centerButton = screen.getByRole('button', { name: 'Center automaton in view' });
+    expect(centerButton).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Zoom' })).not.toContainElement(centerButton);
+    // Immediately after Fit, so the pair reads as one choice rather than two scattered ones.
+    expect(
+      screen.getByRole('button', { name: 'Fit automaton to view' }).nextElementSibling,
+    ).toBe(centerButton);
+  });
+
   it('announces its value as a spoken percentage, not a track position', () => {
     // A bare value announces "62", which is where the thumb sits and means nothing. Percent
     // is spelled out because how a screen reader pronounces the symbol varies.
@@ -466,6 +477,33 @@ describe('what the viewer publishes to a menu', () => {
     h.cy.resize.mockClear();
     act(() => run?.('fitToWindow'));
     expect(h.cy.resize).toHaveBeenCalled();
+  });
+
+  it('wires Center in window to a centring that leaves the zoom alone', async () => {
+    let run: ((name: 'centerInWindow') => void) | null = null;
+    function Probe() {
+      run = useViewerActions().run;
+      return null;
+    }
+    render(
+      <ViewerActionsProvider>
+        <JffCytoscapeViewer src="/api/files/submissions/abc.jff" title="abc.jff" />
+        <Probe />
+      </ViewerActionsProvider>,
+    );
+
+    await waitForEngine();
+    h.cy.center.mockClear();
+    h.cy.zoom.mockClear();
+    h.cy.resize.mockClear();
+    act(() => run?.('centerInWindow'));
+
+    expect(h.cy.center).toHaveBeenCalled();
+    // Not a fit, and not a scale change: the reader keeps the magnification they set. Fit
+    // resizes the canvas on its way through, which is what tells the two apart here, and
+    // setting the zoom would mean calling it with a value rather than reading it.
+    expect(h.cy.resize).not.toHaveBeenCalled();
+    expect(h.cy.zoom).not.toHaveBeenCalledWith(expect.anything());
   });
 });
 
@@ -673,6 +711,131 @@ describe('clicking a state', () => {
     expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
   });
 
+  it('says what was clicked in the header, not just its name', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const panel = await screen.findByRole('group', { name: /properties of state/i });
+    expect(panel).toHaveTextContent(/State\s+q0/);
+  });
+
+  it('closes on Escape from the keyboard, since it is not a modal that traps it', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const close = await screen.findByRole('button', { name: /close state properties/i });
+    close.focus();
+
+    fireEvent.keyDown(close, { key: 'Escape' });
+
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
+  });
+
+  it('sits beside the drawing rather than inside it, which is what lets it dock', async () => {
+    // The canvas is a `role="img"`, so anything inside it is unreachable to a screen reader,
+    // and the docked layout needs the panel to be a flex sibling of the drawing's column.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const panel = await screen.findByRole('group', { name: /properties of state/i });
+    const canvas = screen.getByRole('img');
+
+    expect(canvas).not.toContainElement(panel);
+    expect(panel.parentElement).toBe(canvas.parentElement?.parentElement);
+  });
+
+  it('renames the state as it is typed', async () => {
+    // A viewer that can be marked up: the label follows the box straight away, and the file is
+    // untouched, which is what the toolbar's note is for.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const field = await screen.findByLabelText('Name');
+
+    fireEvent.change(field, { target: { value: 'start' } });
+
+    expect(await screen.findByRole('group', { name: /properties of state start/i })).toBeVisible();
+    expect(field).toHaveValue('start');
+    expect(await screen.findByRole('button', { name: /file changed/i })).toBeInTheDocument();
+  });
+
+  it('keeps the box empty when it is emptied, rather than filling it back in', async () => {
+    // A state with no name is described by its id, so a box that read its value back from the
+    // machine would put `q0` in as soon as the last character went.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+    const field = await screen.findByLabelText('Name');
+
+    fireEvent.change(field, { target: { value: '' } });
+
+    expect(field).toHaveValue('');
+  });
+
+  it('offers Initial and Final as boxes that can be ticked', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+
+    const initial = await screen.findByLabelText('Initial state');
+    const final = screen.getByLabelText('Final state');
+    // q0 is the initial state in the fixture and q1 is the final one.
+    expect(initial).toBeChecked();
+    expect(final).not.toBeChecked();
+
+    fireEvent.click(final);
+
+    expect(await screen.findByRole('button', { name: /file changed/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Final state')).toBeChecked();
+  });
+
+  it('lists what touches the state, and opens a transition when one is clicked', async () => {
+    // The only other way to a transition's properties is clicking its line on the canvas, which
+    // is no way at all for somebody not using a mouse.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapNode('0');
+
+    const rows = await screen.findAllByRole('button', { name: /^(Out|In):/ });
+    expect(rows.length).toBeGreaterThan(0);
+
+    fireEvent.click(rows[0]!);
+
+    expect(await screen.findByRole('group', { name: /transition from/i })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /properties of state/i })).toBeNull();
+  });
+
+  it('offers where the state sits, and moves it when the numbers change', async () => {
+    // The drawing's coordinates, not the file's: typing one is how two states are lined up
+    // exactly, which dragging cannot do.
+    const pos = { x: 100, y: 200 };
+    const node = {
+      isNode: () => true,
+      hasClass: () => false,
+      id: () => '0',
+      empty: () => false,
+      data: () => undefined,
+      position: vi.fn((next?: { x: number; y: number }) => {
+        if (next) Object.assign(pos, next);
+        return pos;
+      }),
+      closedNeighborhood: () => ({ addClass: () => ({ removeClass: () => undefined }) }),
+    };
+    h.cy.getElementById.mockReturnValue(node);
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    const tap = h.cy.on.mock.calls.find(([name]) => name === 'tap')?.[1] as
+      ((evt: { target: unknown }) => void) | undefined;
+    act(() => tap?.({ target: node }));
+
+    const x = await screen.findByLabelText('X');
+    expect(x).toHaveValue(100);
+    fireEvent.focus(x);
+    fireEvent.change(x, { target: { value: '250' } });
+
+    expect(pos).toMatchObject({ x: 250, y: 200 });
+  });
+
   it('shows nothing for the start marker, which is scenery rather than a state', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
@@ -729,6 +892,32 @@ describe('clicking a transition', () => {
     tapEdge('0', '1');
     const panel = await screen.findByRole('group', { name: /transition from/i });
     expect(panel).toHaveTextContent('Reads');
+  });
+
+  it('names the pair in the header and closes under its own name', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapEdge('0', '1');
+    const panel = await screen.findByRole('group', { name: /transition from/i });
+    expect(panel).toHaveTextContent(/Transition\s+q0\s*→\s*q1/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close transition properties' }));
+    expect(screen.queryByRole('group', { name: /transition from/i })).toBeNull();
+  });
+
+  it('offers what it reads as a box that can be typed in', async () => {
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    tapEdge('0', '1');
+
+    const reads = await screen.findAllByLabelText('Reads');
+    fireEvent.change(reads[0]!, { target: { value: 'x' } });
+
+    expect(reads[0]).toHaveValue('x');
+    expect(await screen.findByRole('button', { name: /file changed/i })).toBeInTheDocument();
+    // A finite automaton reads and nothing else: no stack, no tape.
+    expect(screen.queryByLabelText('Pops')).toBeNull();
+    expect(screen.queryByLabelText('Writes')).toBeNull();
   });
 
   it('shows one panel at a time, not a state and a transition together', async () => {
@@ -820,10 +1009,16 @@ describe('undo and redo of the arrangement', () => {
     act(() => handler?.());
   };
 
-  it('records a step when a state is picked up, not on every pixel of the drag', async () => {
-    // One drag is one undoable step. `grab` fires once, at the start; `position` fires
-    // continuously, and recording there would bury the previous state under hundreds of
-    // near-identical snapshots.
+  /** A whole drag: picked up, and let go. Cytoscape fires `dragfree` only if it really moved. */
+  const drag = () => {
+    fire('grab');
+    fire('dragfree');
+  };
+
+  it('records one step per drag, not one per pixel of it', async () => {
+    // One drag is one undoable step. The snapshot is taken on `grab`, which fires once at the
+    // start, and kept until the state is let go; `position` fires continuously, and recording
+    // there would bury the previous state under hundreds of near-identical snapshots.
     const pos = { x: 10, y: 20 };
     const node = fakeNode('0', pos);
     h.cy.nodes.mockReturnValue({ forEach: (fn: (n: unknown) => void) => fn(node), length: 1 });
@@ -845,7 +1040,7 @@ describe('undo and redo of the arrangement', () => {
     await waitForEngine();
 
     expect(view.current?.canUndo).toBe(false);
-    fire('grab');
+    drag();
     await waitFor(() => expect(view.current?.canUndo).toBe(true));
   });
 
@@ -871,7 +1066,7 @@ describe('undo and redo of the arrangement', () => {
     );
     await waitForEngine();
 
-    fire('grab');
+    drag();
     await waitFor(() => expect(view.current?.canUndo).toBe(true));
 
     // The drag itself: the state ends up somewhere else.
@@ -921,9 +1116,10 @@ describe('the toolbar undo and redo buttons', () => {
     renderWithMenu({ src: SRC, title: 'abc.jff' });
     await waitForEngine();
 
-    const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
-      (() => void) | undefined;
-    act(() => grab?.());
+    const handler = (event: string) =>
+      h.cy.on.mock.calls.find(([name]) => name === event)?.[2] as (() => void) | undefined;
+    act(() => handler('grab')?.());
+    act(() => handler('dragfree')?.());
     await waitFor(() => expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled());
 
     pos.x = 500;
@@ -1231,22 +1427,36 @@ describe('telling a reader they have not changed the file', () => {
   const SRC = '/api/files/submissions/abc.jff';
 
   const drag = () => {
-    const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
-      (() => void) | undefined;
-    act(() => grab?.());
+    const handler = (event: string) =>
+      h.cy.on.mock.calls.find(([name]) => name === event)?.[2] as (() => void) | undefined;
+    // Picked up and let go: `dragfree` is what tells a drag from a click, so both are needed.
+    act(() => handler('grab')?.());
+    act(() => handler('dragfree')?.());
   };
 
   it('says nothing about a file nobody has touched', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
-    expect(screen.queryByRole('button', { name: /view changed/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /file changed/i })).toBeNull();
   });
 
   it('appears once something has been moved', async () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     drag();
-    expect(await screen.findByRole('button', { name: /view changed/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /file changed/i })).toBeInTheDocument();
+  });
+
+  it('stays away when a state was only clicked to read its properties', async () => {
+    // A click picks the state up and puts it down without moving it, so it used to report a
+    // rearrangement that had not happened.
+    render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
+    await waitForEngine();
+    const grab = h.cy.on.mock.calls.find(([name]) => name === 'grab')?.[2] as
+      (() => void) | undefined;
+    act(() => grab?.());
+
+    expect(screen.queryByRole('button', { name: /file changed/i })).toBeNull();
   });
 
   it('says the submitted file is unchanged, which is the whole point of it', async () => {
@@ -1256,7 +1466,7 @@ describe('telling a reader they have not changed the file', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     drag();
-    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+    await user.click(await screen.findByRole('button', { name: /file changed/i }));
 
     expect(await screen.findByText(/submitted file is unchanged/i)).toBeInTheDocument();
   });
@@ -1266,7 +1476,7 @@ describe('telling a reader they have not changed the file', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     drag();
-    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+    await user.click(await screen.findByRole('button', { name: /file changed/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /download this arrangement/i }));
 
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
@@ -1277,11 +1487,11 @@ describe('telling a reader they have not changed the file', () => {
     render(<JffCytoscapeViewer src={SRC} title="abc.jff" />);
     await waitForEngine();
     drag();
-    await user.click(await screen.findByRole('button', { name: /view changed/i }));
+    await user.click(await screen.findByRole('button', { name: /file changed/i }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /put it back/i }));
 
     expect(await screen.findByText(/Put the machine back\?/i)).toBeInTheDocument();
     // Still there: nothing happens until the reader says so.
-    expect(screen.getByRole('button', { name: /view changed/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /file changed/i })).toBeInTheDocument();
   });
 });

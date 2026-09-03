@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTheme } from 'next-themes';
 import {
   Dialog,
@@ -10,6 +10,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { ConfirmDialog } from '@/components/dialogs/ConfirmDialog';
@@ -23,6 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   describeMachine,
+  transitionFields,
   type MachineDescription,
   type MachineType,
   type EdgeDescription,
@@ -51,6 +55,8 @@ import {
   Copy,
   Minus,
   Plus,
+  ChevronRight,
+  Crosshair,
   Scan,
   Undo2,
   Redo2,
@@ -146,106 +152,272 @@ function MachineDescriptionList({ description }: { description: MachineDescripti
 }
 
 /**
- * What a clicked state is, floated over the top right of the canvas.
+ * Where a clicked state or transition is described.
  *
- * Over the graph rather than beside it: the graph is the whole point of the window, and a side
- * panel would take a column away from the machine permanently to show something that is only
- * wanted occasionally.
+ * One panel in two places, and which one is decided by the width of this pane rather than of
+ * the window. Wide enough for a column beside the machine and it docks down the right-hand
+ * side, in the flow, so the drawing gives up the width rather than being covered by it.
+ * Narrower and it slides up from the bottom of the drawing instead, out of the flow, so the
+ * machine keeps the whole width and stays visible above it.
  *
- * Mouse-only by nature, because it answers a click on a canvas and a canvas cannot be tabbed
- * into. Everything it shows is also in the text representation, which is the keyboard and
- * screen-reader route to the same facts, so this is a convenience rather than the only way to
- * them.
+ * A container query rather than a screen breakpoint, matching the rest of the app, because the
+ * pane is what has the room: a split window on a wide screen gives each machine half of it, and
+ * one half can want the drawer while the other has space for the sidebar. It also means the two
+ * layouts are one element and one copy of the content, so there is nothing to keep in step.
+ *
+ * The `@container` it answers to is on the row below, whose width does not change when this
+ * opens. Putting it on something this panel takes width from would make the query flip back and
+ * forth: docking would narrow the container, which would ask for the drawer, which would widen
+ * it again.
+ *
+ * Non-modal on purpose. It says what was just clicked while the reader carries on with the
+ * machine, so it takes no focus, dims nothing, and traps nothing. Escape closes it for somebody
+ * who has tabbed into it, and everything it shows is also in the text representation, which is
+ * the keyboard and screen-reader route to the same facts.
  */
 function PropertiesPanel({
   label,
   heading,
+  closeLabel,
   onClose,
   children,
 }: {
   label: string;
   heading: React.ReactNode;
+  closeLabel: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
   return (
     <div
-      // Capped and scrollable, so a hub state with twenty transitions cannot run off the canvas.
-      className="bg-card absolute top-2 right-2 z-10 max-h-[min(60%,20rem)] w-64 overflow-y-auto rounded-md border p-3 shadow-md"
+      className={cn(
+        // The drawer: over the bottom of the drawing, and never more than a little over half of
+        // it, so a hub state with twenty transitions scrolls rather than swallowing the machine.
+        'bg-card absolute inset-x-0 bottom-0 z-10 flex max-h-[min(60%,20rem)] flex-col rounded-t-lg border-t shadow-lg',
+        // The sidebar: back in the flow beside the machine, full height, no shadow. 20rem leaves
+        // a usable canvas at the width this switches on and matches the app's other side panels.
+        '@[48rem]/viewer:static @[48rem]/viewer:z-auto @[48rem]/viewer:max-h-none @[48rem]/viewer:w-80 @[48rem]/viewer:shrink-0 @[48rem]/viewer:rounded-none @[48rem]/viewer:border-t-0 @[48rem]/viewer:border-l @[48rem]/viewer:shadow-none',
+      )}
       role="group"
       aria-label={label}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2 border-b px-3 py-2">
         <div className="min-w-0 text-sm font-semibold">{heading}</div>
         <Button
           type="button"
           size="sm"
           variant="ghost"
-          className="-mt-1 -mr-1 h-6 w-6 shrink-0 p-0"
+          // Bigger than the toolbar's buttons, because in the drawer it is a thumb that reaches
+          // for it.
+          className="-mt-0.5 -mr-1 h-8 w-8 shrink-0 p-0 @[48rem]/viewer:h-7 @[48rem]/viewer:w-7"
           onClick={onClose}
-          aria-label="Close state properties"
+          // Escape as well as the click. On the button rather than on the panel because it is
+          // the only thing in here that takes focus: the rest is text. In the standalone window
+          // nothing else is listening, so this closes the panel alone; inside a dialog the
+          // dialog closes too, which is what anybody would expect of Escape in a dialog.
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') onClose();
+          }}
+          aria-label={closeLabel}
         >
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
-      {children}
+      {/* The scrolling part, so the header stays put while a long list of transitions moves. */}
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-2.5">{children}</div>
     </div>
   );
 }
 
-/** What a clicked state is. */
-function StateProperties({ state, onClose }: { state: StateDescription; onClose: () => void }) {
+/**
+ * What a clicked state is, and the one thing about it a reader can change.
+ *
+ * The name is editable and takes effect as it is typed: the label on the drawing, every panel
+ * that mentions the state and the text representation all follow. It changes nothing about the
+ * submitted file, which is why the toolbar says the file has changed on screen once one has
+ * been renamed.
+ *
+ * The box holds its own copy of what has been typed rather than reading it back from the
+ * machine, so that emptying it leaves it empty: a state with no name is described by its id, and
+ * a box that filled itself with `q0` the moment the last character was deleted would be
+ * impossible to type in.
+ */
+function StateProperties({
+  state,
+  onRename,
+  onSetInitial,
+  onSetFinal,
+  onOpenTransition,
+  position,
+  onMoveStart,
+  onMove,
+  onClose,
+}: {
+  state: StateDescription;
+  onRename: (id: string, name: string) => void;
+  onSetInitial: (id: string | null) => void;
+  onSetFinal: (id: string, final: boolean) => void;
+  onOpenTransition: (from: string, to: string) => void;
+  /** Where the state is on the canvas now, which is not where the file has it once dragged. */
+  position: { x: number; y: number } | null;
+  onMoveStart: () => void;
+  onMove: (id: string, at: { x: number; y: number }) => void;
+  onClose: () => void;
+}) {
+  // Seeded once per state: the call site keys this component by id, so moving to another state
+  // remounts it rather than leaving the previous name in the box.
+  const [name, setName] = useState(state.name);
+  // Unique per rendered panel, not per state: both halves of a split window can be showing the
+  // same file, and two boxes with the same id would leave one label pointing at the other's.
+  const nameFieldId = useId();
+  const initialFieldId = useId();
+  const finalFieldId = useId();
+  const xFieldId = useId();
+  const yFieldId = useId();
+
   return (
     <PropertiesPanel
       label={`Properties of state ${state.name}`}
-      heading={<span className="font-mono break-all">{state.name}</span>}
+      // What was clicked, said in the header rather than left to be inferred from a bare name.
+      heading={
+        <>
+          State <span className="font-mono break-all">{state.name}</span>
+        </>
+      }
+      closeLabel="Close state properties"
       onClose={onClose}
     >
-      {state.initial || state.final ? (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {state.initial ? (
-            <Badge variant="outline" className="text-xs">
-              Initial
-            </Badge>
-          ) : null}
-          {state.final ? (
-            <Badge variant="outline" className="text-xs">
-              Final
-            </Badge>
-          ) : null}
+      <div className="space-y-1">
+        <Label htmlFor={nameFieldId} className="text-muted-foreground text-xs">
+          Name
+        </Label>
+        <Input
+          id={nameFieldId}
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+            onRename(state.id, event.target.value);
+          }}
+          className="h-8 font-mono text-sm"
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+
+      {/* A machine has one initial state, so ticking this moves the arrow off whichever state
+          had it rather than giving the machine two. Unticking leaves it with none, which is a
+          machine that cannot run: allowed here because this is a drawing being marked up, and
+          the submitted file is not being touched either way. */}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={initialFieldId}
+          checked={state.initial}
+          onCheckedChange={(checked) => onSetInitial(checked === true ? state.id : null)}
+        />
+        <Label htmlFor={initialFieldId} className="text-xs font-normal">
+          Initial state
+        </Label>
+      </div>
+
+      {/* Any number of states can be final, so unlike the box above this says nothing about the
+          others. It is the double circle JFLAP draws. */}
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id={finalFieldId}
+          checked={state.final}
+          onCheckedChange={(checked) => onSetFinal(state.id, checked === true)}
+        />
+        <Label htmlFor={finalFieldId} className="text-xs font-normal">
+          Final state
+        </Label>
+      </div>
+
+      {/* Where it sits on the canvas. The drawing's own coordinates, the ones a drag moves it
+          through and the ones a downloaded arrangement carries, rather than the file's: those
+          are where its author put it and do not change when the reader moves it.
+
+          Typed rather than nudged, because the reason to type a coordinate at all is to line
+          two states up exactly, which dragging cannot do. */}
+      {position ? (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label htmlFor={xFieldId} className="text-muted-foreground text-xs font-normal">
+              X
+            </Label>
+            <Input
+              id={xFieldId}
+              type="number"
+              value={Math.round(position.x)}
+              onFocus={onMoveStart}
+              onChange={(event) => {
+                const x = Number(event.target.value);
+                if (Number.isFinite(x)) onMove(state.id, { x, y: position.y });
+              }}
+              className="h-8 font-mono text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={yFieldId} className="text-muted-foreground text-xs font-normal">
+              Y
+            </Label>
+            <Input
+              id={yFieldId}
+              type="number"
+              value={Math.round(position.y)}
+              onFocus={onMoveStart}
+              onChange={(event) => {
+                const y = Number(event.target.value);
+                if (Number.isFinite(y)) onMove(state.id, { x: position.x, y });
+              }}
+              className="h-8 font-mono text-sm"
+            />
+          </div>
         </div>
       ) : null}
 
-      <dl className="mt-3 space-y-2 text-xs">
-        <div>
-          <dt className="text-muted-foreground">Out</dt>
-          <dd>
-            {state.outgoing.length === 0 ? (
-              <span className="text-muted-foreground">Nothing leaves this state</span>
-            ) : (
-              <ul className="list-none space-y-0.5">
-                {state.outgoing.map((line, i) => (
-                  <li key={`${line}-${i}`}>{line}</li>
-                ))}
-              </ul>
-            )}
-          </dd>
+      {/* Everything that touches this state, as a list rather than two paragraphs of prose, and
+          each row a way into that transition's own properties: the canvas is the only other way
+          to reach one, and a canvas cannot be tabbed into. */}
+      <div className="space-y-1.5">
+        <div className="text-muted-foreground text-xs">
+          {state.links.length === 0 ? 'Transitions' : `Transitions (${state.links.length})`}
         </div>
-        <div>
-          <dt className="text-muted-foreground">In</dt>
-          <dd>
-            {state.incoming.length === 0 ? (
-              <span className="text-muted-foreground">Nothing reaches this state</span>
-            ) : (
-              <ul className="list-none space-y-0.5">
-                {state.incoming.map((line, i) => (
-                  <li key={`${line}-${i}`}>{line}</li>
-                ))}
-              </ul>
-            )}
-          </dd>
-        </div>
-      </dl>
+        {state.links.length === 0 ? (
+          <p className="text-muted-foreground text-xs">Nothing touches this state</p>
+        ) : (
+          <ul className="divide-border divide-y rounded-md border">
+            {state.links.map((link, i) => (
+              <li key={`${link.from}-${link.to}-${link.label}-${i}`}>
+                <button
+                  type="button"
+                  onClick={() => onOpenTransition(link.from, link.to)}
+                  className="hover:bg-muted focus-visible:ring-ring/70 flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs focus-visible:ring-[3px] focus-visible:outline-none"
+                >
+                  <span className="text-muted-foreground shrink-0">
+                    {link.direction === 'out' ? 'Out:' : 'In:'}
+                  </span>
+                  <span className="min-w-0 flex-1 font-mono break-all">
+                    {link.direction === 'out' ? (
+                      <>
+                        on {link.label} <span aria-hidden="true">&rarr;</span>
+                        <span className="sr-only">to</span> {link.other}
+                      </>
+                    ) : (
+                      <>
+                        {link.other} <span aria-hidden="true">&rarr;</span> on {link.label}
+                      </>
+                    )}
+                  </span>
+                  <ChevronRight
+                    className="text-muted-foreground h-3.5 w-3.5 shrink-0"
+                    aria-hidden="true"
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </PropertiesPanel>
   );
 }
@@ -256,41 +428,86 @@ function StateProperties({ state, onClose }: { state: StateDescription; onClose:
  * Plural on purpose: parallel transitions between the same two states are drawn as one line, so
  * clicking it asks about all of them.
  */
-function TransitionProperties({ edge, onClose }: { edge: EdgeDescription; onClose: () => void }) {
+const TRANSITION_FIELD_LABEL: Record<string, string> = {
+  read: 'Reads',
+  pop: 'Pops',
+  push: 'Pushes',
+  write: 'Writes',
+  move: 'Moves',
+};
+
+function TransitionProperties({
+  edge,
+  fields,
+  onEdit,
+  onClose,
+}: {
+  edge: EdgeDescription;
+  /** The parts a transition of this machine has: a PDA pops and pushes, a TM writes and moves. */
+  fields: Array<'read' | 'pop' | 'push' | 'write' | 'move'>;
+  onEdit: (index: number, field: 'read' | 'pop' | 'push' | 'write' | 'move', value: string) => void;
+  onClose: () => void;
+}) {
+  const fieldIdPrefix = useId();
+
   return (
     <PropertiesPanel
       label={`Properties of the transition from ${edge.from} to ${edge.to}`}
       heading={
-        <span className="font-mono break-all">
-          {edge.from} &rarr; {edge.to}
-        </span>
+        <>
+          Transition{' '}
+          <span className="font-mono break-all">
+            {edge.from} &rarr; {edge.to}
+          </span>
+        </>
       }
+      closeLabel="Close transition properties"
       onClose={onClose}
     >
       {edge.selfLoop ? (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1">
           <Badge variant="outline" className="text-xs">
             Self-loop
           </Badge>
         </div>
       ) : null}
 
-      <dl className="mt-3 space-y-2 text-xs">
-        <div>
-          <dt className="text-muted-foreground">
-            {edge.labels.length === 1 ? 'Reads' : `Reads (${edge.labels.length})`}
-          </dt>
-          <dd>
-            <ul className="list-none space-y-0.5">
-              {edge.labels.map((line, i) => (
-                <li key={`${line}-${i}`} className="font-mono">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </dd>
+      {/* One block per transition, because parallel transitions between the same two states are
+          drawn as a single line: clicking it asks about all of them, and each is edited on its
+          own. The boxes offered are the ones the machine type has, so a Turing machine gets what
+          it writes and which way it moves and a finite automaton does not.
+
+          Laid out like the state panel's Name, label over box: this is the same kind of thing,
+          and a second shape for it would read as a different one. */}
+      {edge.transitions.map((transition, i) => (
+        <div key={transition.index} className={cn('space-y-3', i > 0 && 'border-t pt-3')}>
+          {/* Only when there is more than one to tell apart, and it says which line of the
+              label on the drawing this block is. */}
+          {edge.transitions.length > 1 ? (
+            <div className="text-muted-foreground text-xs">
+              Transition {i + 1} of {edge.transitions.length}
+            </div>
+          ) : null}
+          {fields.map((field) => {
+            const fieldId = `${fieldIdPrefix}-${transition.index}-${field}`;
+            return (
+              <div key={field} className="space-y-1">
+                <Label htmlFor={fieldId} className="text-muted-foreground text-xs font-normal">
+                  {TRANSITION_FIELD_LABEL[field]}
+                </Label>
+                <Input
+                  id={fieldId}
+                  value={transition[field] ?? ''}
+                  onChange={(event) => onEdit(transition.index, field, event.target.value)}
+                  className="h-8 font-mono text-sm"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+            );
+          })}
         </div>
-      </dl>
+      ))}
     </PropertiesPanel>
   );
 }
@@ -403,12 +620,21 @@ export function JffCytoscapeViewer({
     selectedState,
     selectedTransition,
     clearSelectedState,
+    renameState,
+    setInitialState,
+    setFinalState,
+    setTransitionField,
+    selectTransition,
+    selectedStatePosition,
+    beginStateMove,
+    moveState,
     zoomIn,
     zoomOut,
     zoom,
     setZoom,
     zoomRange,
     fit,
+    center,
     downloadSVG,
     downloadPNG,
     downloadCurrent,
@@ -459,6 +685,7 @@ export function JffCytoscapeViewer({
       toggleNotes,
       toggleSnapToGrid,
       fitToWindow: fit,
+      centerInWindow: center,
       showTextRepresentation: () => setShowText(true),
       // Set rather than toggled, so the menu's two options are a choice between states and
       // selecting the one already showing does nothing.
@@ -516,7 +743,7 @@ export function JffCytoscapeViewer({
           {/* Title is shown in the dialog header above; only the type label lives here. */}
           <TypeBadge t={type} />
           {/*
-            Whether the drawing has been rearranged, and what to do about it.
+            Whether the drawing has been changed, and what to do about it.
 
             Quiet on purpose: it sits beside the type label rather than announcing itself, and
             it is only there once something has actually been moved. What it answers is a
@@ -533,13 +760,13 @@ export function JffCytoscapeViewer({
                   className="text-muted-foreground h-6 gap-1 px-2 text-xs font-normal"
                 >
                   <PencilLine className="h-3 w-3" aria-hidden="true" />
-                  View changed
+                  File changed
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-w-xs">
                 <DropdownMenuLabel className="text-muted-foreground text-xs font-normal">
-                  You have moved things about. The submitted file is unchanged, and nothing here
-                  writes to it.
+                  You have changed how this is shown, by moving states about or renaming one. The
+                  submitted file is unchanged, and nothing here writes to it.
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => void downloadCurrent()}>
@@ -659,6 +886,9 @@ export function JffCytoscapeViewer({
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+            {/* The same rule the toolbar uses elsewhere, so the zoom controls read as one group
+                and Fit and Center as another rather than as one long row of buttons. */}
+            <div className="bg-muted-foreground/40 mx-0.5 h-6 w-px shrink-0" aria-hidden="true" />
             {/* Outside the group: it sets the zoom rather than nudging it, and it is the one
                 control here somebody reaches for without knowing what the current value is.
                 The label drops below `sm`, where the icon and the tooltip carry it. */}
@@ -672,6 +902,20 @@ export function JffCytoscapeViewer({
             >
               <Scan className="h-4 w-4 sm:mr-2" />
               <span className="sr-only sm:not-sr-only">Fit</span>
+            </Button>
+            {/* Beside Fit because they answer the same question, "I have lost the machine",
+                differently: Fit brings all of it back and gives up the reader's magnification,
+                this brings it back at the scale they chose. */}
+            <Button
+              size="sm"
+              variant="outline"
+              className={cn(controlBtnClass, 'h-8 shrink-0')}
+              onClick={center}
+              title="Center automaton in view"
+              aria-label="Center automaton in view"
+            >
+              <Crosshair className="h-4 w-4 sm:mr-2" />
+              <span className="sr-only sm:not-sr-only">Center</span>
             </Button>
           </div>
 
@@ -730,60 +974,100 @@ export function JffCytoscapeViewer({
 
       {/* The rendered graph. role="img" + a description keeps a screen reader from
           wandering into cytoscape's internals while still conveying what it shows. */}
-      {/* A positioned wrapper around the graph, because cytoscape owns the container's
-          children and anything floated over the drawing has to be a sibling of it. */}
-      <div className={cn('relative', fill ? 'flex min-h-0 flex-1 flex-col' : undefined)}>
-        <div
-          ref={containerRef}
-          // In fill mode the flex track supplies the height; an inline one would fight it.
-          style={fill ? backgroundStyle : { height, ...backgroundStyle }}
-          // The ordinary arrow at rest, a closed hand while the button is down and the graph is
-          // being dragged. Not an open hand throughout: that reads as "this whole surface is a
-          // handle" over a diagram whose states and transitions are the things worth pointing
-          // at. `cursor` inherits, so the canvases cytoscape puts inside pick this up without
-          // being styled themselves.
-          className={cn(
-            'bg-card relative cursor-default overflow-hidden active:cursor-grabbing',
-            fill && 'min-h-0 flex-1',
-            // The CANVASES are held back, not this container. Cytoscape paints the moment it
-            // is constructed, at whatever scale the file's own coordinates imply, and the fit
-            // runs after: unhidden, the machine arrives at the wrong size and visibly jumps.
-            //
-            // Hiding the container instead (which is what this was) took the grid and the
-            // surface with it, so the toolbar sat fully drawn above a blank white rectangle
-            // for about half a second and then everything appeared at once. Keeping the
-            // prepared canvas visible and fading in only the drawing is the difference
-            // between a panel that is loading and a panel that looks broken.
-            '[&_canvas]:transition-opacity [&_canvas]:duration-150',
-            'motion-reduce:[&_canvas]:transition-none',
-            settled ? '[&_canvas]:opacity-100' : '[&_canvas]:opacity-0',
-          )}
-          role="img"
-          aria-label={
-            failure
-              ? 'The diagram could not be drawn'
-              : title
-                ? `Diagram of ${title}`
-                : 'Automaton diagram'
-          }
-          aria-describedby={description ? summaryId : undefined}
-        />
-        {/* What this pane is doing, over the prepared canvas rather than instead of it. Named
+      {/*
+        The machine and, when something is selected, the panel describing it.
+
+        A row rather than a single box, because on a wide pane the properties dock beside the
+        drawing and the drawing gives up the width: the canvas is the flexible half and the
+        panel is a fixed column. On a narrow one the panel takes itself out of the flow and the
+        row has a single child again. `@container/viewer` is what the panel's own query reads,
+        and it is here rather than on the canvas because this width does not change when the
+        panel opens.
+
+        Still positioned, because cytoscape owns the container's children and anything laid over
+        the drawing has to be a sibling of it.
+      */}
+      <div
+        // The row owns the height when the caller gave one, rather than the canvas inside it.
+        // With it on the canvas, a docked panel taller than the drawing stretched the row and
+        // left a strip of nothing under the machine. In fill mode the flex track supplies it.
+        style={fill ? undefined : { height }}
+        className={cn('@container/viewer relative flex', fill ? 'min-h-0 flex-1' : undefined)}
+      >
+        {/* The drawing's own column. The overlays below belong to the machine, not to the pane,
+            so they are positioned against this rather than against the row: a loading message
+            centred over the row would drift sideways as the panel opened. */}
+        <div className={cn('relative flex min-w-0 flex-1 flex-col', fill ? 'min-h-0' : undefined)}>
+          <div
+            ref={containerRef}
+            style={backgroundStyle}
+            // The ordinary arrow at rest, a closed hand while the button is down and the graph is
+            // being dragged. Not an open hand throughout: that reads as "this whole surface is a
+            // handle" over a diagram whose states and transitions are the things worth pointing
+            // at. `cursor` inherits, so the canvases cytoscape puts inside pick this up without
+            // being styled themselves.
+            className={cn(
+              // Fills its column in both modes now that the row carries the height.
+              'bg-card relative min-h-0 flex-1 cursor-default overflow-hidden active:cursor-grabbing',
+              // The CANVASES are held back, not this container. Cytoscape paints the moment it
+              // is constructed, at whatever scale the file's own coordinates imply, and the fit
+              // runs after: unhidden, the machine arrives at the wrong size and visibly jumps.
+              //
+              // Hiding the container instead (which is what this was) took the grid and the
+              // surface with it, so the toolbar sat fully drawn above a blank white rectangle
+              // for about half a second and then everything appeared at once. Keeping the
+              // prepared canvas visible and fading in only the drawing is the difference
+              // between a panel that is loading and a panel that looks broken.
+              '[&_canvas]:transition-opacity [&_canvas]:duration-150',
+              'motion-reduce:[&_canvas]:transition-none',
+              settled ? '[&_canvas]:opacity-100' : '[&_canvas]:opacity-0',
+            )}
+            role="img"
+            aria-label={
+              failure
+                ? 'The diagram could not be drawn'
+                : title
+                  ? `Diagram of ${title}`
+                  : 'Automaton diagram'
+            }
+            aria-describedby={description ? summaryId : undefined}
+          />
+          {/* What this pane is doing, over the prepared canvas rather than instead of it. Named
             steps rather than one spinner: with two machines on screen, one can still be
             fetching while the other is already drawing, and "loading" for both says less than
             either of them could. */}
-        {!failure && phase !== 'ready' ? (
-          <div
-            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
-            data-testid="viewer-loading"
-          >
-            <LoadingSpinner label={PHASE_LABEL[phase]} fullScreen={false} className="min-h-0" />
-          </div>
-        ) : null}
+          {!failure && phase !== 'ready' ? (
+            <div
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+              data-testid="viewer-loading"
+            >
+              <LoadingSpinner label={PHASE_LABEL[phase]} fullScreen={false} className="min-h-0" />
+            </div>
+          ) : null}
+        </div>
+
+        {/* One at a time: a click selects a state or a transition, never both. */}
         {selectedState ? (
-          <StateProperties state={selectedState} onClose={clearSelectedState} />
+          <StateProperties
+            // By id, so the name box is re-seeded when the reader clicks a different state.
+            key={selectedState.id}
+            state={selectedState}
+            onRename={renameState}
+            onSetInitial={setInitialState}
+            onSetFinal={setFinalState}
+            onOpenTransition={selectTransition}
+            position={selectedStatePosition}
+            onMoveStart={beginStateMove}
+            onMove={moveState}
+            onClose={clearSelectedState}
+          />
         ) : selectedTransition ? (
-          <TransitionProperties edge={selectedTransition} onClose={clearSelectedState} />
+          <TransitionProperties
+            edge={selectedTransition}
+            fields={transitionFields(type)}
+            onEdit={setTransitionField}
+            onClose={clearSelectedState}
+          />
         ) : null}
       </div>
 

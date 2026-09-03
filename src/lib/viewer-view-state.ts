@@ -21,12 +21,35 @@
  */
 export type ViewerViewport = { zoom: number; pan: { x: number; y: number } };
 
+/**
+ * What the reader had open, so the properties panel comes back with the view.
+ *
+ * A transition is named by its two ends rather than by an element id, because the ids the
+ * drawing uses are positional (`e3-q0-q1`) and would move if the file were reordered. The pair
+ * is what the panel asks about anyway: parallel transitions between the same two states are one
+ * line on the canvas.
+ */
+export type ViewerSelection =
+  | { kind: 'state'; id: string }
+  | { kind: 'transition'; from: string; to: string };
+
 /** Where every state sits, plus the camera looking at it. */
 export type ViewerViewState = {
   /** Bumped when the shape changes, so an old entry is ignored rather than misread. */
   v: 1;
   zoom: number;
   pan: { x: number; y: number };
+  /**
+   * The model point that was under the middle of the canvas.
+   *
+   * The pan above is in rendered pixels and so belongs to the size the canvas had when it was
+   * written down. That size is not the size it comes back at: the properties panel docks beside
+   * the drawing and takes 20rem of it, and on the way back in the panel opens a moment after the
+   * view is restored. Restoring the pan therefore moved the machine left by half a panel every
+   * refresh, and it accumulated. This is what the restore uses; `pan` stays for an entry written
+   * before this existed.
+   */
+  centre?: { x: number; y: number };
   positions: Record<string, { x: number; y: number }>;
   /** Whether the reader was on the drawn layout or the auto-arranged one. */
   honorPositions: boolean;
@@ -37,6 +60,55 @@ export type ViewerViewState = {
    * the flag, and the worst it costs is an indicator that stays quiet for one session.
    */
   modified?: boolean;
+  /**
+   * The state or transition whose properties were open, if any.
+   *
+   * Optional for the same reason as `modified`: an entry written before this existed still
+   * opens, and the worst it costs is a panel the reader has to click again.
+   */
+  selection?: ViewerSelection | null;
+  /**
+   * The names the reader has given states, by state id.
+   *
+   * Kept for the same reason as the positions: a reader who renames three states to follow an
+   * argument and then reloads should not lose the argument. Optional, like the two above, so an
+   * entry written before this existed still opens.
+   */
+  renames?: Record<string, string>;
+  /**
+   * The state the reader has made the initial one, if they have said anything about it.
+   *
+   * Absent means the file's own answer stands. A string is the state they chose, and null is
+   * "none", which is what unticking the box asks for. Three answers rather than two, because
+   * "they have not touched it" and "they have taken it away" are different things to come back
+   * to after a refresh.
+   */
+  initialState?: string | null;
+  /**
+   * Which states the reader has made final, or unmade, by state id.
+   *
+   * A map rather than a single id, because unlike the initial state a machine can have any
+   * number of final ones: this says what the reader changed, and every state it does not name
+   * keeps the file's own answer.
+   */
+  finals?: Record<string, boolean>;
+  /**
+   * What the reader has changed about transitions, by a transition's place in the file.
+   *
+   * Only the fields they touched, and only the ones their machine type has: a finite automaton's
+   * transition reads, a pushdown automaton's also pops and pushes, a Turing machine's writes and
+   * moves.
+   */
+  transitions?: Record<number, ViewerTransitionEdit>;
+};
+
+/** The parts of a transition a reader can change. */
+export type ViewerTransitionEdit = {
+  read?: string;
+  write?: string;
+  move?: string;
+  pop?: string;
+  push?: string;
 };
 
 const PREFIX = 'afct.viewer.view.';
@@ -52,6 +124,14 @@ const isPoint = (value: unknown): value is { x: number; y: number } => {
   );
 };
 
+function isSelection(value: unknown): value is ViewerSelection {
+  if (!value || typeof value !== 'object') return false;
+  const sel = value as Record<string, unknown>;
+  if (sel.kind === 'state') return typeof sel.id === 'string' && sel.id.length > 0;
+  if (sel.kind === 'transition') return typeof sel.from === 'string' && typeof sel.to === 'string';
+  return false;
+}
+
 /** Reject anything that is not ours: the key is editable, and an old shape is not. */
 function isViewState(value: unknown): value is ViewerViewState {
   if (!value || typeof value !== 'object') return false;
@@ -59,8 +139,41 @@ function isViewState(value: unknown): value is ViewerViewState {
   if (s.v !== 1) return false;
   if (typeof s.zoom !== 'number' || !Number.isFinite(s.zoom) || s.zoom <= 0) return false;
   if (!isPoint(s.pan)) return false;
+  if (s.centre !== undefined && !isPoint(s.centre)) return false;
   if (typeof s.honorPositions !== 'boolean') return false;
   if (s.modified !== undefined && typeof s.modified !== 'boolean') return false;
+  if (s.selection !== undefined && s.selection !== null && !isSelection(s.selection)) return false;
+  if (
+    s.initialState !== undefined &&
+    s.initialState !== null &&
+    typeof s.initialState !== 'string'
+  ) {
+    return false;
+  }
+  if (s.finals !== undefined) {
+    if (!s.finals || typeof s.finals !== 'object') return false;
+    if (!Object.values(s.finals as Record<string, unknown>).every((v) => typeof v === 'boolean')) {
+      return false;
+    }
+  }
+  if (s.transitions !== undefined) {
+    if (!s.transitions || typeof s.transitions !== 'object') return false;
+    const edits = Object.values(s.transitions as Record<string, unknown>);
+    const isEdit = (edit: unknown) =>
+      !!edit &&
+      typeof edit === 'object' &&
+      Object.entries(edit as Record<string, unknown>).every(
+        ([key, value]) =>
+          ['read', 'write', 'move', 'pop', 'push'].includes(key) && typeof value === 'string',
+      );
+    if (!edits.every(isEdit)) return false;
+  }
+  if (s.renames !== undefined) {
+    if (!s.renames || typeof s.renames !== 'object') return false;
+    if (!Object.values(s.renames as Record<string, unknown>).every((v) => typeof v === 'string')) {
+      return false;
+    }
+  }
   if (!s.positions || typeof s.positions !== 'object') return false;
   return Object.values(s.positions as Record<string, unknown>).every(isPoint);
 }

@@ -7,6 +7,7 @@ import {
   FileDown,
   FileImage,
   FileCode2,
+  Crosshair,
   Scan,
   ListTree,
   BookOpen,
@@ -178,6 +179,13 @@ export function ViewerMenubar({
           <MenubarItem disabled={!ready} onSelect={() => run('fitToWindow')}>
             <Scan aria-hidden="true" />
             Fit to window
+          </MenubarItem>
+          {/* Under Fit, for the reader who has zoomed in on a corner and lost the machine
+              rather than wanting the whole of it back: this moves the camera and leaves the
+              scale alone. */}
+          <MenubarItem disabled={!ready} onSelect={() => run('centerInWindow')}>
+            <Crosshair aria-hidden="true" />
+            Center in window
           </MenubarItem>
           <MenubarSeparator />
           {/* A checkbox item rather than a plain one, so the menu says what the grid is

@@ -693,12 +693,13 @@ describe('a window split into two panes', () => {
 
   it('marks the half the menu bar is acting on', () => {
     // Two machines on screen, one menu bar. Without this nobody can tell which one Reset or
-    // Download will mean, which is the question somebody asks before clicking either.
+    // Download will mean, which is the question somebody asks before clicking either. The bar
+    // over the file says it; the strips themselves are the same colour on both sides, so a
+    // strip's fill never has to be read as meaning something.
     renderLayout(splitLayout());
     const strips = screen.getAllByRole('tablist');
-    // Opened focused on the right.
-    expect(strips[0]!.className).toContain('bg-muted');
-    expect(strips[1]!.className).not.toContain('bg-muted/60');
+    expect(strips[0]!.className).toContain('bg-muted/60');
+    expect(strips[1]!.className).toContain('bg-muted/60');
 
     const marked = () =>
       screen
@@ -709,6 +710,27 @@ describe('a window split into two panes', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'b.jff' }));
     expect(marked()).toEqual(['b.jff']);
+  });
+
+  it('marks the file on screen with one pane as well as two', () => {
+    // The same mark on the same thing whether or not the window is split: a bar that appeared
+    // only once a second machine was opened reads as being about the split rather than about
+    // which file the menus mean.
+    // One pane: every tab in it, and the focus on it by definition. The strip carries the same
+    // fill it has when the window is split, so nothing about it changes on the way in and out.
+    renderLayout({
+      tabs: [tab('a.jff'), tab('b.jff')],
+      panes: {},
+      active: ['submissions:a.jff', null],
+      focused: 0,
+    });
+
+    const marked = screen
+      .getAllByRole('tab')
+      .filter((t) => t.parentElement?.className.includes('after:bg-primary'))
+      .map((t) => t.textContent);
+    expect(marked).toEqual([screen.getByRole('tab', { selected: true }).textContent]);
+    expect(screen.getByRole('tablist').className).toContain('bg-muted/60');
   });
 
   it('draws a line between the two halves', () => {

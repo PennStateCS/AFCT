@@ -126,6 +126,14 @@ function collection(els: FakeEl[]): Collection {
 /** An absent element: cytoscape answers with an empty collection, not null. */
 const MISSING = { empty: () => true, position: () => ({ x: 0, y: 0 }), style: () => ({}) };
 
+/**
+ * The size a graph is built at.
+ *
+ * Mutable so a test can build one in a container that has no box yet, which is the case the
+ * pan that keeps the reader's spot has to refuse to act on.
+ */
+const builtAt = { width: 800, height: 600 };
+
 class FakeCy {
   nodeList: FakeEl[] = [];
   edgeList: FakeEl[] = [];
@@ -229,14 +237,14 @@ class FakeCy {
    * The size cytoscape thinks it has, and the size its container actually is.
    *
    * Two of them because that is how the real thing behaves: `width()` answers from a cached
-   * measurement and only `resize()` goes back to the DOM. Collapsing them into one would let a
-   * resize handler read the new size before it asked for it, which is exactly the mistake the
-   * code under test must not make.
+   * measurement and only `resize()` goes back to the DOM. Cytoscape watches the container
+   * itself, though, so in a browser something else has usually called `resize()` before the
+   * viewer's own handler runs: see the resize helper below, which is what makes that true here.
    */
-  containerWidth = 800;
-  containerHeight = 600;
-  viewWidth = 800;
-  viewHeight = 600;
+  containerWidth = builtAt.width;
+  containerHeight = builtAt.height;
+  viewWidth = builtAt.width;
+  viewHeight = builtAt.height;
   width() {
     return this.viewWidth;
   }
@@ -310,6 +318,8 @@ vi.mock('cytoscape-elk', () => ({ default: () => {} }));
 vi.mock('cytoscape-svg', () => ({ default: () => {} }));
 
 import { useJffCytoscape, DEFAULT_EPS } from './useJffCytoscape';
+import { describeState } from '@/lib/jflap-parse';
+import { STATE_FONT_SIZE } from '@/lib/jflap-layout';
 import type { ViewerViewState } from '@/lib/viewer-view-state';
 
 /* ─────────────────────────────── the fixture ─────────────────────────────── */
@@ -349,6 +359,20 @@ const renderViewer = (props: Partial<Parameters<typeof useJffCytoscape>[0]> = {}
 };
 
 const lastCy = () => instances[instances.length - 1];
+
+/**
+ * A state picked up, moved, and put down.
+ *
+ * Cytoscape fires `grab` on the way down and `dragfree` on release, but `dragfree` only when
+ * something really moved, which is how a drag is told from a click. Tests that mean "a state
+ * was moved" have to fire both: firing `grab` alone is a click, and now records nothing.
+ */
+const dragState = (id = '0', to?: { x: number; y: number }) => {
+  const cy = lastCy();
+  act(() => cy.handlers['grab']?.({ target: cy.byId(id) }));
+  if (to) cy.byId(id)?.position(to);
+  act(() => cy.handlers['dragfree']?.({ target: cy.byId(id) }));
+};
 const fetchOk = (body: string) =>
   vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', text: async () => body });
 
@@ -357,6 +381,8 @@ const originalFetch = global.fetch;
 beforeEach(() => {
   vi.clearAllMocks();
   instances.length = 0;
+  builtAt.width = 800;
+  builtAt.height = 600;
   cytoscapeMock.fn.mockImplementation((config: { elements?: Array<Record<string, unknown>> }) => {
     const cy = new FakeCy(config);
     instances.push(cy);
@@ -787,6 +813,164 @@ describe('remembering the view across a refresh', () => {
     expect(lastCy().byId('0')?.position()).toEqual({ x: 500, y: 500 });
   });
 
+  it('puts the view back when the graph is rebuilt, not only on the first load', async () => {
+    // The graph is rebuilt for more than a refresh: the theme changes, and React replays
+    // effects on mount in development, which loads the machine twice. Restoring on the first
+    // load and never again left the rebuild at the plain fit, and the write that follows a
+    // load then put that over the entry, so a refresh came back to nothing remembered.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 3,
+        pan: { x: 42, y: -7 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+      }),
+    );
+
+    const { rerender } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+    expect(lastCy().panPosition).toEqual({ x: 42, y: -7 });
+    expect(lastCy().byId('0')?.position()).toEqual({ x: 500, y: 500 });
+    // And the entry still says where the reader was, rather than where the rebuild fitted.
+    expect(saved()?.zoom).toBe(3);
+  });
+
+  it('writes down which properties panel is open, and that one was closed', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(saved()).not.toBeNull());
+
+    act(() => lastCy().handlers.tap({ target: lastCy().byId('0') }));
+    await waitFor(() => expect(saved()?.selection).toEqual({ kind: 'state', id: '0' }));
+
+    act(() => api().clearSelectedState());
+    await waitFor(() => expect(saved()?.selection).toBeNull());
+  });
+
+  it('opens the panel again on the state it was open on', async () => {
+    // A refresh is not a click, so without this a reader came back to the machine they left and
+    // no panel: the one thing on screen saying which state they were reading about.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        selection: { kind: 'state', id: '0' },
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+
+    await waitFor(() => expect(api().selectedState?.name).toBe('q0'));
+    // And the drawing agrees: an open panel with nothing marked on the canvas is worse than no
+    // panel at all.
+    expect(lastCy().byId('0')?.hasClass('highlighted')).toBe(true);
+    expect(lastCy().byId('1')?.hasClass('faded')).toBe(true);
+  });
+
+  it('opens the panel again on the transition it was open on', async () => {
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        selection: { kind: 'transition', from: '0', to: '1' },
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+
+    await waitFor(() => expect(api().selectedTransition?.from).toBe('q0'));
+    expect(api().selectedTransition?.to).toBe('q1');
+  });
+
+  it('ignores a selection the machine no longer has', async () => {
+    // The same file name can hold a different machine, and a panel about a state that is not
+    // there would describe nothing.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        selection: { kind: 'state', id: 'q7' },
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    expect(api().selectedState).toBeNull();
+  });
+
+  it('lets the newest load have the last word on the view', async () => {
+    // Two loads in flight: a rebuild starts while the one before it is still in its final
+    // frame. The older one used to finish by writing down the view of the graph it no longer
+    // owned, which was the fit the new one had just opened at, and the restore that followed
+    // read that back, losing the reader's zoom and positions.
+    //
+    // The exact interleaving that does the damage cannot be forced from here, so this is the
+    // scenario rather than a proof of the guard: it failed about one full-suite run in ten
+    // before each load was told which graph is its own.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 3,
+        pan: { x: 42, y: -7 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+      }),
+    );
+
+    const { rerender } = renderViewer({ viewStateKey: KEY });
+    // As soon as the first graph exists, before its load has finished: that is the window.
+    await waitFor(() => expect(instances).toHaveLength(1));
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().zoomLevel).toBe(3));
+    expect(saved()?.zoom).toBe(3);
+  });
+
+  it('comes back to the same place when the canvas is a different width', async () => {
+    // The properties panel docks beside the drawing and takes 20rem of it, and on the way back
+    // in it opens a moment after the view is restored. Restoring the pan, which is in rendered
+    // pixels, therefore moved the machine left by half a panel on every refresh, and it piled
+    // up: Jeff saw it walk further left each time.
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        // Written down at 480 wide, where this pan put the model point (100, 100) in the middle.
+        pan: { x: 140, y: 200 },
+        centre: { x: 100, y: 100 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+      }),
+    );
+
+    renderViewer({ viewStateKey: KEY });
+
+    // The fake canvas is 800 x 600, so the same point in the middle means a different pan.
+    await waitFor(() => expect(lastCy().panPosition).toEqual({ x: 300, y: 200 }));
+  });
+
   it('does not put the old positions back when the layout is switched', async () => {
     // The regression this guards: the restore ran at the end of every load, and switching to
     // Auto-arranged is a load, so the layout engine placed the states and the remembered
@@ -835,6 +1019,325 @@ describe('remembering the view across a refresh', () => {
     const { api } = renderViewer();
     await waitFor(() => expect(api().type).toBe('fa'));
     expect(window.sessionStorage.length).toBe(0);
+  });
+});
+
+describe('the size a state name is drawn at', () => {
+  const nodeFontSize = (label: string) => {
+    const rule = lastCy().styleSheet.find((r) => r.selector === 'node');
+    const size = rule?.style['font-size'] as ((node: unknown) => number) | undefined;
+    return size?.({ data: () => label });
+  };
+
+  it('asks per state rather than fixing one size for all of them', async () => {
+    // Cytoscape re-runs a function mapper when the element's data changes, which is what makes
+    // a state renamed in the properties panel come back at a size that fits.
+    renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    expect(nodeFontSize('q0')).toBe(STATE_FONT_SIZE);
+    expect(nodeFontSize('accepting')).toBeLessThan(STATE_FONT_SIZE);
+  });
+});
+
+describe('moving a state by typing its coordinates', () => {
+  it('says where the selected state is, and follows it when it is dragged', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const cy = lastCy();
+
+    act(() => cy.handlers.tap({ target: cy.byId('0') }));
+    await waitFor(() => expect(api().selectedStatePosition).toEqual(cy.byId('0')?.position()));
+
+    cy.byId('0')?.position({ x: 700, y: 400 });
+    await act(async () => {
+      await cy.handlers.position({ target: cy.byId('0') });
+    });
+
+    expect(api().selectedStatePosition).toEqual({ x: 700, y: 400 });
+  });
+
+  it('moves the state, and is one undoable step like a drag', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const cy = lastCy();
+    const before = { ...cy.byId('0')!.position() };
+    act(() => cy.handlers.tap({ target: cy.byId('0') }));
+
+    // Focus first, which is where the snapshot is taken, exactly as picking a state up is.
+    act(() => api().beginStateMove());
+    act(() => api().moveState('0', { x: 250, y: 250 }));
+
+    expect(cy.byId('0')?.position()).toEqual({ x: 250, y: 250 });
+    await waitFor(() => expect(api().canUndo).toBe(true));
+
+    act(() => api().undo());
+    expect(cy.byId('0')?.position()).toEqual(before);
+  });
+
+  it('records nothing when the boxes are only tabbed through', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().beginStateMove());
+
+    expect(api().canUndo).toBe(false);
+  });
+});
+
+describe('renaming a state', () => {
+  const KEY = 'submissions:machine.jff';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('changes the label on the drawing and everything that describes it', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => lastCy().handlers.tap({ target: lastCy().byId('0') }));
+
+    act(() => api().renameState('0', 'start'));
+
+    await waitFor(() => expect(api().selectedState?.name).toBe('start'));
+    expect(lastCy().byId('0')?.data('label')).toBe('start');
+    // And every other panel that names it, which all come from the same parsed machine.
+    expect(api().parsed?.states.find((st) => st.id === '0')?.name).toBe('start');
+    expect(describeState(api().parsed!, '1', DEFAULT_EPS)?.incoming.join(' ')).toContain('start');
+  });
+
+  it('says the drawing has been changed, since it no longer matches the file', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    expect(api().viewModified).toBe(false);
+
+    act(() => api().renameState('0', 'start'));
+
+    await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('survives a rebuild, which re-reads the file and would put the old name back', async () => {
+    const { api, rerender } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().renameState('0', 'start'));
+    await waitFor(() => expect(lastCy().byId('0')?.data('label')).toBe('start'));
+
+    // A theme change is a rebuild, and so is switching the layout.
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('0')?.data('label')).toBe('start'));
+  });
+
+  it('comes back after a refresh, with the note that says the file is not the file', async () => {
+    // Without this the names reverted while the toolbar still said the drawing had been
+    // changed, which was a claim about nothing.
+    window.sessionStorage.setItem(
+      `afct.viewer.view.${KEY}`,
+      JSON.stringify({
+        v: 1,
+        zoom: 1,
+        pan: { x: 0, y: 0 },
+        positions: { '0': { x: 500, y: 500 }, '1': { x: 640, y: 500 } },
+        honorPositions: true,
+        modified: true,
+        renames: { '0': 'start' },
+      }),
+    );
+
+    const { api } = renderViewer({ viewStateKey: KEY });
+
+    await waitFor(() => expect(lastCy().byId('0')?.data('label')).toBe('start'));
+    expect(api().viewModified).toBe(true);
+  });
+
+  it('writes the names down, so the next visit has them', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    // After the load has finished, so the write that carries the name has to be this change's
+    // own rather than the one the load ends with.
+    await waitFor(() => expect(api().phase).toBe('ready'));
+
+    act(() => api().renameState('0', 'start'));
+
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).renames,
+      ).toEqual({ '0': 'start' }),
+    );
+  });
+
+  it('is given up when the machine is put back the way it opened', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().renameState('0', 'start'));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().resetMachine());
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('0')?.data('label')).toBe('q0'));
+    expect(api().viewModified).toBe(false);
+  });
+});
+
+describe('choosing which state is initial', () => {
+  const KEY = 'submissions:machine.jff';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('moves the marker rather than giving the machine two initial states', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    expect(api().parsed?.states.filter((st) => st.initial).map((st) => st.id)).toEqual(['0']);
+
+    act(() => api().setInitialState('1'));
+
+    await waitFor(() =>
+      expect(api().parsed?.states.filter((st) => st.initial).map((st) => st.id)).toEqual(['1']),
+    );
+    expect(lastCy().byId('1')?.data('initial')).toBe(1);
+    expect(lastCy().byId('0')?.data('initial')).toBe(0);
+  });
+
+  it('leaves the machine without one when the box is unticked', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().setInitialState(null));
+
+    await waitFor(() => expect(api().parsed?.states.some((st) => st.initial)).toBe(false));
+    expect(api().viewModified).toBe(true);
+  });
+
+  it('survives a rebuild and a refresh, like the names do', async () => {
+    const { api, rerender } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    act(() => api().setInitialState('1'));
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).initialState,
+      ).toBe('1'),
+    );
+
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('1')?.data('initial')).toBe(1));
+    expect(lastCy().byId('0')?.data('initial')).toBe(0);
+  });
+
+  it('is given up when the machine is put back the way it opened', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    act(() => api().setInitialState('1'));
+    await waitFor(() => expect(api().viewModified).toBe(true));
+
+    act(() => api().resetMachine());
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('0')?.data('initial')).toBe(1));
+    expect(api().viewModified).toBe(false);
+  });
+});
+
+describe('choosing which states are final', () => {
+  const KEY = 'submissions:machine.jff';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('marks one without saying anything about the others', async () => {
+    // Unlike the initial state: a machine can have any number of final states, or none.
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().setFinalState('0', true));
+
+    await waitFor(() =>
+      expect(api().parsed?.states.filter((st) => st.final).map((st) => st.id)).toEqual(['0', '1']),
+    );
+    expect(lastCy().byId('0')?.hasClass('final')).toBe(true);
+    expect(api().viewModified).toBe(true);
+  });
+
+  it('takes the double circle away again', async () => {
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().setFinalState('1', false));
+
+    await waitFor(() => expect(lastCy().byId('1')?.hasClass('final')).toBe(false));
+    expect(api().parsed?.states.some((st) => st.final)).toBe(false);
+  });
+
+  it('survives a rebuild and is written down for the next visit', async () => {
+    const { api, rerender } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    act(() => api().setFinalState('0', true));
+    await waitFor(() =>
+      expect(JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).finals).toEqual({
+        '0': true,
+      }),
+    );
+
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(lastCy().byId('0')?.hasClass('final')).toBe(true));
+  });
+});
+
+describe('changing what a transition reads', () => {
+  const KEY = 'submissions:machine.jff';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  it('redraws the line from the transitions behind it', async () => {
+    const { api } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const edge = lastCy().edgeList.find(
+      (e) => e.data('source') === '0' && e.data('target') === '1',
+    );
+    const before = edge?.data('label');
+
+    act(() => api().setTransitionField(0, 'read', 'x'));
+
+    await waitFor(() => expect(edge?.data('label')).not.toBe(before));
+    expect(String(edge?.data('label'))).toContain('x');
+    expect(api().viewModified).toBe(true);
+  });
+
+  it('leaves the other transitions on the same line alone', async () => {
+    // Two transitions between the same pair are drawn as one line carrying both labels, so the
+    // label is worked out again from all of them rather than replaced by the one that changed.
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+
+    act(() => api().setTransitionField(0, 'read', 'x'));
+
+    await waitFor(() => expect(api().parsed?.transitions[0]?.read).toBe('x'));
+    expect(api().parsed?.transitions[1]?.read).not.toBe('x');
+  });
+
+  it('survives a rebuild and is written down for the next visit', async () => {
+    const { api, rerender } = renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(api().phase).toBe('ready'));
+    act(() => api().setTransitionField(0, 'read', 'x'));
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).transitions,
+      ).toEqual({ '0': { read: 'x' } }),
+    );
+
+    rerender({ darkMode: true });
+
+    await waitFor(() => expect(instances.length).toBeGreaterThan(1));
+    await waitFor(() => expect(api().parsed?.transitions[0]?.read).toBe('x'));
   });
 });
 
@@ -899,7 +1402,7 @@ describe('putting a machine back the way it opened', () => {
   it('leaves nothing to undo, since there is nothing to go back to', async () => {
     const { api } = renderViewer({ viewStateKey: KEY });
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
+    dragState();
     await waitFor(() => expect(api().canUndo).toBe(true));
 
     act(() => api().resetMachine());
@@ -933,6 +1436,11 @@ describe('keeping the canvas in step with its container', () => {
   });
 
   const resize = async () => {
+    // Cytoscape watches the container itself and calls its own `resize` on a shorter debounce
+    // than the viewer's, so by the time the viewer's handler runs the graph already knows its
+    // new size. Without this the test asked the viewer to compare two readings it would never
+    // get in a browser, and passed while a split pane left its machine half off the side.
+    lastCy()?.resize();
     for (const fire of observers) fire();
     // The handler is debounced, so nothing has happened yet.
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -990,6 +1498,54 @@ describe('keeping the canvas in step with its container', () => {
     expect(cy.zoomLevel).toBe(2);
   });
 
+  it('does not move the view when the canvas had no size to compare against', async () => {
+    // A container measured before it had a box would otherwise read as a change the width of a
+    // whole pane, and throw the machine sideways the first time it was looked at.
+    builtAt.width = 0;
+    builtAt.height = 0;
+    renderViewer();
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    const cy = lastCy();
+    cy.containerWidth = 800;
+    cy.containerHeight = 600;
+    const pan = { ...cy.panPosition };
+
+    await resize();
+
+    expect(cy.panPosition).toEqual(pan);
+  });
+
+  it('writes down the same centre after a resize, so refreshing does not walk the machine', async () => {
+    // The drift Jeff saw: open the properties panel, refresh, and the machine sits further left
+    // every time. The panel narrows the canvas after the view has been restored, so what is
+    // written down has to be the point in the middle rather than the pan that put it there.
+    const KEY = 'submissions:machine.jff';
+    window.sessionStorage.clear();
+    renderViewer({ viewStateKey: KEY });
+    await waitFor(() => expect(observers.length).toBeGreaterThan(0));
+    const cy = lastCy();
+    cy.zoom(2);
+    cy.pan({ x: -200, y: -80 });
+    act(() => cy.handlers['viewport position']?.({}));
+    await waitFor(() =>
+      expect(JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).centre).toBeDefined(),
+    );
+    const before = JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!).centre;
+
+    // The panel opening: 20rem off the width of the canvas.
+    cy.containerWidth = 480;
+    await resize();
+    act(() => cy.handlers['viewport position']?.({}));
+
+    await waitFor(() => {
+      const after = JSON.parse(window.sessionStorage.getItem(`afct.viewer.view.${KEY}`)!);
+      expect(after.centre.x).toBeCloseTo(before.x, 6);
+      expect(after.centre.y).toBeCloseTo(before.y, 6);
+      // The pan did move, which is the point: the same place, seen through a narrower window.
+      expect(after.pan.x).not.toBe(-200);
+    });
+  });
+
   it('leaves Fit to window fitting and centring, which is what it is for', async () => {
     // Resizing keeps the reader where they are; Fit deliberately does not. The two must stay
     // different, or the only way back to the whole machine is gone.
@@ -1001,6 +1557,23 @@ describe('keeping the canvas in step with its container', () => {
     act(() => api().fit());
 
     await waitFor(() => expect(lastCy().fitCalls).toBeGreaterThan(fitsBefore));
+  });
+
+  it('centres the machine on request without touching the scale', async () => {
+    // The other half of Fit: a reader who zoomed in on a corner and panned off the machine
+    // wants it back in front of them at the scale they chose, not the whole thing at once.
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const cy = lastCy();
+    cy.zoom(2.5);
+    cy.centerCalls = 0;
+    const fitsBefore = cy.fitCalls;
+
+    act(() => api().center());
+
+    expect(cy.centerCalls).toBe(1);
+    expect(cy.fitCalls).toBe(fitsBefore);
+    expect(cy.zoomLevel).toBe(2.5);
   });
 
   it('does not recentre the whole machine, which would be a different place', async () => {
@@ -1030,8 +1603,7 @@ describe('undoing a layout switch', () => {
     await waitFor(() => expect(instances).toHaveLength(1));
 
     // A state picked up and put down somewhere else, which is one undoable step.
-    act(() => lastCy().handlers['grab']?.({}));
-    lastCy().byId('0')?.position({ x: 640, y: 480 });
+    dragState('0', { x: 640, y: 480 });
     await waitFor(() => expect(api().canUndo).toBe(true));
 
     act(() => api().toggleHonorPositions());
@@ -1047,8 +1619,7 @@ describe('undoing a layout switch', () => {
   it('leaves the view where it was, since an undo moves the machine and not the camera', async () => {
     const { api } = renderViewer({ honorPositionsDefault: true });
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
-    lastCy().byId('0')?.position({ x: 640, y: 480 });
+    dragState('0', { x: 640, y: 480 });
     await waitFor(() => expect(api().canUndo).toBe(true));
 
     act(() => api().toggleHonorPositions());
@@ -1073,8 +1644,7 @@ describe('undoing a layout switch', () => {
     await waitFor(() => expect(instances).toHaveLength(1));
     const before = { ...lastCy().byId('0')!.position() };
 
-    act(() => lastCy().handlers['grab']?.({}));
-    lastCy().byId('0')?.position({ x: 900, y: 900 });
+    dragState('0', { x: 900, y: 900 });
     await waitFor(() => expect(api().canUndo).toBe(true));
 
     act(() => api().undo());
@@ -1120,8 +1690,10 @@ describe("linking one pane's camera to the other", () => {
     // Cytoscape reports a move whether a person or this code caused it. Reporting one back
     // would have the two panes talking past each other.
     const onViewportChange = vi.fn();
-    const { rerender } = renderViewer({ onViewportChange });
-    await waitFor(() => expect(instances).toHaveLength(1));
+    const { rerender, api } = renderViewer({ onViewportChange });
+    // Wait for the load to finish, not just for the graph to exist: it reports the opening
+    // view when it ends, and clearing before that left the report racing the rerender below.
+    await waitFor(() => expect(api().phase).toBe('ready'));
     onViewportChange.mockClear();
 
     // Both props at once, which the window never does: it gives a pane one or the other. This
@@ -1233,8 +1805,23 @@ describe('saying that the drawing has been rearranged', () => {
   it('speaks up once a state has been moved', async () => {
     const { api } = renderViewer();
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
+    dragState();
     await waitFor(() => expect(api().viewModified).toBe(true));
+  });
+
+  it('says nothing when a state is only clicked to read its properties', async () => {
+    // A click starts by picking the state up, so recording the arrangement there made every
+    // click report a rearrangement that had not happened.
+    const { api } = renderViewer();
+    await waitFor(() => expect(instances).toHaveLength(1));
+    const cy = lastCy();
+
+    act(() => cy.handlers['grab']?.({ target: cy.byId('0') }));
+    act(() => cy.handlers.tap({ target: cy.byId('0') }));
+
+    await waitFor(() => expect(api().selectedState?.id).toBe('0'));
+    expect(api().viewModified).toBe(false);
+    expect(api().canUndo).toBe(false);
   });
 
   it('speaks up when the layout is switched, which moves every state', async () => {
@@ -1247,7 +1834,7 @@ describe('saying that the drawing has been rearranged', () => {
   it('goes quiet again once the reader has undone what they did', async () => {
     const { api } = renderViewer({ honorPositionsDefault: true });
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
+    dragState();
     await waitFor(() => expect(api().viewModified).toBe(true));
 
     act(() => api().undo());
@@ -1276,8 +1863,9 @@ describe('saying that the drawing has been rearranged', () => {
     await waitFor(() => expect(api().phase).toBe('ready'));
     expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).modified).toBe(false);
 
-    act(() => lastCy().handlers['grab']?.({}));
-    act(() => lastCy().handlers['viewport position']?.({}));
+    // The drag alone, with no scroll after it: releasing the state is the last thing that
+    // happens, so it is what has to write the flag down.
+    dragState();
     await waitFor(() =>
       expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!).modified).toBe(true),
     );
@@ -1307,7 +1895,7 @@ describe('saying that the drawing has been rearranged', () => {
   it('goes quiet when the machine is put back', async () => {
     const { api } = renderViewer({ viewStateKey: KEY });
     await waitFor(() => expect(instances).toHaveLength(1));
-    act(() => lastCy().handlers['grab']?.({}));
+    dragState();
     await waitFor(() => expect(api().viewModified).toBe(true));
 
     act(() => api().resetMachine());

@@ -13,6 +13,7 @@ import {
   LABEL_LINE_HEIGHT,
   LOOP_REACH,
   NODE_DIAMETER,
+  stateFontSize,
   NOTE_FONT_SIZE,
   NOTE_MAX_WIDTH,
   START_MARKER_SIZE,
@@ -30,10 +31,12 @@ import {
   readViewState,
   writeViewState,
   viewStateFits,
+  type ViewerSelection,
   type ViewerViewport,
   type ViewerViewState,
 } from '@/lib/viewer-view-state';
 import {
+  bundleEdges,
   describeMachine,
   describeEdge,
   describeState,
@@ -292,19 +295,130 @@ function panKeepingCentre(
   pan: { x: number; y: number },
 ): { x: number; y: number } | null {
   if (!(zoom > 0) || !isFinitePoint(pan)) return null;
-  if (![before.width, before.height, after.width, after.height].every((n) => Number.isFinite(n))) {
+  // Every dimension has to be a real, positive size. A zero one means the canvas was measured
+  // while it had no box, and treating that as the old size would shove the view half a
+  // container sideways the first time the reader saw the machine.
+  if (![before.width, before.height, after.width, after.height].every((n) => n > 0)) {
     return null;
   }
-  const centre = {
-    x: (before.width / 2 - pan.x) / zoom,
-    y: (before.height / 2 - pan.y) / zoom,
-  };
-  return { x: after.width / 2 - centre.x * zoom, y: after.height / 2 - centre.y * zoom };
+  return panPuttingCentre(centreOfView(before, zoom, pan), after, zoom);
+}
+
+/** The model point under the middle of the canvas. */
+function centreOfView(
+  size: { width: number; height: number },
+  zoom: number,
+  pan: { x: number; y: number },
+): { x: number; y: number } {
+  return { x: (size.width / 2 - pan.x) / zoom, y: (size.height / 2 - pan.y) / zoom };
+}
+
+/** The pan that puts a model point under the middle of the canvas. */
+function panPuttingCentre(
+  centre: { x: number; y: number },
+  size: { width: number; height: number },
+  zoom: number,
+): { x: number; y: number } {
+  return { x: size.width / 2 - centre.x * zoom, y: size.height / 2 - centre.y * zoom };
 }
 
 /** A point cytoscape will accept: both halves present and real numbers. */
 function isFinitePoint(value: any): value is { x: number; y: number } {
   return !!value && Number.isFinite(value.x) && Number.isFinite(value.y);
+}
+
+/**
+ * Dim the machine around one element and light up what it touches.
+ *
+ * Shared by the click that selects something and the restore that puts a selection back after a
+ * refresh, so the drawing looks the same either way round rather than coming back with an open
+ * properties panel and nothing marked on the canvas.
+ */
+function highlightElement(cy: any, ele: any): void {
+  const neighborhood = ele.closedNeighborhood ? ele.closedNeighborhood() : ele.neighborhood();
+  cy.elements().addClass('faded');
+  neighborhood.addClass('highlighted').removeClass('faded');
+}
+
+/**
+ * The machine with the reader's renamings applied.
+ *
+ * Renamings live beside the parsed file rather than in it, because every rebuild re-reads the
+ * file: switching the layout or the theme would otherwise put the author's names back. Applied
+ * on the way out of each parse instead, so the drawing, the panels, the text representation and
+ * the downloaded arrangement all say the same thing.
+ *
+ * Nothing here writes to the submitted file. It is a view of it, as the whole viewer is.
+ */
+function applyRenames(parsed: Parsed, renames: Record<string, string>): Parsed {
+  if (Object.keys(renames).length === 0) return parsed;
+  return {
+    ...parsed,
+    states: parsed.states.map((state) =>
+      state.id in renames ? { ...state, name: renames[state.id]! } : state,
+    ),
+  };
+}
+
+/**
+ * The machine with the reader's choice of initial state applied.
+ *
+ * A machine has one initial state, which is what JFLAP draws the arrow into and what everything
+ * here already assumes: the summary says "Initial state: q0", not a list. So choosing one takes
+ * it away from whichever state had it, and `null` leaves the machine without one, which is what
+ * unticking the box asks for.
+ *
+ * `undefined` means the reader has not said, and the file's own answer stands.
+ */
+function applyInitialState(parsed: Parsed, initial: string | null | undefined): Parsed {
+  if (initial === undefined) return parsed;
+  return {
+    ...parsed,
+    states: parsed.states.map((state) =>
+      state.initial === (state.id === initial)
+        ? state
+        : { ...state, initial: state.id === initial },
+    ),
+  };
+}
+
+/**
+ * The machine with the reader's choice of final states applied.
+ *
+ * Unlike the initial state there is nothing to take away from anybody: any number of states can
+ * be final, and a machine with none is a perfectly ordinary one that accepts nothing. So this is
+ * a map of the states the reader has changed, and every state it does not name keeps the file's
+ * own answer.
+ */
+function applyFinalStates(parsed: Parsed, finals: Record<string, boolean>): Parsed {
+  if (Object.keys(finals).length === 0) return parsed;
+  return {
+    ...parsed,
+    states: parsed.states.map((state) =>
+      state.id in finals ? { ...state, final: finals[state.id]! } : state,
+    ),
+  };
+}
+
+/**
+ * The machine with the reader's changes to transitions applied.
+ *
+ * Keyed by a transition's place in the file, which is the only stable thing about it: two
+ * transitions between the same pair of states are told apart by nothing else, and they are drawn
+ * as one line.
+ */
+function applyTransitionEdits(
+  parsed: Parsed,
+  edits: Record<number, Partial<Parsed['transitions'][number]>>,
+): Parsed {
+  if (Object.keys(edits).length === 0) return parsed;
+  return {
+    ...parsed,
+    transitions: parsed.transitions.map((transition) => {
+      const edit = edits[transition.__idx];
+      return edit ? { ...transition, ...edit } : transition;
+    }),
+  };
 }
 
 /** Read the current arrangement out of the graph. */
@@ -433,6 +547,88 @@ export function useJffCytoscape({
   // assigned by the bundler and would not survive a re-parse, while the pair is the machine's
   // own identity for it.
   const [selectedEdge, setSelectedEdge] = useState<{ from: string; to: string } | null>(null);
+  /**
+   * Where the selected state is on the canvas right now.
+   *
+   * Not read from the parsed file: that says where its author put it, and the reader may have
+   * dragged it since. Kept in step by the same `position` event that moves the labels and the
+   * initial-state marker, so the boxes in the panel follow a drag rather than going stale.
+   */
+  const [selectedPosition, setSelectedPosition] = useState<{ x: number; y: number } | null>(null);
+  /**
+   * What is selected, in the shape the remembered view stores.
+   *
+   * A ref because the writer reads only refs: it runs from a debounce and from `pagehide`, and
+   * a closure from the first render would always write "nothing selected".
+   */
+  /**
+   * Whether the graph on screen has had its remembered view put back.
+   *
+   * False from the moment a load starts until that load has restored (or decided not to), which
+   * is the window in which a write would record a view nobody asked for.
+   */
+  /**
+   * The names the reader has given states, by state id.
+   *
+   * Not in `load`'s dependencies on purpose: renaming a state changes one label on a graph that
+   * is already drawn, and rebuilding the machine to do it would throw away the arrangement, the
+   * zoom and the undo history for the sake of a word.
+   *
+   * Seeded from the remembered view rather than restored after the fact: every load applies
+   * these on its way out of the parse, so the first drawing already carries them. Without this
+   * a refresh put the author's names back while the toolbar still said the file had changed on
+   * screen, which was a claim about nothing.
+   */
+  const [renames, setRenames] = useState<Record<string, string>>(savedView?.renames ?? {});
+  const renamesRef = useRef(renames);
+  renamesRef.current = renames;
+  /**
+   * Which state the reader has made initial, held the same way as the renamings and for the
+   * same reasons: outside the parsed file, so a rebuild keeps it, and written down with the
+   * view, so a refresh does.
+   */
+  const [initialOverride, setInitialOverride] = useState<string | null | undefined>(
+    savedView?.initialState,
+  );
+  const initialOverrideRef = useRef(initialOverride);
+  initialOverrideRef.current = initialOverride;
+  /**
+   * What the reader has changed about transitions, by the transition's place in the file.
+   *
+   * Held outside the parsed machine like the renamings, so a rebuild keeps it, and written down
+   * with the view, so a refresh does.
+   */
+  const [transitionEdits, setTransitionEdits] = useState<
+    Record<number, Partial<Parsed['transitions'][number]>>
+  >(savedView?.transitions ?? {});
+  const transitionEditsRef = useRef(transitionEdits);
+  transitionEditsRef.current = transitionEdits;
+  /** Which states the reader has made final, or unmade. Same handling as the two above. */
+  const [finalOverrides, setFinalOverrides] = useState<Record<string, boolean>>(
+    savedView?.finals ?? {},
+  );
+  const finalOverridesRef = useRef(finalOverrides);
+  finalOverridesRef.current = finalOverrides;
+  const viewRestored = useRef(false);
+  /**
+   * Which load owns the graph.
+   *
+   * Two can be in flight at once: a theme change or a layout switch starts one while the last
+   * is still fetching or still in its final frame. Without a way to tell them apart the older
+   * one carried on and acted on the newer one's graph, and the sequence that showed it was
+   * ordinary use: it wrote the fit the new graph had opened at over the remembered view, and
+   * the restore that came a moment later read it back and stayed there.
+   */
+  const loadGeneration = useRef(0);
+  // Read by the graph's own event handlers, which are built once per load.
+  const selectedStateIdRef = useRef<string | null>(null);
+  selectedStateIdRef.current = selectedStateId;
+  const selectionRef = useRef<ViewerSelection | null>(null);
+  selectionRef.current = selectedStateId
+    ? { kind: 'state', id: selectedStateId }
+    : selectedEdge
+      ? { kind: 'transition', from: selectedEdge.from, to: selectedEdge.to }
+      : null;
   // Read by the load path, which runs outside React's render and would otherwise capture the
   // value from whenever the effect that started it was created.
   const showNotesRef = useRef(showNotes);
@@ -474,6 +670,16 @@ export function useJffCytoscape({
   const undoStack = useRef<ArrangementSnapshot[]>([]);
   const redoStack = useRef<ArrangementSnapshot[]>([]);
   /**
+   * The arrangement as it was when a state was picked up, held until the reader lets go.
+   *
+   * Clicking a state selects it and opens its properties, and picking one up is how a click
+   * starts, so recording the snapshot straight onto the undo stack made every click look like
+   * a rearrangement: the window said the drawing had been moved when nothing had. The snapshot
+   * still has to be taken at that moment, while the old positions are readable, so it waits
+   * here and is only committed if the state was actually dragged.
+   */
+  const grabbedArrangement = useRef<ArrangementSnapshot | null>(null);
+  /**
    * An arrangement waiting for the graph to be rebuilt before it can be applied.
    *
    * Stepping across a layout switch changes `honorPositions`, which `load` depends on, so the
@@ -510,6 +716,26 @@ export function useJffCytoscape({
 
   // Expose onResize for Fit button
   const onResizeRef = useRef<(() => void) | null>(null);
+  /**
+   * Put the label geometry back in step, for a change that is not a drag.
+   *
+   * The offsets that keep a transition's label clear of its line, and a self-loop's of its
+   * state, are worked out from the label itself, so editing what a transition reads has to run
+   * them again. The functions belong to the graph currently loaded, which is why this is a ref
+   * the load fills in rather than something callable from out here.
+   */
+  const refreshLabelGeometryRef = useRef<(() => void) | null>(null);
+  /**
+   * The size the canvas had when it was last drawn.
+   *
+   * Kept here rather than read from cytoscape when a resize arrives, because by then it is no
+   * longer the old size: cytoscape watches the container itself and calls its own `resize`
+   * about half a debounce ahead of this one, so both readings came back the same and the pan
+   * that keeps the reader's spot in the middle worked out to no move at all. Splitting the
+   * window left each machine sitting where it had been in the full width, half of it off the
+   * side of its pane.
+   */
+  const canvasSize = useRef<{ width: number; height: number } | null>(null);
 
   /* ── remembering the view across a refresh ──────────────────────────── */
 
@@ -517,7 +743,13 @@ export function useJffCytoscape({
   viewStateKeyRef.current = viewStateKey;
   // Read by the writer, which runs from a cytoscape event rather than from a render.
   const viewModifiedRef = useRef(false);
-  viewModifiedRef.current = undoDepth > 0 || restoredModified;
+  viewModifiedRef.current =
+    undoDepth > 0 ||
+    restoredModified ||
+    Object.keys(renames).length > 0 ||
+    initialOverride !== undefined ||
+    Object.keys(finalOverrides).length > 0 ||
+    Object.keys(transitionEdits).length > 0;
 
   /* ── following another pane's camera ────────────────────────────────── */
 
@@ -572,6 +804,12 @@ export function useJffCytoscape({
   /** Write down where the reader is looking and where they have put the states. */
   const rememberView = useCallback(() => {
     if (!viewStateKeyRef.current) return;
+    // Not while a graph is being built. The writer is debounced, so a wheel or a drag from just
+    // before a rebuild can come due after the new graph exists and before its remembered view
+    // has been put back: it would then write the fit the rebuild opened at, and the restore a
+    // moment later would read that and stay there. What is in storage is already this machine's
+    // view; the load writes it again when it has finished.
+    if (!viewRestored.current) return;
     const cy = cyRef.current;
     if (!cy) return;
     try {
@@ -579,13 +817,25 @@ export function useJffCytoscape({
       const pan = cy.pan();
       const zoom = cy.zoom();
       if (!arrangement || !isFinitePoint(pan) || !Number.isFinite(zoom) || zoom <= 0) return;
+      const size = { width: cy.width(), height: cy.height() };
       writeViewState(viewStateKeyRef.current, {
         v: 1,
         zoom,
         pan: { x: pan.x, y: pan.y },
+        // What the restore actually uses. See the note on the type: the pan alone belongs to the
+        // canvas size it was taken at, and the canvas is not that size when it comes back.
+        centre:
+          size.width > 0 && size.height > 0
+            ? centreOfView(size, zoom, { x: pan.x, y: pan.y })
+            : undefined,
         positions: arrangement.positions,
         honorPositions: arrangement.honorPositions,
         modified: viewModifiedRef.current,
+        selection: selectionRef.current,
+        renames: renamesRef.current,
+        initialState: initialOverrideRef.current,
+        finals: finalOverridesRef.current,
+        transitions: transitionEditsRef.current,
       });
     } catch {
       // A graph mid-teardown, or storage refusing. Neither is worth interrupting a reader.
@@ -600,13 +850,13 @@ export function useJffCytoscape({
    * not have. The caller then opens the file the ordinary way.
    */
   /**
-   * The remembered view belongs to the first load and nothing after it.
+   * Skip the next restore, once.
    *
-   * Switching between the drawn and the auto-arranged layout rebuilds the graph, and without
-   * this the restore ran again at the end of that rebuild and put the old positions straight
-   * back over the layout engine's. Choosing Auto-arranged appeared to do nothing at all.
+   * Reset throws the remembered view away and rebuilds, but a debounced write from a drag a
+   * moment earlier can still be in flight and would put the entry back between the two. This
+   * says "the rebuild you are about to do was asked for, do not restore anything into it".
    */
-  const hasRestored = useRef(false);
+  const skipRestore = useRef(false);
 
   /**
    * Bumped to rebuild the graph when nothing `load` depends on has changed.
@@ -616,11 +866,82 @@ export function useJffCytoscape({
    */
   const [reloadNonce, setReloadNonce] = useState(0);
 
+  /**
+   * Put the properties panel back on whatever it was open on.
+   *
+   * The panel answers a click, and a refresh is not a click, so without this a reader who
+   * reloaded came back to the machine they had left and no panel: the one thing on screen that
+   * had said which state they were reading about. Silent when the machine no longer has what
+   * was selected, which is what a file replaced under the same name would give.
+   */
+  const restoreSelection = useCallback((cy: any, selection: ViewerSelection | null) => {
+    if (!selection) return;
+    try {
+      if (selection.kind === 'state') {
+        const node = cy.getElementById(selection.id);
+        if (!node || node.empty?.() || node.length === 0) return;
+        setSelectedStateId(selection.id);
+        setSelectedEdge(null);
+        const at = node.position?.();
+        setSelectedPosition(isFinitePoint(at) ? { x: at.x, y: at.y } : null);
+        highlightElement(cy, node);
+        return;
+      }
+      // By its two ends, since that is how it was written down. Works on a cytoscape collection
+      // and on a plain array alike: both filter, both index.
+      const match = cy
+        .edges()
+        .filter(
+          (edge: any) =>
+            edge.data('source') === selection.from && edge.data('target') === selection.to,
+        );
+      const edge = match?.[0];
+      if (!edge) return;
+      setSelectedStateId(null);
+      setSelectedPosition(null);
+      setSelectedEdge({ from: selection.from, to: selection.to });
+      highlightElement(cy, edge);
+    } catch {
+      // An engine mid-teardown, or one a test has not told about selections. The machine is
+      // still there; only the panel is missing.
+    }
+  }, []);
+
+  /**
+   * Turn the snapshot taken when a move began into an undo step.
+   *
+   * Shared by the two ways a state moves: dragging it, where the snapshot is taken as it is
+   * picked up, and typing its coordinates, where it is taken as the box takes focus. Both hold
+   * the snapshot until something actually moves, so a click or a stray focus records nothing.
+   */
+  const commitPendingMove = useCallback(() => {
+    const before = grabbedArrangement.current;
+    grabbedArrangement.current = null;
+    if (!before) return;
+    undoStack.current.push(before);
+    // A new action makes the redo branch unreachable, as in any editor.
+    redoStack.current = [];
+    setUndoDepth(undoStack.current.length);
+    setRedoDepth(0);
+  }, []);
+
   const restoreSavedView = useCallback(
     (cy: any): boolean => {
-      const saved = savedView;
-      if (!saved || hasRestored.current) return false;
-      hasRestored.current = true;
+      if (skipRestore.current) {
+        skipRestore.current = false;
+        return false;
+      }
+      // Read now rather than at mount, because the graph is rebuilt for more reasons than a
+      // refresh: React replays effects in development, and switching the theme rebuilds too.
+      // Restoring only on the very first load meant the second one landed on the plain fit and
+      // then wrote that over the reader's remembered view, so a refresh lost the zoom and the
+      // positions in development and after any theme change.
+      const saved = readViewState(viewStateKeyRef.current);
+      if (!saved) return false;
+      // The positions belong to the layout they were saved from. Switching between the drawn
+      // and the auto-arranged layout is a rebuild too, and dropping the other layout's
+      // positions over the engine's work made Auto-arranged look like it did nothing.
+      if (saved.honorPositions !== honorPositionsRef.current) return false;
       try {
         const ids = cy.nodes().map((node: any) => node.id());
         if (!viewStateFits(saved, ids)) return false;
@@ -629,7 +950,15 @@ export function useJffCytoscape({
         // happened either.
         if (saved.modified) setRestoredModified(true);
         cy.zoom(saved.zoom);
-        cy.pan(saved.pan);
+        // The point that was in the middle, put back in the middle of whatever width the canvas
+        // has now. Falling back to the raw pan for an entry written before that was recorded.
+        const size = { width: cy.width(), height: cy.height() };
+        const centred =
+          saved.centre && size.width > 0 && size.height > 0
+            ? panPuttingCentre(saved.centre, size, saved.zoom)
+            : null;
+        cy.pan(centred ?? saved.pan);
+        restoreSelection(cy, saved.selection ?? null);
         return true;
       } catch {
         // An engine that does not offer these, which is every one of them in a test that has
@@ -637,14 +966,19 @@ export function useJffCytoscape({
         return false;
       }
     },
-    // Read once at mount and never replaced, so this is built once.
-    [savedView],
+    // Refs only, plus a callback that is itself built once.
+    [restoreSelection],
   );
 
   const load = useMemo(
     () => async () => {
       setFailure(null);
       setPhase('fetching');
+      // Nothing is written down again until this load has decided what the view should be.
+      viewRestored.current = false;
+      const generation = ++loadGeneration.current;
+      /** False once a later load has taken over: this one must then touch nothing. */
+      const isCurrent = () => generation === loadGeneration.current;
       // Before anything else, and before any await. A second load onto a viewer that is
       // already showing something (React re-running effects in development, or the source
       // changing) would otherwise start with the graph visible, and the new machine would be
@@ -675,11 +1009,21 @@ export function useJffCytoscape({
           setFailure(failureForContent());
           return;
         }
+        // Whatever the reader has renamed, put back over the file's own names. Every load
+        // re-reads the file, so this is where a rename survives a rebuild.
+        parsed = applyTransitionEdits(
+          applyFinalStates(
+            applyInitialState(applyRenames(parsed, renamesRef.current), initialOverrideRef.current),
+            finalOverridesRef.current,
+          ),
+          transitionEditsRef.current,
+        );
         setPhase('drawing');
         setType(parsed.type);
         setParsed(parsed);
         setSelectedStateId(null);
         setSelectedEdge(null);
+        setSelectedPosition(null);
         // A different file is a different machine. Keeping the old history would let undo
         // apply one machine's positions to another's states.
         //
@@ -691,6 +1035,8 @@ export function useJffCytoscape({
           loadedSrc.current = src;
           undoStack.current = [];
           redoStack.current = [];
+          // A snapshot held from a state picked up in the old machine belongs to that machine.
+          grabbedArrangement.current = null;
           setUndoDepth(0);
           setRedoDepth(0);
         }
@@ -701,6 +1047,9 @@ export function useJffCytoscape({
         }
 
         const cytoscape = await ensureCytoscapeReady();
+        // A newer load is already building. Constructing a second engine here would leave one
+        // of them unowned, still listening to the container and never destroyed.
+        if (!isCurrent()) return;
 
         if (cyRef.current) {
           cyRef.current.destroy();
@@ -749,7 +1098,10 @@ export function useJffCytoscape({
                 'border-width': STATE_BORDER_WIDTH,
                 label: 'data(label)',
                 'font-family': uiFontFamily,
-                'font-size': 16,
+                // Shrinks to fit rather than running out over the circle. A function of the
+                // element, so a state renamed from the properties panel is re-measured: setting
+                // `data` marks the style dirty and cytoscape asks again.
+                'font-size': (node: any) => stateFontSize(String(node.data('label') ?? '')),
                 color: STATE_TEXT,
                 'text-valign': 'center',
                 'text-halign': 'center',
@@ -1069,15 +1421,23 @@ export function useJffCytoscape({
 
         // Expose fitAndResize for Fit button and initial layout
         onResizeRef.current = () => void fitAndResize();
+        refreshLabelGeometryRef.current = () => {
+          void (async () => {
+            await updateEdgeLabelMargins();
+            await selfLoopGeometry();
+            repositionStartNodes(cy);
+          })();
+        };
         setTimeout(() => {
           void (async () => {
             try {
+              if (!isCurrent()) return;
               // Fit first either way: it sizes the canvas and settles the layout, and the
               // centring it does is what keeps the machine in view at 100% rather than off in
               // a corner. Only then is the scale set back to 1:1, if that was asked for.
               await fitAndResize();
               const current = cyRef.current;
-              if (!current) return;
+              if (!current || !isCurrent()) return;
               // An undo that crossed a layout switch, waiting for this rebuild. It wins over
               // everything else here: it is the reader asking for a particular arrangement
               // back, and for the view not to move while they get it.
@@ -1104,13 +1464,17 @@ export function useJffCytoscape({
               // canvas while cytoscape may still be redrawing it, which is the tail of the
               // flash rather than its cause.
               await nextFrame();
+              // Not if a newer load has taken over in the meantime: revealing, and above all
+              // writing the view down, belong to whichever load owns the graph now.
+              if (!isCurrent()) return;
               // In a `finally` so a layout that throws still reveals the graph. A machine
               // drawn wrongly is recoverable; one that never appears is not.
               setSettled(true);
               setPhase('ready');
+              viewRestored.current = true;
               // Write the opening view down now, so a reader who changes nothing and refreshes
-              // still comes back to the same picture. Nothing above this can lose the saved
-              // view: it was read into `savedView` before the first render.
+              // still comes back to the same picture. Whatever the step above decided is
+              // already on the graph, so this records that rather than overwriting it.
               rememberView();
               // And, if this pane is driving a linked one, where it ended up. The effect that
               // reports when the link is switched on cannot: at mount there is no graph yet.
@@ -1150,22 +1514,23 @@ export function useJffCytoscape({
           const current = cyRef.current;
           if (!current) return;
           try {
-            const before = { width: current.width(), height: current.height() };
+            const before = canvasSize.current;
             const zoom = current.zoom();
             const pan = { ...current.pan() };
             current.resize();
-            const next = panKeepingCentre(
-              before,
-              { width: current.width(), height: current.height() },
-              zoom,
-              pan,
-            );
+            const after = { width: current.width(), height: current.height() };
+            canvasSize.current = after;
+            if (!before) return;
+            const next = panKeepingCentre(before, after, zoom, pan);
             if (next) current.pan(next);
           } catch {
             // A graph mid-teardown. Nothing to resize.
           }
         }, 160);
         if (typeof ResizeObserver === 'function' && containerRef.current) {
+          // The size to compare the next one against. Read now, while it is still the size the
+          // machine was drawn at.
+          canvasSize.current = { width: cy.width(), height: cy.height() };
           const observer = new ResizeObserver(resizeKeepingZoom);
           observer.observe(containerRef.current);
           (cy as any).__resizeObserver = observer;
@@ -1186,6 +1551,7 @@ export function useJffCytoscape({
             // A click on empty canvas means "never mind", so the properties panel goes too.
             setSelectedStateId(null);
             setSelectedEdge(null);
+            setSelectedPosition(null);
             return;
           }
           const ele = evt.target;
@@ -1198,14 +1564,14 @@ export function useJffCytoscape({
           // One panel at a time: a state and an edge cannot both be what was just clicked.
           const isNode = ele.isNode?.() ?? false;
           setSelectedStateId(isNode ? (ele.id?.() ?? null) : null);
+          // Where it is now, for the panel's coordinate boxes. From the graph rather than the
+          // file: this is the point a drag moves, and the file's is where its author put it.
+          const at = isNode ? ele.position?.() : null;
+          setSelectedPosition(isFinitePoint(at) ? { x: at.x, y: at.y } : null);
           setSelectedEdge(
             isNode ? null : { from: ele.data?.('source') ?? '', to: ele.data?.('target') ?? '' },
           );
-          const neighborhood = ele.closedNeighborhood
-            ? ele.closedNeighborhood()
-            : ele.neighborhood();
-          cy.elements().addClass('faded');
-          neighborhood.addClass('highlighted').removeClass('faded');
+          highlightElement(cy, ele);
         });
 
         /**
@@ -1235,12 +1601,33 @@ export function useJffCytoscape({
         cy.on('zoom pan resize', syncGridToGraph);
         syncGridToGraph();
 
-        // Snap on release rather than during the drag: the state follows the pointer exactly
-        // while it is held, then settles onto the lattice, which reads as landing rather than
-        // as the drag fighting back.
+        // A drag is one undoable step, so the snapshot is taken when the state is picked up
+        // rather than on every pixel of movement. `grab` fires once, at the start, and on a
+        // plain click as well, which is why the snapshot is only held here.
+        cy.on('grab', 'node', () => {
+          grabbedArrangement.current = readArrangement(cy, honorPositionsRef.current);
+        });
+
+        // Release. Two things happen here, both only when the state really moved: cytoscape
+        // fires `dragfree` on a drag and not on a click, so a click leaves the held snapshot
+        // uncommitted and the drawing unchanged.
+        //
+        // Snapping is on release rather than during the drag: the state follows the pointer
+        // exactly while it is held, then settles onto the lattice, which reads as landing
+        // rather than as the drag fighting back.
         cy.on('dragfree', 'node', (evt: any) => {
+          const moved = grabbedArrangement.current !== null;
+          commitPendingMove();
+          if (moved) {
+            // Write the view down again now that this counts as a rearrangement. Dragging a
+            // state and then holding it still schedules the write while the flag is still off,
+            // and release fires nothing else, so without this the saved view would have the
+            // new positions and say the drawing had not been touched.
+            rememberViewSoon();
+          }
+
           if (!snapToGridRef.current) return;
-          const node = evt.target;
+          const node = evt?.target;
           if (!node?.position || node.hasClass?.('note') || node.hasClass?.('start')) return;
           const at = node.position();
           if (!at || !Number.isFinite(at.x) || !Number.isFinite(at.y)) return;
@@ -1250,18 +1637,6 @@ export function useJffCytoscape({
           });
         });
 
-        // A drag is one undoable step, so the snapshot is taken when the state is picked up
-        // rather than on every pixel of movement. `grab` fires once, at the start.
-        cy.on('grab', 'node', () => {
-          const before = readArrangement(cy, honorPositionsRef.current);
-          if (!before) return;
-          undoStack.current.push(before);
-          // A new action makes the redo branch unreachable, as in any editor.
-          redoStack.current = [];
-          setUndoDepth(undoStack.current.length);
-          setRedoDepth(0);
-        });
-
         // Keep the label and loop geometry, and the initial-state marker, following a
         // state the reader has dragged. Moving the marker itself fires this too, so skip
         // it: it has nothing hanging off it, and reacting would only recurse.
@@ -1269,6 +1644,10 @@ export function useJffCytoscape({
           const target = evt.target;
           if (!target?.isNode?.() || target.hasClass('start') || target.hasClass('note')) return;
 
+          if (target.id?.() === selectedStateIdRef.current) {
+            const at = target.position?.();
+            if (isFinitePoint(at)) setSelectedPosition({ x: at.x, y: at.y });
+          }
           await updateEdgeLabelMargins();
           await selfLoopGeometry();
           repositionStartNodes(cy);
@@ -1281,8 +1660,33 @@ export function useJffCytoscape({
       }
     },
     // The last two never change identity, so they cost nothing here.
-    [src, epsSymbol, darkMode, honorPositions, rememberView, restoreSavedView],
+    [src, epsSymbol, darkMode, honorPositions, rememberView, restoreSavedView, commitPendingMove],
   );
+
+  /**
+   * Write the view down when something that is not the camera changes.
+   *
+   * The debounced writer answers the camera and the arrangement, which cytoscape reports; none
+   * of these move either. Without this a panel opened and then refreshed away came back, a panel
+   * closed came back open, and a state renamed a moment before a refresh was remembered only
+   * because the flush on the way out happened to catch it.
+   *
+   * Only once the machine is on screen, or the clearing that every load starts with would erase
+   * the selection that load is about to restore.
+   */
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    rememberView();
+  }, [
+    phase,
+    selectedStateId,
+    selectedEdge,
+    renames,
+    initialOverride,
+    finalOverrides,
+    transitionEdits,
+    rememberView,
+  ]);
 
   /**
    * Write the view down on the way out.
@@ -1535,16 +1939,24 @@ export function useJffCytoscape({
      * is being discarded is the reader's own rearranging of the drawing.
      */
     resetMachine: () => {
-      // The rebuild below will not put the discarded arrangement back: `hasRestored` is
-      // already set, since restoring happens on the first load and only there.
+      // The rebuild below opens the file as its author drew it, rather than restoring what is
+      // being thrown away here.
+      skipRestore.current = true;
       clearViewState(viewStateKeyRef.current);
       setRestoredModified(false);
       // The rebuild below keeps the history now, since it is the same file. Reset is the one
       // place that means to throw it away.
       undoStack.current = [];
       redoStack.current = [];
+      grabbedArrangement.current = null;
       setUndoDepth(0);
       setRedoDepth(0);
+      // Including the names and which state is initial: "the way the file opened" means the
+      // author's answers, not the reader's.
+      setRenames({});
+      setInitialOverride(undefined);
+      setFinalOverrides({});
+      setTransitionEdits({});
       setHonorPositions(honorPositionsDefault);
       // The rebuild puts every state back where its author had it.
       setReloadNonce((n) => n + 1);
@@ -1557,8 +1969,8 @@ export function useJffCytoscape({
     toggleNotes: () => setShowNotes((on) => !on),
     snapToGrid,
     toggleSnapToGrid: () => setSnapToGrid((on) => !on),
-    /** Whether the drawing has been rearranged since it was opened. */
-    viewModified: undoDepth > 0 || restoredModified,
+    /** Whether the drawing has been changed since it was opened. */
+    viewModified: viewModifiedRef.current,
     canUndo: undoDepth > 0,
     canRedo: redoDepth > 0,
     undo: () => step(undoStack, redoStack),
@@ -1568,6 +1980,176 @@ export function useJffCytoscape({
     clearSelectedState: () => {
       setSelectedStateId(null);
       setSelectedEdge(null);
+      setSelectedPosition(null);
+    },
+    /** Where the selected state sits on the canvas now, which a drag keeps in step. */
+    selectedStatePosition: selectedPosition,
+    /**
+     * Take a snapshot before the coordinates are typed into.
+     *
+     * The same bargain a drag makes: the arrangement is remembered as the box takes focus and
+     * only becomes an undo step if something actually moves, so tabbing through the panel
+     * records nothing.
+     */
+    beginStateMove: () => {
+      const cy = cyRef.current;
+      if (!cy) return;
+      grabbedArrangement.current = readArrangement(cy, honorPositionsRef.current);
+    },
+    /**
+     * Put a state at a given point, which is the panel's coordinate boxes.
+     *
+     * The drawing's own coordinates, the ones a drag moves it through and the ones "Download
+     * this arrangement" writes out, not the file's: those are where its author put it, and it
+     * may have been dragged since.
+     */
+    moveState: (id: string, at: { x: number; y: number }) => {
+      if (!isFinitePoint(at)) return;
+      const cy = cyRef.current;
+      if (!cy) return;
+      try {
+        const node = cy.getElementById(id);
+        if (!node || node.empty?.()) return;
+        commitPendingMove();
+        node.position({ x: at.x, y: at.y });
+        setSelectedPosition({ x: at.x, y: at.y });
+        refreshLabelGeometryRef.current?.();
+        rememberView();
+      } catch {
+        // A graph mid-teardown. Nothing to move.
+      }
+    },
+    /**
+     * Open a transition's properties, as if its line had been clicked.
+     *
+     * The rows in a state's panel are the way into the transitions around it, which a canvas
+     * cannot offer to somebody who is not using a mouse. Goes through the same restore path a
+     * refresh does, so the drawing dims around it exactly as a click would leave it.
+     */
+    selectTransition: (from: string, to: string) => {
+      const cy = cyRef.current;
+      if (!cy) return;
+      restoreSelection(cy, { kind: 'transition', from, to });
+    },
+    /**
+     * Make a state the initial one, or take the marker away with `null`.
+     *
+     * One at a time: a machine has a single initial state, so this moves the arrow rather than
+     * adding another. On screen only, like renaming, and the same three places follow: the
+     * drawing, everything that describes the machine, and the arrangement a reader downloads.
+     */
+    setInitialState: (id: string | null) => {
+      setInitialOverride(id);
+      setParsed((current) => (current ? applyInitialState(current, id) : current));
+      const cy = cyRef.current;
+      if (!cy) return;
+      try {
+        cy.nodes().forEach((node: any) => {
+          if (node.hasClass?.('start') || node.hasClass?.('note')) return;
+          node.data('initial', node.id() === id ? 1 : 0);
+        });
+        if (id === null) {
+          // The markers are made one per initial state, so with none left there is nothing to
+          // move the old one to: it has to go.
+          cy.nodes()
+            .filter((node: any) => node.hasClass?.('start'))
+            .forEach((node: any) => node.remove?.());
+          return;
+        }
+        repositionStartNodes(cy);
+      } catch {
+        // A graph mid-teardown. The choice is kept, and the next load draws it.
+      }
+    },
+    /**
+     * Change one part of one transition, on screen only.
+     *
+     * Which parts there are depends on the machine: `read` for a finite automaton, plus `pop`
+     * and `push` for a pushdown automaton, or `write` and `move` for a Turing machine. The panel
+     * asks `transitionFields` and offers exactly those.
+     *
+     * Transitions between the same two states are drawn as one line carrying all their labels,
+     * so the line's whole label is worked out again from the transitions behind it rather than
+     * patched, and the geometry that keeps that label clear of the line is run again after.
+     */
+    setTransitionField: (
+      index: number,
+      field: 'read' | 'write' | 'move' | 'pop' | 'push',
+      value: string,
+    ) => {
+      setTransitionEdits((current) => ({
+        ...current,
+        [index]: { ...current[index], [field]: value },
+      }));
+      if (!parsed) return;
+      const next = applyTransitionEdits(parsed, { [index]: { [field]: value } });
+      setParsed(next);
+
+      const edited = next.transitions.find((transition) => transition.__idx === index);
+      const cy = cyRef.current;
+      if (!edited || !cy) return;
+      try {
+        const bundled = bundleEdges(
+          next.transitions.filter((t) => t.from === edited.from && t.to === edited.to),
+          next.type,
+          epsSymbol,
+        )[0];
+        const edge = cy
+          .edges()
+          .filter(
+            (e: any) => e.data('source') === edited.from && e.data('target') === edited.to,
+          )?.[0];
+        if (!edge || bundled === undefined) return;
+        edge.data('label', bundled.label);
+        refreshLabelGeometryRef.current?.();
+      } catch {
+        // A graph mid-teardown. The change is kept, and the next load draws it.
+      }
+    },
+    /**
+     * Make a state final, or stop it being one.
+     *
+     * Any number of states can be final, so this says nothing about the others. The double
+     * circle JFLAP draws is a class on the node here, and the initial-state marker has to clear
+     * whichever border the state ends up with, so the marker is placed again afterwards.
+     */
+    setFinalState: (id: string, final: boolean) => {
+      setFinalOverrides((current) => ({ ...current, [id]: final }));
+      setParsed((current) => (current ? applyFinalStates(current, { [id]: final }) : current));
+      const cy = cyRef.current;
+      if (!cy) return;
+      try {
+        const node = cy.getElementById(id);
+        if (!node || node.empty?.()) return;
+        node.data('final', final ? 1 : 0);
+        if (final) node.addClass('final');
+        else node.removeClass('final');
+        repositionStartNodes(cy);
+      } catch {
+        // A graph mid-teardown. The choice is kept, and the next load draws it.
+      }
+    },
+    /**
+     * Give a state a different name, on screen only.
+     *
+     * The label on the drawing, the panels that mention the state, the text representation and
+     * the `.jff` that "Download this arrangement" writes all follow. The submitted file does
+     * not: nothing in this viewer writes to it, and this is why the reader is told the file has
+     * changed on screen.
+     *
+     * Not undoable. The undo history is the arrangement's, and mixing a rename into it would
+     * make one step mean two different kinds of thing.
+     */
+    renameState: (id: string, name: string) => {
+      setRenames((current) => ({ ...current, [id]: name }));
+      setParsed((current) => (current ? applyRenames(current, { [id]: name }) : current));
+      // The drawing, straight away rather than through a rebuild: the reader is typing.
+      try {
+        const node = cyRef.current?.getElementById(id);
+        if (node && !node.empty?.()) node.data('label', name);
+      } catch {
+        // A graph mid-teardown. The name is kept either way, and the next load applies it.
+      }
     },
     selectedTransition:
       parsed && selectedEdge
@@ -1575,6 +2157,25 @@ export function useJffCytoscape({
         : null,
     zoomRange,
     fit: () => onResizeRef.current?.(),
+    /**
+     * Bring the machine back to the middle of the pane, at the scale the reader chose.
+     *
+     * Fit is the wrong tool when somebody has zoomed in deliberately: it takes them back out
+     * to the whole machine. This moves the camera and nothing else, which is what a reader who
+     * has panned off the edge of a large automaton actually wants.
+     *
+     * Centred on everything rather than on the states alone, which is what Fit measures too:
+     * an edge label or a note hanging off one side is part of what has to be on screen.
+     */
+    center: () => {
+      const cy = cyRef.current;
+      if (!cy) return;
+      try {
+        cy.center(cy.elements());
+      } catch {
+        // A graph mid-teardown. There is nothing on screen to centre.
+      }
+    },
     downloadSVG,
     downloadCurrent,
     copySVG,

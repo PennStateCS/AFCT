@@ -16,6 +16,9 @@ import {
   STATE_BORDER_WIDTH,
   noteBox,
   noteCentre,
+  stateFontSize,
+  STATE_FONT_SIZE,
+  STATE_FONT_MIN_SIZE,
   NOTE_MAX_WIDTH,
   NOTE_PADDING,
 } from './jflap-layout';
@@ -318,5 +321,34 @@ describe('note geometry', () => {
       x: 120,
       y: 210,
     });
+  });
+});
+
+describe('stateFontSize', () => {
+  it('leaves an ordinary name at the size JFLAP draws it', () => {
+    // The common case by far, and the one that must not change: two or three characters.
+    expect(stateFontSize('q0')).toBe(STATE_FONT_SIZE);
+    expect(stateFontSize('q12')).toBe(STATE_FONT_SIZE);
+  });
+
+  it('shrinks a name that would run out over the circle', () => {
+    // What renaming from the properties panel makes ordinary: a word rather than a label.
+    const small = stateFontSize('accepting');
+    expect(small).toBeLessThan(STATE_FONT_SIZE);
+    expect(small).toBeGreaterThanOrEqual(STATE_FONT_MIN_SIZE);
+  });
+
+  it('shrinks further the longer the name gets, until the floor', () => {
+    expect(stateFontSize('abcdefgh')).toBeLessThan(stateFontSize('abcdef'));
+    // Past readable, so it stops rather than trading one unreadable label for another.
+    expect(stateFontSize('a'.repeat(40))).toBe(STATE_FONT_MIN_SIZE);
+  });
+
+  it('measures the longest line of a name that has more than one', () => {
+    expect(stateFontSize('accepting\nq0')).toBe(stateFontSize('accepting'));
+  });
+
+  it('leaves an empty name alone rather than dividing by nothing', () => {
+    expect(stateFontSize('')).toBe(STATE_FONT_SIZE);
   });
 });
