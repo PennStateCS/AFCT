@@ -153,8 +153,8 @@ export default async function DashboardPage({
   // Get upcoming assignments for all the user's courses, resolved for THIS user: a
   // student with a due-date override sees (and is sorted by) their own effective due
   // date. Staff have no override rows, so they see the base dates unchanged. The query
-  // matches on the base due OR this user's override due so an extension into the future
-  // still surfaces even when the base date has passed.
+  // matches on the base due OR an override that applies to them, their group's included, so
+  // an extension into the future still surfaces even when the base date has passed.
   const now = new Date();
   const rawAssignments =
     courseIds.length === 0
