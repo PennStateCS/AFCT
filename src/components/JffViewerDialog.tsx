@@ -107,7 +107,7 @@ function MachineDescriptionList({ description }: { description: MachineDescripti
           This file contains no states or notes, so there is nothing to describe.
         </p>
       ) : (
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+        <dl className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1">
           <dt className="text-muted-foreground">States</dt>
           <dd>{description.stateNames.join(', ')}</dd>
 

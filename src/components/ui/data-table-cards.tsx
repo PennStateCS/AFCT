@@ -108,7 +108,10 @@ export function DataTableCards<TData>({
                   key={cell.id}
                   className="flex min-w-0 items-start justify-between gap-4 text-sm"
                 >
-                  <dt className="text-muted-foreground font-medium">
+                  {/* The label shrinks and wraps for the same reason the value does: a long
+                      column name beside a long value pushed the row past the card's edge,
+                      and how long either of them looks depends on the reader's font size. */}
+                  <dt className="text-muted-foreground min-w-0 font-medium break-words">
                     {getColumnLabel(cell.column)}
                   </dt>
                   {/* Cells keep `whitespace-nowrap` so a date or an ID is not broken across

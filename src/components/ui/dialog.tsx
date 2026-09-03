@@ -60,6 +60,12 @@ function DialogContent({
           // passed `bg-card` one at a time to work around it, which is the codebase saying what
           // the default should have been.
           'bg-card data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100vh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-x-hidden overflow-y-auto rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg',
+          // A grid item will not shrink below its content by default, so one wide row, one long
+          // unbroken word or one nowrap value pushed a whole section past the dialog's edge,
+          // where `overflow-x-hidden` cut it off. Students reported it as text running off the
+          // area, differently on different phones, because how wide "too wide" is depends on the
+          // reader's font size. Every direct child may shrink now, and wrap inside instead.
+          '[&>*]:min-w-0',
           className,
         )}
         onInteractOutside={(event) => {

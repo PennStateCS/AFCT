@@ -124,7 +124,11 @@ export function SearchableSelect({
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       {label ? <FieldLabelRow htmlFor={triggerId}>{label}</FieldLabelRow> : null}
+      {/* `modal` for the same reason as SearchableMultiSelect: without it a dialog's scroll
+          lock swallows every wheel and touchmove over this list, because the popover is
+          portalled outside the subtree that lock allows. */}
       <Popover
+        modal
         open={open}
         onOpenChange={(next) => {
           setOpen(next);

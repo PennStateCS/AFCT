@@ -497,7 +497,7 @@ export function EditProblemDialog({
 
               {step === LAST_STEP && review && (
                 <div className="space-y-3">
-                  <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm [&>dd]:min-w-0 [&>dd]:break-words">
+                  <dl className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm [&>dt]:break-words [&>dd]:min-w-0 [&>dd]:break-words">
                     <dt className="text-muted-foreground">Title</dt>
                     <dd className="font-medium">{review.title || '—'}</dd>
                     <dt className="text-muted-foreground">Type</dt>

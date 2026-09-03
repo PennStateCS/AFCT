@@ -311,7 +311,7 @@ export function ViewerMenubar({
               <DialogTitle>Properties</DialogTitle>
               <DialogDescription>Where this file came from.</DialogDescription>
             </DialogHeader>
-            <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
+            <dl className="grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
               {properties.rows.map((row) => (
                 <Fragment key={row.label}>
                   <dt className="text-muted-foreground">{row.label}</dt>

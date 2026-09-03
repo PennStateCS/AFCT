@@ -105,7 +105,13 @@ export function SearchableMultiSelect({
           group of real checkboxes, so a menu's role/roving-focus model would be a
           lie. Radix Popover.Trigger supplies aria-haspopup="dialog", aria-expanded,
           and aria-controls; each checkbox conveys its own name + checked state. */}
-      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+      {/* `modal` is what makes the list scrollable inside a dialog. A dialog locks scrolling
+          through react-remove-scroll and allows only its own content subtree; this popover is
+          portalled to the body, outside that subtree, so every wheel and touchmove over the
+          options was swallowed. On a phone the list could not be scrolled at all, and on a
+          desktop only by dragging the native scrollbar, which the lock never sees. A modal
+          popover registers its own lock, so its own content scrolls again. */}
+      <Popover open={menuOpen} onOpenChange={setMenuOpen} modal>
         {/* aria-invalid is intentional on this combobox-style trigger so AT hears
             the validation state; the jsx-a11y rule wrongly treats it as
             unsupported on the button role. */}
