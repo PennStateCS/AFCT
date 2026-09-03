@@ -10,6 +10,14 @@ import { cn } from '@/lib/utils';
 interface SelectItem {
   id: string;
   label: string;
+  /**
+   * A second line under the label, for telling two identical labels apart.
+   *
+   * Same rule as the multi-select's: shown under the name, searched alongside it, and part of
+   * the option's accessible name, so two people called the same thing can be told apart by
+   * eye, by typing an email address, and by a screen reader.
+   */
+  description?: string;
 }
 
 interface SearchableSelectProps {
@@ -58,7 +66,11 @@ export function SearchableSelect({
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return items;
-    return items.filter((item) => item.label.toLowerCase().includes(query));
+    return items.filter(
+      (item) =>
+        item.label.toLowerCase().includes(query) ||
+        (item.description ?? '').toLowerCase().includes(query),
+    );
   }, [items, search]);
 
   const pick = (itemId: string) => {
@@ -173,9 +185,19 @@ export function SearchableSelect({
                   data-option
                   onClick={() => pick(item.id)}
                   onKeyDown={handleOptionKeyDown}
+                  aria-label={
+                    item.description ? `${item.label} (${item.description})` : undefined
+                  }
                   className="hover:bg-muted focus-visible:bg-muted flex w-full cursor-pointer items-center px-3 py-2 text-left text-sm focus-visible:outline-none"
                 >
-                  <span className="truncate">{item.label}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{item.label}</span>
+                    {item.description ? (
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {item.description}
+                      </span>
+                    ) : null}
+                  </span>
                 </button>
               ))
             )}

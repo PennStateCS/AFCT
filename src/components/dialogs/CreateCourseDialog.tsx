@@ -28,7 +28,7 @@ import {
 import type { z } from 'zod';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
-import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
+import { useFacultyTaOptions, getUserName, namesForReview } from './useFacultyTaOptions';
 import { CourseDateTimeField } from './CourseDateTimeField';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
 import { formatDateTimeLocal } from '@/lib/date-convert';
@@ -372,6 +372,9 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                       items={facultyList.map((faculty) => ({
                         id: faculty.id,
                         label: getUserName(faculty),
+                        // Two members of staff with the same name is an ordinary thing in a
+                        // university, and the name alone leaves the chooser guessing.
+                        description: faculty.email,
                       }))}
                       value={field.value ?? []}
                       onChange={(value) => field.onChange(value)}
@@ -392,6 +395,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                       items={taList.map((ta) => ({
                         id: ta.id,
                         label: getUserName(ta),
+                        description: ta.email,
                       }))}
                       value={field.value ?? []}
                       onChange={(value) => field.onChange(value)}
@@ -452,21 +456,11 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                   </dd>
                   <dt className="text-muted-foreground">Faculty</dt>
                   <dd>
-                    {(review.instructorIds ?? [])
-                      .map((id) => {
-                        const f = facultyList.find((u) => u.id === id);
-                        return f ? getUserName(f) : id;
-                      })
-                      .join(', ')}
+                    {namesForReview(review.instructorIds ?? [], facultyList)}
                   </dd>
                   <dt className="text-muted-foreground">TAs</dt>
                   <dd>
-                    {(review.taIds ?? [])
-                      .map((id) => {
-                        const ta = taList.find((u) => u.id === id);
-                        return ta ? getUserName(ta) : id;
-                      })
-                      .join(', ') || 'None'}
+                    {namesForReview(review.taIds ?? [], taList) || 'None'}
                   </dd>
                   <dt className="text-muted-foreground">Empty string</dt>
                   <dd>

@@ -64,3 +64,26 @@ describe('SearchableSelect', () => {
     expect(screen.getByRole('button', { name: 'Add a student' })).toBeDisabled();
   });
 });
+
+describe('SearchableSelect: telling two identical names apart', () => {
+  const twins = [
+    { id: 's1', label: 'Bruce Wayne', description: 'bwayne@example.edu' },
+    { id: 's2', label: 'Bruce Wayne', description: 'bruce.wayne@example.edu' },
+  ];
+
+  it('names each option by both, and searches the second line', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(<SearchableSelect label="Add override" items={twins} onSelect={onSelect} />);
+    await user.click(screen.getByRole('button', { name: 'Add override' }));
+
+    expect(screen.getByText('bwayne@example.edu')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('textbox'), 'bruce.wayne@');
+    const options = screen.getAllByRole('button', { name: /Bruce Wayne/ });
+    expect(options).toHaveLength(1);
+
+    await user.click(options[0]!);
+    expect(onSelect).toHaveBeenCalledWith('s2');
+  });
+});

@@ -27,7 +27,7 @@ import type { Course } from '@prisma/client';
 import { showToast } from '@/lib/toast';
 import { apiPaths } from '@/lib/api-paths';
 import { apiClient, ApiError } from '@/lib/api/fetch-client';
-import { useFacultyTaOptions, getUserName } from './useFacultyTaOptions';
+import { useFacultyTaOptions, getUserName, namesForReview } from './useFacultyTaOptions';
 import { CourseDateTimeField } from './CourseDateTimeField';
 import { shouldEnterAdvanceStep } from '@/lib/wizard-keyboard';
 import { formatDateTimeLocal, toDateTimeLocalInTimeZone } from '@/lib/date-convert';
@@ -578,6 +578,7 @@ export default function DuplicateCourseDialog({
                       items={facultyList.map((faculty) => ({
                         id: faculty.id,
                         label: getUserName(faculty),
+                        description: faculty.email,
                       }))}
                       value={field.value ?? []}
                       onChange={(value) => field.onChange(value)}
@@ -598,6 +599,7 @@ export default function DuplicateCourseDialog({
                       items={taList.map((ta) => ({
                         id: ta.id,
                         label: getUserName(ta),
+                        description: ta.email,
                       }))}
                       value={field.value ?? []}
                       onChange={(value) => field.onChange(value)}
@@ -642,27 +644,13 @@ export default function DuplicateCourseDialog({
                   {(review.instructorIds ?? []).length > 0 && (
                     <>
                       <dt className="text-muted-foreground">Added faculty</dt>
-                      <dd>
-                        {(review.instructorIds ?? [])
-                          .map((id) => {
-                            const f = facultyList.find((u) => u.id === id);
-                            return f ? getUserName(f) : id;
-                          })
-                          .join(', ')}
-                      </dd>
+                      <dd>{namesForReview(review.instructorIds ?? [], facultyList)}</dd>
                     </>
                   )}
                   {(review.taIds ?? []).length > 0 && (
                     <>
                       <dt className="text-muted-foreground">Added TAs</dt>
-                      <dd>
-                        {(review.taIds ?? [])
-                          .map((id) => {
-                            const ta = taList.find((u) => u.id === id);
-                            return ta ? getUserName(ta) : id;
-                          })
-                          .join(', ')}
-                      </dd>
+                      <dd>{namesForReview(review.taIds ?? [], taList)}</dd>
                     </>
                   )}
                 </dl>

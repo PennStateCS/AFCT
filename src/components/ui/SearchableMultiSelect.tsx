@@ -11,6 +11,14 @@ import { cn } from '@/lib/utils';
 interface MultiSelectItem {
   id: string;
   label: string;
+  /**
+   * A second line under the label, for telling two identical labels apart.
+   *
+   * Two members of staff called the same thing are not a rarity in a university, and a list of
+   * bare names asks somebody to guess which is which. Searched as well as shown, so typing an
+   * email address finds the person; kept out of the trigger's summary, which has one line.
+   */
+  description?: string;
 }
 
 interface SearchableMultiSelectProps {
@@ -49,7 +57,11 @@ export function SearchableMultiSelect({
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return items;
-    return items.filter((item) => item.label.toLowerCase().includes(query));
+    return items.filter(
+      (item) =>
+        item.label.toLowerCase().includes(query) ||
+        (item.description ?? '').toLowerCase().includes(query),
+    );
   }, [items, search]);
 
   /**
@@ -157,12 +169,23 @@ export function SearchableMultiSelect({
                   >
                     <Checkbox
                       // Radix renders a <button role="checkbox">, which takes no name
-                      // from a wrapping <label>, so name it explicitly.
-                      aria-label={item.label}
+                      // from a wrapping <label>, so name it explicitly. The second line goes
+                      // in the name too: two options reading "Bruce Wayne" are as ambiguous
+                      // to a screen reader as they are on screen.
+                      aria-label={
+                        item.description ? `${item.label} (${item.description})` : item.label
+                      }
                       checked={!!checked}
                       onCheckedChange={() => toggleSelection(item.id)}
                     />
-                    <span className="truncate">{item.label}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{item.label}</span>
+                      {item.description ? (
+                        <span className="text-muted-foreground block truncate text-xs">
+                          {item.description}
+                        </span>
+                      ) : null}
+                    </span>
                   </label>
                 );
               })
