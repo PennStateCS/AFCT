@@ -4,6 +4,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { setDateTimeField } from '@/test/date-time-field';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import DuplicateCourseDialog from './DuplicateCourseDialog';
@@ -181,7 +182,7 @@ describe('DuplicateCourseDialog', () => {
     await clickNext(user);
 
     // Schedule (prefilled from the source course)
-    await screen.findByLabelText('Start Date & Time');
+    await screen.findByLabelText('Start Date & Time, date');
     await clickNext(user);
 
     // Content
@@ -232,10 +233,11 @@ describe('DuplicateCourseDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     // Schedule
-    await user.type(await screen.findByLabelText('Start Date & Time'), '2026-01-15T12:00');
-    await user.type(screen.getByLabelText('End Date & Time'), '2026-05-15T12:00');
-    await user.type(screen.getByLabelText('Self Registration Opens'), '2026-01-01T12:00');
-    await user.type(screen.getByLabelText('Self Registration Closes'), '2026-01-14T12:00');
+    await screen.findByLabelText('Start Date & Time, date');
+    setDateTimeField('Start Date & Time', '2026-01-15T12:00');
+    setDateTimeField('End Date & Time', '2026-05-15T12:00');
+    setDateTimeField('Self Registration Opens', '2026-01-01T12:00');
+    setDateTimeField('Self Registration Closes', '2026-01-14T12:00');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     // Content -> Roster (satisfy the faculty requirement) -> Review
@@ -264,7 +266,7 @@ describe('DuplicateCourseDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     // Still on Details: the Schedule fields never mount.
-    expect(screen.queryByLabelText('Start Date & Time')).toBeNull();
+    expect(screen.queryByLabelText('Start Date & Time, date')).toBeNull();
     expect(screen.getByText('Credits must be an integer between 1 and 6.')).toBeInTheDocument();
   });
 
@@ -275,7 +277,7 @@ describe('DuplicateCourseDialog', () => {
 
     // Details and Schedule are prefilled from the source course.
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await screen.findByLabelText('Start Date & Time');
+    await screen.findByLabelText('Start Date & Time, date');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await screen.findByText('What would you like to copy?');
     await user.click(screen.getByRole('button', { name: 'Next' }));

@@ -15,6 +15,10 @@ The settings form includes:
 - **Self Registration Opens** and **Self Registration Closes**
 - **Empty string notation**, either epsilon or lambda
 
+Each date field is a date box and a time box. Setting only the date fills the time in for you:
+the start of the day for **Start Date & Time** and **Self Registration Opens**, and 23:59 for
+**End Date & Time** and **Self Registration Closes**, since those are the end of a window.
+
 Select **Save Changes** after editing these fields.
 
 ## Choose the timezone first

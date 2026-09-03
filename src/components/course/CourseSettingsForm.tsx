@@ -9,6 +9,7 @@ import type { Course } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
 import InputGroup from '@/components/ui/InputGroup';
+import { DateTimeField } from '@/components/ui/DateTimeField';
 import SelectField from '@/components/ui/SelectField';
 import { SettingsSection } from '@/components/settings/settings-layout';
 import { EMPTY_STRING_NOTATION_OPTIONS } from '@/lib/empty-string-notation';
@@ -237,16 +238,12 @@ export function CourseSettingsForm({ course, onSaved, className }: CourseSetting
             name="startDate"
             control={control}
             render={({ field }) => (
-              <InputGroup
+              <DateTimeField
                 name="startDate"
                 label="Start Date & Time"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
                 description="When the course begins, in the course timezone above."
                 error={errors.startDate?.message}
                 requiredMark
@@ -258,19 +255,16 @@ export function CourseSettingsForm({ course, onSaved, className }: CourseSetting
             name="endDate"
             control={control}
             render={({ field }) => (
-              <InputGroup
+              <DateTimeField
                 name="endDate"
                 label="End Date & Time"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
                 description="When the course ends. Must be on or after the start date."
                 error={errors.endDate?.message}
                 min={startDateStr || undefined}
+                defaultTime="23:59"
                 requiredMark
               />
             )}
@@ -288,16 +282,12 @@ export function CourseSettingsForm({ course, onSaved, className }: CourseSetting
             name="registrationOpenAt"
             control={control}
             render={({ field }) => (
-              <InputGroup
+              <DateTimeField
                 name="registrationOpenAt"
                 label="Self Registration Opens"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
                 description="When students may start self-enrolling with the registration code."
                 error={errors.registrationOpenAt?.message}
                 requiredMark
@@ -309,18 +299,15 @@ export function CourseSettingsForm({ course, onSaved, className }: CourseSetting
             name="registrationCloseAt"
             control={control}
             render={({ field }) => (
-              <InputGroup
+              <DateTimeField
                 name="registrationCloseAt"
                 label="Self Registration Closes"
-                type="datetime-local"
-                fieldProps={{
-                  ...field,
-                  value: field.value ?? '',
-                  onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-                    field.onChange(e.target.value),
-                }}
+                value={field.value ?? ''}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
                 description="After this time, self-registration is closed."
                 error={errors.registrationCloseAt?.message}
+                defaultTime="23:59"
                 requiredMark
               />
             )}

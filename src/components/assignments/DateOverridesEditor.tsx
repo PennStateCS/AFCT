@@ -291,6 +291,7 @@ export function DateOverridesEditor({
                         control={control}
                         name={`dateOverrides.${index}.dueDate`}
                         label="Due"
+                        defaultTime="23:59"
                       />
                       <Controller
                         control={control}
@@ -309,6 +310,7 @@ export function DateOverridesEditor({
                           control={control}
                           name={`dateOverrides.${index}.lateCutoff`}
                           label="Accept until (optional)"
+                          defaultTime="23:59"
                         />
                       ) : (
                         <div className="text-muted-foreground flex min-h-11 items-center text-xs xl:mt-6">

@@ -338,6 +338,8 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                     label="End Date & Time"
                     error={errors.endDate?.message}
                     min={startDateStr || undefined} // prevent picking an end earlier than start
+                    // A course ends at the end of its last day, so a bare date means 23:59.
+                    defaultTime="23:59"
                     requiredMark
                   />
                 </div>
@@ -355,6 +357,7 @@ export function CreateCourseDialog({ open, setOpen, onSuccess }: CreateCourseDia
                     name="registrationCloseAt"
                     label="Self Registration Closes"
                     error={errors.registrationCloseAt?.message}
+                    defaultTime="23:59"
                     requiredMark
                   />
                 </div>

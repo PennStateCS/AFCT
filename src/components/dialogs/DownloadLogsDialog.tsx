@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 
 import { Button } from '@/components/ui/button';
-import InputGroup from '@/components/ui/InputGroup';
+import { DateTimeField } from '@/components/ui/DateTimeField';
 import { SearchableMultiSelect } from '@/components/ui/SearchableMultiSelect';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -233,39 +233,35 @@ export function DownloadLogsDialog({ open, onOpenChange }: DownloadLogsDialogPro
 
           {/* Time range */}
           <div className="grid gap-4 md:grid-cols-2">
-            {/* START datetime-local */}
             <Controller
               control={control}
               name="begTime"
               render={({ field }) => (
-                <InputGroup
+                <DateTimeField
                   label="Start Date & Time"
                   name="begTime"
-                  type="datetime-local"
                   className="min-w-0"
-                  fieldProps={{
-                    ...field,
-                    value: field.value ?? '',
-                  }}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
                 />
               )}
             />
 
-            {/* END datetime-local */}
             <Controller
               control={control}
               name="endTime"
               render={({ field }) => (
-                <InputGroup
+                <DateTimeField
                   label="End Date & Time"
                   name="endTime"
-                  type="datetime-local"
                   className="min-w-0"
-                  fieldProps={{
-                    ...field,
-                    value: field.value,
-                  }}
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
                   min={watchedBegTime || ''} // prevent picking an end earlier than start
+                  // The window is inclusive of its last day, so a bare date runs to 23:59.
+                  defaultTime="23:59"
                 />
               )}
             />

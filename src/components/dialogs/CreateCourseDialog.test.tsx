@@ -4,6 +4,7 @@ import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
+import { setDateTimeField } from '@/test/date-time-field';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { CreateCourseDialog } from './CreateCourseDialog';
@@ -192,19 +193,11 @@ const fillForm = async (user: ReturnType<typeof userEvent.setup>) => {
   await clickNext(user);
 
   // Step 2: Schedule (timezone keeps its default)
-  await screen.findByLabelText('Start Date & Time');
-  fireEvent.change(screen.getByLabelText('Start Date & Time'), {
-    target: { value: '2025-08-25T09:00' },
-  });
-  fireEvent.change(screen.getByLabelText('End Date & Time'), {
-    target: { value: '2025-12-10T12:00' },
-  });
-  fireEvent.change(screen.getByLabelText('Self Registration Opens'), {
-    target: { value: '2025-06-01T09:00' },
-  });
-  fireEvent.change(screen.getByLabelText('Self Registration Closes'), {
-    target: { value: '2025-08-15T09:00' },
-  });
+  await screen.findByLabelText('Start Date & Time, date');
+  setDateTimeField('Start Date & Time', '2025-08-25T09:00');
+  setDateTimeField('End Date & Time', '2025-12-10T12:00');
+  setDateTimeField('Self Registration Opens', '2025-06-01T09:00');
+  setDateTimeField('Self Registration Closes', '2025-08-15T09:00');
   await clickNext(user);
 
   // Step 3: Faculty & TAs, pick one of each.
@@ -310,7 +303,7 @@ describe('CreateCourseDialog', () => {
     await clickNext(user);
 
     expect(await screen.findAllByRole('alert')).not.toHaveLength(0);
-    expect(screen.queryByLabelText('Start Date & Time')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Start Date & Time, date')).not.toBeInTheDocument();
   });
 
   it('lets the user go back to a completed step', async () => {
@@ -323,7 +316,7 @@ describe('CreateCourseDialog', () => {
     await user.type(screen.getByLabelText('Semester'), 'Fall 2025');
     await clickNext(user);
 
-    await screen.findByLabelText('Start Date & Time');
+    await screen.findByLabelText('Start Date & Time, date');
     await user.click(screen.getByRole('button', { name: /back/i }));
 
     // Back on Details, with the entered value retained.
