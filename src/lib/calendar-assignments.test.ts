@@ -1,4 +1,5 @@
 import { visibleAssignmentsForWidth } from '@/lib/calendar-shared';
+import { assignedToStudentWhere, overridesForStudentWhere } from '@/lib/assignment-visibility';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
@@ -46,8 +47,10 @@ describe('getAssignmentsForUserRange', () => {
 
     const where = prismaMock.assignment.findMany.mock.calls[0][0].where;
     // Staff/TA courses: every assignment whose base due is in range. Student course:
-    // gated on the assignment AND the course being published, matched on the base due
-    // OR this student's own override due (so an extension moves the date correctly).
+    // gated on the assignment AND the course being published, matched on the base due OR an
+    // override that applies to them, their group's included (an extension granted to a group is
+    // its members' deadline). Whether they are assigned at all is the assignee table's answer,
+    // never the overrides': asking those hid work assigned to them that carried no exception.
     expect(where.OR).toEqual([
       {
         courseId: { in: ['staff-course', 'ta-course'] },
@@ -63,12 +66,17 @@ describe('getAssignmentsForUserRange', () => {
               { dueDate: { gte: range.startDate, lte: range.endDate } },
               {
                 overrides: {
-                  some: { userId: 'u1', dueDate: { gte: range.startDate, lte: range.endDate } },
+                  some: {
+                    AND: [
+                      overridesForStudentWhere('u1'),
+                      { dueDate: { gte: range.startDate, lte: range.endDate } },
+                    ],
+                  },
                 },
               },
             ],
           },
-          { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: 'u1' } } }] },
+          assignedToStudentWhere('u1'),
         ],
       },
     ]);
@@ -105,12 +113,17 @@ describe('getAssignmentsForUserRange', () => {
               { dueDate: { gte: range.startDate, lte: range.endDate } },
               {
                 overrides: {
-                  some: { userId: 'admin1', dueDate: { gte: range.startDate, lte: range.endDate } },
+                  some: {
+                    AND: [
+                      overridesForStudentWhere('admin1'),
+                      { dueDate: { gte: range.startDate, lte: range.endDate } },
+                    ],
+                  },
                 },
               },
             ],
           },
-          { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId: 'admin1' } } }] },
+          assignedToStudentWhere('admin1'),
         ],
       },
     ]);

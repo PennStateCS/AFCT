@@ -119,8 +119,8 @@ export const GET = withCourseAuth(
                     _count: {
                       select: { problems: true },
                     },
-                    // Non-staff: their own (and their group's) date overrides, used only
-                    // to resolve the effective unlock time for the content lock below.
+                    // Non-staff: their own (and their group's) date overrides, which resolve
+                    // the dates this student is held to, and with them the content lock.
                     // Never serialized -- peers' names/dates must not reach a student.
                     ...(isStaff
                       ? {}

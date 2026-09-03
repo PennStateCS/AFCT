@@ -9,7 +9,7 @@ import { greetingFor } from '@/lib/greeting';
 import { DEFAULT_SYSTEM_TIMEZONE } from '@/lib/system-settings';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
-import { assignedToStudentWhere } from '@/lib/assignment-visibility';
+import { assignedToStudentWhere, overridesForStudentWhere } from '@/lib/assignment-visibility';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { LaunchNotice } from '@/components/lti/LaunchNotice';
 
@@ -153,8 +153,8 @@ export default async function DashboardPage({
   // Get upcoming assignments for all the user's courses, resolved for THIS user: a
   // student with a due-date override sees (and is sorted by) their own effective due
   // date. Staff have no override rows, so they see the base dates unchanged. The query
-  // matches on the base due OR this user's override due so an extension into the future
-  // still surfaces even when the base date has passed.
+  // matches on the base due OR an override that applies to them, their group's included, so
+  // an extension into the future still surfaces even when the base date has passed.
   const now = new Date();
   const rawAssignments =
     courseIds.length === 0
@@ -180,7 +180,13 @@ export default async function DashboardPage({
               {
                 OR: [
                   { dueDate: { gt: now } },
-                  { overrides: { some: { userId: id, dueDate: { gt: now } } } },
+                  {
+                    overrides: {
+                      some: {
+                        AND: [overridesForStudentWhere(id), { dueDate: { gt: now } }],
+                      },
+                    },
+                  },
                 ],
               },
             ],

@@ -107,13 +107,18 @@ export function serializeAssignment(assignment: AssignmentRow, ctx: SerializeAss
     // this serializer sent `description` and quietly dropped `descriptionJson`.
     ...projectDescription(assignment, { locked }),
     locked,
-    dueDate: assignment.dueDate,
-    unlockAt: assignment.unlockAt ?? null,
+    // The dates this viewer is actually held to. `eff` is null for staff, who keep the
+    // assignment's own dates because they are the ones they set and the exceptions are listed
+    // to them below. For a student it is their extension, and sending the base date instead was
+    // the difference between handing work in and being late: the Grades tab resolved it and
+    // this, the Assignments tab, did not.
+    dueDate: eff ? eff.dueDate : assignment.dueDate,
+    unlockAt: eff ? eff.unlockAt : (assignment.unlockAt ?? null),
     assignedToEveryone: assignment.assignedToEveryone ?? true,
     // Individual vs group is derived from the set link (no stored flag).
     isGroup: assignment.groupSetId != null,
-    allowLateSubmissions: assignment.allowLateSubmissions,
-    lateCutoff: assignment.lateCutoff,
+    allowLateSubmissions: eff ? eff.allowLateSubmissions : assignment.allowLateSubmissions,
+    lateCutoff: eff ? eff.lateCutoff : assignment.lateCutoff,
     maxPoints: totalProblemPoints,
     isPublished: assignment.isPublished,
     createdAt: assignment.createdAt,

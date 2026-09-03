@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ACTIVE_STUDENT_ROSTER } from '@/lib/roster-status';
 import { effectiveDeadline } from '@/lib/effective-deadline';
+import { assignedToStudentWhere, overridesForStudentWhere } from '@/lib/assignment-visibility';
 import type { CalendarAssignment } from '@/lib/calendar-shared';
 export { getDateKeyInTimeZone, getMonthRangeIso } from '@/lib/calendar-shared';
 // Re-exported so existing importers keep working; the implementation now lives in
@@ -63,15 +64,28 @@ export async function getAssignmentsForUserRange(params: {
           isPublished: true,
           course: { isPublished: true },
           AND: [
-            // Base due OR this student's override due falls in the range.
+            // Base due OR an override that applies to this student falls in the range. Their
+            // group's counts: an extension granted to a group is the group members' deadline,
+            // and matching only their own row left them looking at an empty week.
             {
               OR: [
                 { dueDate: { gte: startDate, lte: endDate } },
-                { overrides: { some: { userId, dueDate: { gte: startDate, lte: endDate } } } },
+                {
+                  overrides: {
+                    some: {
+                      AND: [
+                        overridesForStudentWhere(userId),
+                        { dueDate: { gte: startDate, lte: endDate } },
+                      ],
+                    },
+                  },
+                },
               ],
             },
-            // And the assignment is actually assigned to this student.
-            { OR: [{ assignedToEveryone: true }, { overrides: { some: { userId } } }] },
+            // And the assignment is actually assigned to this student. Membership is the
+            // assignee table, not the overrides: an override says when, never who, so asking
+            // the override rows hid work that was assigned to them and carried no exception.
+            assignedToStudentWhere(userId),
           ],
         },
       ],
