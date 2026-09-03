@@ -48,6 +48,16 @@ const DAY_MS = 24 * HOUR_MS;
  * Where the app keeps one kind of uploaded file. Mirrors the path handling in `seed-dev.ts`:
  * the container path when there is one, otherwise a directory under the checkout.
  */
+/**
+ * Names the database whose rows the uploaded files belong to.
+ *
+ * The prune below deletes files no row points at, which is right for the database that owns the
+ * directory and catastrophic for any other: run the seed against a throwaway copy inside the dev
+ * container, where the volume is shared, and every real file looks like an orphan. It deleted a
+ * whole development environment's uploads once, which is why this marker exists.
+ */
+const OWNER_MARKER = '.seeded-by';
+
 async function uploadDir(kind: 'submissions' | 'solutions' | 'pfps'): Promise<string> {
   const inContainer = path.join(path.sep, 'private', 'uploads', kind);
   try {
@@ -917,7 +927,47 @@ async function seedActivityLog(prisma: PrismaClient) {
  * wall-clock window, re-seeding twice inside that window protected the previous run's garbage,
  * so the directory doubled instead of being cleaned. Anything written before this run started is
  * either referenced or left over, and neither case needs protecting.
+ *
+ * ## Whose files are these
+ *
+ * The rule above assumes this database is the one the uploads directory belongs to. Point the
+ * seed at a throwaway database that happens to share the volume, which is exactly what running
+ * it against a scratch copy inside the dev container does, and every real file looks like an
+ * orphan: it deletes the lot. That is not hypothetical, it is how this note came to be written,
+ * and it left a dev database whose every file link answered "this file is not there any more".
+ *
+ * So the prune first asks whether this database recognises anything already on disk. If it
+ * names none of the files that were there before the run, it is not the volume's database and
+ * nothing is deleted.
  */
+/**
+ * The database a set of uploaded files belongs to.
+ *
+ * Read from the connection string rather than passed in, because the whole point is to catch a
+ * seed pointed somewhere other than where it thinks it is.
+ */
+export function databaseNameFrom(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const name = new URL(url).pathname.replace(/^\//, '');
+    return name || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether this run may delete files in a directory the marker says belongs to `owner`.
+ *
+ * An unclaimed directory is claimed by whoever seeds it. A directory claimed by another
+ * database is left alone: its files are that database's, and this run knows nothing about
+ * which of them are still referenced.
+ */
+export function mayPrune(owner: string | null, current: string | null): boolean {
+  if (!current) return false;
+  return owner === null || owner === current;
+}
+
 async function pruneOrphanedUploads(prisma: PrismaClient, startedAt: number) {
   const kinds = [
     {
@@ -936,6 +986,25 @@ async function pruneOrphanedUploads(prisma: PrismaClient, startedAt: number) {
         (await prisma.user.findMany({ select: { avatar: true } })).map((r) => r.avatar),
     },
   ];
+
+  // Whose files these are, before deleting any of them.
+  const current = databaseNameFrom(process.env.DATABASE_URL);
+  const markerPath = path.join(path.dirname(await uploadDir('submissions')), OWNER_MARKER);
+  let owner: string | null = null;
+  try {
+    owner = (await fs.readFile(markerPath, 'utf8')).trim() || null;
+  } catch {
+    owner = null;
+  }
+
+  if (!mayPrune(owner, current)) {
+    console.log(
+      `[seed] extras: left the uploaded files alone; they belong to "${owner}" and this seed is ` +
+        `connected to "${current ?? 'an unknown database'}"`,
+    );
+    return;
+  }
+  if (owner === null && current) await fs.writeFile(markerPath, `${current}\n`, 'utf8');
 
   let removed = 0;
   for (const { kind, referenced } of kinds) {
