@@ -226,3 +226,72 @@ describe('serializeAssignment: override disclosure', () => {
     expect(JSON.stringify(out)).not.toContain('Reyes');
   });
 });
+
+describe('serializeAssignment: the deadline a viewer is held to', () => {
+  const OVERRIDE_DUE = new Date(NOW.getTime() + 96 * HOUR);
+  const studentOverride = {
+    targetType: 'STUDENT' as const,
+    userId: 'student-1',
+    groupId: null,
+    unlockAt: null,
+    dueDate: OVERRIDE_DUE,
+    lateCutoff: null,
+    allowLateSubmissions: null,
+  };
+
+  it("gives a student the date their own override sets", () => {
+    // Reported by a student: the Grades tab showed the extension and the Assignments tab
+    // showed the original date, which is the difference between handing work in and being
+    // late. This serializer resolved the override and then sent the assignment's own date.
+    const out = serializeAssignment(row({ overrides: [studentOverride] }), ctx());
+    expect(out.dueDate).toEqual(OVERRIDE_DUE);
+  });
+
+  it("gives a student the date their group's override sets", () => {
+    // The rows are selected already scoped to this viewer, so a group row here is one of
+    // theirs.
+    const out = serializeAssignment(
+      row({
+        overrides: [
+          {
+            targetType: 'GROUP' as const,
+            userId: null,
+            groupId: 'g1',
+            unlockAt: null,
+            dueDate: OVERRIDE_DUE,
+            lateCutoff: null,
+            allowLateSubmissions: null,
+          },
+        ],
+      }),
+      ctx(),
+    );
+    expect(out.dueDate).toEqual(OVERRIDE_DUE);
+  });
+
+  it('carries the late window the override sets rather than the assignment one', () => {
+    const cutoff = new Date(NOW.getTime() + 120 * HOUR);
+    const out = serializeAssignment(
+      row({
+        allowLateSubmissions: false,
+        lateCutoff: null,
+        overrides: [{ ...studentOverride, allowLateSubmissions: true, lateCutoff: cutoff }],
+      }),
+      ctx(),
+    );
+    expect(out.allowLateSubmissions).toBe(true);
+    expect(out.lateCutoff).toEqual(cutoff);
+  });
+
+  it("leaves staff looking at the assignment's own dates", () => {
+    // Staff set those, and the exceptions are listed to them separately in the same payload.
+    const base = row().dueDate;
+    const out = serializeAssignment(row({ overrides: [studentOverride] }), ctx({ isStaff: true }));
+    expect(out.dueDate).toEqual(base);
+  });
+
+  it('leaves an assignment with no due date alone', () => {
+    const out = serializeAssignment(row({ dueDate: undefined }), ctx());
+    expect(out.dueDate).toBeUndefined();
+  });
+});
