@@ -57,13 +57,16 @@ export const POST = withAdminAuth(
     try {
       const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-      await prisma.user.update({
+      // The email comes back from the write itself, so the log can say whose password was
+      // reset rather than leaving a reader to look an id up. One statement, no extra read.
+      const target = await prisma.user.update({
         where: { id: userId },
         data: {
           password: hashedPassword,
           temporaryPassword: Boolean(isTemporary),
           passwordChangedAt: new Date(),
         },
+        select: { email: true },
       });
       // A reset must terminate this user's existing sessions immediately, so drop the
       // cached session row rather than waiting for it to expire.
@@ -76,6 +79,7 @@ export const POST = withAdminAuth(
         category: 'USER',
         metadata: {
           targetUserId: userId,
+          targetEmail: target.email,
           temporaryPassword: Boolean(isTemporary),
         },
       });

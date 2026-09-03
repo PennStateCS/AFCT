@@ -88,7 +88,7 @@ describe('POST /api/courses/[id]/roster/[userId]/reset-password', () => {
   });
 
   it('denies resetting a staff member (target is FACULTY)', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY', user: { isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY', user: { isAdmin: false, email: 'faculty@example.edu' } });
     const res = await POST(postReq({ newPassword: 'Str0ng!pass' }), ctx);
     expect(res.status).toBe(403);
     expect(logDenialMock).toHaveBeenCalled();
@@ -96,14 +96,14 @@ describe('POST /api/courses/[id]/roster/[userId]/reset-password', () => {
   });
 
   it('denies resetting a global administrator even if enrolled as a student', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', user: { isAdmin: true } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', user: { isAdmin: true, email: 'admin@example.edu' } });
     const res = await POST(postReq({ newPassword: 'Str0ng!pass' }), ctx);
     expect(res.status).toBe(403);
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
 
   it('rejects a weak password with 400', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', user: { isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', user: { isAdmin: false, email: 'student@example.edu' } });
     isStrongPasswordMock.mockReturnValue(false);
     const res = await POST(postReq({ newPassword: 'weak' }), ctx);
     expect(res.status).toBe(400);
@@ -111,7 +111,7 @@ describe('POST /api/courses/[id]/roster/[userId]/reset-password', () => {
   });
 
   it('resets a student password, invalidates sessions, and logs it', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', user: { isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', user: { isAdmin: false, email: 'student@example.edu' } });
     const res = await POST(postReq({ newPassword: 'Str0ng!pass', isTemporary: true }), ctx);
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ success: true });
@@ -132,13 +132,19 @@ describe('POST /api/courses/[id]/roster/[userId]/reset-password', () => {
       expect.objectContaining({
         action: 'RESET_STUDENT_PASSWORD',
         courseId: 'c1',
-        metadata: expect.objectContaining({ targetUserId: 'stu1', temporaryPassword: true }),
+        // The account, not just its id: an entry that does not say whose password was reset is
+        // the one thing somebody auditing a reset needs and cannot get.
+        metadata: expect.objectContaining({
+          targetUserId: 'stu1',
+          targetEmail: 'student@example.edu',
+          temporaryPassword: true,
+        }),
       }),
     );
   });
 
   it('returns 500 and logs an error when the update fails', async () => {
-    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', user: { isAdmin: false } });
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT', user: { isAdmin: false, email: 'student@example.edu' } });
     prismaMock.user.update.mockRejectedValue(new Error('db down'));
     const res = await POST(postReq({ newPassword: 'Str0ng!pass' }), ctx);
     expect(res.status).toBe(500);

@@ -1185,3 +1185,46 @@ describe('the feedback switch in the log', () => {
     ).toContain('Feedback shown to students: true to false');
   });
 });
+
+describe('a password reset', () => {
+  /**
+   * Reported by a student reading the log: it recorded that a password had been reset and not
+   * whose. That is the one thing an audit of a reset is for.
+   */
+  it('names the account the reset was done to', () => {
+    expect(objectPhrase('RESET_PASSWORD', { targetEmail: 'ada@example.edu' })).toBe(
+      'Password for ada@example.edu',
+    );
+    expect(
+      objectPhrase('RESET_STUDENT_PASSWORD', {
+        targetUserId: 'u-1',
+        targetEmail: 'ada@example.edu',
+      }),
+    ).toBe('Password for ada@example.edu');
+  });
+
+  it('says as much as it can when the account is not named', () => {
+    // Entries written before the email was recorded still have to read as something.
+    expect(objectPhrase('RESET_STUDENT_PASSWORD', { targetUserId: 'u-1' })).toBe(
+      "A student's password",
+    );
+    expect(objectPhrase('RESET_PASSWORD', {})).toBe('Password');
+  });
+
+  it('names the account on a refused reset too', () => {
+    // A reset that was turned away is worth reading for the same reason: on whom.
+    expect(actionLabel('ROSTER_RESET_PASSWORD_DENIED')).toBe('Denied');
+    expect(
+      objectPhrase('ROSTER_RESET_PASSWORD_DENIED', {
+        targetEmail: 'ada@example.edu',
+        targetRole: 'FACULTY',
+      }),
+    ).toBe('Password for ada@example.edu');
+  });
+
+  it('still says whether the password was temporary', () => {
+    expect(activityDetail('RESET_STUDENT_PASSWORD', { temporaryPassword: true })).toBe(
+      'temporary password set',
+    );
+  });
+});

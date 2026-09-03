@@ -525,9 +525,22 @@ const OBJECT_BY_ACTION: Record<
   UPDATE_USER: (m) => accountNamed(m),
   DELETE_USER: (m) => accountNamed(m),
   USER_SIGNUP: (m) => accountNamed(m),
+  // Whose password, not just that one was reset. Naming the account is the whole value of the
+  // entry: a reader auditing a reset is asking who it was done to, and an id in the detail is
+  // not an answer they can read. Unlike the VIEW_ actions below, this is a change to somebody's
+  // way in rather than a look at their work, so the account is the subject rather than a
+  // disclosure the summary should avoid making.
   RESET_PASSWORD: (m) => {
-    const who = firstStr(m, 'userEmail', 'email');
+    const who = firstStr(m, 'userEmail', 'email', 'targetEmail');
     return who ? `Password for ${who}` : 'Password';
+  },
+  RESET_STUDENT_PASSWORD: (m) => {
+    const who = firstStr(m, 'userEmail', 'email', 'targetEmail');
+    return who ? `Password for ${who}` : "A student's password";
+  },
+  ROSTER_RESET_PASSWORD_DENIED: (m) => {
+    const who = firstStr(m, 'userEmail', 'email', 'targetEmail');
+    return who ? `Password for ${who}` : "A student's password";
   },
   CHANGE_PASSWORD: () => 'Own password',
   SET_PASSWORD: () => 'First password for the account',
@@ -1384,6 +1397,7 @@ const FIELD_LABELS: Record<string, string> = {
   contextId: 'LMS course',
   platformId: 'Platform',
   targetUserId: 'About user',
+  targetEmail: 'About account',
   observedClaims: 'Claimed by the token',
   linkId: 'Link',
   identityId: 'Sign-in method',
