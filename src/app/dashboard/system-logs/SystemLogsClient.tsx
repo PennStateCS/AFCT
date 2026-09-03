@@ -374,7 +374,7 @@ export default function SystemLogsClient() {
         // the log it was pointing at. Same click, same dialog; only the presentation changed.
         cell: ({ row }: { row: { original: LogRow } }) => {
           const when = row.original.timestamp
-            ? formatDateTimeInTimeZone(row.original.timestamp, timezone)
+            ? formatDateTimeInTimeZone(row.original.timestamp, timezone, hour12)
             : null;
           const what = actionLabel(
             row.original.action || '',

@@ -101,7 +101,7 @@ export function ActivityCard({ courseId }: ActivityCardProps) {
       // but renames things, and a bug report or a disclosure record wants the real field names.
       setDetailsJson(JSON.stringify(activity, null, 2));
       // The table's timezone, not the browser's, so the dialog and the row it came from agree.
-      setDetailsTitle(formatDateTimeInTimeZone(activity.timestamp, timezone));
+      setDetailsTitle(formatDateTimeInTimeZone(activity.timestamp, timezone, hour12));
       setDetailsOpen(true);
     },
     [timezone, hour12],

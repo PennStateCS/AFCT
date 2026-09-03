@@ -31,6 +31,8 @@ type StudentScheduleProps = {
   effective?: EffectiveSchedule | null;
   loading?: boolean;
   timezone: string;
+  /** The installation's clock preference, so a 24-hour install is not shown 12-hour times. */
+  hour12?: boolean;
   className?: string;
 };
 
@@ -48,6 +50,7 @@ export function StudentSchedule({
   effective = null,
   loading = false,
   timezone,
+  hour12 = true,
   className = '',
 }: StudentScheduleProps) {
   if (loading) {
@@ -107,7 +110,7 @@ export function StudentSchedule({
                   {dueOverridden ? <OverrideMark /> : null}
                 </span>
                 <span className="text-muted-foreground block">
-                  {formatTimeInTimeZone(showDueDate, timezone)}
+                  {formatTimeInTimeZone(showDueDate, timezone, hour12)}
                 </span>
               </>
             ) : (
@@ -128,7 +131,7 @@ export function StudentSchedule({
             <span className="block">
               <span className="font-medium">Late Cutoff:</span>{' '}
               {showAllowLate && showLateCutoff
-                ? formatDateTimeInTimeZone(showLateCutoff, timezone)
+                ? formatDateTimeInTimeZone(showLateCutoff, timezone, hour12)
                 : 'Never'}
               {cutoffOverridden ? <OverrideMark /> : null}
             </span>

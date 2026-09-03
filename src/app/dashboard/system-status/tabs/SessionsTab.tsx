@@ -19,7 +19,7 @@ export default function SessionsTab({
   active: boolean;
   autoRefresh: boolean;
 }) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const { data, isLoading } = useStatusQuery<SessionsStatusResponse>({
     queryKey: queryKeys.admin.statusSessions(),
     path: apiPaths.admin.statusSessions(),
@@ -67,7 +67,9 @@ export default function SessionsTab({
         accessorKey: 'lastSeen',
         header: 'Last Seen',
         cell: ({ row }) =>
-          row.original.lastSeen ? formatDateTimeInTimeZone(row.original.lastSeen, timezone) : '—',
+          row.original.lastSeen
+            ? formatDateTimeInTimeZone(row.original.lastSeen, timezone, hour12)
+            : '—',
         meta: { priority: 2 },
       },
       {
@@ -88,7 +90,7 @@ export default function SessionsTab({
         meta: { priority: 3 },
       },
     ],
-    [timezone],
+    [timezone, hour12],
   );
 
   if (isLoading || !data) {

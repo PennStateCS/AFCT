@@ -24,7 +24,7 @@ export default function DatabaseTab({
   active: boolean;
   autoRefresh: boolean;
 }) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const { data, isLoading } = useStatusQuery<DatabaseStatusResponse>({
     queryKey: queryKeys.admin.statusDatabase(),
     path: apiPaths.admin.statusDatabase(),
@@ -79,7 +79,7 @@ export default function DatabaseTab({
               {details?.current_time_iso && (
                 <Stat
                   label="DB Time"
-                  value={formatDateTimeInTimeZone(details.current_time_iso, timezone)}
+                  value={formatDateTimeInTimeZone(details.current_time_iso, timezone, hour12)}
                 />
               )}
               {details?.sqlite_file_path && (
@@ -107,6 +107,7 @@ export default function DatabaseTab({
                       ? formatDateTimeInTimeZone(
                           new Date(details.last_migration_finished_at),
                           timezone,
+                          hour12,
                         )
                       : '—'
                   }

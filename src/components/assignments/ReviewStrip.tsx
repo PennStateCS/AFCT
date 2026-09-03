@@ -29,6 +29,8 @@ type ReviewStripProps = {
   assignment: ScheduleBase | null;
   effective?: EffectiveSchedule | null;
   timezone: string;
+  /** The installation's clock preference, passed on to the schedule below. */
+  hour12?: boolean;
 
   totals: { totalPoints: number; earned: number; graded: number; count: number };
   className?: string;
@@ -58,6 +60,7 @@ export function ReviewStrip({
   assignment,
   effective = null,
   timezone,
+  hour12 = true,
   totals,
   className = '',
 }: ReviewStripProps) {
@@ -97,6 +100,7 @@ export function ReviewStrip({
         effective={effective}
         loading={!assignment}
         timezone={timezone}
+        hour12={hour12}
       />
       {/* A cell each, so the strip's rules separate them the way they separate the
             dates from the picker. They answer different questions: how much is done,

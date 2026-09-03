@@ -52,7 +52,7 @@ const TABS = [
 ] as const;
 
 export default function SystemStatusClient() {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const queryClient = useQueryClient();
   const [autoRefresh, setAutoRefresh] = useState(false);
   // Persist the open tab so a refresh keeps you where you were (SSR-safe init).
@@ -225,7 +225,7 @@ export default function SystemStatusClient() {
             </select>
           </div>
           <div className="text-muted-foreground text-xs" aria-live="polite">
-            {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone)}` : ''}
+            {lastUpdated ? `Updated ${formatTimeInTimeZone(lastUpdated, timezone, hour12)}` : ''}
           </div>
           <Button size="sm" onClick={refreshAll} disabled={isFetching}>
             {isFetching ? 'Refreshing…' : 'Refresh'}

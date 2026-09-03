@@ -19,7 +19,7 @@ export default function RateLimitsTab({
   active: boolean;
   autoRefresh: boolean;
 }) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
 
@@ -58,11 +58,12 @@ export default function RateLimitsTab({
     () =>
       getRateLimitColumns({
         timeZone: timezone,
+        hour12,
         generatedAt,
         onClear: (entry) => clear(entry),
         clearingIp,
       }),
-    [timezone, generatedAt, clearingIp, clear],
+    [timezone, hour12, generatedAt, clearingIp, clear],
   );
 
   return (

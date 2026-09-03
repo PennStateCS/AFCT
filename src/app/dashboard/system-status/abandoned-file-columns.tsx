@@ -18,12 +18,14 @@ import type { AbandonedFile } from '@/lib/status/types';
 export function abandonedFileColumns({
   labels,
   timeZone,
+  hour12 = true,
   onDelete,
   deleting,
 }: {
   /** Category name to its plain-language label, so the badge is not a folder name. */
   labels: Record<string, string>;
   timeZone: string;
+  hour12?: boolean;
   onDelete: (file: AbandonedFile) => void;
   /** The file currently being deleted, if any. */
   deleting: { category: string; fileName: string } | null;
@@ -70,7 +72,7 @@ export function abandonedFileColumns({
       header: 'Last changed',
       cell: ({ row }) => (
         <span className="text-muted-foreground text-xs">
-          {formatDateTimeInTimeZone(row.original.modifiedAt, timeZone)}
+          {formatDateTimeInTimeZone(row.original.modifiedAt, timeZone, hour12)}
         </span>
       ),
       meta: { filterLabel: 'Last changed', nowrap: true },

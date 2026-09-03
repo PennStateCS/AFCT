@@ -46,7 +46,15 @@ const AddressFacts = ({ details }: { details: IpDetails }) => (
 );
 
 /** Whether AFCT has seen this address before, from its own activity log. */
-const SeenBefore = ({ details, timeZone }: { details: IpDetails; timeZone: string }) => {
+const SeenBefore = ({
+  details,
+  timeZone,
+  hour12,
+}: {
+  details: IpDetails;
+  timeZone: string;
+  hour12: boolean;
+}) => {
   const known = details.knownActivity;
   if (!known) {
     return <span className="text-muted-foreground">Not checked</span>;
@@ -70,7 +78,7 @@ const SeenBefore = ({ details, timeZone }: { details: IpDetails; timeZone: strin
       </div>
       {known.lastSeen ? (
         <div className="text-muted-foreground text-xs">
-          Last seen {formatDateTimeInTimeZone(new Date(known.lastSeen), timeZone)}
+          Last seen {formatDateTimeInTimeZone(new Date(known.lastSeen), timeZone, hour12)}
         </div>
       ) : null}
       {known.accounts.length ? (
@@ -92,11 +100,13 @@ const SeenBefore = ({ details, timeZone }: { details: IpDetails; timeZone: strin
 const ClearCell = ({
   entry,
   timeZone,
+  hour12,
   onClear,
   disabled,
 }: {
   entry: RateLimitedAddress;
   timeZone: string;
+  hour12: boolean;
   onClear: (entry: RateLimitedAddress) => void;
   disabled: boolean;
 }) => {
@@ -115,7 +125,7 @@ const ClearCell = ({
       <ConfirmDialog
         open={confirming}
         title="Clear this rate limit?"
-        description={`${entry.ip} will be able to make ${entry.scopeLabel.toLowerCase()} again right away, instead of waiting until ${formatDateTimeInTimeZone(new Date(entry.expiresAt), timeZone)}. This is recorded in the activity log.`}
+        description={`${entry.ip} will be able to make ${entry.scopeLabel.toLowerCase()} again right away, instead of waiting until ${formatDateTimeInTimeZone(new Date(entry.expiresAt), timeZone, hour12)}. This is recorded in the activity log.`}
         confirmText="Clear rate limit"
         onConfirm={() => {
           setConfirming(false);
@@ -136,11 +146,13 @@ const ClearCell = ({
  */
 export function getRateLimitColumns({
   timeZone,
+  hour12 = true,
   generatedAt,
   onClear,
   clearingIp,
 }: {
   timeZone: string;
+  hour12?: boolean;
   generatedAt: number;
   onClear: (entry: RateLimitedAddress) => void;
   clearingIp: string | null;
@@ -202,7 +214,7 @@ export function getRateLimitColumns({
       header: 'Seen before',
       cell: ({ row }) => (
         <Wrap width="max-w-[24ch]">
-          <SeenBefore details={row.original.details} timeZone={timeZone} />
+          <SeenBefore details={row.original.details} timeZone={timeZone} hour12={hour12} />
         </Wrap>
       ),
     },
@@ -212,7 +224,7 @@ export function getRateLimitColumns({
       header: 'Restricted since',
       cell: ({ row }) => (
         <Wrap width="max-w-[14ch]">
-          <div>{formatDateTimeInTimeZone(new Date(row.original.startedAt), timeZone)}</div>
+          <div>{formatDateTimeInTimeZone(new Date(row.original.startedAt), timeZone, hour12)}</div>
           <div className="text-muted-foreground text-xs">
             {formatRelative(row.original.startedAt, generatedAt)}
           </div>
@@ -234,7 +246,7 @@ export function getRateLimitColumns({
                 : ''}
             </div>
             <div className="text-muted-foreground text-xs">
-              Last attempt {formatDateTimeInTimeZone(new Date(entry.lastAttemptAt), timeZone)}
+              Last attempt {formatDateTimeInTimeZone(new Date(entry.lastAttemptAt), timeZone, hour12)}
             </div>
           </Wrap>
         );
@@ -246,7 +258,7 @@ export function getRateLimitColumns({
       header: 'Expires',
       cell: ({ row }) => (
         <Wrap width="max-w-[14ch]">
-          <div>{formatDateTimeInTimeZone(new Date(row.original.expiresAt), timeZone)}</div>
+          <div>{formatDateTimeInTimeZone(new Date(row.original.expiresAt), timeZone, hour12)}</div>
           <div className="text-muted-foreground text-xs">
             {formatRelative(row.original.expiresAt, generatedAt)}
           </div>
@@ -264,6 +276,7 @@ export function getRateLimitColumns({
         <ClearCell
           entry={row.original}
           timeZone={timeZone}
+          hour12={hour12}
           onClear={onClear}
           disabled={clearingIp !== null}
         />

@@ -98,3 +98,55 @@ describe('formatShortDateParts and daysUntilInTimeZone', () => {
     expect(formatShortDateParts('not-a-date', 'UTC')).toEqual({ month: '', day: '' });
   });
 });
+
+describe('every time on screen asks for the clock the installation chose', () => {
+  /**
+   * A source check, deliberately.
+   *
+   * `hour12` defaults to true on the formatters, which is what let twenty-two call sites drift
+   * into showing 12-hour times to an installation that had asked for 24: nothing failed, the
+   * clock was simply wrong in most of the app. A runtime test cannot catch that, because each
+   * of those calls was correct on its own terms. This counts the arguments instead.
+   *
+   * Multiline calls are why this walks the brackets rather than matching a regular expression:
+   * several of the calls it has to judge span four lines.
+   */
+  it('passes one to every formatter that prints an hour', async () => {
+    const { readFile, readdir } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+
+    const files: string[] = [];
+    const walk = async (dir: string) => {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) await walk(full);
+        else if (/\.tsx?$/.test(entry.name) && !entry.name.includes('.test.')) files.push(full);
+      }
+    };
+    await walk('src');
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      // The formatters' own file is where the defaults live.
+      if (file.includes('date-format')) continue;
+      const text = await readFile(file, 'utf8');
+      for (const match of text.matchAll(/format(?:DateTime|Time)InTimeZone\(/g)) {
+        let index = match.index + match[0].length;
+        let depth = 1;
+        let args = 1;
+        while (index < text.length && depth > 0) {
+          const char = text[index]!;
+          if ('([{'.includes(char)) depth += 1;
+          else if (')]}'.includes(char)) depth -= 1;
+          else if (char === ',' && depth === 1) args += 1;
+          index += 1;
+        }
+        if (args < 3) {
+          offenders.push(`${file}:${text.slice(0, match.index).split('\n').length}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});

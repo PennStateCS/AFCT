@@ -121,9 +121,9 @@ export default function DiscussionPanel({
 
   const { data: session } = useSession();
   const myId = session?.user?.id ?? null;
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
 
-  const formatDateTime = (iso: string | Date) => formatDateTimeInTimeZone(iso, timezone);
+  const formatDateTime = (iso: string | Date) => formatDateTimeInTimeZone(iso, timezone, hour12);
 
   const [commentToDelete, setCommentToDelete] = useState<string | null>(null);
   const handleConfirmDelete = () => {

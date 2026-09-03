@@ -100,8 +100,8 @@ export function actorName(activity: ActivityLog): string | null {
   return name || activity.user?.email || null;
 }
 
-const formatFullTimestamp = (timestamp: string, timeZone: string) =>
-  formatDateTimeInTimeZone(timestamp, timeZone);
+const formatFullTimestamp = (timestamp: string, timeZone: string, hour12 = true) =>
+  formatDateTimeInTimeZone(timestamp, timeZone, hour12);
 
 /**
  * The assignment an entry is about.
@@ -369,7 +369,9 @@ export const getActivityColumns = (
     // popover held the same text in a 20rem box that closed when you clicked to select it.
     cell: ({ row }) => {
       const activity = row.original;
-      const when = activity.timestamp ? formatFullTimestamp(activity.timestamp, timeZone) : null;
+      const when = activity.timestamp
+        ? formatFullTimestamp(activity.timestamp, timeZone, hour12)
+        : null;
       const what = actionLabel(
         activity.action,
         activity.metadata as Record<string, unknown> | null,
