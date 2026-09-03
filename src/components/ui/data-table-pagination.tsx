@@ -158,7 +158,10 @@ export function PaginationControls<TData>({
         ) : null}
       </div>
 
-      <div className="text-foreground flex items-center gap-3 font-normal">
+      {/* flex-wrap: at 320px the row total plus the rows-per-page control is wider than the
+          screen, and both are nowrap. Wrapping drops the control onto its own line instead of
+          pushing the page sideways. */}
+      <div className="text-foreground flex flex-wrap items-center gap-x-3 gap-y-2 font-normal">
         {totalLabel ? (
           <span className="text-muted-foreground text-sm whitespace-nowrap">{totalLabel}</span>
         ) : null}

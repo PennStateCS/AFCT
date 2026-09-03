@@ -51,7 +51,8 @@ export default function NetworkTab({
         title="Endpoints"
         description="What AFCT can reach, and how quickly. Compare the two: both slow is the network, one slow is that service."
       >
-        <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+        {/* See DatabaseTab: an implicit grid column takes its minimum from the content. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-4 lg:grid-cols-2">
           <StatusSubsection title="Database endpoint">
             <div className="space-y-2">
               <Stat label="Latency" value={formatMs(net.db?.latencyMs)} />

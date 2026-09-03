@@ -67,7 +67,10 @@ export default function DatabaseTab({
       {/* What the database is, beside when it was last changed. The two are read together
           after an upgrade: the version you are on and the migration that put you there. */}
       <StatusSection title="Details">
-        <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+        {/* grid-cols spelled out: an implicit column is sized `auto`, whose minimum is the
+            content's min-content width, so a long migration name pushed the page sideways
+            on a phone. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-4 lg:grid-cols-2">
           <StatusSubsection title="Connection">
             <div className="space-y-2">
               {details?.current_database && (

@@ -205,7 +205,12 @@ export function TokensSection() {
             You have no tokens. Create one above if you use the desktop client.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Tokens you have issued for the desktop client"
+            className="focus-visible:ring-ring overflow-x-auto focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none"
+          >
             <table className="w-full text-sm">
               <caption className="sr-only">Tokens you have issued for the desktop client</caption>
               <thead>
