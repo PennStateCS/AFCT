@@ -3,13 +3,13 @@
 import { Fragment, useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
 
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { Table, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
-import { formatDateInTimeZone } from '@/lib/date-format';
+import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
 import { cn } from '@/lib/utils';
 
 type StudentGradesProblem = {
@@ -27,6 +27,8 @@ type StudentGradesAssignment = {
   id: string;
   title: string;
   description?: string | null;
+  /** Derived server-side from the assignment's group set link; there is no stored flag. */
+  isGroup: boolean;
   dueDate: string | null;
   maxPoints: number;
   grade: number | null;
@@ -114,7 +116,7 @@ export function formatPercent(grade: number | null, maxPoints: number): string {
  * whatever the width.
  */
 export function StudentGradesTable({ courseId }: { courseId: string }) {
-  const { timezone } = useEffectiveTimezone();
+  const { timezone, hour12 } = useEffectiveTimezone();
   const [expanded, setExpanded] = useState<string[]>([]);
 
   const gradesQuery = useQuery({
@@ -163,7 +165,11 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
       ) : assignments.length === 0 ? (
         <p className="text-muted-foreground text-sm">No graded assignments available yet.</p>
       ) : (
-        <div className="overflow-hidden rounded-lg border">
+        // The DataTable's own shell, verbatim: the surface belongs to the container, not to
+        // the rows, so the empty and loading states never show the page through the table.
+        // The Assignments tab next door is a DataTable, and this is what makes the two tabs
+        // read as one interface rather than two tables that happen to sit on one page.
+        <div className="overflow-hidden rounded-md border bg-[var(--table-background)]">
           <Table aria-labelledby="student-grades-title">
             {/* Deliberate proportions. Left to itself the table spreads five columns over the
                 full width and the grade, which is the thing being read, ends up a screen away
@@ -179,14 +185,29 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
                   color: 'var(--table-header-foreground)',
                 }}
               >
-                <TableHead className="h-9 w-[46%] px-3 text-xs">Assignment / Problem</TableHead>
-                <TableHead className="hidden h-9 w-[15%] px-3 text-xs md:table-cell">Due</TableHead>
-                <TableHead className="hidden h-9 w-[15%] px-3 text-xs sm:table-cell">
-                  Status
+                {/* The DataTable's header cells, class for class: h-12, semibold, nowrap,
+                    the primitive's own px-2, and the same flex wrapper it puts round the
+                    label so a right-aligned header sits where a right-aligned cell does.
+                    The widths are the only addition. */}
+                <TableHead className="h-12 w-[38%] font-semibold whitespace-nowrap">
+                  <div className="flex items-center">Assignment / Problem</div>
                 </TableHead>
-                <TableHead className="h-9 w-[14%] px-3 text-right text-xs">Score</TableHead>
-                <TableHead className="hidden h-9 w-[10%] px-3 text-right text-xs sm:table-cell">
-                  Percent
+                {/* Type is the first to go as the table narrows: a student mostly knows
+                    whether a piece of work is theirs or their group's. */}
+                <TableHead className="hidden h-12 w-[10%] font-semibold whitespace-nowrap lg:table-cell">
+                  <div className="flex items-center">Type</div>
+                </TableHead>
+                <TableHead className="hidden h-12 w-[18%] font-semibold whitespace-nowrap md:table-cell">
+                  <div className="flex items-center">Due</div>
+                </TableHead>
+                <TableHead className="hidden h-12 w-[14%] font-semibold whitespace-nowrap sm:table-cell">
+                  <div className="flex items-center">Status</div>
+                </TableHead>
+                <TableHead className="h-12 w-[12%] text-right font-semibold whitespace-nowrap">
+                  <div className="flex items-center justify-end">Score</div>
+                </TableHead>
+                <TableHead className="hidden h-12 w-[8%] text-right font-semibold whitespace-nowrap sm:table-cell">
+                  <div className="flex items-center justify-end">Percent</div>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -202,25 +223,35 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
               {assignments.map((assignment, assignmentIndex) => {
                 const isExpanded = expanded.includes(assignment.id);
                 const status = assignmentStatusLabel(assignment.problems);
-                // The placeholder is for the assignment only. A problem's Due cell is left
-                // genuinely blank, because a problem has no deadline to be missing.
+                const type = assignment.isGroup ? 'Group' : 'Individual';
+                // The date with the time beside it, because "due Friday" and "due Friday at
+                // 11:59 PM" are different pieces of information to someone deciding whether
+                // to hand in tonight. The placeholder is for the assignment only: a problem's
+                // Due cell is left genuinely blank, having no deadline to be missing.
                 const due = assignment.dueDate
-                  ? formatDateInTimeZone(assignment.dueDate, timezone)
+                  ? `${formatDateInTimeZone(assignment.dueDate, timezone)} ${formatTimeInTimeZone(assignment.dueDate, timezone, hour12)}`
                   : NONE;
 
                 return (
                   <Fragment key={assignment.id}>
                     <TableRow
                       className={cn(
-                        // The group's header: tinted, taller than its problems, and carrying
-                        // the line that separates this assignment from the one above.
-                        'bg-muted/40 hover:bg-muted/70 border-b-0 sm:h-11',
+                        // Same surface as its problems, on purpose. The hierarchy is carried
+                        // by weight, by the border above each group and by the indent under
+                        // it, not by a tint: with the header already muted, a third shade in
+                        // the body made the table read as three greys rather than as groups.
+                        // Vertical padding is set here, on the row, so every cell in it gets
+                        // the same: setting it per cell is what put the problem titles a few
+                        // pixels above the values beside them.
+                        'hover:bg-muted/50 border-b-0 sm:h-11 [&>td]:py-2',
+                        // The strongest line in the body, and the only one at full border
+                        // colour: it is where one assignment's group ends and the next begins.
                         assignmentIndex > 0 && 'border-t',
                         isExpanded && 'border-b',
                       )}
                     >
-                      <TableCell className="px-3 py-1.5">
-                        <div className="flex items-start gap-1">
+                      <TableCell>
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
                             onClick={() => toggle(assignment.id)}
@@ -232,7 +263,10 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
                             aria-expanded={isExpanded}
                             // The icon stays small; the target does not. 32px square, which is
                             // reachable on a phone without making every row that tall.
-                            className="hover:bg-background/80 focus-visible:ring-ring text-muted-foreground hover:text-foreground -ml-1 flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                            // No background at rest; the hover is the neutral muted grey,
+                            // which reads against the row's primary tint where a lighter
+                            // wash of the same hue would have disappeared into it.
+                            className="hover:bg-muted focus-visible:ring-ring text-muted-foreground hover:text-foreground -ml-1 flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
                             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${assignment.title} problems`}
                           >
                             {isExpanded ? (
@@ -241,10 +275,10 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
                               <ChevronRight className="size-4" aria-hidden="true" />
                             )}
                           </button>
-                          <div className="min-w-0 pt-1.5">
+                          <div className="min-w-0">
                             <Link
                               href={`/dashboard/courses/${courseId}/${assignment.id}`}
-                              className={cn(ROW_LINK_CLASS, 'font-semibold')}
+                              className={cn(ROW_LINK_CLASS, 'leading-5 font-semibold')}
                             >
                               {assignment.title}
                             </Link>
@@ -252,20 +286,28 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
                                 their columns are gone. `hidden` takes an element out of the
                                 accessibility tree, so each value is announced exactly once
                                 whatever the width. */}
-                            <p className="text-muted-foreground text-xs md:hidden">
-                              {due}
+                            {/* Type, Due and Status folded under the title, each appearing
+                                at the width where its own column has gone. `hidden` takes an
+                                element out of the accessibility tree, so every value is
+                                announced exactly once whatever the width. */}
+                            <p className="text-muted-foreground text-xs lg:hidden">
+                              {type}
+                              <span className="md:hidden"> • {due}</span>
                               <span className="sm:hidden"> • {status}</span>
                             </p>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell nowrap className="text-muted-foreground hidden px-3 md:table-cell">
+                      <TableCell nowrap className="text-muted-foreground hidden lg:table-cell">
+                        {type}
+                      </TableCell>
+                      <TableCell nowrap className="text-muted-foreground hidden md:table-cell">
                         {due}
                       </TableCell>
-                      <TableCell nowrap className="text-muted-foreground hidden px-3 sm:table-cell">
+                      <TableCell nowrap className="text-muted-foreground hidden sm:table-cell">
                         {status}
                       </TableCell>
-                      <TableCell nowrap className="px-3 text-right font-semibold tabular-nums">
+                      <TableCell nowrap className="text-right font-semibold tabular-nums">
                         {formatScore(assignment.grade, assignment.maxPoints)}
                         <span className="text-muted-foreground block text-xs font-normal sm:hidden">
                           {formatPercent(assignment.grade, assignment.maxPoints)}
@@ -273,7 +315,7 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
                       </TableCell>
                       <TableCell
                         nowrap
-                        className="hidden px-3 text-right font-semibold tabular-nums sm:table-cell"
+                        className="hidden text-right font-semibold tabular-nums sm:table-cell"
                       >
                         {formatPercent(assignment.grade, assignment.maxPoints)}
                       </TableCell>
@@ -282,39 +324,58 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
                     {isExpanded
                       ? assignment.problems.map((problem, index) => {
                           const problemStatus = problemStatusLabel(problem);
+                          const isLastProblem = index === assignment.problems.length - 1;
                           return (
                             <TableRow
                               key={problem.id}
-                              className="hover:bg-muted/40 border-b-0 sm:h-9"
+                              className={cn(
+                                // No background of its own, so a problem row is the card
+                                // surface. Its divider is deliberately fainter than the line
+                                // above an assignment: that is the hierarchy, in borders.
+                                'hover:bg-muted/50 border-border/40 sm:h-9 [&>td]:py-1.5',
+                                // The last problem's edge is the next assignment's top
+                                // border, and two borders there would read as a double rule.
+                                isLastProblem && 'border-b-0',
+                              )}
                             >
-                              <TableCell className="px-3 py-1">
-                                {/* Indented, and with a hairline running down the indent so
-                                    the rows read as belonging to the assignment above even
-                                    when the tint is not what the eye is using. */}
-                                <div className="border-border ml-3 border-l pl-4">
-                                  <Link
-                                    href={`/dashboard/courses/${courseId}/${assignment.id}?problem=${encodeURIComponent(problem.id)}`}
-                                    className={cn(ROW_LINK_CLASS, 'text-[0.8125rem]')}
-                                  >
-                                    Problem {index + 1}: {problem.title ?? 'Untitled'}
-                                  </Link>
-                                  <p className="text-muted-foreground text-xs sm:hidden">
-                                    {problemStatus}
-                                  </p>
+                              <TableCell>
+                                {/* Indented, and marked with a corner arrow so the row reads
+                                    as belonging to the assignment above it. The rows share a
+                                    surface with their assignment, so this and the indent are
+                                    what carry the nesting. Decorative: "Problem 1:" already
+                                    says the same thing in words. */}
+                                <div className="ml-7 flex items-center gap-2">
+                                  <CornerDownRight
+                                    className="text-muted-foreground size-4 shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                  <div className="min-w-0">
+                                    <Link
+                                      href={`/dashboard/courses/${courseId}/${assignment.id}?problem=${encodeURIComponent(problem.id)}`}
+                                      className={cn(ROW_LINK_CLASS, 'text-[0.8125rem] leading-5')}
+                                    >
+                                      Problem {index + 1}: {problem.title ?? 'Untitled'}
+                                    </Link>
+                                    <p className="text-muted-foreground text-xs sm:hidden">
+                                      {problemStatus}
+                                    </p>
+                                  </div>
                                 </div>
                               </TableCell>
-                              {/* Left empty on purpose. A problem has no deadline of its own,
-                                  and repeating the assignment's would read as if it did. */}
-                              <TableCell className="hidden px-3 md:table-cell" />
+                              {/* Left empty on purpose. A problem has neither a type nor a
+                                  deadline of its own, and repeating the assignment's would
+                                  read as if it did. */}
+                              <TableCell className="hidden lg:table-cell" />
+                              <TableCell className="hidden md:table-cell" />
                               <TableCell
                                 nowrap
-                                className="text-muted-foreground hidden px-3 text-[0.8125rem] sm:table-cell"
+                                className="text-muted-foreground hidden text-[0.8125rem] leading-5 sm:table-cell"
                               >
                                 {problemStatus}
                               </TableCell>
                               <TableCell
                                 nowrap
-                                className="px-3 text-right text-[0.8125rem] tabular-nums"
+                                className="text-right text-[0.8125rem] leading-5 tabular-nums"
                               >
                                 {formatScore(problem.grade, problem.maxPoints)}
                                 <span className="text-muted-foreground block text-xs sm:hidden">
@@ -323,7 +384,7 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
                               </TableCell>
                               <TableCell
                                 nowrap
-                                className="hidden px-3 text-right text-[0.8125rem] tabular-nums sm:table-cell"
+                                className="hidden text-right text-[0.8125rem] leading-5 tabular-nums sm:table-cell"
                               >
                                 {formatPercent(problem.grade, problem.maxPoints)}
                               </TableCell>

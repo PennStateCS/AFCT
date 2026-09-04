@@ -44,6 +44,7 @@ const gradesResponse = {
       title: 'Regular Languages',
       description: null,
       dueDate: '2027-09-04T12:00:00Z',
+      isGroup: false,
       maxPoints: 10,
       grade: 8,
       problems: [
@@ -114,6 +115,29 @@ describe('StudentGradesTable', () => {
     expect(within(row).getAllByText('8 / 10').length).toBeGreaterThan(0);
     expect(within(row).getAllByText('80%').length).toBeGreaterThan(0);
     expect(within(row).getAllByText('Graded').length).toBeGreaterThan(0);
+  });
+
+  it('names the assignment type and shows the due time beside the date', async () => {
+    mockFetch({
+      assignments: [
+        {
+          ...gradesResponse.assignments[0],
+          id: 'a4',
+          title: 'Group Lab',
+          isGroup: true,
+          dueDate: '2027-09-18T15:30:00Z',
+        },
+      ],
+    });
+
+    renderWithClient(<StudentGradesTable courseId="c1" />);
+    await waitFor(() => expect(screen.getByText('Group Lab')).toBeInTheDocument());
+
+    const row = assignmentRow('Group Lab');
+    expect(within(row).getAllByText('Group').length).toBeGreaterThan(0);
+    // The date and the time together: "due Friday" and "due Friday at 3:30 PM" answer
+    // different questions for someone deciding whether to hand in tonight.
+    expect(within(row).getAllByText('09/18/27 03:30 PM').length).toBeGreaterThan(0);
   });
 
   it('links the assignment title to the assignment page', async () => {
