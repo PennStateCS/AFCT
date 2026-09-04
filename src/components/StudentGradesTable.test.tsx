@@ -76,6 +76,11 @@ describe('StudentGradesTable derivations', () => {
     expect(problemStatusLabel(problem({ grade: null, status: 'COMPLETED' }))).toBe('Processed');
     expect(problemStatusLabel(problem({ grade: null, status: 'FAILED' }))).toBe('Processed');
     expect(problemStatusLabel(problem({ grade: null, status: 'PENDING' }))).toBe('Not graded');
+    // Nothing handed in is a different fact from nothing marked, and it is the one the
+    // student guide already words this way.
+    expect(problemStatusLabel(problem({ grade: null, status: '', submissionCount: 0 }))).toBe(
+      'Not submitted',
+    );
   });
 
   it('spaces the score and blanks a missing one', () => {

@@ -1,23 +1,15 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { Fragment, useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import { formatDateInTimeZone } from '@/lib/date-format';
-import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
 
 type StudentGradesProblem = {
@@ -51,6 +43,18 @@ const EMPTY_ASSIGNMENTS: StudentGradesAssignment[] = [];
 const NONE = '—';
 
 /**
+ * How a name reads inside a table row here.
+ *
+ * Not `TEXT_LINK_CLASS`, which paints a link blue and underlined from the start. Nearly
+ * every cell in the first column is a link, and that treatment turns a gradebook into a
+ * page of blue text. These read as the row's own label and become a link on hover, which
+ * is what an application table does; the focus ring is what keeps them findable without a
+ * mouse.
+ */
+const ROW_LINK_CLASS =
+  'text-foreground hover:text-primary focus-visible:ring-ring inline-block max-w-full cursor-pointer truncate rounded-sm hover:underline focus-visible:ring-2 focus-visible:outline-none';
+
+/**
  * How far a student is through one problem, in their words rather than the queue's.
  *
  * `status` is the latest submission's evaluator state, so "the autograder finished but
@@ -62,6 +66,9 @@ export function problemStatusLabel(problem: StudentGradesProblem): string {
   if (status === 'processing') return 'Evaluating';
   if (problem.grade !== null) return 'Graded';
   if (status === 'failed' || status === 'completed') return 'Processed';
+  // "Not graded" is true of a problem nobody has submitted to, but it is not the fact the
+  // student needs. `Not submitted` is the wording the student guide already uses for it.
+  if (problem.submissionCount === 0) return 'Not submitted';
   return 'Not graded';
 }
 
@@ -158,129 +165,176 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
       ) : (
         <div className="overflow-hidden rounded-lg border">
           <Table aria-labelledby="student-grades-title">
+            {/* Deliberate proportions. Left to itself the table spreads five columns over the
+                full width and the grade, which is the thing being read, ends up a screen away
+                from the assignment it belongs to. A hidden column contributes no cells, so a
+                width on a hidden header is simply ignored. */}
             <TableHeader>
-              <TableRow className="bg-muted/60 hover:bg-muted/60">
-                <TableHead>Assignment / Problem</TableHead>
-                <TableHead className="hidden sm:table-cell">Due</TableHead>
-                <TableHead className="hidden sm:table-cell">Status</TableHead>
-                <TableHead className="text-right">Score</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">Percent</TableHead>
+              <TableRow
+                // The same header colour every other table in the app uses, rather than a
+                // muted tint that happens to look similar. An inline style, as there, because
+                // the token is a CSS variable rather than a Tailwind palette entry.
+                style={{
+                  backgroundColor: 'var(--table-header)',
+                  color: 'var(--table-header-foreground)',
+                }}
+              >
+                <TableHead className="h-9 w-[46%] px-3 text-xs">Assignment / Problem</TableHead>
+                <TableHead className="hidden h-9 w-[15%] px-3 text-xs md:table-cell">Due</TableHead>
+                <TableHead className="hidden h-9 w-[15%] px-3 text-xs sm:table-cell">
+                  Status
+                </TableHead>
+                <TableHead className="h-9 w-[14%] px-3 text-right text-xs">Score</TableHead>
+                <TableHead className="hidden h-9 w-[10%] px-3 text-right text-xs sm:table-cell">
+                  Percent
+                </TableHead>
               </TableRow>
             </TableHeader>
 
-            {assignments.map((assignment) => {
-              const isExpanded = expanded.includes(assignment.id);
-              const status = assignmentStatusLabel(assignment.problems);
-              const due = assignment.dueDate
-                ? formatDateInTimeZone(assignment.dueDate, timezone)
-                : NONE;
+            {/* A raw tbody, not the TableBody primitive, and one for the whole table.
+                Grouping here is done with borders on the rows: a border on a row group is
+                ignored under the separated-borders model browsers use by default, and
+                TableBody's `[&_tr:last-child]:border-0` would zero the border-t on the last
+                assignment row, which is the line separating it from the group above. That
+                rule out-specifies any class we could put on the row, and every assignment
+                starts collapsed, so it would have shown on arrival. */}
+            <tbody>
+              {assignments.map((assignment, assignmentIndex) => {
+                const isExpanded = expanded.includes(assignment.id);
+                const status = assignmentStatusLabel(assignment.problems);
+                // The placeholder is for the assignment only. A problem's Due cell is left
+                // genuinely blank, because a problem has no deadline to be missing.
+                const due = assignment.dueDate
+                  ? formatDateInTimeZone(assignment.dueDate, timezone)
+                  : NONE;
 
-              return (
-                // One body per assignment, so its problems are grouped with it and the
-                // border between groups falls where a reader expects it.
-                <TableBody key={assignment.id}>
-                  <TableRow className="bg-muted/40 hover:bg-muted/70">
-                    <TableCell className="py-2">
-                      <div className="flex items-start gap-1">
-                        <button
-                          type="button"
-                          onClick={() => toggle(assignment.id)}
-                          // aria-expanded and no aria-controls: the problems are several
-                          // sibling rows with no element of their own to name, and pointing
-                          // at the group would name a region containing this button. The
-                          // rows follow it in reading order, which is what a disclosure
-                          // needs.
-                          aria-expanded={isExpanded}
-                          // Icon is small, the target is not: 32px square, which keeps it
-                          // usable on a phone without making the row tall.
-                          className="hover:bg-muted focus-visible:ring-ring -ml-1 flex size-8 shrink-0 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none"
-                          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${assignment.title} problems`}
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="size-4" aria-hidden="true" />
-                          ) : (
-                            <ChevronRight className="size-4" aria-hidden="true" />
-                          )}
-                        </button>
-                        <div className="min-w-0 pt-1">
-                          <Link
-                            href={`/dashboard/courses/${courseId}/${assignment.id}`}
-                            className={cn(TEXT_LINK_CLASS, 'font-semibold')}
-                          >
-                            {assignment.title}
-                          </Link>
-                          {/* The folded Due and Status columns. Only one of the two
-                              copies is in the accessibility tree at any width. */}
-                          <p className="text-muted-foreground text-xs sm:hidden">
-                            {assignment.dueDate ? `${due} • ` : ''}
-                            {status}
-                          </p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell nowrap className="hidden py-2 sm:table-cell">
-                      {due}
-                    </TableCell>
-                    <TableCell nowrap className="hidden py-2 sm:table-cell">
-                      {status}
-                    </TableCell>
-                    <TableCell nowrap className="py-2 text-right font-semibold tabular-nums">
-                      {formatScore(assignment.grade, assignment.maxPoints)}
-                      <span className="text-muted-foreground block text-xs font-normal sm:hidden">
-                        {formatPercent(assignment.grade, assignment.maxPoints)}
-                      </span>
-                    </TableCell>
-                    <TableCell
-                      nowrap
-                      className="hidden py-2 text-right font-semibold tabular-nums sm:table-cell"
+                return (
+                  <Fragment key={assignment.id}>
+                    <TableRow
+                      className={cn(
+                        // The group's header: tinted, taller than its problems, and carrying
+                        // the line that separates this assignment from the one above.
+                        'bg-muted/40 hover:bg-muted/70 border-b-0 sm:h-11',
+                        assignmentIndex > 0 && 'border-t',
+                        isExpanded && 'border-b',
+                      )}
                     >
-                      {formatPercent(assignment.grade, assignment.maxPoints)}
-                    </TableCell>
-                  </TableRow>
-
-                  {isExpanded
-                    ? assignment.problems.map((problem, index) => {
-                        const problemStatus = problemStatusLabel(problem);
-                        return (
-                          <TableRow key={problem.id} className="hover:bg-muted/50">
-                            {/* Indented under the assignment name, and named "Problem N",
-                                so the hierarchy survives without the background tint. */}
-                            <TableCell className="py-1.5 pl-9 sm:pl-10">
-                              <Link
-                                href={`/dashboard/courses/${courseId}/${assignment.id}?problem=${encodeURIComponent(problem.id)}`}
-                                className={cn(TEXT_LINK_CLASS, 'font-normal')}
-                              >
-                                Problem {index + 1}: {problem.title ?? 'Untitled'}
-                              </Link>
-                              <p className="text-muted-foreground text-xs sm:hidden">
-                                {problemStatus}
-                              </p>
-                            </TableCell>
-                            {/* Deliberately empty: repeating the assignment's due date on
-                                every problem would read as a per-problem deadline. */}
-                            <TableCell className="hidden py-1.5 sm:table-cell" />
-                            <TableCell nowrap className="hidden py-1.5 sm:table-cell">
-                              {problemStatus}
-                            </TableCell>
-                            <TableCell nowrap className="py-1.5 text-right tabular-nums">
-                              {formatScore(problem.grade, problem.maxPoints)}
-                              <span className="text-muted-foreground block text-xs sm:hidden">
-                                {formatPercent(problem.grade, problem.maxPoints)}
-                              </span>
-                            </TableCell>
-                            <TableCell
-                              nowrap
-                              className="hidden py-1.5 text-right tabular-nums sm:table-cell"
+                      <TableCell className="px-3 py-1.5">
+                        <div className="flex items-start gap-1">
+                          <button
+                            type="button"
+                            onClick={() => toggle(assignment.id)}
+                            // aria-expanded and no aria-controls: the problems are several
+                            // sibling rows with no element of their own to name, and pointing
+                            // at the group would name a region containing this button. The
+                            // rows follow it in reading order, which is what a disclosure
+                            // needs.
+                            aria-expanded={isExpanded}
+                            // The icon stays small; the target does not. 32px square, which is
+                            // reachable on a phone without making every row that tall.
+                            className="hover:bg-background/80 focus-visible:ring-ring text-muted-foreground hover:text-foreground -ml-1 flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${assignment.title} problems`}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="size-4" aria-hidden="true" />
+                            ) : (
+                              <ChevronRight className="size-4" aria-hidden="true" />
+                            )}
+                          </button>
+                          <div className="min-w-0 pt-1.5">
+                            <Link
+                              href={`/dashboard/courses/${courseId}/${assignment.id}`}
+                              className={cn(ROW_LINK_CLASS, 'font-semibold')}
                             >
-                              {formatPercent(problem.grade, problem.maxPoints)}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    : null}
-                </TableBody>
-              );
-            })}
+                              {assignment.title}
+                            </Link>
+                            {/* Due and Status folded under the title at the widths where
+                                their columns are gone. `hidden` takes an element out of the
+                                accessibility tree, so each value is announced exactly once
+                                whatever the width. */}
+                            <p className="text-muted-foreground text-xs md:hidden">
+                              {due}
+                              <span className="sm:hidden"> • {status}</span>
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell nowrap className="text-muted-foreground hidden px-3 md:table-cell">
+                        {due}
+                      </TableCell>
+                      <TableCell nowrap className="text-muted-foreground hidden px-3 sm:table-cell">
+                        {status}
+                      </TableCell>
+                      <TableCell nowrap className="px-3 text-right font-semibold tabular-nums">
+                        {formatScore(assignment.grade, assignment.maxPoints)}
+                        <span className="text-muted-foreground block text-xs font-normal sm:hidden">
+                          {formatPercent(assignment.grade, assignment.maxPoints)}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        nowrap
+                        className="hidden px-3 text-right font-semibold tabular-nums sm:table-cell"
+                      >
+                        {formatPercent(assignment.grade, assignment.maxPoints)}
+                      </TableCell>
+                    </TableRow>
+
+                    {isExpanded
+                      ? assignment.problems.map((problem, index) => {
+                          const problemStatus = problemStatusLabel(problem);
+                          return (
+                            <TableRow
+                              key={problem.id}
+                              className="hover:bg-muted/40 border-b-0 sm:h-9"
+                            >
+                              <TableCell className="px-3 py-1">
+                                {/* Indented, and with a hairline running down the indent so
+                                    the rows read as belonging to the assignment above even
+                                    when the tint is not what the eye is using. */}
+                                <div className="border-border ml-3 border-l pl-4">
+                                  <Link
+                                    href={`/dashboard/courses/${courseId}/${assignment.id}?problem=${encodeURIComponent(problem.id)}`}
+                                    className={cn(ROW_LINK_CLASS, 'text-[0.8125rem]')}
+                                  >
+                                    Problem {index + 1}: {problem.title ?? 'Untitled'}
+                                  </Link>
+                                  <p className="text-muted-foreground text-xs sm:hidden">
+                                    {problemStatus}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              {/* Left empty on purpose. A problem has no deadline of its own,
+                                  and repeating the assignment's would read as if it did. */}
+                              <TableCell className="hidden px-3 md:table-cell" />
+                              <TableCell
+                                nowrap
+                                className="text-muted-foreground hidden px-3 text-[0.8125rem] sm:table-cell"
+                              >
+                                {problemStatus}
+                              </TableCell>
+                              <TableCell
+                                nowrap
+                                className="px-3 text-right text-[0.8125rem] tabular-nums"
+                              >
+                                {formatScore(problem.grade, problem.maxPoints)}
+                                <span className="text-muted-foreground block text-xs sm:hidden">
+                                  {formatPercent(problem.grade, problem.maxPoints)}
+                                </span>
+                              </TableCell>
+                              <TableCell
+                                nowrap
+                                className="hidden px-3 text-right text-[0.8125rem] tabular-nums sm:table-cell"
+                              >
+                                {formatPercent(problem.grade, problem.maxPoints)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      : null}
+                  </Fragment>
+                );
+              })}
+            </tbody>
           </Table>
         </div>
       )}
