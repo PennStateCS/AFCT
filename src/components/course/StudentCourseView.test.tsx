@@ -10,8 +10,8 @@ import type { FullCourse } from '@/types/course';
 vi.mock('@/components/StudentGradesCard', () => ({
   StudentGradesCard: () => <div data-testid="grades-panel" />,
 }));
-vi.mock('@/components/StudentAssignmentCard', () => ({
-  StudentAssignmentCard: () => <div data-testid="assignments-panel" />,
+vi.mock('@/components/StudentAssignmentsTable', () => ({
+  StudentAssignmentsTable: () => <div data-testid="assignments-panel" />,
 }));
 vi.mock('@/hooks/use-effective-timezone', () => ({
   useEffectiveTimezone: () => ({ timezone: 'UTC' }),
