@@ -7,8 +7,8 @@ import { StudentCourseView } from './StudentCourseView';
 import type { FullCourse } from '@/types/course';
 
 // The panels fetch and format on their own; this is about the page's shape.
-vi.mock('@/components/StudentGradesCard', () => ({
-  StudentGradesCard: () => <div data-testid="grades-panel" />,
+vi.mock('@/components/StudentGradesTable', () => ({
+  StudentGradesTable: () => <div data-testid="grades-panel" />,
 }));
 vi.mock('@/components/StudentAssignmentsTable', () => ({
   StudentAssignmentsTable: () => <div data-testid="assignments-panel" />,

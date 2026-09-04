@@ -7,7 +7,7 @@ import { CourseHeaderContent } from '@/components/course/CourseHeader';
 import { CourseTabPanel, TabBar, TabRail } from '@/components/course/course-tabs';
 import { LocalNavLayout } from '@/components/local-nav';
 import { useIsDesktopNav } from '@/hooks/use-desktop-nav';
-import { StudentGradesCard } from '@/components/StudentGradesCard';
+import { StudentGradesTable } from '@/components/StudentGradesTable';
 import { StudentAssignmentsTable } from '@/components/StudentAssignmentsTable';
 import type { FullCourse, TabType } from '@/types/course';
 
@@ -86,7 +86,7 @@ export function StudentCourseView({ course, tab, onTabChange }: StudentCourseVie
         </CourseTabPanel>
 
         <CourseTabPanel value="grades" active={tab === 'grades'}>
-          <StudentGradesCard courseId={course.id} />
+          <StudentGradesTable courseId={course.id} />
         </CourseTabPanel>
       </LocalNavLayout>
     </Tabs>
