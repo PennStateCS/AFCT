@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
@@ -10,6 +10,7 @@ import { Table, TableCell, TableHead, TableHeader, TableRow } from '@/components
 import { useEffectiveTimezone } from '@/hooks/use-effective-timezone';
 import { apiPaths } from '@/lib/api-paths';
 import { formatDateInTimeZone, formatTimeInTimeZone } from '@/lib/date-format';
+import { TEXT_LINK_CLASS } from '@/lib/link-styles';
 import { cn } from '@/lib/utils';
 
 type StudentGradesProblem = {
@@ -45,16 +46,69 @@ const EMPTY_ASSIGNMENTS: StudentGradesAssignment[] = [];
 const NONE = '—';
 
 /**
- * How a name reads inside a table row here.
+ * How a PROBLEM name reads inside a row. Assignment titles use `TEXT_LINK_CLASS`, the same
+ * conventional link the Assignments tab puts on its titles.
  *
- * Not `TEXT_LINK_CLASS`, which paints a link blue and underlined from the start. Nearly
- * every cell in the first column is a link, and that treatment turns a gradebook into a
- * page of blue text. These read as the row's own label and become a link on hover, which
- * is what an application table does; the focus ring is what keeps them findable without a
- * mouse.
+ * A child row is quieter than its parent on purpose, and blue underlined text on every row
+ * of a six-row group is what made the gradebook read as a page of links rather than a
+ * table. The row is already recognisable as a destination from the arrow, the indent and
+ * the "Problem 1:" label, so this stays foreground-coloured and takes its underline on
+ * hover; the focus ring is what keeps it findable without a mouse.
  */
 const ROW_LINK_CLASS =
   'text-foreground hover:text-primary focus-visible:ring-ring inline-block max-w-full cursor-pointer truncate rounded-sm hover:underline focus-visible:ring-2 focus-visible:outline-none';
+
+/**
+ * Which assignments are open, remembered per course in this browser.
+ *
+ * A student opens an assignment to see which problem cost them the marks, follows the link
+ * to that problem, and comes back to a table that has forgotten what they were looking at.
+ * Keyed by course, because "open" means something different in each one.
+ *
+ * Read after mount rather than during render: `localStorage` does not exist on the server,
+ * and seeding state from it during render makes the first client HTML disagree with the
+ * server's. The cost is that the table paints collapsed for one frame, which is also what
+ * it does for a student who has never expanded anything.
+ */
+function usePersistentExpanded(courseId: string): [string[], (assignmentId: string) => void] {
+  const key = `student-grades-expanded-${courseId}`;
+  const [expanded, setExpanded] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved === null) return;
+      const parsed: unknown = JSON.parse(saved);
+      // Ids of assignments since deleted simply never match a row, so there is nothing to
+      // prune here. Anything that is not a list of strings is ignored outright: this is
+      // hand-editable storage, and a bad value must not decide what a student sees.
+      if (Array.isArray(parsed)) setExpanded(parsed.filter((v) => typeof v === 'string'));
+    } catch {
+      // Unavailable (private window, blocked site data) or not JSON. Either way the table
+      // opens collapsed, which is a fine place to start.
+    }
+  }, [key]);
+
+  // Written from the handler, not from an effect on `expanded`: an effect would also run on
+  // mount, and its first run would overwrite the stored value with the empty initial state
+  // before the read above had a chance to replace it.
+  const toggle = useCallback(
+    (assignmentId: string) => {
+      const next = expanded.includes(assignmentId)
+        ? expanded.filter((id) => id !== assignmentId)
+        : [...expanded, assignmentId];
+      setExpanded(next);
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        // Not being able to remember is not a reason to refuse to expand.
+      }
+    },
+    [expanded, key],
+  );
+
+  return [expanded, toggle];
+}
 
 /**
  * How far a student is through one problem, in their words rather than the queue's.
@@ -117,7 +171,7 @@ export function formatPercent(grade: number | null, maxPoints: number): string {
  */
 export function StudentGradesTable({ courseId }: { courseId: string }) {
   const { timezone, hour12 } = useEffectiveTimezone();
-  const [expanded, setExpanded] = useState<string[]>([]);
+  const [expanded, toggle] = usePersistentExpanded(courseId);
 
   const gradesQuery = useQuery({
     queryKey: ['course', courseId, 'student-grades'],
@@ -139,14 +193,6 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
       : 'Unable to load grades'
     : null;
   const assignments = gradesQuery.data?.assignments ?? EMPTY_ASSIGNMENTS;
-
-  const toggle = useCallback((assignmentId: string) => {
-    setExpanded((current) =>
-      current.includes(assignmentId)
-        ? current.filter((id) => id !== assignmentId)
-        : [...current, assignmentId],
-    );
-  }, []);
 
   return (
     // No outer Card: this is the page's active panel, so wrapping it would put a bounded
@@ -278,7 +324,14 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
                           <div className="min-w-0">
                             <Link
                               href={`/dashboard/courses/${courseId}/${assignment.id}`}
-                              className={cn(ROW_LINK_CLASS, 'leading-5 font-semibold')}
+                              // The Assignments tab's title link, class for class, plus the
+                              // weight this row carries as a group header. The underline at
+                              // rest is the point of that class and is a WCAG 1.4.1 fix, not
+                              // decoration: see the note on TEXT_LINK_CLASS.
+                              className={cn(
+                                TEXT_LINK_CLASS,
+                                'block truncate leading-5 font-semibold',
+                              )}
                             >
                               {assignment.title}
                             </Link>

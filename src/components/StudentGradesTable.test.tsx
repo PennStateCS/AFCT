@@ -101,6 +101,9 @@ describe('StudentGradesTable', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
+    // The expanded state persists per course, so one test's expansion would otherwise
+    // decide the next test's opening state.
+    localStorage.clear();
   });
 
   it('fetches the student grades on mount and renders an assignment row', async () => {
@@ -257,6 +260,48 @@ describe('StudentGradesTable', () => {
     expect(within(row).getAllByText('Partially graded').length).toBeGreaterThan(0);
     expect(within(row).getAllByText('35 / 50').length).toBeGreaterThan(0);
     expect(within(row).getAllByText('70%').length).toBeGreaterThan(0);
+  });
+
+  it('remembers which assignments were open, per course, across a remount', async () => {
+    const user = userEvent.setup();
+    mockFetch(gradesResponse);
+
+    const first = renderWithClient(<StudentGradesTable courseId="c1" />);
+    await waitFor(() => expect(screen.getByText('Regular Languages')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Expand Regular Languages problems' }));
+    expect(screen.getByText('Problem 1: DFA Design')).toBeInTheDocument();
+
+    // A remount is what a refresh looks like to the component: fresh state, same storage.
+    first.unmount();
+    renderWithClient(<StudentGradesTable courseId="c1" />);
+    await waitFor(() => expect(screen.getByText('Problem 1: DFA Design')).toBeInTheDocument());
+    expect(
+      screen.getByRole('button', { name: 'Collapse Regular Languages problems' }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not carry one course's open assignments into another", async () => {
+    const user = userEvent.setup();
+    mockFetch(gradesResponse);
+
+    const first = renderWithClient(<StudentGradesTable courseId="c1" />);
+    await waitFor(() => expect(screen.getByText('Regular Languages')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Expand Regular Languages problems' }));
+    first.unmount();
+
+    renderWithClient(<StudentGradesTable courseId="c2" />);
+    await waitFor(() => expect(screen.getByText('Regular Languages')).toBeInTheDocument());
+    expect(screen.queryByText('Problem 1: DFA Design')).not.toBeInTheDocument();
+  });
+
+  it('opens collapsed when the stored value is not a list of ids', async () => {
+    localStorage.setItem('student-grades-expanded-c1', '{"nope":true}');
+    mockFetch(gradesResponse);
+
+    renderWithClient(<StudentGradesTable courseId="c1" />);
+    await waitFor(() => expect(screen.getByText('Regular Languages')).toBeInTheDocument());
+
+    expect(screen.queryByText('Problem 1: DFA Design')).not.toBeInTheDocument();
   });
 
   it('shows a loading state while the query is pending', () => {
