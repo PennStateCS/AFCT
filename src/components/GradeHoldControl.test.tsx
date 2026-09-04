@@ -213,6 +213,18 @@ describe('GradeHoldControl', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  /*
+   * The badge and a button labelled "Lock this grade" are wider together than the 30% grade
+   * column they sit in, and the button does not wrap its own label, so it used to run past
+   * the panel. jsdom cannot measure that; the rule that fixes it is that the row may wrap.
+   */
+  it('lets the button drop under the badge rather than overflow the panel', () => {
+    renderControl({ gradedManually: false });
+
+    const row = screen.getByRole('button', { name: 'Lock this grade' }).parentElement;
+    expect(row?.className).toContain('flex-wrap');
+  });
+
   it('does not act on an archived course', async () => {
     const { onChange } = renderControl({ gradedManually: false, disabled: true });
 

@@ -4,6 +4,7 @@ import {
   formatDeadlineParts,
   formatDeadlineDual,
   formatShortDateParts,
+  formatShortDateTimeInTimeZone,
   daysUntilInTimeZone,
 } from './date-format';
 
@@ -52,6 +53,25 @@ describe('formatDeadlineParts / formatDeadlineDual', () => {
     expect(formatDeadlineParts(instant, 'America/New_York', null).course).toBeNull();
     // The dual string is then just the local time (no separator).
     expect(formatDeadlineDual(instant, 'America/New_York', 'America/New_York')).not.toContain('·');
+  });
+});
+
+describe('formatShortDateTimeInTimeZone', () => {
+  // The same instant that catches a UTC reading above: 02:00Z on 2 March is the evening of
+  // 1 March in New York, so a zone-blind implementation reads a different day here.
+  const lateNight = '2025-03-02T02:00:00Z';
+
+  it('joins the day and the time in the given zone', () => {
+    expect(formatShortDateTimeInTimeZone(lateNight, 'America/New_York')).toBe('Mar 1 · 09:00 PM');
+    expect(formatShortDateTimeInTimeZone(lateNight, 'UTC')).toBe('Mar 2 · 02:00 AM');
+  });
+
+  it('honours a 24-hour install', () => {
+    expect(formatShortDateTimeInTimeZone(lateNight, 'UTC', false)).toBe('Mar 2 · 02:00');
+  });
+
+  it('gives back nothing for an unparseable date, like its neighbours', () => {
+    expect(formatShortDateTimeInTimeZone('not a date', 'UTC')).toBe('');
   });
 });
 

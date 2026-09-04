@@ -168,7 +168,11 @@ export function GradeHoldControl({
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <div className="flex items-center gap-2">
+      {/* flex-wrap: the badge and a button named for its consequence ("Lock this grade") do
+          not fit one line in the 30%-wide grade column, and the button does not wrap its
+          label, so it ran past the panel. It drops under the badge instead, still right
+          aligned by ml-auto. */}
+      <div className="flex flex-wrap items-center gap-2">
         <GradeHoldBadge {...input} />
         <Button
           type="button"
