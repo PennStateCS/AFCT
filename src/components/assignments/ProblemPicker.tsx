@@ -61,7 +61,16 @@ export function ProblemPicker({
 
   return (
     <div className={`flex w-full min-w-0 flex-col gap-1 ${className}`}>
-      <span className="text-muted-foreground text-xs font-medium">Problem</span>
+      {/* Position above the control, not inside it: see the note in StudentNavigator. The
+          trigger already prefixes the title with its number, so in there it also read twice. */}
+      <div className="flex w-full items-baseline gap-2">
+        <span className="text-muted-foreground text-xs font-medium">Problem</span>
+        {selected && problems.length > 0 ? (
+          <span className="text-muted-foreground ml-auto text-xs tabular-nums">
+            {problems.findIndex((p) => p.id === selected.id) + 1} of {problems.length}
+          </span>
+        ) : null}
+      </div>
       <div className="flex w-full min-w-0 items-center">
         <Button
           variant="secondary"
@@ -103,12 +112,7 @@ export function ProblemPicker({
                   ? `${problems.findIndex((p) => p.id === selected.id) + 1}. ${selected.title ?? ''}`
                   : 'Select problem'}
               </span>
-              {selected && problems.length > 0 ? (
-                <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
-                  {problems.findIndex((p) => p.id === selected.id) + 1} of {problems.length}
-                </span>
-              ) : null}
-              <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <ChevronDown className="ml-auto h-4 w-4 shrink-0" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-72">

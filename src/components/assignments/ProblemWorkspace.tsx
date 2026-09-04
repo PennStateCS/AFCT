@@ -443,6 +443,10 @@ export default function ProblemWorkspace({
     },
   ];
 
+  // Named because two places ask it: whether the grade card exists at all, and whether its
+  // first section needs a rule under it.
+  const showGradeControls = isPrivilegedUser && !!onGradeInputChange && !!onSaveGrade;
+
   return (
     /*
      * Two columns only once there is room for both, measured on this workspace rather than
@@ -527,133 +531,154 @@ export default function ProblemWorkspace({
           )}
         </div>
 
-        {/* Right column: what you are doing about this student's work. */}
-        <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4 @[56rem]/workspace:h-full">
-          {isPrivilegedUser && onGradeInputChange && onSaveGrade ? (
-            <div className="flex flex-col gap-2 border-b pb-4">
-              <div className="flex items-center gap-2">
-                <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-                <h3 className="text-sm font-medium">Problem Grade</h3>
-              </div>
-              <ProblemGradeForm
-                value={gradeInput}
-                currentGrade={currentGrade}
-                maxPoints={problem.maxPoints}
-                disabled={courseIsArchived}
-                isSaving={isSavingGrade}
-                isLoading={isLoadingGrade}
-                error={gradeError}
-                onChange={onGradeInputChange}
-                onSubmit={onSaveGrade}
-                audience={gradeAudience}
-                groupGradeValue={groupGradeValue}
-              />
-              {/* Renders nothing unless the course is linked to an LMS. */}
-              {assignmentId ? (
-                <GradeSyncCard assignmentId={assignmentId} variant="inline" studentId={studentId} />
-              ) : null}
-              {/* Under the grade rather than beside the heading: it needs a sentence to
-                    mean anything, and the sentence is the part the old switch was missing. */}
-              {onManualHoldChange ? (
-                <GradeHoldControl
-                  autograderEnabled={!!problem.autograderEnabled}
-                  gradeSource={gradeSource}
-                  gradedManually={gradedManually}
-                  hasGrade={currentGrade !== null && currentGrade !== undefined}
-                  onChange={onManualHoldChange}
-                  disabled={courseIsArchived}
-                  className="mt-1"
-                />
-              ) : null}
-            </div>
-          ) : null}
-          {group ? (
-            <div className="flex flex-col gap-1 border-b pb-4">
-              <div className="flex items-center gap-2">
-                <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-                <h3 className="text-sm font-medium">
-                  {group.name} · {(groupMembers?.length ?? 0) + 1}{' '}
-                  {(groupMembers?.length ?? 0) + 1 === 1 ? 'member' : 'members'}
-                </h3>
-                {/* Collapsed by default: the count in the heading answers the usual
-                      question, and the names are only needed when something looks wrong. */}
-                <button
-                  type="button"
-                  onClick={() => setMembersOpen((open) => !open)}
-                  aria-expanded={membersOpen}
-                  aria-controls="group-members"
-                  className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
-                >
-                  <ChevronUp
-                    className={`h-4 w-4 transition-transform ${membersOpen ? '' : 'rotate-180'}`}
-                    aria-hidden="true"
+        {/* Right column: what you are doing about this student's work. Two cards, because
+            marking the work and talking about it are two jobs; the thread is long and open
+            ended, the grade is three controls. */}
+        <div className="flex min-w-0 flex-col gap-4">
+          {/* A student sees neither the grade controls nor, usually, a group, and an empty
+              bordered box is worse than no box: the card only exists if it holds something. */}
+          {showGradeControls || group ? (
+            <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4">
+              {showGradeControls ? (
+                // The rule belongs between two sections, so it is only drawn when the group
+                // block follows. On its own this is the last thing in the card.
+                <div className={`flex flex-col gap-2 ${group ? 'border-b pb-4' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+                    <h3 className="text-sm font-medium">Problem Grade</h3>
+                  </div>
+                  <ProblemGradeForm
+                    value={gradeInput}
+                    currentGrade={currentGrade}
+                    maxPoints={problem.maxPoints}
+                    disabled={courseIsArchived}
+                    isSaving={isSavingGrade}
+                    isLoading={isLoadingGrade}
+                    error={gradeError}
+                    onChange={onGradeInputChange}
+                    onSubmit={onSaveGrade}
+                    audience={gradeAudience}
+                    groupGradeValue={groupGradeValue}
                   />
-                  <span className="sr-only">
-                    {membersOpen ? 'Collapse members' : 'Expand members'}
-                  </span>
-                </button>
-              </div>
-              {/* The whole group, the student under review included: a list that omitted
+                  {/* Renders nothing unless the course is linked to an LMS. */}
+                  {assignmentId ? (
+                    <GradeSyncCard
+                      assignmentId={assignmentId}
+                      variant="inline"
+                      studentId={studentId}
+                    />
+                  ) : null}
+                  {/* Under the grade rather than beside the heading: it needs a sentence to
+                    mean anything, and the sentence is the part the old switch was missing. */}
+                  {onManualHoldChange ? (
+                    <GradeHoldControl
+                      autograderEnabled={!!problem.autograderEnabled}
+                      gradeSource={gradeSource}
+                      gradedManually={gradedManually}
+                      hasGrade={currentGrade !== null && currentGrade !== undefined}
+                      onChange={onManualHoldChange}
+                      disabled={courseIsArchived}
+                      className="mt-1"
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+              {group ? (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+                    <h3 className="text-sm font-medium">
+                      {group.name} · {(groupMembers?.length ?? 0) + 1}{' '}
+                      {(groupMembers?.length ?? 0) + 1 === 1 ? 'member' : 'members'}
+                    </h3>
+                    {/* Collapsed by default: the count in the heading answers the usual
+                      question, and the names are only needed when something looks wrong. */}
+                    <button
+                      type="button"
+                      onClick={() => setMembersOpen((open) => !open)}
+                      aria-expanded={membersOpen}
+                      aria-controls="group-members"
+                      className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
+                    >
+                      <ChevronUp
+                        className={`h-4 w-4 transition-transform ${membersOpen ? '' : 'rotate-180'}`}
+                        aria-hidden="true"
+                      />
+                      <span className="sr-only">
+                        {membersOpen ? 'Collapse members' : 'Expand members'}
+                      </span>
+                    </button>
+                  </div>
+                  {/* The whole group, the student under review included: a list that omitted
                     them would read as "everyone else", which is not who the grade and the
                     thread apply to. */}
-              <p id="group-members" hidden={!membersOpen} className="text-muted-foreground text-xs">
-                {[
-                  subjectName ?? 'This student',
-                  ...(groupMembers ?? []).map(
-                    (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student',
-                  ),
-                ].join(', ')}
-              </p>
+                  <p
+                    id="group-members"
+                    hidden={!membersOpen}
+                    className="text-muted-foreground text-xs"
+                  >
+                    {[
+                      subjectName ?? 'This student',
+                      ...(groupMembers ?? []).map(
+                        (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student',
+                      ),
+                    ].join(', ')}
+                  </p>
+                </div>
+              ) : null}
             </div>
           ) : null}
-          <div className="flex items-center gap-2">
-            <MessageSquare className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-            <h3 className="text-sm font-medium">
-              Problem Discussion ({normalizedComments.length})
-            </h3>
-            {/* Collapsing gets the composer out of the way when a grader is reading rather
+
+          <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+              <h3 className="text-sm font-medium">
+                Problem Discussion ({normalizedComments.length})
+              </h3>
+              {/* Collapsing gets the composer out of the way when a grader is reading rather
                   than replying. aria-expanded and aria-controls carry the state, so it is not
                   a chevron whose meaning only a sighted user can infer. */}
-            <button
-              type="button"
-              onClick={() => setDiscussionOpen((open) => !open)}
-              aria-expanded={discussionOpen}
-              aria-controls="problem-discussion"
-              className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
-            >
-              <ChevronUp
-                className={`h-4 w-4 transition-transform ${discussionOpen ? '' : 'rotate-180'}`}
-                aria-hidden="true"
-              />
-              <span className="sr-only">
-                {discussionOpen ? 'Collapse discussion' : 'Expand discussion'}
-              </span>
-            </button>
-          </div>
-          <div id="problem-discussion" hidden={!discussionOpen}>
-            {/* Kept across both branches. It used to be mounted with "Loading discussion..." and
+              <button
+                type="button"
+                onClick={() => setDiscussionOpen((open) => !open)}
+                aria-expanded={discussionOpen}
+                aria-controls="problem-discussion"
+                className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
+              >
+                <ChevronUp
+                  className={`h-4 w-4 transition-transform ${discussionOpen ? '' : 'rotate-180'}`}
+                  aria-hidden="true"
+                />
+                <span className="sr-only">
+                  {discussionOpen ? 'Collapse discussion' : 'Expand discussion'}
+                </span>
+              </button>
+            </div>
+            <div id="problem-discussion" hidden={!discussionOpen}>
+              {/* Kept across both branches. It used to be mounted with "Loading discussion..." and
               then replaced wholesale by the panel, so neither the wait nor its end announced. */}
-            <span role="status" aria-live="polite" className="sr-only">
-              {commentsLoading ? 'Loading the discussion.' : 'Discussion loaded.'}
-            </span>
-            {commentsLoading ? (
-              <div className="text-muted-foreground text-sm" aria-hidden="true">
-                Loading discussion...
-              </div>
-            ) : (
-              <ProblemDiscussionPanel
-                courseIsArchived={courseIsArchived}
-                audience={commentAudience}
-                subjectName={subjectName}
-                comments={normalizedComments}
-                commentText={commentText}
-                onCommentTextChange={onCommentTextChange}
-                onSaveComment={onSaveComment}
-                onDeleteComment={handleDeleteComment}
-                isSaving={isSaving}
-                deletingComments={deletingComments}
-              />
-            )}
+              <span role="status" aria-live="polite" className="sr-only">
+                {commentsLoading ? 'Loading the discussion.' : 'Discussion loaded.'}
+              </span>
+              {commentsLoading ? (
+                <div className="text-muted-foreground text-sm" aria-hidden="true">
+                  Loading discussion...
+                </div>
+              ) : (
+                <ProblemDiscussionPanel
+                  courseIsArchived={courseIsArchived}
+                  audience={commentAudience}
+                  subjectName={subjectName}
+                  comments={normalizedComments}
+                  commentText={commentText}
+                  onCommentTextChange={onCommentTextChange}
+                  onSaveComment={onSaveComment}
+                  onDeleteComment={handleDeleteComment}
+                  isSaving={isSaving}
+                  deletingComments={deletingComments}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>

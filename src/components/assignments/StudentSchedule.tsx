@@ -1,7 +1,6 @@
 'use client';
 
 import type React from 'react';
-import { CalendarDays, Clock } from 'lucide-react';
 import {
   formatDateInTimeZone,
   formatDateTimeInTimeZone,
@@ -96,10 +95,6 @@ export function StudentSchedule({
     <>
       <div className={`flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0 ${className}`}>
         <div className="flex items-center gap-2">
-          <CalendarDays
-            className="text-primary hidden h-8 w-8 shrink-0 xl:block"
-            aria-hidden="true"
-          />
           <Field label="Due">
             {/* Date and time on separate lines: the strip has the room, and a grader scanning
               for "which day" should not have to read past a timestamp to find it. */}
@@ -122,7 +117,6 @@ export function StudentSchedule({
 
       <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
         <div className="flex items-center gap-2">
-          <Clock className="text-primary hidden h-8 w-8 shrink-0 xl:block" aria-hidden="true" />
           <Field label="Late Policy">
             <span className="block">
               <span className="font-medium">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}

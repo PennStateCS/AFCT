@@ -163,8 +163,19 @@ export default function StudentNavigator({
           : ''}
       </span>
       {/* Labelled like the problem picker beside it: the two are the same kind of control and
-          should read as a pair rather than one being a bare row of buttons. */}
-      <span className="text-muted-foreground text-xs font-medium">Student</span>
+          should read as a pair rather than one being a bare row of buttons.
+
+          The position sits up here rather than inside the trigger. It is nowrap and never
+          shrinks, so in the trigger it took 50px off a name that was already truncating
+          ("Android, Vis..."); this row is otherwise empty, so moving it costs no height. */}
+      <div className="flex w-full items-baseline gap-2">
+        <span className="text-muted-foreground text-xs font-medium">Student</span>
+        {selectedStudent ? (
+          <span className="text-muted-foreground ml-auto text-xs tabular-nums">
+            {selectedIndex + 1} of {students.length}
+          </span>
+        ) : null}
+      </div>
       {/* Prev / student picker / Next joined into one segmented control, below the info. */}
       <div className="flex w-full min-w-0 items-center">
         <Button
@@ -202,10 +213,11 @@ export default function StudentNavigator({
                   </span>
                 ) : null}
               </span>
-              {/* Position of the selected student in the roster, right-aligned. */}
+              {/* The position is shown above the control, but it was part of this button's
+                  accessible name before it moved, so it stays here for a reader. */}
               {selectedStudent ? (
-                <span className="text-muted-foreground shrink-0 text-xs">
-                  {selectedIndex + 1} of {students.length}
+                <span className="sr-only">
+                  , {selectedIndex + 1} of {students.length}
                 </span>
               ) : null}
               <ChevronDown className="h-4 w-4 shrink-0" />
