@@ -1,7 +1,8 @@
 'use client';
 
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SubmissionNavigator } from '@/components/assignments/SubmissionNavigator';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -60,29 +61,17 @@ export function ProblemPicker({
   const ungradedCount = problems.filter((p) => typeof grades[p.id] !== 'number').length;
 
   return (
-    <div className={`flex w-full min-w-0 flex-col gap-1 ${className}`}>
-      {/* Position above the control, not inside it: see the note in StudentNavigator. The
-          trigger already prefixes the title with its number, so in there it also read twice. */}
-      <div className="flex w-full items-baseline gap-2">
-        <span className="text-muted-foreground text-xs font-medium">Problem</span>
-        {selected && problems.length > 0 ? (
-          <span className="text-muted-foreground ml-auto text-xs tabular-nums">
-            {problems.findIndex((p) => p.id === selected.id) + 1} of {problems.length}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex w-full min-w-0 items-center">
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={() => step(-1)}
-          aria-label="Previous problem"
-          title="Previous problem"
-          className="shrink-0 rounded-r-none"
-          disabled={problems.length < 2}
-        >
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        </Button>
+    <div className={`w-full min-w-0 ${className}`}>
+      <SubmissionNavigator
+        label="Problem"
+        position={selected ? problems.findIndex((p) => p.id === selected.id) + 1 : null}
+        total={problems.length}
+        onPrev={() => step(-1)}
+        onNext={() => step(1)}
+        prevLabel="Previous problem"
+        nextLabel="Next problem"
+        disabled={problems.length < 2}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -112,10 +101,19 @@ export function ProblemPicker({
                   ? `${problems.findIndex((p) => p.id === selected.id) + 1}. ${selected.title ?? ''}`
                   : 'Select problem'}
               </span>
+              {/* What the dot beside the title means, in words. It says whether THIS problem
+                  is graded for this student, which the button's own label (about the
+                  assignment) does not cover. */}
+              {selected ? (
+                <span className="sr-only">
+                  {typeof grades[selected.id] === 'number' ? '(graded)' : '(needs grading)'}
+                </span>
+              ) : null}
               <ChevronDown className="ml-auto h-4 w-4 shrink-0" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-72">
+          {/* See the student picker: the menu matches its trigger rather than a fixed width. */}
+          <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56">
             {problems.map((problem, index) => {
               const grade = grades[problem.id];
               const graded = typeof grade === 'number';
@@ -147,18 +145,7 @@ export function ProblemPicker({
             })}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={() => step(1)}
-          aria-label="Next problem"
-          title="Next problem"
-          className="shrink-0 rounded-l-none"
-          disabled={problems.length < 2}
-        >
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </div>
+      </SubmissionNavigator>
     </div>
   );
 }

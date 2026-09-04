@@ -116,6 +116,24 @@ export function formatShortDateParts(value: DateInput, timeZone = 'UTC'): ShortD
 }
 
 /**
+ * A compact deadline: "Sep 4 · 11:30 PM", as read in `timeZone`.
+ *
+ * For a status strip, where "09/04/26 11:30 PM" is both longer and harder to read at a
+ * glance than the month and day. The year is dropped on purpose: these are deadlines inside
+ * a term that is already on screen. Returns '' for an unparseable date, like its neighbours.
+ */
+export function formatShortDateTimeInTimeZone(
+  value: DateInput,
+  timeZone = 'UTC',
+  hour12 = true,
+): string {
+  const { month, day } = formatShortDateParts(value, timeZone);
+  if (!month || !day) return '';
+  const time = formatTimeInTimeZone(value, timeZone, hour12);
+  return time ? `${month} ${day} · ${time}` : `${month} ${day}`;
+}
+
+/**
  * Whole calendar days from `from` to `value`, counted in `timeZone`.
  *
  * Calendar days, not 24-hour spans: something due at 1am tomorrow is one day away even

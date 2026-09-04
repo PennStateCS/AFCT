@@ -1,11 +1,8 @@
 'use client';
 
 import type React from 'react';
-import {
-  formatDateInTimeZone,
-  formatDateTimeInTimeZone,
-  formatTimeInTimeZone,
-} from '@/lib/date-format';
+import { formatShortDateTimeInTimeZone } from '@/lib/date-format';
+import { SubmissionMetaItem } from '@/components/assignments/SubmissionMetaItem';
 
 /** The assignment's own dates, before any override is applied. */
 export type ScheduleBase = {
@@ -54,7 +51,9 @@ export function StudentSchedule({
 }: StudentScheduleProps) {
   if (loading) {
     return (
-      <div className={`text-muted-foreground px-4 text-sm ${className}`}>Loading assignment...</div>
+      <SubmissionMetaItem label="Due" className={className}>
+        <span className="text-muted-foreground">Loading…</span>
+      </SubmissionMetaItem>
     );
   }
   if (!assignment) return null;
@@ -81,57 +80,33 @@ export function StudentSchedule({
     <span className="text-primary ml-1 text-xs font-medium">({overrideLabel})</span>
   );
 
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="min-w-0">
-      <div className="text-muted-foreground text-xs">{label}</div>
-      <div className="text-sm">{children}</div>
-    </div>
-  );
+  // "Late until Sep 8 · 11:30 PM" says the same thing as "Allow Late: Yes / Late Cutoff: ..."
+  // in a quarter of the width, and the two states a grader cares about (there is a cutoff,
+  // or late work is not taken) are the label rather than a value to read past.
+  const lateLabel = showAllowLate ? 'Late until' : 'Late work';
+  const lateValue = !showAllowLate
+    ? 'Not accepted'
+    : showLateCutoff
+      ? formatShortDateTimeInTimeZone(showLateCutoff, timezone, hour12)
+      : 'No cutoff';
 
-  // Two cells rather than one divided internally: as direct children of the strip they take
-  // its own rules, so every separator on the bar is the same height instead of a short one
-  // nested inside a tall one.
   return (
     <>
-      <div className={`flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0 ${className}`}>
-        <div className="flex items-center gap-2">
-          <Field label="Due">
-            {/* Date and time on separate lines: the strip has the room, and a grader scanning
-              for "which day" should not have to read past a timestamp to find it. */}
-            {showDueDate ? (
-              <>
-                <span className="block font-medium">
-                  {formatDateInTimeZone(showDueDate, timezone)}
-                  {dueOverridden ? <OverrideMark /> : null}
-                </span>
-                <span className="text-muted-foreground block">
-                  {formatTimeInTimeZone(showDueDate, timezone, hour12)}
-                </span>
-              </>
-            ) : (
-              <span className="font-medium">—</span>
-            )}
-          </Field>
-        </div>
-      </div>
+      <SubmissionMetaItem label="Due">
+        {showDueDate ? (
+          <>
+            {formatShortDateTimeInTimeZone(showDueDate, timezone, hour12)}
+            {dueOverridden ? <OverrideMark /> : null}
+          </>
+        ) : (
+          '—'
+        )}
+      </SubmissionMetaItem>
 
-      <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
-        <div className="flex items-center gap-2">
-          <Field label="Late Policy">
-            <span className="block">
-              <span className="font-medium">Allow Late:</span> {showAllowLate ? 'Yes' : 'No'}
-              {allowLateOverridden ? <OverrideMark /> : null}
-            </span>
-            <span className="block">
-              <span className="font-medium">Late Cutoff:</span>{' '}
-              {showAllowLate && showLateCutoff
-                ? formatDateTimeInTimeZone(showLateCutoff, timezone, hour12)
-                : 'Never'}
-              {cutoffOverridden ? <OverrideMark /> : null}
-            </span>
-          </Field>
-        </div>
-      </div>
+      <SubmissionMetaItem label={lateLabel}>
+        {lateValue}
+        {allowLateOverridden || cutoffOverridden ? <OverrideMark /> : null}
+      </SubmissionMetaItem>
     </>
   );
 }

@@ -4,7 +4,8 @@ import type React from 'react';
 import type { StudentNavigatorStudent } from '@/components/StudentNavigator';
 import StudentNavigator from '@/components/StudentNavigator';
 import { ProblemPicker, type PickableProblem } from '@/components/assignments/ProblemPicker';
-import { ProgressRing } from '@/components/assignments/ProgressRing';
+import { Check } from 'lucide-react';
+import { SubmissionMetaItem } from '@/components/assignments/SubmissionMetaItem';
 import {
   StudentSchedule,
   type ScheduleBase,
@@ -64,17 +65,23 @@ export function ReviewStrip({
   totals,
   className = '',
 }: ReviewStripProps) {
-  // Divided into cells rather than spaced apart, so the regions read as parts of one control
-  // strip instead of loose groups.
-  //
-  // bg-card, like the two panels it sits above. It was a transparent outline, which was
-  // invisible while the workspace was white and left the strip reading as a gap between the
-  // tab heading and the review below it rather than as the header of it.
+  // The assignment is 0/0 when it has no problems yet. Say "graded" of nothing rather than
+  // dividing by zero anywhere.
+  const allGraded = totals.count > 0 && totals.graded === totals.count;
+
   return (
-    <div
-      className={`bg-card flex flex-col divide-y rounded-md border xl:flex-row xl:items-stretch xl:divide-x xl:divide-y-0 xl:py-3 ${className}`}
-    >
-      <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
+    // Two rows: what is being reviewed, and the facts about it. The pickers are what a grader
+    // operates, so they get the width and the top; the readings underneath are a glance.
+    //
+    // bg-card, like the two panels it sits above. It was a transparent outline, which was
+    // invisible while the workspace was white and left the strip reading as a gap between the
+    // tab heading and the review below it rather than as the header of it.
+    <div className={`bg-card flex flex-col gap-2.5 rounded-md border p-3 sm:px-4 ${className}`}>
+      {/* Side by side from md, stacked below it: two segmented controls sharing a phone's
+          width leaves nothing for the names they exist to show. */}
+      {/* 45/55 once there is room: a problem title carries its number and is the longer of
+          the two, and an even split left the student control ending mid-column. */}
+      <div className="grid gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-[45fr_55fr]">
         <StudentNavigator
           students={students}
           selectedIndex={selectedIndex}
@@ -86,8 +93,6 @@ export function ReviewStrip({
           totalPoints={totals.totalPoints}
           groupInfo={groupInfo}
         />
-      </div>
-      <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
         <ProblemPicker
           problems={problems}
           selectedProblemId={selectedProblemId}
@@ -95,35 +100,32 @@ export function ReviewStrip({
           grades={problemGrades}
         />
       </div>
-      <StudentSchedule
-        assignment={assignment}
-        effective={effective}
-        loading={!assignment}
-        timezone={timezone}
-        hour12={hour12}
-      />
-      {/* A cell each, so the strip's rules separate them the way they separate the
-            dates from the picker. They answer different questions: how much is done,
-            and how it is going. */}
-      {/* Dropped first when the bar is tight: how many problems are graded is the
-            least load-bearing figure here, and the picker already shows it per problem. */}
-      <div className="hidden min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0 2xl:flex">
-        <ProgressRing
-          label="Problems graded"
-          value={totals.graded}
-          total={totals.count}
-          srLabel={`${totals.graded} of ${totals.count} problems graded`}
+
+      {/* Two columns on a phone, four once there is room. auto-fit rather than a breakpoint
+          would reflow at widths nobody chose; these two are the shapes that read well. */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-2.5 lg:grid-cols-4">
+        <StudentSchedule
+          assignment={assignment}
+          effective={effective}
+          loading={!assignment}
+          timezone={timezone}
+          hour12={hour12}
         />
-      </div>
-      <div className="flex min-w-0 items-center px-4 py-2 xl:flex-auto xl:py-0">
-        <ProgressRing
-          label="Assignment score"
-          value={totals.earned}
-          total={totals.totalPoints}
-          // Only once everything is graded is the shortfall actually points lost.
-          remainderTone={totals.count > 0 && totals.graded === totals.count ? 'danger' : 'muted'}
-          srLabel={`${totals.earned} of ${totals.totalPoints} points`}
-        />
+        <SubmissionMetaItem label="Graded">
+          <span className="inline-flex items-center gap-1 tabular-nums">
+            {/* A tick as well as the numbers, so "finished" is not carried by colour, and
+                only once there is nothing left to grade. */}
+            {allGraded ? <Check className="text-status-success size-4" aria-hidden="true" /> : null}
+            {totals.graded}/{totals.count}
+          </span>
+          <span className="sr-only">
+            {totals.graded} of {totals.count} problems graded
+          </span>
+        </SubmissionMetaItem>
+        <SubmissionMetaItem label="Score" emphasis>
+          {totals.earned} / {totals.totalPoints}
+          <span className="sr-only"> points</span>
+        </SubmissionMetaItem>
       </div>
     </div>
   );

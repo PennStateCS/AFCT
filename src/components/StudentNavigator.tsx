@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
+import { SubmissionNavigator } from '@/components/assignments/SubmissionNavigator';
 import { Input } from './ui/input';
 import {
   DropdownMenu,
@@ -152,7 +153,7 @@ export default function StudentNavigator({
   const selectedSpokenName = selectedStudent ? memberName(selectedStudent) : null;
 
   return (
-    <div className="flex w-full flex-col items-start gap-1">
+    <div className="flex w-full min-w-0 flex-col gap-1">
       {/* Polite live region: announces the newly selected student on navigation,
           since focus stays on the Prev/Next/dropdown control while the panel changes. */}
       <span className="sr-only" aria-live="polite">
@@ -162,33 +163,18 @@ export default function StudentNavigator({
             }`
           : ''}
       </span>
-      {/* Labelled like the problem picker beside it: the two are the same kind of control and
-          should read as a pair rather than one being a bare row of buttons.
-
-          The position sits up here rather than inside the trigger. It is nowrap and never
-          shrinks, so in the trigger it took 50px off a name that was already truncating
-          ("Android, Vis..."); this row is otherwise empty, so moving it costs no height. */}
-      <div className="flex w-full items-baseline gap-2">
-        <span className="text-muted-foreground text-xs font-medium">Student</span>
-        {selectedStudent ? (
-          <span className="text-muted-foreground ml-auto text-xs tabular-nums">
-            {selectedIndex + 1} of {students.length}
-          </span>
-        ) : null}
-      </div>
-      {/* Prev / student picker / Next joined into one segmented control, below the info. */}
-      <div className="flex w-full min-w-0 items-center">
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={onPrev}
-          aria-keyshortcuts="ArrowLeft"
-          aria-label="Previous student"
-          title="Previous student (Left arrow)"
-          className="shrink-0 rounded-r-none"
-        >
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        </Button>
+      <SubmissionNavigator
+        label="Student"
+        position={selectedStudent ? selectedIndex + 1 : null}
+        total={students.length}
+        onPrev={onPrev}
+        onNext={onNext}
+        prevLabel="Previous student"
+        nextLabel="Next student"
+        prevTitle="Previous student (Left arrow)"
+        nextTitle="Next student (Right arrow)"
+        keyShortcuts={['ArrowLeft', 'ArrowRight']}
+      >
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button
@@ -223,7 +209,10 @@ export default function StudentNavigator({
               <ChevronDown className="h-4 w-4 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="bg-card text-foreground border-border w-[320px] rounded-md border p-2 shadow-lg">
+          {/* As wide as the control it belongs to, rather than a fixed 320px that was
+              narrower than the trigger on a desktop and wider than the screen on a phone.
+              Radix publishes the trigger's width as a CSS variable for exactly this. */}
+          <DropdownMenuContent className="bg-card text-foreground border-border w-[var(--radix-dropdown-menu-trigger-width)] min-w-56 rounded-md border p-2 shadow-lg">
             <Input
               ref={inputRef}
               placeholder="Search students..."
@@ -301,18 +290,7 @@ export default function StudentNavigator({
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={onNext}
-          aria-keyshortcuts="ArrowRight"
-          aria-label="Next student"
-          title="Next student (Right arrow)"
-          className="shrink-0 rounded-l-none"
-        >
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </div>
+      </SubmissionNavigator>
       <div className="min-w-0">
         {/* A group assignment with nobody to submit alongside is a setup mistake, not a
             fact about this student's work. Say so here rather than letting the panel read
