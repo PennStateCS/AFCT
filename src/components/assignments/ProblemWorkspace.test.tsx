@@ -230,3 +230,67 @@ describe('loading the discussion', () => {
     expect(textOf()).toContain('Discussion loaded.');
   });
 });
+
+/**
+ * The right column is three independent cards now: the grade, the group, then the
+ * discussion. They used to be one box holding the grade and the group under a rule, which
+ * made a group read as part of the marking controls rather than a fact about the work.
+ */
+describe('the right column', () => {
+  const studentProps = { ...baseProps, isPrivilegedUser: false };
+
+  it('gives a student their own grade card, out of the attempts card it used to hang off', () => {
+    render(<ProblemWorkspace {...studentProps} currentGrade={8} />);
+
+    const heading = screen.getByRole('heading', { name: 'Problem Grade' });
+    const card = heading.closest('div')?.parentElement as HTMLElement;
+    expect(card).toHaveTextContent('8');
+    expect(card).toHaveTextContent('/ 10');
+  });
+
+  it('says so rather than showing nothing when the problem is not marked yet', () => {
+    render(<ProblemWorkspace {...studentProps} currentGrade={null} />);
+
+    expect(screen.getByRole('heading', { name: 'Problem Grade' })).toBeInTheDocument();
+    expect(screen.getByText('Not graded yet.')).toBeInTheDocument();
+  });
+
+  it('names the group and its members on a group assignment', () => {
+    render(
+      <ProblemWorkspace
+        {...studentProps}
+        currentGrade={8}
+        group={{ id: 'g1', name: 'Team Turing' }}
+        groupMembers={[{ id: 'u2', firstName: 'Ada', lastName: 'Lovelace' }]}
+        subjectName="You"
+      />,
+    );
+
+    // Two members: the viewer plus one groupmate. The viewer is counted and listed, because
+    // a list that omitted them would read as "everyone else".
+    expect(screen.getByRole('heading', { name: /Team Turing · 2 members/ })).toBeInTheDocument();
+    expect(screen.getByText('You, Ada Lovelace')).toBeInTheDocument();
+  });
+
+  it('shows no group card on an individual assignment', () => {
+    render(<ProblemWorkspace {...studentProps} currentGrade={8} />);
+
+    expect(screen.queryByRole('button', { name: /members/i })).not.toBeInTheDocument();
+  });
+
+  it('gives a grader the grade form instead of the readout', () => {
+    render(
+      <ProblemWorkspace
+        {...baseProps}
+        currentGrade={8}
+        gradeInput="8"
+        onGradeInputChange={vi.fn()}
+        onSaveGrade={vi.fn()}
+      />,
+    );
+
+    // One card named Problem Grade either way: the two never render together.
+    expect(screen.getAllByRole('heading', { name: 'Problem Grade' })).toHaveLength(1);
+    expect(screen.queryByText('Not graded yet.')).not.toBeInTheDocument();
+  });
+});

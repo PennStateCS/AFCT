@@ -135,6 +135,31 @@ export const GET = withCourseAuth(
         : null;
       const myGroupId = myGroup?.groupId ?? null;
 
+      // The group's name and the caller's groupmates, for the assignment page's group card.
+      // Their own group only, and only names: on a group assignment they already share every
+      // submission with these people, so who is in it is not a disclosure. Shaped exactly like
+      // the staff review-data route's, so ProblemWorkspace takes one prop shape from both.
+      const myGroupDetail = myGroupId
+        ? await prisma.studentGroup.findUnique({
+            where: { id: myGroupId },
+            select: {
+              id: true,
+              name: true,
+              memberships: {
+                select: {
+                  roster: {
+                    select: { user: { select: { id: true, firstName: true, lastName: true } } },
+                  },
+                },
+              },
+            },
+          })
+        : null;
+      // Everyone but the caller: the card names them separately as the person looking.
+      const myGroupMembers = (myGroupDetail?.memberships ?? [])
+        .map((m) => m.roster.user)
+        .filter((u) => u.id !== userId);
+
       const [submissions, comments, grades, grants] = await Promise.all([
         prisma.submission.findMany({
           where: {
@@ -335,6 +360,12 @@ export const GET = withCourseAuth(
             })),
           ]),
         ),
+        group: myGroupDetail ? { id: myGroupDetail.id, name: myGroupDetail.name } : null,
+        groupMembers: myGroupMembers.map((u) => ({
+          id: u.id,
+          firstName: u.firstName,
+          lastName: u.lastName,
+        })),
         commentsByProblem: Object.fromEntries(
           Object.entries(commentsByProblem).map(([problemId, problemComments]) => [
             problemId,

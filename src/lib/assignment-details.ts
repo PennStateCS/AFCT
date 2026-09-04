@@ -99,4 +99,8 @@ export type StudentAssignmentContext = {
    * extra-submission grants for them or their group. `max` null means unlimited.
    */
   problemLimits?: Record<string, { max: number | null; granted: number }>;
+  /** The caller's own group on a group assignment; null on an individual one. */
+  group?: { id: string; name: string } | null;
+  /** Their groupmates, the caller excluded. Names only, and only for their own group. */
+  groupMembers?: Array<{ id: string; firstName: string | null; lastName: string | null }>;
 };
