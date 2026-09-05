@@ -15,7 +15,15 @@ import { getCourseGradeMatrix, getCourseGradeColumns, getCourseGradePage } from 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1' }, { userId: 's2' }]);
+  // Enrolled and working accounts, spelled out. A roster row without `status` resolves as
+  // inactive, and missing-work exempts an inactive student ('not-active') before it looks at
+  // anything else, so a bare `{ userId }` default silently makes every missing-work assertion
+  // in this file pass whatever the rule does. Nothing here depended on that, but a test added
+  // later would have, and one did while this was being written.
+  prismaMock.roster.findMany.mockResolvedValue([
+    { userId: 's1', status: 'ENROLLED', user: { inactive: false } },
+    { userId: 's2', status: 'ENROLLED', user: { inactive: false } },
+  ]);
   // The missing-work rule reads per-problem grades and submissions. Empty by default, so the
   // tests that are not about it keep asserting what they always did.
   prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
@@ -135,13 +143,6 @@ describe('getCourseGradeMatrix: assigned map', () => {
         assignees: [],
         problems: [{ problemId: 'p1', maxPoints: 10, createdAt: due }],
       },
-    ]);
-    // Both students must be genuinely active, or missing-work exempts them as 'not-active'
-    // before it ever looks at their groups. The shared roster mock above omits `status`, which
-    // resolves to inactive; without this the assertions below hold for the wrong reason.
-    prismaMock.roster.findMany.mockResolvedValue([
-      { userId: 's1', status: 'ENROLLED', user: { inactive: false } },
-      { userId: 's2', status: 'ENROLLED', user: { inactive: false } },
     ]);
     // s2 is in a group, but in a DIFFERENT set: another course's project teams, say. The mock
     // ignores the where clause on purpose, so this is the row the old unscoped query would

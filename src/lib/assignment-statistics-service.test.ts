@@ -467,3 +467,38 @@ it('returns null when the assignment is not in the course', async () => {
   prismaMock.assignment.findFirst.mockResolvedValue(null);
   expect(await getAssignmentStatistics('c1', 'missing')).toBeNull();
 });
+
+/**
+ * Scope, not behaviour, and worth being explicit about which.
+ *
+ * The group ids this service looks up are only ever compared against the assignment's own
+ * assignee rows, and a group from another set can never match one, so an over-broad lookup did
+ * not change a number here the way it did on the gradebook. It was still the wrong question,
+ * and it read every membership row these students hold anywhere. This asserts the query, since
+ * there is no observable behaviour to assert.
+ */
+describe('the membership lookup', () => {
+  it("asks only about the assignment's own group set", async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue(baseAssignment({ groupSetId: 'gs1' }));
+    prismaMock.studentGroup.findMany.mockResolvedValue([
+      { id: 'g1', memberships: [{ userId: 'u1' }] },
+    ]);
+    setRoster([rosterRow('u1'), rosterRow('u2')]);
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 'u1', groupId: 'g1' }]);
+
+    await getAssignmentStatistics('c1', 'a1');
+
+    for (const call of prismaMock.groupMembership.findMany.mock.calls) {
+      expect(call[0]).toMatchObject({ where: { groupSetId: 'gs1' } });
+    }
+  });
+
+  it('does not go near the table for an individual assignment, which has no groups', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue(baseAssignment({ groupSetId: null }));
+    setRoster([rosterRow('u1')]);
+
+    await getAssignmentStatistics('c1', 'a1');
+
+    expect(prismaMock.groupMembership.findMany).not.toHaveBeenCalled();
+  });
+});
