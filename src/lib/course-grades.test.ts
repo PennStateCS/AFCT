@@ -15,7 +15,15 @@ import { getCourseGradeMatrix, getCourseGradeColumns, getCourseGradePage } from 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  prismaMock.roster.findMany.mockResolvedValue([{ userId: 's1' }, { userId: 's2' }]);
+  // Enrolled and working accounts, spelled out. A roster row without `status` resolves as
+  // inactive, and missing-work exempts an inactive student ('not-active') before it looks at
+  // anything else, so a bare `{ userId }` default silently makes every missing-work assertion
+  // in this file pass whatever the rule does. Nothing here depended on that, but a test added
+  // later would have, and one did while this was being written.
+  prismaMock.roster.findMany.mockResolvedValue([
+    { userId: 's1', status: 'ENROLLED', user: { inactive: false } },
+    { userId: 's2', status: 'ENROLLED', user: { inactive: false } },
+  ]);
   // The missing-work rule reads per-problem grades and submissions. Empty by default, so the
   // tests that are not about it keep asserting what they always did.
   prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
@@ -69,18 +77,23 @@ describe('getCourseGradeMatrix: assigned map', () => {
         problems: [],
         assignees: [{ userId: 's1', groupId: null }],
       },
-      // Not everyone, group assignee on g1 (s2 is a member).
+      // Not everyone, group assignee on g1 (s2 is a member). A group assignee row only
+      // exists on a group assignment, and the assignees route refuses a group that is not in
+      // this assignment's own set, so the fixture carries the set the way real data does.
       {
         id: 'a3',
         title: 'A3',
         dueDate: null,
         isPublished: true,
         assignedToEveryone: false,
+        groupSetId: 'gs1',
         problems: [],
         assignees: [{ userId: null, groupId: 'g1' }],
       },
     ]);
-    prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 's2', groupId: 'g1' }]);
+    prismaMock.groupMembership.findMany.mockResolvedValue([
+      { groupSetId: 'gs1', userId: 's2', groupId: 'g1' },
+    ]);
 
     const matrix = await getCourseGradeMatrix('c1');
 
@@ -96,6 +109,56 @@ describe('getCourseGradeMatrix: assigned map', () => {
 
     // Membership lookup is batched into a single query for the whole roster.
     expect(prismaMock.groupMembership.findMany).toHaveBeenCalledTimes(1);
+    // And scoped to the sets in play. It used to ask for every membership these students hold
+    // anywhere; see the missing-work case below for what that cost.
+    expect(prismaMock.groupMembership.findMany.mock.calls[0][0].where).toEqual({
+      groupSetId: { in: ['gs1'] },
+      userId: { in: ['s1', 's2'] },
+    });
+  });
+
+  /**
+   * The bug this scoping fixes. `missing-work` treats an empty group list as the exemption:
+   * on a group assignment, no group means no way to submit, so no zero. The membership query
+   * was unscoped, so a student in a group in some *other* course or set came back with a
+   * non-empty list, lost the exemption, and was scored zero on work they could never hand in.
+   * Since the LMS passback that zero leaves the building.
+   */
+  it('does not zero a student whose only group is in another set', async () => {
+    const due = new Date('2020-01-01T00:00:00.000Z'); // long past, so the deadline has gone
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'Group Lab',
+        dueDate: due,
+        unlockAt: null,
+        lateCutoff: null,
+        allowLateSubmissions: false,
+        isPublished: true,
+        assignedToEveryone: true,
+        missingWorkIsZero: true,
+        groupSetId: 'gs1',
+        course: { isArchived: false },
+        overrides: [],
+        assignees: [],
+        problems: [{ problemId: 'p1', maxPoints: 10, createdAt: due }],
+      },
+    ]);
+    // s2 is in a group, but in a DIFFERENT set: another course's project teams, say. The mock
+    // ignores the where clause on purpose, so this is the row the old unscoped query would
+    // have returned and the scoped one would not. s1 is in no group anywhere.
+    //
+    // Neither is in a group for THIS assignment, so neither could have submitted and neither
+    // is scored zero. Before the fix s2 came back holding gOther, lost the exemption, and was
+    // given a 0 they had no way to avoid.
+    prismaMock.groupMembership.findMany.mockResolvedValue([
+      { groupSetId: 'some-other-set', userId: 's2', groupId: 'gOther' },
+    ]);
+
+    const matrix = await getCourseGradeMatrix('c1');
+
+    expect(matrix.grades.s1.a1).toBeNull();
+    expect(matrix.grades.s2.a1).toBeNull();
   });
 });
 
