@@ -36,6 +36,10 @@ export const GET = withCourseAuth(
           id: assignment.id,
           title: assignment.title,
           description: assignment.description,
+          // Individual vs group, derived from the group set link the same way the course
+          // route derives it. There is no stored flag, and the gradebook labels the row
+          // with it so a student can tell a shared grade from their own.
+          isGroup: assignment.groupSetId != null,
           dueDate: assignment.dueDate?.toISOString() ?? null,
           maxPoints,
           grade: hasGrade ? assignmentGrade : null,

@@ -469,18 +469,9 @@ export default function ProblemWorkspace({
           </div>
           <ProblemHeader
             className="min-w-0"
-            action={
-              isPrivilegedUser ? null : (
-                // A readout, not a state: it says what the grade is, so it stays quiet and
-                // takes the same geometry as the problem facts immediately below it.
-                <Badge variant="outline" className="gap-2 px-3 py-2">
-                  <span className="font-semibold tracking-widest uppercase">Grade</span>
-                  <span>
-                    {currentGrade !== null ? currentGrade : '-'} / {problem.maxPoints}
-                  </span>
-                </Badge>
-              )
-            }
+            // No grade here any more. It used to hang off this heading as a badge, which put
+            // the one number a student came for inside the card about their attempts. It has
+            // its own card in the right column now, where the grader's version of it lives.
             title={problem.title}
             description={problem.description ?? undefined}
             descriptionJson={(problem as { descriptionJson?: unknown }).descriptionJson}
@@ -531,101 +522,124 @@ export default function ProblemWorkspace({
           )}
         </div>
 
-        {/* Right column: what you are doing about this student's work. Two cards, because
-            marking the work and talking about it are two jobs; the thread is long and open
-            ended, the grade is three controls. */}
+        {/* Right column, in the order the questions get asked: what the grade is, who it is
+            shared with, and what anyone has said about it. One card each. They used to be a
+            single box holding the grade and the group under a rule, which made a group look
+            like part of the marking controls rather than a fact about the work. Each renders
+            only when it has something to hold, so an absent one leaves no empty frame. */}
         <div className="flex min-w-0 flex-col gap-4">
-          {/* A student sees neither the grade controls nor, usually, a group, and an empty
-              bordered box is worse than no box: the card only exists if it holds something. */}
-          {showGradeControls || group ? (
+          {showGradeControls ? (
             <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4">
-              {showGradeControls ? (
-                // The rule belongs between two sections, so it is only drawn when the group
-                // block follows. On its own this is the last thing in the card.
-                <div className={`flex flex-col gap-2 ${group ? 'border-b pb-4' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-                    <h3 className="text-sm font-medium">Problem Grade</h3>
-                  </div>
-                  <ProblemGradeForm
-                    value={gradeInput}
-                    currentGrade={currentGrade}
-                    maxPoints={problem.maxPoints}
-                    disabled={courseIsArchived}
-                    isSaving={isSavingGrade}
-                    isLoading={isLoadingGrade}
-                    error={gradeError}
-                    onChange={onGradeInputChange}
-                    onSubmit={onSaveGrade}
-                    audience={gradeAudience}
-                    groupGradeValue={groupGradeValue}
-                  />
-                  {/* Renders nothing unless the course is linked to an LMS. */}
-                  {assignmentId ? (
-                    <GradeSyncCard
-                      assignmentId={assignmentId}
-                      variant="inline"
-                      studentId={studentId}
-                    />
-                  ) : null}
-                  {/* Under the grade rather than beside the heading: it needs a sentence to
-                    mean anything, and the sentence is the part the old switch was missing. */}
-                  {onManualHoldChange ? (
-                    <GradeHoldControl
-                      autograderEnabled={!!problem.autograderEnabled}
-                      gradeSource={gradeSource}
-                      gradedManually={gradedManually}
-                      hasGrade={currentGrade !== null && currentGrade !== undefined}
-                      onChange={onManualHoldChange}
-                      disabled={courseIsArchived}
-                      className="mt-1"
-                    />
-                  ) : null}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+                  <h3 className="text-sm font-medium">Problem Grade</h3>
                 </div>
+                <ProblemGradeForm
+                  value={gradeInput}
+                  currentGrade={currentGrade}
+                  maxPoints={problem.maxPoints}
+                  disabled={courseIsArchived}
+                  isSaving={isSavingGrade}
+                  isLoading={isLoadingGrade}
+                  error={gradeError}
+                  onChange={onGradeInputChange}
+                  onSubmit={onSaveGrade}
+                  audience={gradeAudience}
+                  groupGradeValue={groupGradeValue}
+                />
+                {/* Renders nothing unless the course is linked to an LMS. */}
+                {assignmentId ? (
+                  <GradeSyncCard
+                    assignmentId={assignmentId}
+                    variant="inline"
+                    studentId={studentId}
+                  />
+                ) : null}
+                {/* Under the grade rather than beside the heading: it needs a sentence to
+                    mean anything, and the sentence is the part the old switch was missing. */}
+                {onManualHoldChange ? (
+                  <GradeHoldControl
+                    autograderEnabled={!!problem.autograderEnabled}
+                    gradeSource={gradeSource}
+                    gradedManually={gradedManually}
+                    hasGrade={currentGrade !== null && currentGrade !== undefined}
+                    onChange={onManualHoldChange}
+                    disabled={courseIsArchived}
+                    className="mt-1"
+                  />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {/* The student's own grade, in the slot the grader's Problem Grade card occupies.
+              The two never appear together (`showGradeControls` is privileged-only), so the
+              heading and icon are shared deliberately: one name for one thing, whoever is
+              looking. It renders ungraded as well as graded, because "not yet" is an answer
+              to the question a student opened this page to ask. */}
+          {!isPrivilegedUser ? (
+            <div className="bg-card flex min-w-0 flex-col gap-2 rounded-md border p-4">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+                <h3 className="text-sm font-medium">Problem Grade</h3>
+              </div>
+              <p className="text-2xl leading-none font-semibold tabular-nums">
+                {currentGrade !== null ? currentGrade : '—'}
+                <span className="text-muted-foreground text-base font-normal">
+                  {' / '}
+                  {problem.maxPoints}
+                </span>
+              </p>
+              {currentGrade === null ? (
+                <p className="text-muted-foreground text-xs">Not graded yet.</p>
               ) : null}
-              {group ? (
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
-                    <h3 className="text-sm font-medium">
-                      {group.name} · {(groupMembers?.length ?? 0) + 1}{' '}
-                      {(groupMembers?.length ?? 0) + 1 === 1 ? 'member' : 'members'}
-                    </h3>
-                    {/* Collapsed by default: the count in the heading answers the usual
+            </div>
+          ) : null}
+
+          {group ? (
+            <div className="bg-card flex min-w-0 flex-col gap-4 rounded-md border p-4">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+                  <h3 className="text-sm font-medium">
+                    {group.name} · {(groupMembers?.length ?? 0) + 1}{' '}
+                    {(groupMembers?.length ?? 0) + 1 === 1 ? 'member' : 'members'}
+                  </h3>
+                  {/* Collapsed by default: the count in the heading answers the usual
                       question, and the names are only needed when something looks wrong. */}
-                    <button
-                      type="button"
-                      onClick={() => setMembersOpen((open) => !open)}
-                      aria-expanded={membersOpen}
-                      aria-controls="group-members"
-                      className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
-                    >
-                      <ChevronUp
-                        className={`h-4 w-4 transition-transform ${membersOpen ? '' : 'rotate-180'}`}
-                        aria-hidden="true"
-                      />
-                      <span className="sr-only">
-                        {membersOpen ? 'Collapse members' : 'Expand members'}
-                      </span>
-                    </button>
-                  </div>
-                  {/* The whole group, the student under review included: a list that omitted
+                  <button
+                    type="button"
+                    onClick={() => setMembersOpen((open) => !open)}
+                    aria-expanded={membersOpen}
+                    aria-controls="group-members"
+                    className="text-muted-foreground hover:text-foreground ml-auto rounded p-1"
+                  >
+                    <ChevronUp
+                      className={`h-4 w-4 transition-transform ${membersOpen ? '' : 'rotate-180'}`}
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">
+                      {membersOpen ? 'Collapse members' : 'Expand members'}
+                    </span>
+                  </button>
+                </div>
+                {/* The whole group, the student under review included: a list that omitted
                     them would read as "everyone else", which is not who the grade and the
                     thread apply to. */}
-                  <p
-                    id="group-members"
-                    hidden={!membersOpen}
-                    className="text-muted-foreground text-xs"
-                  >
-                    {[
-                      subjectName ?? 'This student',
-                      ...(groupMembers ?? []).map(
-                        (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student',
-                      ),
-                    ].join(', ')}
-                  </p>
-                </div>
-              ) : null}
+                <p
+                  id="group-members"
+                  hidden={!membersOpen}
+                  className="text-muted-foreground text-xs"
+                >
+                  {[
+                    subjectName ?? 'This student',
+                    ...(groupMembers ?? []).map(
+                      (m) => `${m.firstName ?? ''} ${m.lastName ?? ''}`.trim() || 'Student',
+                    ),
+                  ].join(', ')}
+                </p>
+              </div>
             </div>
           ) : null}
 

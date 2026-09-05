@@ -71,6 +71,12 @@ export type StudentProblemSubmission = {
   fileName?: string | null;
   originalFileName?: string | null;
   correct?: boolean | null;
+  /**
+   * "First Last" of whoever made the attempt. Sent only for a group assignment, where the
+   * caller sees their whole group's submissions and needs to tell them apart; absent on an
+   * individual one, where every attempt is their own.
+   */
+  submittedBy?: string | null;
 };
 
 export type StudentProblemComment = {
@@ -99,4 +105,8 @@ export type StudentAssignmentContext = {
    * extra-submission grants for them or their group. `max` null means unlimited.
    */
   problemLimits?: Record<string, { max: number | null; granted: number }>;
+  /** The caller's own group on a group assignment; null on an individual one. */
+  group?: { id: string; name: string } | null;
+  /** Their groupmates, the caller excluded. Names only, and only for their own group. */
+  groupMembers?: Array<{ id: string; firstName: string | null; lastName: string | null }>;
 };
