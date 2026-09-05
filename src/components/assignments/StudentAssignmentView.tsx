@@ -645,6 +645,10 @@ export default function StudentAssignmentPage({
         <SubmissionViewerDialog
           open={openDialog.open}
           onOpenChange={(open) => setOpenDialog({ open, submission: null })}
+          // Preview only. The standalone viewer window is a staff tool: it exists for
+          // comparing and arranging several machines while marking, and a student looking at
+          // one attempt of their own has nothing to do with it.
+          allowOpenInWindow={false}
           problemType={
             assignment.problems.find((u) => u.problem.id === openDialog?.submission?.problemId)
               ?.problem?.type
