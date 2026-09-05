@@ -92,6 +92,13 @@ export type ProblemWorkspaceProps = {
   /** Hold the grade against the autograder, or hand it back. */
   onManualHoldChange?: (held: boolean) => void;
   /** The group whose work this is, on a group assignment. */
+  /**
+   * Whether the assignment is group work at all, which is a different question from whether
+   * this student has a group. Without it a student in no group saw the card simply missing
+   * from a page that says "Type: Group" two inches above, and nothing told them why they
+   * cannot submit.
+   */
+  isGroupWork?: boolean;
   group?: { id: string; name: string } | null;
   /** The other members of that group. */
   groupMembers?: { id: string; firstName: string | null; lastName: string | null }[];
@@ -159,6 +166,7 @@ export default function ProblemWorkspace({
   gradeSource = 'AUTOGRADER',
   onManualHoldChange,
   group = null,
+  isGroupWork = false,
   groupMembers,
   gradeAudience,
   groupGradeValue,
@@ -594,6 +602,29 @@ export default function ProblemWorkspace({
               {currentGrade === null ? (
                 <p className="text-muted-foreground text-xs">Not graded yet.</p>
               ) : null}
+            </div>
+          ) : null}
+
+          {isGroupWork && !group ? (
+            <div className="bg-card flex min-w-0 flex-col gap-2 rounded-md border p-4">
+              <div className="flex items-center gap-2">
+                <Users className="text-muted-foreground h-4 w-4" aria-hidden="true" />
+                <h3 className="text-sm font-medium">Group</h3>
+              </div>
+              {/* States the fact and its consequence, rather than leaving a gap where a card
+                  should be on a page whose banner says "Type: Group".
+
+                  Not an error, and deliberately not "ask to be added": submitting without a
+                  group is allowed. `create-submission` writes the attempt with no
+                  studentGroupId and counts it against this student alone, which is a
+                  reasonable thing for an instructor to have intended. What changes is that
+                  the work is theirs rather than a group's, and that is the part worth saying
+                  before they submit. */}
+              <p className="text-muted-foreground text-sm">
+                {subjectName && subjectName !== 'You'
+                  ? `${subjectName} is not in a group for this assignment, but can still submit on their own.`
+                  : 'You are not in a group for this assignment, but you can still submit on your own. If you feel like this is an error, contact your instructor.'}
+              </p>
             </div>
           ) : null}
 

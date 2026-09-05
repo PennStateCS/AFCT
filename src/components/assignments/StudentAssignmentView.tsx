@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { showToast } from '@/lib/toast';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
@@ -384,7 +384,9 @@ export default function StudentAssignmentPage({
     const Heading = headingTag;
     return (
       <div className={headingTag === 'h3' ? 'mt-4' : undefined}>
-        <Heading className="mb-2 font-semibold">Description</Heading>
+        {/* "Assignment Description", not "Description": the problem selected below carries one
+            too, and on a page showing both at once the bare word did not say whose. */}
+        <Heading className="mb-2 font-semibold">Assignment Description</Heading>
         {/* Plain text on the card, not a bordered box that scrolls and drags to resize. The
             box existed to bound a long description, and the cost was a frame, a scrollbar and
             a tab stop around three sentences. The focusable-region markup went with it: a
@@ -535,14 +537,15 @@ export default function StudentAssignmentPage({
       {assignment.problems.length > 0 ? (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle aria-level={2} className="text-lg font-semibold">
-              {assignment.title}
-            </CardTitle>
-            {/* No row of fact chips here any more. Due, the late policy and the type are in
-                the banner, where they are terms of the assignment rather than a property of
-                its problem list; the points total is the denominator of the grade beside it
-                there, and the problem count is the list immediately below. */}
-            {hasDescription ? descriptionSection('h3', 4) : null}
+            {/* The assignment's name is the banner's h1 two inches above; repeating it as the
+                card's title said the same word twice and pushed the first thing a student
+                actually needs to read further down.
+
+                No row of fact chips here either. Due, the late policy and the type are in the
+                banner, where they are terms of the assignment rather than a property of its
+                problem list; the points total is the denominator of the grade beside it there,
+                and the problem count is the list immediately below. */}
+            {hasDescription ? descriptionSection('h2', 3) : null}
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(240px,280px)_1fr]">
@@ -566,6 +569,7 @@ export default function StudentAssignmentPage({
                 assignmentDueDate={assignment.dueDate}
                 // Null on an individual assignment, so the card renders only when there is a
                 // group to name. "You" rather than a name: this is the student's own page.
+                isGroupWork={typeDisplay === 'Group'}
                 group={myGroup}
                 groupMembers={myGroupMembers}
                 subjectName="You"

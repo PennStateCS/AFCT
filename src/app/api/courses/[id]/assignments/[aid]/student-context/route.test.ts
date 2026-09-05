@@ -533,3 +533,108 @@ describe('GET student context, group work', () => {
     expect(body.submissionsByProblem.p1[0].submittedBy).toBe('Unknown');
   });
 });
+
+/**
+ * The cap the assignment page shows, with extra attempts granted.
+ *
+ * This is the number beside "Max Submissions" on the problem a student is about to submit to,
+ * so it has to be the one the submit path will actually enforce. Both go through
+ * `effectiveMaxSubmissions`, but each fetches its own group ids, and that is where the two
+ * have drifted apart before.
+ */
+describe('GET student context, granted attempts', () => {
+  const setup = (over: { groupSetId?: string | null; membership?: boolean } = {}) => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      isPublished: true,
+      groupSetId: over.groupSetId === undefined ? 'gs1' : over.groupSetId,
+      missingWorkIsZero: false,
+      dueDate: new Date('2026-03-05T00:00:00.000Z'),
+      unlockAt: null,
+      lateCutoff: null,
+      allowLateSubmissions: false,
+      assignedToEveryone: true,
+      course: { isArchived: false },
+      overrides: [],
+      problems: [
+        {
+          problemId: 'p1',
+          maxSubmissions: 2,
+          showFeedback: true,
+          maxPoints: 10,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+    });
+    if (over.membership !== false) {
+      prismaMock.groupMembership.findFirst.mockResolvedValue({ groupId: 'g1' });
+      prismaMock.studentGroup.findUnique.mockResolvedValue({
+        id: 'g1',
+        name: 'Team 1',
+        memberships: [{ roster: { user: { id: 'u1', firstName: 'Ada', lastName: 'L' } } }],
+      });
+    }
+    prismaMock.submission.findMany.mockResolvedValue([]);
+    prismaMock.comment.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  };
+
+  const read = async () => {
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    return res.json();
+  };
+
+  const grant = (over: Record<string, unknown>) => ({
+    problemId: 'p1',
+    targetType: 'STUDENT',
+    userId: 'u1',
+    groupId: null,
+    extraSubmissions: 3,
+    ...over,
+  });
+
+  it('raises the cap by a grant made to the student', async () => {
+    setup();
+    prismaMock.submissionGrant.findMany.mockResolvedValue([grant({})]);
+
+    const body = await read();
+    expect(body.problemLimits.p1).toEqual({ max: 5, granted: 3 }); // base 2 + 3
+  });
+
+  it("raises the cap by a grant made to the student's group", async () => {
+    setup();
+    prismaMock.submissionGrant.findMany.mockResolvedValue([
+      grant({ targetType: 'GROUP', userId: null, groupId: 'g1', extraSubmissions: 2 }),
+    ]);
+
+    const body = await read();
+    expect(body.problemLimits.p1).toEqual({ max: 4, granted: 2 });
+  });
+
+  it('ignores a grant to a group the student is not in', async () => {
+    setup();
+    prismaMock.submissionGrant.findMany.mockResolvedValue([
+      grant({ targetType: 'GROUP', userId: null, groupId: 'someone-elses-group' }),
+    ]);
+
+    const body = await read();
+    expect(body.problemLimits.p1).toEqual({ max: 2, granted: 0 });
+  });
+
+  it('ignores a group grant when the student is in no group at all', async () => {
+    setup({ membership: false });
+    prismaMock.submissionGrant.findMany.mockResolvedValue([
+      grant({ targetType: 'GROUP', userId: null, groupId: 'g1' }),
+    ]);
+
+    const body = await read();
+    expect(body.problemLimits.p1).toEqual({ max: 2, granted: 0 });
+  });
+});

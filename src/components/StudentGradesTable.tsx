@@ -3,7 +3,9 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, CornerDownRight } from 'lucide-react';
+// `Table` is the ui primitive below, so the icon of the same name is aliased rather than
+// shadowing it.
+import { ChevronDown, ChevronRight, CornerDownRight, Table as TableIcon } from 'lucide-react';
 
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { Table, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -198,7 +200,10 @@ export function StudentGradesTable({ courseId }: { courseId: string }) {
     // No outer Card: this is the page's active panel, so wrapping it would put a bounded
     // thing inside a bounded thing.
     <section className="space-y-6" aria-labelledby="student-grades-title">
-      <h2 id="student-grades-title" className="text-xl font-semibold">
+      {/* The Course Menu's own icon for this section, so the rail and the panel agree.
+          Decorative; the heading carries the name. */}
+      <h2 id="student-grades-title" className="flex items-center gap-2 text-xl font-semibold">
+        <TableIcon className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
         Grades
       </h2>
 

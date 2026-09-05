@@ -276,6 +276,39 @@ describe('the right column', () => {
     render(<ProblemWorkspace {...studentProps} currentGrade={8} />);
 
     expect(screen.queryByRole('button', { name: /members/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Group' })).not.toBeInTheDocument();
+  });
+
+  it('says they are in no group, and that they submit on their own rather than blocked', () => {
+    // The case that prompted this: the banner says "Type: Group" and the card was simply
+    // absent, so the page never mentioned why. Submitting without a group is permitted (the
+    // attempt is written with no studentGroupId), so this states the consequence and does not
+    // tell them to go and get added to one.
+    render(<ProblemWorkspace {...studentProps} currentGrade={null} isGroupWork group={null} />);
+
+    expect(screen.getByRole('heading', { name: 'Group' })).toBeInTheDocument();
+    expect(screen.getByText(/not in a group for this assignment/i)).toBeInTheDocument();
+    expect(screen.getByText(/but you can still submit on your own/i)).toBeInTheDocument();
+    expect(screen.getByText(/contact your instructor/i)).toBeInTheDocument();
+    expect(screen.queryByText(/cannot submit/i)).not.toBeInTheDocument();
+  });
+
+  it('names the student rather than addressing them when a grader is looking', () => {
+    render(
+      <ProblemWorkspace
+        {...baseProps}
+        isGroupWork
+        group={null}
+        subjectName="Ada Lovelace"
+        currentGrade={null}
+        gradeInput=""
+        onGradeInputChange={vi.fn()}
+        onSaveGrade={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Ada Lovelace is not in a group/i)).toBeInTheDocument();
+    expect(screen.getByText(/can still submit on their own/i)).toBeInTheDocument();
   });
 
   it('gives a grader the grade form instead of the readout', () => {

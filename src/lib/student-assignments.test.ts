@@ -235,3 +235,100 @@ describe('work nobody handed in', () => {
     expect(assignment.problems[0].missing).toBe(false);
   });
 });
+
+/**
+ * A grant aimed at a group, seen from the student's side.
+ *
+ * The number a student is shown and the number the submit path enforces have to be the same
+ * number. They are computed by the same resolver but from separately fetched group ids, and
+ * this is the side that decides what the page says: a cap shown too low costs an attempt the
+ * student had, one shown too high is the "told 5, blocked at 3" complaint.
+ */
+describe('extra attempts granted to a group', () => {
+  const groupAssignment = (over: Record<string, unknown> = {}) => ({
+    id: 'a1',
+    title: 'Group Lab',
+    description: 'desc',
+    unlockAt: null,
+    dueDate: new Date('2026-01-10T23:59:00.000Z'),
+    allowLateSubmissions: false,
+    lateCutoff: null,
+    groupSetId: 'gs1',
+    overrides: [],
+    ...over,
+  });
+
+  const groupGrant = (groupId: string, extraSubmissions = 2) => ({
+    assignmentId: 'a1',
+    problemId: 'p1',
+    targetType: 'GROUP' as const,
+    userId: null,
+    groupId,
+    extraSubmissions,
+  });
+
+  it('raises the cap for a member of the group it was granted to', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([groupAssignment()]);
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ groupSetId: 'gs1', groupId: 'g1' }]);
+    prismaMock.submissionGrant.findMany.mockResolvedValue([groupGrant('g1')]);
+
+    const result = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(result[0].problems[0].maxSubmissions).toBe(3); // base 1 + granted 2
+  });
+
+  it('leaves a non-member on the base cap', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([groupAssignment()]);
+    // In the set, but in a different group from the one that was granted the extras.
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ groupSetId: 'gs1', groupId: 'g2' }]);
+    prismaMock.submissionGrant.findMany.mockResolvedValue([groupGrant('g1')]);
+
+    const result = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(result[0].problems[0].maxSubmissions).toBe(1);
+  });
+
+  it('ignores a grant to a group of theirs in some other set', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([groupAssignment()]);
+    // Their group in another course. The grant query is deliberately broad (it matches any
+    // group the student is in), so the set scoping has to happen when the cap is resolved.
+    prismaMock.groupMembership.findMany.mockResolvedValue([
+      { groupSetId: 'some-other-set', groupId: 'gOther' },
+    ]);
+    prismaMock.submissionGrant.findMany.mockResolvedValue([groupGrant('gOther')]);
+
+    const result = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(result[0].problems[0].maxSubmissions).toBe(1);
+  });
+
+  it('does not apply a group grant to an individual assignment', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([groupAssignment({ groupSetId: null })]);
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ groupSetId: 'gs1', groupId: 'g1' }]);
+    prismaMock.submissionGrant.findMany.mockResolvedValue([groupGrant('g1')]);
+
+    const result = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(result[0].problems[0].maxSubmissions).toBe(1);
+  });
+
+  it('adds a student grant and a group grant together, the way the submit path does', async () => {
+    prismaMock.assignment.findMany.mockResolvedValue([groupAssignment()]);
+    prismaMock.groupMembership.findMany.mockResolvedValue([{ groupSetId: 'gs1', groupId: 'g1' }]);
+    prismaMock.submissionGrant.findMany.mockResolvedValue([
+      groupGrant('g1', 2),
+      {
+        assignmentId: 'a1',
+        problemId: 'p1',
+        targetType: 'STUDENT' as const,
+        userId: 'stu-1',
+        groupId: null,
+        extraSubmissions: 3,
+      },
+    ]);
+
+    const result = await getStudentCourseAssignments('stu-1', 'c1');
+
+    expect(result[0].problems[0].maxSubmissions).toBe(6); // base 1 + 2 + 3
+  });
+});
