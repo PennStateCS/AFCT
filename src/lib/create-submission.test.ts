@@ -155,6 +155,9 @@ const call = (extra: Partial<Parameters<typeof createSubmission>[0]> = {}) =>
 
 /** The action names passed to the audit logger during this call. */
 const auditActions = () => auditMock.mock.calls.map((c) => c[2].action);
+/** The whole entries, for the cases that care what was recorded and not only that it was. */
+const auditEntries = () =>
+  auditMock.mock.calls.map((c) => c[2] as { action: string; metadata?: Record<string, unknown> });
 
 beforeEach(() => {
   // resetAllMocks, NOT clearAllMocks: clear only wipes recorded calls and leaves
@@ -321,6 +324,19 @@ describe('createSubmission', () => {
       const res = await call();
       expect(res).toMatchObject({ ok: false, status: 409 });
       expect((res as { error: string }).error).toMatch(/limit reached/i);
+    });
+
+    it('logs the racing refusal, which used to leave no trace at all', async () => {
+      // The cooldown's concurrent case has always been logged; the cap's was not, so a
+      // student stopped by a race looked in the record like someone who never tried. RQ5
+      // makes submission limits a study variable, so the log is the measurement.
+      setup({ priorCount: 2, countInTx: 3 });
+      await call();
+
+      expect(auditActions()).toContain('SUBMISSION_LIMIT_REACHED');
+      const entry = auditEntries().find((e) => e.action === 'SUBMISSION_LIMIT_REACHED');
+      // The same fields the pre-transaction check writes, plus the flag that tells them apart.
+      expect(entry?.metadata).toMatchObject({ priorCount: 3, concurrent: true });
     });
 
     it('maps a serialization failure (P2034) to a retryable conflict', async () => {
