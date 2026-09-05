@@ -34,11 +34,18 @@ export function StudentAssignmentsTable({ course }: StudentAssignmentsTableProps
   return (
     <section className="space-y-6" aria-labelledby="student-assignments-title">
       <div className="space-y-1">
-        <h2 id="student-assignments-title" className="text-xl font-semibold">
+        {/* The same icon the Course Menu gives this section, so the heading and the rail item
+            a student just clicked name the panel the same way. Decorative: the heading beside
+            it already says what this is. */}
+        <h2
+          id="student-assignments-title"
+          className="flex items-center gap-2 text-xl font-semibold"
+        >
+          <BookOpen className="text-muted-foreground size-5 shrink-0" aria-hidden="true" />
           Assignments
         </h2>
         <p className="text-muted-foreground text-sm">
-          Open an assignment by its title to see the details and work on its problems.
+          Open an assignment by clicking on its title.
         </p>
       </div>
 
