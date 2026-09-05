@@ -10,6 +10,7 @@ const prismaMock = vi.hoisted(() => ({
   assignmentProblemGrade: { findMany: vi.fn() },
   submissionGrant: { findMany: vi.fn() },
   groupMembership: { findFirst: vi.fn() },
+  studentGroup: { findUnique: vi.fn() },
 }));
 
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
@@ -27,6 +28,7 @@ beforeEach(() => {
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.submissionGrant.findMany.mockResolvedValue([]);
   prismaMock.groupMembership.findFirst.mockResolvedValue(null);
+  prismaMock.studentGroup.findUnique.mockResolvedValue(null);
   // Assigned and open by default; the audience/unlock cases override it.
   contentGateMock.mockResolvedValue({ assigned: true, locked: false, unlockAt: null });
 });
@@ -422,5 +424,112 @@ describe('GET student context, missing work', () => {
     const body = await read();
     expect(body.problemGrades.p1).toBeNull();
     expect(body.missingProblems).toEqual([]);
+  });
+});
+
+/**
+ * Group work is the only case where "who submitted this" is a real question: the caller is
+ * looking at their whole group's attempts, and on an individual assignment every row would
+ * name the reader.
+ */
+describe('GET student context, group work', () => {
+  const submission = (over: Record<string, unknown> = {}) => ({
+    id: 's1',
+    submittedAt: new Date('2026-03-01T10:00:00.000Z'),
+    feedback: null,
+    feedbackVisible: true,
+    correct: true,
+    fileName: 'a.jff',
+    originalFileName: 'a.jff',
+    problemId: 'p1',
+    status: 'COMPLETED',
+    student: { firstName: 'Ada', lastName: 'Lovelace' },
+    ...over,
+  });
+
+  const setup = (groupSetId: string | null) => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      id: 'r1',
+      role: 'STUDENT',
+      course: { isPublished: true },
+    });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: 'a1',
+      isPublished: true,
+      groupSetId,
+      missingWorkIsZero: false,
+      dueDate: new Date('2026-03-05T00:00:00.000Z'),
+      unlockAt: null,
+      lateCutoff: null,
+      allowLateSubmissions: false,
+      assignedToEveryone: true,
+      course: { isArchived: false },
+      overrides: [],
+      problems: [
+        {
+          problemId: 'p1',
+          maxSubmissions: 3,
+          showFeedback: true,
+          maxPoints: 10,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+    });
+    if (groupSetId) {
+      prismaMock.groupMembership.findFirst.mockResolvedValue({ groupId: 'g1' });
+      prismaMock.studentGroup.findUnique.mockResolvedValue({
+        id: 'g1',
+        name: 'Team Turing',
+        memberships: [
+          { roster: { user: { id: 'u1', firstName: 'Grace', lastName: 'Hopper' } } },
+          { roster: { user: { id: 'u2', firstName: 'Ada', lastName: 'Lovelace' } } },
+        ],
+      });
+    }
+    prismaMock.submission.findMany.mockResolvedValue([submission()]);
+    prismaMock.comment.findMany.mockResolvedValue([]);
+    prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  };
+
+  const read = async () => {
+    const res = await GET(new Request(url), { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
+    expect(res.status).toBe(200);
+    return res.json();
+  };
+
+  it('names who made each attempt on a group assignment', async () => {
+    setup('gs1');
+
+    const body = await read();
+    expect(body.submissionsByProblem.p1[0].submittedBy).toBe('Ada Lovelace');
+  });
+
+  it("names the group and the caller's groupmates, the caller excluded", async () => {
+    setup('gs1');
+
+    const body = await read();
+    expect(body.group).toEqual({ id: 'g1', name: 'Team Turing' });
+    // The caller is left out of the list; the card names them separately as the reader.
+    expect(body.groupMembers).toEqual([{ id: 'u2', firstName: 'Ada', lastName: 'Lovelace' }]);
+  });
+
+  it('omits the submitter on an individual assignment, where it would name the reader', async () => {
+    setup(null);
+
+    const body = await read();
+    expect(body.submissionsByProblem.p1[0]).not.toHaveProperty('submittedBy');
+    expect(body.group).toBeNull();
+    expect(body.groupMembers).toEqual([]);
+  });
+
+  it('falls back to Unknown rather than an empty cell when the submitter has no name', async () => {
+    setup('gs1');
+    prismaMock.submission.findMany.mockResolvedValue([
+      submission({ student: { firstName: null, lastName: null } }),
+    ]);
+
+    const body = await read();
+    expect(body.submissionsByProblem.p1[0].submittedBy).toBe('Unknown');
   });
 });

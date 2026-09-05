@@ -40,6 +40,17 @@ import { withCourseAuth } from '@/lib/api/with-auth';
  *   404: { description: "Assignment not found in this course, or unpublished (for students)." }
  *   500: { description: Server error. }
  */
+/**
+ * "First Last" for a submission's author, matching the staff review route's wording so the
+ * two web views name the same person the same way. Falls back to "Unknown" rather than an
+ * empty cell, which would read as "nobody submitted this".
+ */
+function submitterName(
+  u: { firstName: string | null; lastName: string | null } | null | undefined,
+): string {
+  return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim() || 'Unknown';
+}
+
 export const GET = withCourseAuth(
   async (_req, ctx, { user, courseId }) => {
     const { aid: assignmentId } = await ctx.params;
@@ -134,6 +145,7 @@ export const GET = withCourseAuth(
           })
         : null;
       const myGroupId = myGroup?.groupId ?? null;
+      const isGroupAssignment = assignment.groupSetId != null;
 
       // The group's name and the caller's groupmates, for the assignment page's group card.
       // Their own group only, and only names: on a group assignment they already share every
@@ -177,6 +189,10 @@ export const GET = withCourseAuth(
             originalFileName: true,
             problemId: true,
             status: true,
+            // Who made the attempt. Only disclosed on a group assignment (see below), where
+            // the caller is already looking at their groupmates' submissions and cannot
+            // otherwise tell whose is whose.
+            student: { select: { firstName: true, lastName: true } },
           },
         }),
         prisma.comment.findMany({
@@ -349,6 +365,10 @@ export const GET = withCourseAuth(
               submittedAt: submission.submittedAt.toISOString(),
               grade: gradeMap.get(submission.problemId) ?? null,
               feedback: submission.feedback,
+              // Group work only. On an individual assignment every attempt is the caller's
+              // own, so naming the submitter would add a column that says the same thing on
+              // every row; the field is simply absent and the table's column stays off.
+              ...(isGroupAssignment ? { submittedBy: submitterName(submission.student) } : {}),
               // Null feedback has two meanings and the screen has to tell them apart: the
               // evaluator had nothing to say, or this problem does not show what it said.
               feedbackVisible: submission.feedbackVisible,

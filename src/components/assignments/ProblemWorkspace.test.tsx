@@ -294,3 +294,50 @@ describe('the right column', () => {
     expect(screen.queryByText('Not graded yet.')).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The attempts table on a group assignment is the GROUP's table: every member's attempts,
+ * against one shared cap. Without a name on the row a student cannot tell their own work
+ * from a groupmate's, which is the question the column exists to answer.
+ */
+describe('the Submitted by column', () => {
+  const groupSubmissions = [
+    {
+      id: 's1',
+      status: 'COMPLETED',
+      correct: true,
+      fileName: 'traffic.jff',
+      originalFileName: 'traffic.jff',
+      submittedAt: '2026-03-01T10:00:00.000Z',
+      feedback: null,
+      problemId: 'p1',
+      submittedBy: 'Ada Lovelace',
+    },
+  ];
+
+  it('names the submitter on a group assignment', () => {
+    render(<ProblemWorkspace {...baseProps} submissions={groupSubmissions} showSubmitter />);
+
+    expect(screen.getByRole('columnheader', { name: /Submitted by/ })).toBeInTheDocument();
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+  });
+
+  it('leaves the column out on an individual assignment', () => {
+    render(<ProblemWorkspace {...baseProps} submissions={groupSubmissions} />);
+
+    expect(screen.queryByRole('columnheader', { name: /Submitted by/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
+  });
+
+  it('shows a placeholder rather than a blank cell when the name did not arrive', () => {
+    render(
+      <ProblemWorkspace
+        {...baseProps}
+        submissions={[{ ...groupSubmissions[0], submittedBy: undefined }]}
+        showSubmitter
+      />,
+    );
+
+    expect(screen.getByRole('columnheader', { name: /Submitted by/ })).toBeInTheDocument();
+  });
+});

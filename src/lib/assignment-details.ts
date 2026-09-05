@@ -71,6 +71,12 @@ export type StudentProblemSubmission = {
   fileName?: string | null;
   originalFileName?: string | null;
   correct?: boolean | null;
+  /**
+   * "First Last" of whoever made the attempt. Sent only for a group assignment, where the
+   * caller sees their whole group's submissions and needs to tell them apart; absent on an
+   * individual one, where every attempt is their own.
+   */
+  submittedBy?: string | null;
 };
 
 export type StudentProblemComment = {

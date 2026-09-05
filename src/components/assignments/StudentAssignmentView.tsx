@@ -569,6 +569,10 @@ export default function StudentAssignmentPage({
                 group={myGroup}
                 groupMembers={myGroupMembers}
                 subjectName="You"
+                // On group work the attempts table is the group's, not this student's, so it
+                // gains the "Submitted by" column the staff review view already uses. On an
+                // individual assignment every row would name the reader.
+                showSubmitter={typeDisplay === 'Group'}
                 comments={selectedProblemComments}
                 commentText={selectedProblem ? newComment[selectedProblem.problem.id] || '' : ''}
                 onCommentTextChange={(text: string) =>
