@@ -163,6 +163,73 @@ describe('getAssignmentsForUserRange', () => {
  * calendar away entirely, so no day cell renders there and a test asserting on chips would pass
  * or fail for reasons unrelated to width.
  */
+/**
+ * A group extension is the group members' deadline. The query that decides which assignments
+ * to fetch has always widened on group overrides; the rows it selected to RESOLVE the date
+ * did not, so the override was fetched for the filter and then invisible to the resolver. The
+ * assignment came back on its base date and, when that fell outside the month, was dropped
+ * entirely: gone from the calendar in the very month the group was working to.
+ */
+describe('a group extension on the calendar', () => {
+  const groupOverride = {
+    targetType: 'GROUP',
+    userId: null,
+    groupId: 'g1',
+    unlockAt: null,
+    dueDate: new Date('2026-01-20T12:00:00.000Z'),
+    lateCutoff: null,
+    allowLateSubmissions: null,
+  };
+
+  const setup = (overrides: unknown[]) => {
+    prismaMock.roster.findMany.mockResolvedValue([{ courseId: 'c1', role: 'STUDENT' }]);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'Group Lab',
+        courseId: 'c1',
+        // Base due is in December, outside the January range the calendar asked for.
+        dueDate: new Date('2025-12-10T12:00:00.000Z'),
+        unlockAt: null,
+        allowLateSubmissions: false,
+        lateCutoff: null,
+        isPublished: true,
+        overrides,
+        course: { id: 'c1', code: 'CMPEN 331', name: 'Computer Organization' },
+      },
+    ]);
+  };
+
+  it('moves the assignment to the group date, inside the month it was asked for', async () => {
+    setup([groupOverride]);
+
+    const res = await getAssignmentsForUserRange({ userId: 'u1', ...range });
+
+    expect(res).toHaveLength(1);
+    expect(res[0].dueDate).toEqual(new Date('2026-01-20T12:00:00.000Z'));
+  });
+
+  it("selects the group rows to resolve with, not just the student's own", async () => {
+    setup([groupOverride]);
+
+    await getAssignmentsForUserRange({ userId: 'u1', ...range });
+
+    // The pairing that the bug broke: select with overridesForStudentWhere, resolve with the
+    // group ids it returns. Asserting the select keeps a future edit from narrowing it back
+    // to `{ userId }`, which fails silently rather than loudly.
+    const args = prismaMock.assignment.findMany.mock.calls[0][0];
+    expect(args.select.overrides.where).toEqual(overridesForStudentWhere('u1'));
+  });
+
+  it('still drops an assignment whose own extension moved it out of the range', async () => {
+    setup([{ ...groupOverride, dueDate: new Date('2026-05-01T12:00:00.000Z') }]);
+
+    const res = await getAssignmentsForUserRange({ userId: 'u1', ...range });
+
+    expect(res).toEqual([]);
+  });
+});
+
 describe('how many assignments fit in a day cell', () => {
   it('shows none on a phone, where the cell has room for the date alone', () => {
     expect(visibleAssignmentsForWidth(360)).toBe(0);

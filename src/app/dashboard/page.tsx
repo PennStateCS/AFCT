@@ -9,7 +9,11 @@ import { greetingFor } from '@/lib/greeting';
 import { DEFAULT_SYSTEM_TIMEZONE } from '@/lib/system-settings';
 import { toStudentSafeEnrolled } from '@/lib/course-format';
 import { getCourseDateBucket } from '@/lib/course-status';
-import { assignedToStudentWhere, overridesForStudentWhere } from '@/lib/assignment-visibility';
+import {
+  assignedToStudentWhere,
+  groupIdsFromOverrides,
+  overridesForStudentWhere,
+} from '@/lib/assignment-visibility';
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { LaunchNotice } from '@/components/lti/LaunchNotice';
 
@@ -199,8 +203,13 @@ export default async function DashboardPage({
             allowLateSubmissions: true,
             lateCutoff: true,
             courseId: true,
+            // Their own STUDENT row and the GROUP row for any group they are in. Selecting
+            // `{ userId: id }` alone meant a group extension never applied, and because the
+            // filter above widens on group overrides the row was fetched and then dropped by
+            // the "still upcoming" filter below: work they still had time on vanished from
+            // the panel whose whole job is to say what is due.
             overrides: {
-              where: { userId: id },
+              where: overridesForStudentWhere(id),
               select: {
                 targetType: true,
                 userId: true,
@@ -229,6 +238,7 @@ export default async function DashboardPage({
         },
         a.overrides,
         id,
+        groupIdsFromOverrides(a.overrides),
       );
       return {
         id: a.id,
