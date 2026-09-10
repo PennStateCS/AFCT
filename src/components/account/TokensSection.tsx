@@ -139,15 +139,13 @@ export function TokensSection() {
           are separate acts, and the second is a table. */}
       <SettingsSection
         title="Create a token"
-        /* This used to say the desktop client signs in with a token pasted from here. It does
-           not: its login window asks for a server, an email and a password, and gets its own
-           token from those. Saying otherwise sent people looking for a field that is not there. */
         description={
           <>
             A token lets a program reach AFCT on your behalf, through the AFCT client API, without
             your password. Name it so you can tell your machines apart, and revoke it when you stop
-            using one. The AFCT desktop client does not use these: it asks for your email and
-            password and signs in with those.
+            using one. The AFCT desktop client accepts these: choose Sign-in token on its login
+            window and paste a token from here. If you open AFCT from Canvas or another LMS, this
+            is how you sign in to the client.
           </>
         }
         className={SETTINGS_STANDARD}

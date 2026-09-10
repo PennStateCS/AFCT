@@ -17,21 +17,28 @@ You can keep it open beside your JFLAP work. If you close it, reopen it the same
 The first time you open the Submission Center you are asked to sign in:
 
 - **Server** and **Port**: the address of your AFCT server, for example `https://afct.example.edu` and `443`. Your instructor provides these. The boxes come prefilled with a development address, so replace both rather than trusting what is there.
+- **Sign in with**: choose **Email and password** or **Sign-in token**. Use a token if you
+  normally open AFCT from your LMS or sign in with your university account (see the note below);
+  otherwise use your email and password.
 - **Email** and **Password**: your AFCT account, the same credentials you use for the web app.
+- **Sign-in token**: a token created on your AFCT account page. In the web app, go to
+  **Account, App tokens**, create a token, copy it, and paste it here. The window links to the
+  right page for the server you typed in.
 - **Show password**: reveals what you typed so you can check it.
-- **Remember Me**: saves the server, port, email and password, and signs you in automatically the next time the window opens. The saved details expire after seven days. Leave it off on a shared computer.
+- **Remember Me**: saves the server, port, email and password, and signs you in automatically the next time the window opens. The saved details expire after seven days. Leave it off on a shared computer. It applies to the password form only; a token is not saved.
 - **Validate SSL Certificate**: **tick this box.** It starts unticked, which means the client does not check your server's certificate. Leave it unticked only when your instructor has told you the server uses a self-signed certificate, which is normally only true of a test server.
 
 Select **Login**. Messages appear below the button while it connects. Only active accounts can sign in.
 
 :::note If you usually open AFCT from your LMS
-The client needs an AFCT password, and you may not have one: opening AFCT from Canvas,
-Brightspace or Blackboard signs you in without one, and so does signing in with your university
-account. Open AFCT the way you normally do, go to **Account, Password**, and choose **Set
-password**. Then use that password here.
+Opening AFCT from Canvas, Brightspace or Blackboard signs you in without an AFCT password, and so
+does signing in with your university account, so you may not have one. You do not need one here:
+open AFCT the way you normally do, go to **Account, App tokens**, create a token, and paste it
+into the client with **Sign-in token** selected.
 
-If you see no **Set password** option, your institution has chosen not to allow AFCT passwords on
-accounts like yours; ask an administrator to set one for you.
+If you would rather use a password, go to **Account, Password** and choose **Set password**. If
+there is no such option, your institution has chosen not to allow AFCT passwords on accounts like
+yours; use a sign-in token instead.
 :::
 
 Use **Logout** (top right of the main window) when you are done, especially on a shared machine.
