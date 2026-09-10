@@ -16,7 +16,7 @@ You can keep it open beside your JFLAP work. If you close it, reopen it the same
 
 The first time you open the Submission Center you are asked to sign in:
 
-- **Server** and **Port**: the address of your AFCT server, for example `https://afct.example.edu` and `443`. Your instructor provides these. The boxes come prefilled with a development address, so replace both rather than trusting what is there.
+- **Server address**: the address of your AFCT server, for example `https://afct.example.edu`. Your instructor provides it. You can leave the scheme and port off (`afct.example.edu` means `https` on the standard port); a non-standard port goes on the end, like `afct.example.edu:8443`. The box starts empty the first time and afterwards remembers the last server that worked.
 - **Sign in with**: choose **Email and password** or **Sign-in token**. Use a token if you
   normally open AFCT from your LMS or sign in with your university account (see the note below);
   otherwise use your email and password.
