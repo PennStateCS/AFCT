@@ -192,6 +192,10 @@ export function EmailTab({
         <InputGroup
           label="Username"
           name="smtpUsername"
+          // The mail server's account, not the admin's. A username next to a password field is
+          // what a password manager looks for, so without this it offers to fill the pair with
+          // the administrator's own AFCT sign-in.
+          autoComplete="off"
           value={username}
           setValue={(v) => setField('smtpUsername', v)}
           disabled={disabled}
@@ -202,7 +206,11 @@ export function EmailTab({
           name="smtpPassword"
           type="password"
           // The SMTP account's password, not the admin's. See SignInTab's client secret.
-          autoComplete="off"
+          //
+          // `new-password`, not `off`: browsers ignore `off` on a password input, and this one
+          // sits beside a username, which is exactly the shape they autofill. `new-password`
+          // tells them the pair is not a sign-in, which is the only value they honour here.
+          autoComplete="new-password"
           showEye
           value={password}
           setValue={setPassword}
