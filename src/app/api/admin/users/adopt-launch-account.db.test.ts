@@ -25,6 +25,7 @@ const session = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ auth: async () => session.current }));
 
 const { POST } = await import('./route');
+const { getSessionUser, clearSessionUserCache } = await import('@/lib/session-user-cache');
 
 const create = (body: Record<string, unknown>) =>
   POST(
@@ -88,6 +89,19 @@ describe('creating an account that adopts an LMS sign-in', () => {
     expect((await prisma.user.findUniqueOrThrow({ where: { id: ids.orphan } })).inactive).toBe(
       true,
     );
+  });
+
+  /**
+   * The retired account must stop working at once, not when the session cache's TTL lapses.
+   * Warms the cache first, because a cold cache would pass whether or not the route invalidates.
+   */
+  it('stops the retired account from signing in immediately, not after the cache TTL', async () => {
+    clearSessionUserCache();
+    expect((await getSessionUser(ids.orphan))?.inactive).toBe(false);
+
+    await create({ adoptLaunchAccountId: ids.orphan });
+
+    expect((await getSessionUser(ids.orphan))?.inactive).toBe(true);
   });
 
   /**
