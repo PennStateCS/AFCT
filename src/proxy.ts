@@ -3,8 +3,8 @@ import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { isSessionIdleExpired, isSessionPastAbsoluteLimit } from '@/lib/session-timeout';
 import { requireAuthSecret } from '@/lib/auth-secret';
-// Next 16 runs Proxy on the Node.js runtime, so the database is reachable here. It is read
-// once a minute at most, and only for the LTI routes.
+// Next 16 runs Proxy on the Node.js runtime, so the database is reachable here. Only the LTI
+// routes read it, and only for the handful of registered platforms.
 import { prisma } from '@/lib/prisma';
 import {
   clearFrameMarkerCookie,
@@ -128,17 +128,19 @@ const CSP_ENFORCE =
  * `https://canvas.instructure.com` while living at its own hostname, so the issuer would name an
  * origin that never sends a request. The three endpoint URLs are where the LMS really is.
  */
-const FRAME_ANCESTOR_TTL_MS = 60_000;
-let frameAncestorCache: { value: string; expires: number } | null = null;
-
 function isLtiPath(pathname: string): boolean {
   return pathname === '/lti' || pathname.startsWith('/lti/') || pathname.startsWith('/api/lti');
 }
 
+/**
+ * Read fresh every time rather than memoized. A cache here cannot be invalidated: Next bundles
+ * the proxy separately from the route handlers, so a reset called from the platform routes
+ * touches a different copy of this module and does nothing, while its unit test still passes.
+ * The alternative, an unattended TTL, left a newly registered LMS unable to deep-link for up to
+ * a minute, which shows up as a blank picker with no error. The query is three columns from a
+ * table of a handful of rows, on LTI paths only.
+ */
 async function ltiFrameAncestors(): Promise<string> {
-  const now = Date.now();
-  if (frameAncestorCache && frameAncestorCache.expires > now) return frameAncestorCache.value;
-
   let value = "'self'";
   try {
     const platforms = await prisma.ltiPlatform.findMany({
@@ -162,13 +164,7 @@ async function ltiFrameAncestors(): Promise<string> {
     return "'self'";
   }
 
-  frameAncestorCache = { value, expires: now + FRAME_ANCESTOR_TTL_MS };
   return value;
-}
-
-/** Exported for tests, which need each case to start from a known cache. */
-export function resetFrameAncestorCache(): void {
-  frameAncestorCache = null;
 }
 
 /**
