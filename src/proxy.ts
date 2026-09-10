@@ -128,6 +128,47 @@ const CSP_ENFORCE =
  * `https://canvas.instructure.com` while living at its own hostname, so the issuer would name an
  * origin that never sends a request. The three endpoint URLs are where the LMS really is.
  */
+/**
+ * API routes that set a `Cache-Control` of their own and must keep it.
+ *
+ * This has to be an allowlist, not an "unless the route already set one" check: Next applies
+ * the proxy's headers before the handler runs and then drops any header the handler sets that
+ * is already present (`next/dist/server/send-response.js`), so the proxy wins unconditionally
+ * and there is no way to ask what the route wanted. Anything missing from this list is
+ * silently overwritten, so add to it when a route starts setting its own header.
+ */
+const OWN_CACHE_CONTROL = [
+  // Platforms cache the keyset; the 300s is what makes key rotation possible.
+  '/api/lti/jwks',
+  // A year, immutable. The filename is a per-upload UUID so the bytes never change, and
+  // without it every avatar is re-downloaded and re-authorized on every render.
+  '/api/files/pfps/',
+  // Server-sent events, which set no-cache/no-transform.
+  '/api/admin/settings/upgrade/stream',
+  // Sets nothing today and needs nothing; listed so a monitor is never made to revalidate.
+  '/api/health',
+];
+
+/**
+ * Keep API responses out of every cache.
+ *
+ * These carry grades, rosters and submissions, which are education records. Without a directive
+ * a 200 is heuristically cacheable, so a browser on a shared lab machine may write one to disk
+ * and, absent `private`, a shared intercepting proxy is allowed to keep it too. `no-cache` would
+ * not do: it forces revalidation but still permits storage.
+ *
+ * Scoped to `/api/*` deliberately. Pages already come back `no-store` from Next's dynamic
+ * rendering, and the matcher also covers `public/`, where a blanket rule would strip the ETags
+ * off the KaTeX font and stylesheet files and refetch them on every page carrying math.
+ */
+function cacheControlFor(pathname: string): string | null {
+  if (!pathname.startsWith('/api/')) return null;
+  if (OWN_CACHE_CONTROL.some((prefix) => pathname === prefix || pathname.startsWith(prefix))) {
+    return null;
+  }
+  return 'private, no-store';
+}
+
 function isLtiPath(pathname: string): boolean {
   return pathname === '/lti' || pathname.startsWith('/lti/') || pathname.startsWith('/api/lti');
 }
@@ -254,6 +295,7 @@ async function prepareCsp(req: NextRequest, pathname: string) {
   const responseHeader = CSP_ENFORCE
     ? 'content-security-policy'
     : 'content-security-policy-report-only';
+  const cacheControl = cacheControlFor(pathname);
   return {
     /**
      * Whether this request belongs to a framed session, which decides where the edge looks for
@@ -263,6 +305,7 @@ async function prepareCsp(req: NextRequest, pathname: string) {
     pass: () => {
       const res = NextResponse.next({ request: { headers: requestHeaders } });
       res.headers.set(responseHeader, csp);
+      if (cacheControl) res.headers.set('cache-control', cacheControl);
       if (markFrame) res.headers.append('set-cookie', frameMarkerCookie());
       if (forgetFrame) res.headers.append('set-cookie', clearFrameMarkerCookie());
       if (dropStaleCookies) {
@@ -274,6 +317,7 @@ async function prepareCsp(req: NextRequest, pathname: string) {
     },
     withCsp: (res: NextResponse) => {
       res.headers.set(responseHeader, csp);
+      if (cacheControl) res.headers.set('cache-control', cacheControl);
       if (markFrame) res.headers.append('set-cookie', frameMarkerCookie());
       if (forgetFrame) res.headers.append('set-cookie', clearFrameMarkerCookie());
       if (dropStaleCookies) {

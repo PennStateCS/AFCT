@@ -20,6 +20,7 @@ beforeEach(() => {
   findManyMock.mockResolvedValue([]);
 });
 
+
 /** The frame-ancestors list out of whichever CSP header the response carries. */
 const frameAncestors = (res: Response): string => {
   const csp =
@@ -496,5 +497,61 @@ describe('proxy', () => {
         }
       });
     });
+  });
+});
+
+describe('keeping API responses out of caches', () => {
+  const cacheControl = (res: Response): string | null => res.headers.get('cache-control');
+
+  beforeEach(() => {
+    getTokenMock.mockResolvedValue({ sub: 'u1', isAdmin: false, authTime: Date.now() });
+  });
+
+  it('marks an authenticated API response no-store', async () => {
+    expect(cacheControl(await proxy(req('/api/courses')))).toBe('private, no-store');
+  });
+
+  it('marks the file routes that serve student work no-store', async () => {
+    expect(cacheControl(await proxy(req('/api/files/submissions/abc.jff')))).toBe(
+      'private, no-store',
+    );
+    expect(cacheControl(await proxy(req('/api/files/solutions/abc.jff')))).toBe(
+      'private, no-store',
+    );
+  });
+
+  it('marks the native client routes no-store too', async () => {
+    expect(cacheControl(await proxy(req('/api/client/v1/courses')))).toBe('private, no-store');
+  });
+
+  /**
+   * The proxy's header is applied before the handler runs and wins outright, so a route that
+   * sets its own has to be named here or it is silently overwritten. Each of these breaks
+   * something real if that happens: platforms cache the keyset for rotation, and avatars were
+   * re-downloaded on every render before they were made immutable.
+   */
+  it.each([
+    '/api/lti/jwks',
+    '/api/files/pfps/abc.png',
+    '/api/admin/settings/upgrade/stream',
+    '/api/health',
+  ])('leaves %s to set its own caching', async (path) => {
+    expect(cacheControl(await proxy(req(path)))).toBeNull();
+  });
+
+  /**
+   * Scoped to /api/*. Pages are already no-store from Next's dynamic rendering, and the matcher
+   * also covers public/, where this would strip the ETags off the KaTeX assets.
+   */
+  it('leaves pages and static assets alone', async () => {
+    expect(cacheControl(await proxy(req('/dashboard')))).toBeNull();
+    expect(cacheControl(await proxy(req('/katex/katex.min.css')))).toBeNull();
+  });
+
+  it('marks a 401 from the edge no-store as well', async () => {
+    getTokenMock.mockResolvedValue(null);
+    const res = await proxy(req('/api/courses'));
+    expect(res.status).toBe(401);
+    expect(cacheControl(res)).toBe('private, no-store');
   });
 });
