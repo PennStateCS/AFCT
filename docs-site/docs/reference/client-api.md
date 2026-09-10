@@ -20,6 +20,7 @@ This page is the hand-written guide to the stable native-client surface (`/api/c
 
 ## Typical client flow
 
+1. Ask what sign-in methods the server offers with `GET /api/client/v1/auth/methods` (optional; a `404` means an older server, so fall back to password login).
 1. Sign in with `POST /api/client/v1/auth/login`.
 2. Store the returned token.
 3. Validate a stored token with `GET /api/client/v1/auth/me`.
@@ -36,6 +37,20 @@ The server stores only a SHA-256 hash of the token. The plaintext token is retur
 When an authenticated request returns `401`, stop retrying and ask the user to sign in again.
 
 ## Authentication
+
+### `GET /api/client/v1/auth/methods`
+
+No authentication header is required.
+
+Reports what sign-in methods the server offers, so a client can decide what to show before anyone signs in:
+
+```json
+{ "oidc": { "enabled": true, "buttonLabel": "Sign in with PSU" } }
+```
+
+`buttonLabel` is the institutional sign-in button text (the server substitutes its default when an administrator has not set one) and is `null` when `enabled` is false. Password login is not reported because it is always available. Never returned: the OIDC issuer, client id, or secret. A provider that is enabled but misconfigured reports as disabled, matching the web login page.
+
+Older servers do not have this endpoint. Treat a `404` (which arrives as an HTML page, not JSON) as "password login only" and carry on.
 
 ### `POST /api/client/v1/auth/login`
 

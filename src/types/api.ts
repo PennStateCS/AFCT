@@ -992,6 +992,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/client/v1/auth/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sign-in methods this server offers
+         * @description What sign-in methods this server offers, for the desktop client's login window.  Unauthenticated on purpose: the client asks before anyone has signed in.   Only what the login page already shows publicly is exposed: whether institutional  sign-in exists and the button label. Never the issuer, client id or secret. Password  login is not reported because there is no setting behind it; it is always available.   A provider that is enabled but broken (say the secret cannot be decrypted) reports  as no provider, which matches the login page: if the web cannot offer the button,  the client should not either.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/auth/methods/route.ts)
+         */
+        get: operations["getClientV1AuthMethods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/client/v1/courses/{courseId}/assignments": {
         parameters: {
             query?: never;
@@ -6042,6 +6064,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1AuthMethods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The available sign-in methods. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        oidc?: {
+                            enabled?: boolean;
+                            /** @description Label for the institutional sign-in button; null when disabled */
+                            buttonLabel?: string | null;
+                        };
+                    };
                 };
             };
         };
