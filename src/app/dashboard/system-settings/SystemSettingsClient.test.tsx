@@ -610,6 +610,30 @@ describe('SystemSettingsClient — mail password', () => {
     expect(sent?.smtpPassword).toBe('  spaced secret  ');
   });
 
+  /**
+   * The SMTP credentials belong to the mail server, not to the administrator filling the form.
+   * A username beside a password is the shape a password manager autofills, and browsers ignore
+   * `autoComplete="off"` on a password input, so the password field has to say `new-password`.
+   * It reads like a mistake, which is exactly why it is asserted.
+   */
+  it('keeps password managers away from the SMTP credentials', async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = makeFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<SystemSettingsClient />);
+    await openEmailTab(user);
+
+    expect(screen.getByLabelText('Username', { exact: true })).toHaveAttribute(
+      'autocomplete',
+      'off',
+    );
+    expect(screen.getByLabelText('Password', { exact: true })).toHaveAttribute(
+      'autocomplete',
+      'new-password',
+    );
+  });
+
   it('counts a password-only edit as an unsaved change', async () => {
     const user = userEvent.setup();
     const { fetchMock } = makeFetch();
