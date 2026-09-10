@@ -550,7 +550,6 @@ model Roster {
   groupMemberships GroupMembership[]
 
   @@unique([courseId, userId])
-  @@index([courseId])
   @@index([userId])
   @@index([role])
   // Enumerations of active students filter on (course, role, status), so index the trio.
@@ -636,7 +635,6 @@ model Assignment {
   ltiDeepLinks LtiDeepLink[] // LMS links that open this assignment
   ltiScores    LtiScoreQueue[] // grades queued for an LMS gradebook
 
-  @@index([courseId])
   @@index([isPublished])
   @@index([dueDate])
   @@index([lateCutoff])
@@ -726,6 +724,7 @@ model AssignmentOverride {
   @@unique([assignmentId, groupId]) // future: at most one per (assignment, group)
   @@index([userId])
   @@index([groupId])
+  @@index([createdById])
 }
 
 /// A single exercise a student solves: a finite automaton, regular expression, grammar,
@@ -830,7 +829,9 @@ model AssignmentProblem {
   grants      SubmissionGrant[]
 
   @@id([assignmentId, problemId])
-  @@index([assignmentId])
+  // assignmentId leads the primary key already. problemId does not, and Postgres does not
+  // index a foreign key on its own, so without this deleting a problem scans the whole table.
+  @@index([problemId])
 }
 
 /// Extra attempts given to one student or one group on one problem, over and above the limit
@@ -881,6 +882,7 @@ model SubmissionGrant {
   @@unique([assignmentId, problemId, groupId]) // at most one grant row per (problem, group)
   @@index([userId])
   @@index([groupId])
+  @@index([createdById])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -923,7 +925,6 @@ model GroupSet {
   // Unique set name per course. Case-insensitive + trimmed uniqueness is enforced
   // in the service layer (this DB constraint is the exact-match backstop).
   @@unique([courseId, name])
-  @@index([courseId])
 }
 
 /// One group inside a group set. Members submit and are graded together on any assignment that
@@ -961,7 +962,6 @@ model StudentGroup {
   // Composite target so a membership can prove its group belongs to its set at
   // the database level.
   @@unique([id, groupSetId])
-  @@index([groupSetId])
 }
 
 /// A student's place in one group. A student belongs to at most one group per set, so their
@@ -1127,9 +1127,9 @@ model Submission {
   // Logs
   activityLogs ActivityLog[]
 
-  @@index([assignmentId])
-  @@index([studentId])
-  @@index([courseId])
+  // Every submission writes each of these, so the list is kept to what is actually read.
+  // An index whose columns are the leading columns of a wider one here is left out: Postgres
+  // already answers those lookups from the wider index, so it would only cost inserts.
   @@index([studentGroupId])
   @@index([assignmentId, problemId, studentId])
   // Group submission set + cap counting for a group.
@@ -1140,11 +1140,9 @@ model Submission {
   @@index([problemId, contentHash])
   @@index([problemId, shapeHash])
   // Performance indexes
-  @@index([assignmentId, problemId])
   @@index([studentId, courseId, assignmentId, problemId, submittedAt])
   // Hot path for the submission queue worker's claim query
   @@index([status, submittedAt])
-  @@index([status])
   // The Autograder page pages through submissions newest-first, narrowed by problem or
   // course. Each of these covers one scope level plus the sort, so a page is an index
   // scan rather than a sort of the whole table.
@@ -1218,12 +1216,9 @@ model AssignmentProblemGrade {
 
   @@unique([assignmentId, problemId, studentId])
   @@index([groupGradeGroupId])
-  @@index([assignmentId, problemId])
-  @@index([assignmentId])
-  @@index([studentId])
   // The gradebook reads one page of students at a time, so its grade lookup filters
-  // studentId IN (the page) AND assignmentId IN (the course). The indexes above all lead
-  // with assignmentId or stop at studentId, which leaves that pair unserved.
+  // studentId IN (the page) AND assignmentId IN (the course). The unique key leads with
+  // assignmentId, which leaves that pair unserved, hence this pair the other way round.
   @@index([studentId, assignmentId])
 }
 
@@ -1273,14 +1268,12 @@ model Comment {
   /// The group the comment concerns, when staff comment on a group's shared work.
   aboutGroupId String?
 
-  @@index([assignmentId])
   @@index([problemId])
   @@index([authorId])
   @@index([rosterId])
   @@index([aboutStudentId])
   @@index([aboutGroupId])
   @@index([assignmentId, problemId, aboutGroupId])
-  @@index([assignmentId, problemId])
   @@index([assignmentId, problemId, aboutStudentId])
   @@index([createdAt])
 }
@@ -1334,7 +1327,6 @@ model ActivityLog {
   @@index([timestamp]) // default System Logs ordering
   @@index([severity, timestamp]) // severity dropdown + timestamp sort
   @@index([action])
-  @@index([category])
   @@index([problemId])
   @@index([submissionId])
   @@index([courseId, action])
@@ -1344,7 +1336,7 @@ model ActivityLog {
   @@index([courseId, timestamp])
   @@index([assignmentId, action])
   @@index([userId, courseId])
-  @@index([timestamp, category])
+  @@index([category, timestamp]) // category dropdown + timestamp sort
   @@index([ipAddress, timestamp]) // "what has this address done", System Status + investigations
 }
 
@@ -1517,6 +1509,7 @@ model LtiContextLink {
   /// One AFCT course per LMS course. Not the other way round: see the note above.
   @@unique([platformId, contextId])
   @@index([courseId])
+  @@index([linkedByUserId])
 }
 
 /// A launch that arrived from an LMS course nobody has linked yet, waiting for someone to say
@@ -1563,6 +1556,7 @@ model LtiPendingLink {
   /// When this record was created.
   createdAt DateTime @default(now())
 
+  @@index([platformId])
   @@index([userId])
   /// Expired rows are swept with the other short-lived tokens.
   @@index([expiresAt])
@@ -1671,6 +1665,7 @@ model LtiScoreQueue {
 
   /// One pending grade per student per assignment; a regrade replaces it.
   @@unique([assignmentId, userId])
+  @@index([userId])
   /// What the sender reads: everything due, oldest first.
   @@index([state, nextAttemptAt])
 }
@@ -1725,6 +1720,7 @@ model LtiPendingDeepLink {
   /// When this record was created.
   createdAt DateTime @default(now())
 
+  @@index([platformId])
   @@index([userId])
   @@index([expiresAt])
 }
@@ -1997,6 +1993,7 @@ model LtiPendingIdentityLink {
   /// When this record was created.
   createdAt DateTime @default(now())
 
+  @@index([userId])
   /// The expiry sweep.
   @@index([expiresAt])
 }
@@ -2040,4 +2037,5 @@ model LtiDeepLink {
   /// two submissions of the same form would otherwise both pass.
   @@unique([contextLinkId, assignmentId])
   @@index([assignmentId])
+  @@index([createdByUserId])
 }
