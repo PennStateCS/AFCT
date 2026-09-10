@@ -197,6 +197,19 @@ Students should receive `404` for courses and assignments they cannot access. Th
 
 Never trust identity or scope from the request body. Derive the course from the assignment or another authoritative database relation.
 
+### Caching
+
+Every response under `/api/` is sent `Cache-Control: private, no-store` by the proxy
+(`src/proxy.ts`). These responses carry grades, rosters and submissions, and without a directive
+a browser on a shared machine may write one to disk. Do not add `no-store` to individual routes;
+it is already there.
+
+A route that needs different caching has to be named in `OWN_CACHE_CONTROL` in the proxy. Setting
+the header in the route alone does nothing: Next applies the proxy's headers before the handler
+runs and then drops any the handler sets that are already present, so the proxy wins and the
+route's value is discarded without warning. Adding the prefix to that list is what makes the
+route's own header take effect.
+
 ## Data access
 
 The shared Prisma client in `src/lib/prisma.ts` uses the PostgreSQL driver adapter and a development singleton.
