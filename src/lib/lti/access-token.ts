@@ -84,7 +84,13 @@ const cache = new Map<string, CacheEntry>();
  * registration leaves entries that were valid for the registration as it used to be. They are
  * short-lived and the platform would refuse them anyway, but a refusal reads as "your LMS
  * rejected the grade", which sends an administrator looking in the wrong place after a change
- * they just made. Called when a registration changes, and by tests that need a cold cache.
+ * they just made.
+ *
+ * NOTE: the call from the platform delete route does not reach the grade sender. The sender
+ * starts from `src/instrumentation.ts`, which holds its own copy of this module, so the route's
+ * clear empties a different map. That is harmless today only because the cache key includes the
+ * platform's cuid, which never recurs, so an entry left behind is unreachable rather than wrong.
+ * Do not add a code path that depends on this clearing the sender's cache; it cannot.
  */
 export function clearAccessTokenCache(platformId?: string): void {
   if (!platformId) {

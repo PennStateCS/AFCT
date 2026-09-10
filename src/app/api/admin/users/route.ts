@@ -13,6 +13,7 @@ import { isStrongPassword } from '@/lib/password-policy';
 import { UserCreateApiSchema } from '@/schemas/user';
 import { readAdoptableAccount } from '@/lib/lti/jit-duplicates';
 import { isWriteConflict } from '@/lib/linked-identity';
+import { invalidateSessionUser } from '@/lib/session-user-cache';
 import { Prisma } from '@prisma/client';
 
 /**
@@ -202,6 +203,11 @@ export const POST = withAdminAuth(
 
           newUser = result.created;
           adopted = { fromEmail: result.orphan.email };
+
+          // The orphan was just retired, so drop its cached session row rather than letting a
+          // retired account keep working until the TTL lapses. Before the audit write, so a
+          // logging failure cannot skip it.
+          invalidateSessionUser(result.orphan.userId);
 
           await createEnhancedActivityLog(prisma, req, {
             userId: user.id,

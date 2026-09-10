@@ -7,7 +7,7 @@ vi.mock('next-auth/jwt', () => ({ getToken: getTokenMock }));
 const findManyMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/prisma', () => ({ prisma: { ltiPlatform: { findMany: findManyMock } } }));
 
-import { proxy, resetFrameAncestorCache } from './proxy';
+import { proxy } from './proxy';
 
 const req = (path: string, headers?: Record<string, string>) =>
   new NextRequest(new URL(`http://localhost${path}`), { headers });
@@ -17,7 +17,6 @@ const setCookies = (res: Response): string[] => res.headers.getSetCookie();
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resetFrameAncestorCache();
   findManyMock.mockResolvedValue([]);
 });
 
@@ -415,14 +414,20 @@ describe('proxy', () => {
       expect(frameAncestors(res)).toBe("frame-ancestors 'self' https://canvas.school.edu");
     });
 
-    it('reads the platforms once for a burst of launches rather than once per request', async () => {
+    /**
+     * The list used to be memoized for a minute, which meant an administrator who had just
+     * registered an LMS got a blank deep-link picker and no error until the TTL lapsed. Nothing
+     * could invalidate it either: the proxy is bundled separately from the route handlers, so a
+     * reset called from the platform routes reached a different copy of the module.
+     */
+    it('sees a platform registered a moment ago on the very next request', async () => {
+      findManyMock.mockResolvedValue([]);
+      expect(frameAncestors(await proxy(req('/lti/deep-link')))).toBe("frame-ancestors 'self'");
+
       findManyMock.mockResolvedValue([platform]);
-
-      await proxy(req('/lti/deep-link'));
-      await proxy(req('/lti/deep-link'));
-      await proxy(req('/api/lti/login'));
-
-      expect(findManyMock).toHaveBeenCalledTimes(1);
+      expect(frameAncestors(await proxy(req('/lti/deep-link')))).toBe(
+        "frame-ancestors 'self' https://canvas.school.edu",
+      );
     });
 
     /**
