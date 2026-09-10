@@ -74,3 +74,34 @@ test('a table page fits a 320px screen', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   await expectNoSidewaysScroll(page);
 });
+
+/**
+ * Card labels are not squeezed under their own width.
+ *
+ * Below 640px a table becomes stacked cards of label/value pairs, and the label and the value
+ * share one flex row. Letting the label shrink freely made the flex algorithm hand it a share
+ * of the shortfall in proportion to its size, so a short label beside a long value ended up
+ * narrower than the word it holds and was broken across lines: "Nam / e", "Facult / y". Wrapping
+ * between words is fair game, so this counts line boxes against words rather than forbidding a
+ * second line outright. Verified by putting `min-w-0` back on the label and watching it fail.
+ */
+test('a card label is never broken mid-word', async ({ page }) => {
+  await signIn(page, 'admin');
+  await page.goto('/dashboard/courses');
+  await page.getByRole('main').waitFor();
+  await page.waitForLoadState('networkidle');
+  await page.locator('dl dt').first().waitFor();
+
+  const broken = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('dl dt'))
+      .map((dt) => {
+        const range = document.createRange();
+        range.selectNodeContents(dt);
+        const text = (dt.textContent ?? '').trim();
+        return { text, lines: range.getClientRects().length, words: text.split(/\s+/).length };
+      })
+      .filter((label) => label.lines > label.words)
+      .map((label) => `"${label.text}" over ${label.lines} lines`),
+  );
+  expect(broken, broken.join(', ')).toEqual([]);
+});
