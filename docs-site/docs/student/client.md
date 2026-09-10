@@ -16,22 +16,39 @@ You can keep it open beside your JFLAP work. If you close it, reopen it the same
 
 The first time you open the Submission Center you are asked to sign in:
 
-- **Server** and **Port**: the address of your AFCT server, for example `https://afct.example.edu` and `443`. Your instructor provides these. The boxes come prefilled with a development address, so replace both rather than trusting what is there.
+- **Server address**: the address of your AFCT server, for example `https://afct.example.edu`. Your instructor provides it. You can leave the scheme and port off (`afct.example.edu` means `https` on the standard port); a non-standard port goes on the end, like `afct.example.edu:8443`. The box starts empty the first time and afterwards remembers the last server that worked.
+- **Sign in with**: choose **Email and password**, **Sign-in token**, or **Web browser**. Use
+  the web browser if you sign in with your university account; use a token if you normally open
+  AFCT from your LMS (see the note below); otherwise use your email and password.
 - **Email** and **Password**: your AFCT account, the same credentials you use for the web app.
+- **Sign-in token**: a token created on your AFCT account page. In the web app, go to
+  **Account, App tokens**, create a token, copy it, and paste it here. The window links to the
+  right page for the server you typed in.
+- **Web browser**: select **Login** and your browser opens AFCT. Sign in there however you
+  normally do (your university login works here), review what you are approving, and choose
+  **Approve sign-in**; the Submission Center finishes signing in by itself. If the browser does
+  not open, the window shows a link to copy and open yourself. Institutional sign-in with MFA
+  can take a couple of minutes; the client waits. On a server with a self-signed certificate the
+  browser may warn you before showing the page.
+- **Stay signed in on this computer** (token and web browser forms): saves the token so the
+  Submission Center signs you in automatically next time, with no window at all, until the token
+  expires or you use **Logout**. Leave it off on a shared computer; unticked, the token is
+  forgotten when you close JFLAP.
 - **Show password**: reveals what you typed so you can check it.
-- **Remember Me**: saves the server, port, email and password, and signs you in automatically the next time the window opens. The saved details expire after seven days. Leave it off on a shared computer.
+- **Remember Me** (password form only): saves the server, port, email and password, and signs you in automatically the next time the window opens. The saved details expire after seven days. Leave it off on a shared computer.
 - **Validate SSL Certificate**: **tick this box.** It starts unticked, which means the client does not check your server's certificate. Leave it unticked only when your instructor has told you the server uses a self-signed certificate, which is normally only true of a test server.
 
 Select **Login**. Messages appear below the button while it connects. Only active accounts can sign in.
 
 :::note If you usually open AFCT from your LMS
-The client needs an AFCT password, and you may not have one: opening AFCT from Canvas,
-Brightspace or Blackboard signs you in without one, and so does signing in with your university
-account. Open AFCT the way you normally do, go to **Account, Password**, and choose **Set
-password**. Then use that password here.
+Opening AFCT from Canvas, Brightspace or Blackboard signs you in without an AFCT password, and so
+does signing in with your university account, so you may not have one. You do not need one here:
+open AFCT the way you normally do, go to **Account, App tokens**, create a token, and paste it
+into the client with **Sign-in token** selected.
 
-If you see no **Set password** option, your institution has chosen not to allow AFCT passwords on
-accounts like yours; ask an administrator to set one for you.
+If you would rather use a password, go to **Account, Password** and choose **Set password**. If
+there is no such option, your institution has chosen not to allow AFCT passwords on accounts like
+yours; use a sign-in token instead.
 :::
 
 Use **Logout** (top right of the main window) when you are done, especially on a shared machine.

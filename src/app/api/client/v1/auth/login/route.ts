@@ -42,6 +42,7 @@ import { ClientLoginSchema } from '@/schemas/client';
  *             user: { type: object }
  *   400: { description: Missing or malformed fields. }
  *   401: { description: Invalid email or password. }
+ *   403: { description: The password must be changed on the web before a token can be issued. }
  *   429: { description: Too many attempts; retry after the Retry-After header. }
  *   500: { description: Server error. }
  */
@@ -61,6 +62,13 @@ export async function POST(req: Request) {
         );
       }
       return apiError(401, 'Invalid email or password.');
+    }
+
+    // A temporary password gets you to the change-password screen, not a 30-day
+    // bearer token. The web enforces this in the dashboard layout; a token would
+    // walk straight past it.
+    if (result.user.mustChangePassword) {
+      return apiError(403, 'Your password must be changed first. Sign in on the web to set a new one.');
     }
 
     const { token, expiresAt } = await issueClientToken(result.user.id, { label: deviceName });

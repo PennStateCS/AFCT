@@ -46,6 +46,9 @@ const ACTION_VERB: Record<string, string> = {
   LOGIN: 'Signed in',
   USER_LOGIN: 'Signed in',
   CLIENT_LOGIN: 'Signed in',
+  CLIENT_AUTH_APPROVED: 'Approved',
+  CLIENT_AUTH_APPROVE_REFUSED: 'Refused',
+  CLIENT_AUTH_EXCHANGE_FAILED: 'Refused',
   LOGOUT: 'Signed out',
   CLIENT_LOGOUT: 'Signed out',
   USER_SIGNUP: 'Created',
@@ -521,6 +524,9 @@ const OBJECT_BY_ACTION: Record<
     const how = SIGN_IN_OBJECT[str(m, 'provider') ?? ''];
     return how ? `Desktop client, ${how.toLowerCase()}` : 'Desktop client';
   },
+  CLIENT_AUTH_APPROVED: () => 'Desktop client browser sign-in',
+  CLIENT_AUTH_APPROVE_REFUSED: () => 'Desktop client browser sign-in',
+  CLIENT_AUTH_EXCHANGE_FAILED: () => 'Desktop client sign-in code',
   LOGOUT: (m) => SIGN_OUT_OBJECT[str(m, 'provider') ?? ''] ?? null,
   CLIENT_LOGOUT: () => 'Desktop client session',
   CREATE_USER: (m) => accountNamed(m),
@@ -586,6 +592,9 @@ const SIGN_IN_OBJECT: Record<string, string> = {
   credentials: 'AFCT password',
   'lti-launch': 'LMS launch',
   oidc: 'Institutional sign-in',
+  // The desktop client's browser-approval flow. Distinct from `credentials` because
+  // RQ5 treats "how did the student authenticate" as a study variable.
+  'browser-approval': 'Browser approval',
 };
 
 const SIGN_OUT_OBJECT: Record<string, string> = {
@@ -1054,6 +1063,14 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
     case 'CLIENT_TOKEN_ISSUED':
     case 'CLIENT_TOKEN_REVOKED':
       return str(metadata, 'label');
+
+    // The device label on a grant; the failing check on a refusal. The reason is
+    // for a reader auditing tampering, so it stays terse and technical.
+    case 'CLIENT_AUTH_APPROVED':
+      return str(metadata, 'label');
+    case 'CLIENT_AUTH_APPROVE_REFUSED':
+    case 'CLIENT_AUTH_EXCHANGE_FAILED':
+      return str(metadata, 'reason');
 
     // Courses and their contents.
     // The object names the course; nothing else about a creation is worth a second phrase.

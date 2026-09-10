@@ -275,7 +275,7 @@ export type FilesStatusResponse = {
  * The rate-limiter scopes keyed on a client IP address. Scopes keyed on an email or a
  * user id are never surfaced here, so this tab only ever shows addresses.
  */
-export type RateLimitScope = 'login:ip' | 'signup:ip' | 'check-email:ip';
+export type RateLimitScope = 'login:ip' | 'signup:ip' | 'check-email:ip' | 'client-exchange:ip';
 
 /** A hard block, or the softer captcha-challenge cooldown that precedes one. */
 export type RateLimitState = 'blocked' | 'challenge';

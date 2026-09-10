@@ -72,6 +72,16 @@ const LTI_LOGIN_IP_CONFIG: BucketConfig = {
   frictionDelayMs: 0,
 };
 
+const CLIENT_EXCHANGE_IP_CONFIG: BucketConfig = {
+  windowMs: 5 * 60 * 1000,
+  maxAttempts: 100,
+  frictionThreshold: Number.MAX_SAFE_INTEGER,
+  challengeThreshold: Number.MAX_SAFE_INTEGER, // a native client cannot solve a captcha
+  challengeCooldownMs: 0,
+  blockDurationMs: 10 * 60 * 1000,
+  frictionDelayMs: 0,
+};
+
 // Email-availability checks are a legitimate signup-form affordance, so the limit is
 // generous, but it caps bulk account enumeration from one IP. Only "ok" or "blocked"
 // (thresholds above maxAttempts disable friction/challenge for this background call).
@@ -541,6 +551,23 @@ export const evaluateLtiLoginRateLimit = (params: { ip?: string }): RateLimitDec
   ]);
 
 /**
+ * IP-only limit for the desktop browser-sign-in code exchange. The login limiter
+ * cannot be reused here: it is keyed on IP plus email and drives account lockout,
+ * and an exchange has no email. Sized for campus NAT, where getClientIp sees the
+ * gateway and a whole lab shares one bucket; a code guesser is stopped by the
+ * 256-bit code long before this, so the limit is about resource abuse, not
+ * brute force.
+ */
+export const evaluateClientExchangeRateLimit = (params: { ip?: string }): RateLimitDecision =>
+  ensureEvaluations([
+    {
+      key: bucketKey('client-exchange:ip', params.ip),
+      config: CLIENT_EXCHANGE_IP_CONFIG,
+      reason: 'ip' as LimitReason,
+    },
+  ]);
+
+/**
  * Per-user limit for avatar replacements (both self-serve `/api/me` and admin
  * `/api/users/[id]`). Returns `blocked` once a user exceeds the window budget, so
  * the endpoints can't be used to churn large uploads. Keyed on the actor's id.
@@ -633,6 +660,10 @@ const IP_SCOPES: Record<RateLimitScope, { label: string; reason: string }> = {
     label: 'Email availability checks',
     reason: 'Too many email availability checks from this address',
   },
+  'client-exchange:ip': {
+    label: 'Desktop sign-in exchanges',
+    reason: 'Too many desktop sign-in code exchanges from this address',
+  },
 };
 
 /** The same scopes as a tuple, for building the API's request schema. */
@@ -640,6 +671,7 @@ export const RATE_LIMIT_SCOPES = [
   'login:ip',
   'signup:ip',
   'check-email:ip',
+  'client-exchange:ip',
 ] as const satisfies readonly RateLimitScope[];
 
 const scopeOf = (key: string): RateLimitScope | null =>

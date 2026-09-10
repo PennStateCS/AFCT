@@ -926,6 +926,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/client/v1/auth/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a browser sign-in code for a bearer token
+         * @description Redeems a browser sign-in authorization code (issued by the `/client-auth`  consent page) for a bearer token, completing RFC 8252's loopback flow. The  refusal body is the same for every failure: which check failed is written to the  activity log, where it is useful, and kept from an unauthenticated caller, where  it is a probe result.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/auth/exchange/route.ts)
+         */
+        post: operations["postClientV1AuthExchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/client/v1/auth/login": {
         parameters: {
             query?: never;
@@ -984,6 +1006,28 @@ export interface paths {
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/auth/me/route.ts)
          */
         get: operations["getClientV1AuthMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/client/v1/auth/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sign-in methods this server offers
+         * @description What sign-in methods this server offers, for the desktop client's login window.  Unauthenticated on purpose: the client asks before anyone has signed in.   Only what the login page already shows publicly is exposed: whether institutional  sign-in exists and the button label. Never the issuer, client id or secret. Password  login is not reported because there is no setting behind it; it is always available.   A provider that is enabled but broken (say the secret cannot be decrypted) reports  as no provider, which matches the login page: if the web cannot offer the button,  the client should not either.
+         *
+         *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/client/v1/auth/methods/route.ts)
+         */
+        get: operations["getClientV1AuthMethods"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5917,6 +5961,77 @@ export interface operations {
             };
         };
     };
+    postClientV1AuthExchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The authorization code from the consent redirect */
+                    code: string;
+                    /** @description The PKCE verifier for the challenge the code was issued against */
+                    codeVerifier: string;
+                    /** @description The exact loopback redirect URI the code was issued for */
+                    redirectUri: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A bearer token and the signed-in user, as from /auth/login. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token?: string;
+                        expiresAt?: string;
+                        user?: Record<string, never>;
+                    };
+                };
+            };
+            /** @description Missing or malformed fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The code was not accepted. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too many attempts; retry after the Retry-After header. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Server error. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     postClientV1AuthLogin: {
         parameters: {
             query?: never;
@@ -5959,6 +6074,15 @@ export interface operations {
             };
             /** @description Invalid email or password. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The password must be changed on the web before a token can be issued. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6042,6 +6166,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getClientV1AuthMethods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The available sign-in methods. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        oidc?: {
+                            enabled?: boolean;
+                            /** @description Label for the institutional sign-in button; null when disabled */
+                            buttonLabel?: string | null;
+                        };
+                    };
                 };
             };
         };
