@@ -46,6 +46,18 @@ describe('POST /api/client/v1/auth/login', () => {
     expect(issueMock).not.toHaveBeenCalled();
   });
 
+  it('403 and no token for an account that must change its password', async () => {
+    // A temporary password must not mint a 30-day bearer token; the web login
+    // forces the change and the client has no screen for it.
+    verifyMock.mockResolvedValue({
+      ok: true,
+      user: { id: 'u1', email: 'a@b.c', firstName: 'A', lastName: 'B', mustChangePassword: true },
+    });
+    const res = await POST(makeReq({ email: 'a@b.c', password: 'x' }));
+    expect(res.status).toBe(403);
+    expect(issueMock).not.toHaveBeenCalled();
+  });
+
   it('issues a token and returns the user on success', async () => {
     verifyMock.mockResolvedValue({
       ok: true,

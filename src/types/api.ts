@@ -5988,6 +5988,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The password must be changed on the web before a token can be issued. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Too many attempts; retry after the Retry-After header. */
             429: {
                 headers: {
