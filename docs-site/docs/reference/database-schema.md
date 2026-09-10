@@ -62,6 +62,17 @@ erDiagram
   DateTime usedAt "nullable"
   DateTime createdAt
 }
+"ClientAuthCode" {
+  String id PK
+  String codeHash UK
+  String userId FK
+  String pkceChallenge
+  String redirectUri "nullable"
+  String deviceName "nullable"
+  DateTime createdAt
+  DateTime expiresAt
+  DateTime usedAt "nullable"
+}
 "Course" {
   String id PK
   String name
@@ -103,6 +114,7 @@ erDiagram
 "ClientApiToken" }o--|| "User" : user
 "LinkedIdentity" }o--|| "User" : user
 "SingleUseToken" }o--o| "User" : user
+"ClientAuthCode" }o--|| "User" : user
 "Assignment" }o--|| "Course" : course
 ```
 
@@ -216,6 +228,29 @@ Properties as follows:
 - `expiresAt`: When the token stops working.
 - `usedAt`: When it was spent. Once set, the token is refused.
 - `createdAt`: When this record was created.
+
+### `ClientAuthCode`
+
+A single-use authorization code for the desktop client's browser sign-in: the signed-in
+user approves the client on a consent page, the code travels back to it over a loopback
+redirect, and the client exchanges it (with its PKCE verifier) for a ClientApiToken.
+
+Only a hash of the code is stored, like ClientApiToken. `usedAt` makes replay a refusal
+rather than a second token, and `redirectUri` is re-checked at exchange against what the
+consent page saw. `redirectUri` is nullable so a device-code row (RFC 8628, deliberately
+deferred) fits in this table without a migration: a device code has no redirect.
+
+Properties as follows:
+
+- `id`: Unique identifier.
+- `codeHash`: Hash of the code. The code itself goes to the browser once and is never stored.
+- `userId`: The account that approved the sign-in.
+- `pkceChallenge`: The S256 PKCE code challenge the client opened the browser with.
+- `redirectUri`: The loopback redirect the code was issued for; null for a future device-code row.
+- `deviceName`: Client-supplied device label, stored for the token; attacker-chosen, never load-bearing.
+- `createdAt`: When this record was created.
+- `expiresAt`: When the code stops being exchangeable. Minutes, not days: it only covers the redirect.
+- `usedAt`: When the code was exchanged. Set once; a second exchange is a replay and is refused.
 
 ## LTI
 

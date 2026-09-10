@@ -52,6 +52,18 @@ Reports what sign-in methods the server offers, so a client can decide what to s
 
 Older servers do not have this endpoint. Treat a `404` (which arrives as an HTML page, not JSON) as "password login only" and carry on.
 
+### `POST /api/client/v1/auth/exchange`
+
+No authentication header is required.
+
+Completes browser sign-in (OAuth 2.0 authorization code with PKCE over a loopback redirect, RFC 8252). The client binds a listener on `127.0.0.1` (or `[::1]`; never `localhost`), opens the system browser at `/client-auth?redirect_uri=…&state=…&code_challenge=…&code_challenge_method=S256`, and the signed-in user approves on a consent page. The code that arrives on the loopback redirect is exchanged here:
+
+```json
+{ "code": "<from the redirect>", "codeVerifier": "<the PKCE verifier>", "redirectUri": "<the exact redirect URI the browser was opened with>" }
+```
+
+Returns the same body as `/auth/login`. Codes are single use, expire after about two minutes, and the `redirectUri` must match the one the code was issued for exactly. All refusals are a generic `401`; rate limiting is per IP with `429` + `Retry-After`.
+
 ### `POST /api/client/v1/auth/login`
 
 No authentication header is required.

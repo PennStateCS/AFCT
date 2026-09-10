@@ -213,6 +213,7 @@ model User {
   commentsAbout       Comment[]                @relation("CommentsAboutStudent") // Comments about this student's work
   commentsAuthored    Comment[]                @relation("CommentAuthor") // Comments this user wrote
   clientTokens        ClientApiToken[] // Bearer tokens issued to the native (Java) client
+  clientAuthCodes     ClientAuthCode[] // Short-lived codes from the browser sign-in consent screen
   singleUseTokens     SingleUseToken[] // Password-reset and similar one-shot links
   linkedIdentities    LinkedIdentity[] // Institutional sign-ins and LMS launches mapped to this account
   assignmentAssignees AssignmentAssignee[]     @relation("AssigneeTarget") // assignments this student is individually assigned
@@ -2038,4 +2039,42 @@ model LtiDeepLink {
   @@unique([contextLinkId, assignmentId])
   @@index([assignmentId])
   @@index([createdByUserId])
+}
+
+/// A single-use authorization code for the desktop client's browser sign-in: the signed-in
+/// user approves the client on a consent page, the code travels back to it over a loopback
+/// redirect, and the client exchanges it (with its PKCE verifier) for a ClientApiToken.
+///
+/// Only a hash of the code is stored, like ClientApiToken. `usedAt` makes replay a refusal
+/// rather than a second token, and `redirectUri` is re-checked at exchange against what the
+/// consent page saw. `redirectUri` is nullable so a device-code row (RFC 8628, deliberately
+/// deferred) fits in this table without a migration: a device code has no redirect.
+///
+/// @namespace Identity
+model ClientAuthCode {
+  /// Unique identifier.
+  id       String @id @default(cuid())
+  /// Hash of the code. The code itself goes to the browser once and is never stored.
+  codeHash String @unique // sha256(code), never the plaintext
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The account that approved the sign-in.
+  userId String
+
+  /// The S256 PKCE code challenge the client opened the browser with.
+  pkceChallenge String
+  /// The loopback redirect the code was issued for; null for a future device-code row.
+  redirectUri   String?
+  /// Client-supplied device label, stored for the token; attacker-chosen, never load-bearing.
+  deviceName    String?
+
+  /// When this record was created.
+  createdAt DateTime  @default(now())
+  /// When the code stops being exchangeable. Minutes, not days: it only covers the redirect.
+  expiresAt DateTime
+  /// When the code was exchanged. Set once; a second exchange is a replay and is refused.
+  usedAt    DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
 }
