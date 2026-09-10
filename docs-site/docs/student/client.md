@@ -24,8 +24,12 @@ The first time you open the Submission Center you are asked to sign in:
 - **Sign-in token**: a token created on your AFCT account page. In the web app, go to
   **Account, App tokens**, create a token, copy it, and paste it here. The window links to the
   right page for the server you typed in.
+- **Stay signed in on this computer** (token form only): saves the token so the Submission
+  Center signs you in automatically next time, with no window at all, until the token expires or
+  you use **Logout**. Leave it off on a shared computer; unticked, the token is forgotten when
+  you close JFLAP.
 - **Show password**: reveals what you typed so you can check it.
-- **Remember Me**: saves the server, port, email and password, and signs you in automatically the next time the window opens. The saved details expire after seven days. Leave it off on a shared computer. It applies to the password form only; a token is not saved.
+- **Remember Me** (password form only): saves the server, port, email and password, and signs you in automatically the next time the window opens. The saved details expire after seven days. Leave it off on a shared computer.
 - **Validate SSL Certificate**: **tick this box.** It starts unticked, which means the client does not check your server's certificate. Leave it unticked only when your instructor has told you the server uses a self-signed certificate, which is normally only true of a test server.
 
 Select **Login**. Messages appear below the button while it connects. Only active accounts can sign in.
