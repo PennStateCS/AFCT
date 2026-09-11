@@ -41,8 +41,19 @@ vi.mock('next/link', () => {
   const React = require('react');
   return {
     __esModule: true,
-    default: ({ href, children }: { href: string; children: React.ReactNode }) => (
-      <a href={href}>{children}</a>
+    // onClick is forwarded because it is what closes the mobile drawer on navigation.
+    default: ({
+      href,
+      children,
+      onClick,
+    }: {
+      href: string;
+      children: React.ReactNode;
+      onClick?: () => void;
+    }) => (
+      <a href={href} onClick={onClick}>
+        {children}
+      </a>
     ),
   };
 });
@@ -156,6 +167,33 @@ describe('DashboardSidebarMenu', () => {
       'href',
       '/dashboard/account?tab=password',
     );
+  });
+
+  it('closes the mobile drawer when the account menu links are used', () => {
+    // These two land on the page the drawer is drawn over, so nothing else closes it:
+    // the dashboard layout persists across routes, and both links point at the same
+    // pathname the user may already be on.
+    const setOpenMobile = vi.fn();
+    useSidebarMock.mockReturnValue({ state: 'expanded', isMobile: true, setOpenMobile });
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Account' }));
+    expect(setOpenMobile).toHaveBeenCalledWith(false);
+
+    setOpenMobile.mockClear();
+    fireEvent.click(screen.getByRole('link', { name: 'Password' }));
+    expect(setOpenMobile).toHaveBeenCalledWith(false);
+  });
+
+  it('leaves the desktop sidebar alone when the account menu links are used', () => {
+    const setOpenMobile = vi.fn();
+    useSidebarMock.mockReturnValue({ state: 'expanded', isMobile: false, setOpenMobile });
+
+    renderWithClient(<DashboardSidebarMenu />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Account' }));
+    expect(setOpenMobile).not.toHaveBeenCalled();
   });
 
   it('renders admin navigation links for privileged users', () => {

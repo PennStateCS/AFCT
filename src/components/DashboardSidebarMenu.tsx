@@ -312,11 +312,14 @@ export default function DashboardSidebarMenu() {
     staleTime: 30_000,
   });
 
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   // The mobile drawer is a full-width sheet, not the icon rail, so it must always show
   // full labels. Only treat the sidebar as collapsed on desktop, regardless of the saved
   // (desktop) collapse preference.
   const collapsed = state === 'collapsed' && !isMobile;
+  const closeMobileDrawer = () => {
+    if (isMobile) setOpenMobile(false);
+  };
   const { isOpen, toggle } = useSidebarSections();
 
   if (!session?.user) return null;
@@ -675,7 +678,10 @@ export default function DashboardSidebarMenu() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link href="/dashboard/account">
+                  {/* Closes the drawer the same way the nav links above do. Both of these
+                      land on the same page, so without it the drawer sat open on top of
+                      the account page you had just asked for. */}
+                  <Link href="/dashboard/account" onClick={closeMobileDrawer}>
                     <UserPen className="h-4 w-4" />
                     Account
                   </Link>
@@ -684,7 +690,7 @@ export default function DashboardSidebarMenu() {
                     one account errand people arrive with in mind, and it was two clicks and
                     a hunt through the tabs away. */}
                 <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link href="/dashboard/account?tab=password">
+                  <Link href="/dashboard/account?tab=password" onClick={closeMobileDrawer}>
                     <KeyRound className="h-4 w-4" />
                     Password
                   </Link>
