@@ -30,15 +30,20 @@ The first time you open the Submission Center you are asked to sign in:
   not open, the window shows a link to copy and open yourself. Institutional sign-in with MFA
   can take a couple of minutes; the client waits. On a server with a self-signed certificate the
   browser may warn you before showing the page.
-- **Stay signed in on this computer** (token and web browser forms): saves the token so the
-  Submission Center signs you in automatically next time, with no window at all, until the token
-  expires or you use **Logout**. Leave it off on a shared computer; unticked, the token is
-  forgotten when you close JFLAP.
+- **Stay signed in on this computer** (every form): saves your sign-in so the Submission Center
+  signs you in automatically next time, with no window at all, until it expires or you use
+  **Logout**. Your password itself is never saved, whichever form you use. Leave the box off on
+  a shared computer; unticked, the sign-in is forgotten when you close JFLAP.
 - **Show password**: reveals what you typed so you can check it.
-- **Remember Me** (password form only): saves the server, port, email and password, and signs you in automatically the next time the window opens. The saved details expire after seven days. Leave it off on a shared computer.
-- **Validate SSL Certificate**: **tick this box.** It starts unticked, which means the client does not check your server's certificate. Leave it unticked only when your instructor has told you the server uses a self-signed certificate, which is normally only true of a test server.
 
-Select **Login**. Messages appear below the button while it connects. Only active accounts can sign in.
+Select **Login**. Messages appear below the button while it connects. Only active accounts can sign in. The email box remembers the last address that signed in successfully.
+
+**About certificates**: there is no certificate checkbox any more. A server with a normal
+certificate connects with no questions. A server with a self-signed certificate (common for
+AFCT) is shown to you once, with a SHA-256 fingerprint your instructor can confirm; choosing
+**Trust this server** remembers it. If a remembered server's certificate later changes to one
+that cannot be verified, the client refuses to connect and says what to do, because that can
+mean someone is intercepting the connection.
 
 :::note If you usually open AFCT from your LMS
 Opening AFCT from Canvas, Brightspace or Blackboard signs you in without an AFCT password, and so
