@@ -35,6 +35,12 @@ export type ClientProblem = {
   /** True once the student has earned full marks (autograde fans a correct grade out to
    *  every group member, so a groupmate's solve counts too). Drives the Unsolved filter. */
   solved: boolean;
+  /**
+   * False when a person grades this problem rather than the autograder. The client
+   * uses it to say so, and to explain why a submission reads "Not graded" rather
+   * than Correct/Incorrect until the instructor gets to it.
+   */
+  autograderEnabled: boolean;
 };
 
 export type ClientAssignment = {
@@ -158,6 +164,7 @@ export async function buildClientCourseTree(user: ClientTokenUser): Promise<Clie
         grade: p.grade,
         status: p.status,
         solved: p.grade != null && p.maxPoints > 0 && p.grade >= p.maxPoints,
+        autograderEnabled: p.autograderEnabled,
       })),
     })),
   }));
