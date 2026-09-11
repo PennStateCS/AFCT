@@ -40,6 +40,12 @@ export type SessionUserRow = {
    */
   hasPassword: boolean;
   inactive: boolean;
+  /**
+   * The account's own timezone override, or null to follow the system default. Carried on
+   * the session because the Account form is seeded from the session user: without it the
+   * timezone select shows "Automatic" on every load, whatever is actually stored.
+   */
+  timezone: string | null;
   passwordChangedAt: Date | null;
   cropX: number | null;
   cropY: number | null;
@@ -56,6 +62,7 @@ const SESSION_USER_SELECT = {
   password: true,
   inactive: true,
   passwordChangedAt: true,
+  timezone: true,
   cropX: true,
   cropY: true,
   zoom: true,
