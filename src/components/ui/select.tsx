@@ -5,6 +5,7 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 
 import { fieldControlClass } from '@/components/ui/field';
+import { useCanHover } from '@/hooks/use-can-hover';
 import { cn } from '@/lib/utils';
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
@@ -67,6 +68,18 @@ function SelectContent({
   position = 'popper',
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  /**
+   * The scroll buttons are for a mouse, and on a touch screen they actively break the list.
+   *
+   * Radix mounts a scroll button the moment the viewport can scroll that way, and on mount it
+   * scrolls the *focused* item back into view. With a mouse that is the item under the pointer,
+   * because Radix focuses items on hover, so it does nothing. A finger cannot hover, so focus
+   * is still on whatever was selected when the list opened, and the first drag snaps straight
+   * back to it. The long timezone list on the account page was unusable on a phone because of
+   * it. Press-and-hold auto-scroll is no loss on a screen you can just flick.
+   */
+  const canHover = useCanHover();
+
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
@@ -80,7 +93,7 @@ function SelectContent({
         position={position}
         {...props}
       >
-        <SelectScrollUpButton />
+        {canHover && <SelectScrollUpButton />}
         <SelectPrimitive.Viewport
           className={cn(
             'p-1',
@@ -90,7 +103,7 @@ function SelectContent({
         >
           {children}
         </SelectPrimitive.Viewport>
-        <SelectScrollDownButton />
+        {canHover && <SelectScrollDownButton />}
       </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
   );
