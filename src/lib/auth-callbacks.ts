@@ -240,6 +240,9 @@ export async function buildSession({
      */
     session.user.mustChangePassword = freshUser.temporaryPassword && freshUser.hasPassword;
     session.user.inactive = false;
+    // The Account form seeds its timezone select from the session user, so this has to come
+    // through or the select reads "Automatic" no matter what the account has stored.
+    session.user.timezone = freshUser.timezone || undefined;
     session.user.cropX = freshUser.cropX ?? undefined;
     session.user.cropY = freshUser.cropY ?? undefined;
     session.user.zoom = freshUser.zoom ?? undefined;

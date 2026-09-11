@@ -43,6 +43,7 @@ const freshUser = (over: Record<string, unknown> = {}) => ({
   cropX: null,
   cropY: null,
   zoom: null,
+  timezone: null,
   ...over,
 });
 
@@ -200,6 +201,24 @@ describe('buildSession', () => {
     expect(session.user.firstName).toBe('Grace');
     expect(session.user.name).toBe('Grace Hopper');
     expect(session.user.inactive).toBe(false);
+  });
+
+  it('carries the account timezone onto the session', async () => {
+    // The Account form seeds its select from the session user, so a timezone that never
+    // reaches the session reads as "Automatic" however the account is actually set.
+    getSessionUserMock.mockResolvedValue(freshUser({ timezone: 'Asia/Tokyo' }));
+
+    const session = await runSession();
+
+    expect(session.user.timezone).toBe('Asia/Tokyo');
+  });
+
+  it('leaves the session timezone unset when the account follows the system default', async () => {
+    getSessionUserMock.mockResolvedValue(freshUser({ timezone: null }));
+
+    const session = await runSession();
+
+    expect(session.user.timezone).toBeUndefined();
   });
 
   it('revokes a session whose account was deleted', async () => {
