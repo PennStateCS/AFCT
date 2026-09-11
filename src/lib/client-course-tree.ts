@@ -24,6 +24,12 @@ export type ClientProblem = {
   id: string;
   title: string | null;
   description: string | null;
+  /**
+   * The rich source (validated TipTap envelope) when the description was written
+   * in the rich editor; null for plain-text descriptions. The plain `description`
+   * stays alongside it as the projection for clients that cannot render it.
+   */
+  descriptionJson: unknown;
   type: string | null;
   maxStates: number | null;
   isDeterministic: boolean | null;
@@ -35,12 +41,20 @@ export type ClientProblem = {
   /** True once the student has earned full marks (autograde fans a correct grade out to
    *  every group member, so a groupmate's solve counts too). Drives the Unsolved filter. */
   solved: boolean;
+  /**
+   * False when a person grades this problem rather than the autograder. The client
+   * uses it to say so, and to explain why a submission reads "Not graded" rather
+   * than Correct/Incorrect until the instructor gets to it.
+   */
+  autograderEnabled: boolean;
 };
 
 export type ClientAssignment = {
   id: string;
   title: string;
   description: string | null;
+  /** The rich source, as on ClientProblem; null while the assignment is locked. */
+  descriptionJson: unknown;
   dueDate: string | null;
   unlockAt: string | null;
   lateCutoff: string | null;
@@ -139,6 +153,7 @@ export async function buildClientCourseTree(user: ClientTokenUser): Promise<Clie
       id: a.id,
       title: a.title,
       description: a.description,
+      descriptionJson: a.descriptionJson ?? null,
       dueDate: a.dueDate?.toISOString() ?? null,
       unlockAt: a.unlockAt?.toISOString() ?? null,
       lateCutoff: a.lateCutoff?.toISOString() ?? null,
@@ -149,6 +164,7 @@ export async function buildClientCourseTree(user: ClientTokenUser): Promise<Clie
         id: p.id,
         title: p.title,
         description: p.description,
+        descriptionJson: p.descriptionJson ?? null,
         type: p.type,
         maxStates: p.maxStates,
         isDeterministic: p.isDeterministic,
@@ -158,6 +174,7 @@ export async function buildClientCourseTree(user: ClientTokenUser): Promise<Clie
         grade: p.grade,
         status: p.status,
         solved: p.grade != null && p.maxPoints > 0 && p.grade >= p.maxPoints,
+        autograderEnabled: p.autograderEnabled,
       })),
     })),
   }));
