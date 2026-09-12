@@ -70,7 +70,6 @@ type Props = {
   courseId: string;
   assignmentId: string;
   maxAssignmentGrade: number;
-  assignmentDueDate?: string | Date | null;
   problems?: Problem[];
 };
 
@@ -108,7 +107,6 @@ export default function AssignmentSubmissions({
   courseIsArchived,
   courseId,
   assignmentId,
-  assignmentDueDate,
   problems,
 }: Props) {
   const epsSymbol = useEmptyStringSymbol(courseId);
@@ -558,7 +556,10 @@ export default function AssignmentSubmissions({
                         : null
                     }
                     submissions={selectedSubs}
-                    assignmentDueDate={assignmentDueDate}
+                    // The selected student's own deadline, which the review read already
+                    // resolves. This used to be a prop the only caller never passed, so the
+                    // table had no deadline and called every attempt on time.
+                    effectiveDueDate={reviewData?.effective?.dueDate ?? null}
                     submissionsAction={grantAction}
                     group={reviewData?.group ?? null}
                     groupMembers={reviewData?.groupMembers}

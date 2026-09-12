@@ -40,7 +40,13 @@ type ProblemWorkspaceComment = DiscussionComment | StudentProblemComment;
 export type ProblemWorkspaceProps = {
   problem: Problem | null;
   submissions: ProblemSubmission[];
-  assignmentDueDate?: string | Date | null;
+  /**
+   * The deadline THIS student is held to, with any student or group override already applied,
+   * not the assignment's own due date. Staff are served the assignment's base dates, so a
+   * caller on the staff side has to resolve the selected student's schedule before passing it
+   * here; handing over the base date would label everybody with an extension as late.
+   */
+  effectiveDueDate?: string | Date | null;
   /** Group assignment: show a "Submitted by" column naming the member who submitted. */
   showSubmitter?: boolean;
   comments: ProblemWorkspaceComment[];
@@ -121,7 +127,7 @@ const normalizeComments = (comments: ProblemWorkspaceComment[]): DiscussionComme
 export default function ProblemWorkspace({
   problem,
   submissions,
-  assignmentDueDate,
+  effectiveDueDate,
   showSubmitter = false,
   comments,
   commentText,
@@ -175,7 +181,7 @@ export default function ProblemWorkspace({
 
   const normalizedComments = normalizeComments(comments);
   const handleDeleteComment = onDeleteComment ?? (() => {});
-  const dueDate = assignmentDueDate ? new Date(assignmentDueDate) : null;
+  const dueDate = effectiveDueDate ? new Date(effectiveDueDate) : null;
   const hasValidDueDate = !!dueDate && !Number.isNaN(dueDate.getTime());
 
   const attemptNumbers = new Map<string, number>();

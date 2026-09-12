@@ -545,7 +545,7 @@ describe('marking an attempt late', () => {
     render(
       <ProblemWorkspace
         {...baseProps}
-        assignmentDueDate="2026-03-01T00:00:00.000Z"
+        effectiveDueDate="2026-03-01T00:00:00.000Z"
         submissions={[at('2026-03-02T10:00:00.000Z')]}
       />,
     );
@@ -559,7 +559,7 @@ describe('marking an attempt late', () => {
     render(
       <ProblemWorkspace
         {...baseProps}
-        assignmentDueDate="2026-03-01T00:00:00.000Z"
+        effectiveDueDate="2026-03-01T00:00:00.000Z"
         submissions={[at('2026-02-27T10:00:00.000Z')]}
       />,
     );
