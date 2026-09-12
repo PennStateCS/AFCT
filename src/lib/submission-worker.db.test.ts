@@ -444,6 +444,66 @@ describe('persisting an evaluation', () => {
   });
 
   /**
+   * An evaluator failure is not a verdict, and must not be scored as one.
+   *
+   * Every one of these comes back from `runJavaEvaluator` as FAILED rather than as a throw, so
+   * it used to flow into `correct ? maxPoints : 0` and land a standing zero. None of them is
+   * anything the student did.
+   */
+  const FAILED = {
+    feedback: 'ERROR: Answer file not found on server.',
+    correct: undefined,
+    evaluationRaw: null,
+    status: 'FAILED' as const,
+  };
+
+  it('records the failed attempt but writes no grade', async () => {
+    const sub = await newSubmission();
+    const token = await claimSubmission(sub.id);
+
+    expect(await persist(sub, token, { evaluation: FAILED })).toBe('grade-withheld');
+
+    const after = await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } });
+    // The attempt itself is still recorded, and the claim still released: the work is off the
+    // queue and visible to staff as failed. What it does not do is put a number on it.
+    expect(after).toMatchObject({ status: 'FAILED', processingToken: null });
+    expect(await gradeRows()).toHaveLength(0);
+  });
+
+  it('leaves an existing grade alone when a rerun fails to evaluate', async () => {
+    // The worse half of the bug: `updateMany` targets non-manual rows, and a rerun of the
+    // latest attempt holds the standing grade, so a jar that started failing turned every
+    // correct mark it touched into a zero.
+    const sub = await newSubmission();
+    expect(await persist(sub, await claimSubmission(sub.id))).toBe('graded');
+    expect(await gradeRows()).toMatchObject([{ grade: 100 }]);
+
+    await prisma.submission.update({
+      where: { id: sub.id },
+      data: { status: 'PENDING', processingToken: null },
+    });
+    expect(await persist(sub, await claimSubmission(sub.id), { evaluation: FAILED })).toBe(
+      'grade-withheld',
+    );
+
+    expect(await gradeRows()).toMatchObject([{ grade: 100, gradeSource: 'AUTOGRADER' }]);
+  });
+
+  it('completes with no verdict without scoring it zero', async () => {
+    // The Windows development stand-in: COMPLETED, but it never judged anything.
+    const sub = await newSubmission();
+    const token = await claimSubmission(sub.id);
+
+    expect(
+      await persist(sub, token, {
+        evaluation: { ...OK, correct: undefined, feedback: 'File has 12 lines (Windows).' },
+      }),
+    ).toBe('grade-withheld');
+
+    expect(await gradeRows()).toHaveLength(0);
+  });
+
+  /**
    * The failure this whole shape exists for. Nothing may be left committed, and the row has to
    * still be somebody's work, or it is stranded: finished-looking, ungraded, and off the queue.
    */

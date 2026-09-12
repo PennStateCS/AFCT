@@ -55,6 +55,7 @@ const ACTION_VERB: Record<string, string> = {
   SUBMISSION_CREATED: 'Submitted',
   SUBMISSION_AUTOGRADED: 'Graded',
   SUBMISSION_AUTOGRADE_SKIPPED: 'Skipped',
+  SUBMISSION_AUTOGRADE_WITHHELD: 'Withheld',
   SUBMISSION_RERUN: 'Re-ran',
   COURSE_SUBMISSIONS_RERUN: 'Re-ran',
   SUBMISSION_QUEUE_REAPED: 'Reclaimed',
@@ -761,6 +762,15 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
     case 'SUBMISSION_AUTOGRADE_SKIPPED':
       // Why the grade did not move, which is the whole content of the entry.
       return str(metadata, 'reason');
+
+    // Kept apart from SKIPPED on purpose. That one is routine (newer work holds the grade);
+    // this one means the evaluator broke and somebody's work is unmarked as a result, so a
+    // study or an investigation must be able to tell the two apart years later.
+    case 'SUBMISSION_AUTOGRADE_WITHHELD': {
+      const reason = str(metadata, 'reason');
+      const status = str(metadata, 'status');
+      return reason ? `${reason}${status ? ` (${status})` : ''}` : null;
+    }
 
     case 'SUBMISSION_STALE_DISCARDED':
       return 'the submission was reclaimed while it was being graded';

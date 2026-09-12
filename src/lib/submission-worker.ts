@@ -475,7 +475,35 @@ export async function holdsTheStandingGrade(
  *
  * `stale` is the only one that changed nothing: the row belongs to somebody else now.
  */
-export type PersistOutcome = 'graded' | 'grade-skipped' | 'no-autograde' | 'stale';
+export type PersistOutcome =
+  | 'graded'
+  | 'grade-skipped'
+  | 'grade-withheld'
+  | 'no-autograde'
+  | 'stale';
+
+/**
+ * Whether an evaluation is something a grade may be computed from.
+ *
+ * The evaluator reports a failure by returning, not by throwing: a missing submission file, a
+ * missing or unconfigured answer key, a crashed jar, output that would not parse, JSON that was
+ * not the shape agreed, all come back as FAILED with no verdict. Those used to be fed to
+ * `correct ? maxPoints : 0` like any other answer, so a server-side fault became a standing zero
+ * for the student, and on a group problem for everybody in the group. A rerun of work that had
+ * been marked correct overwrote the mark with that zero.
+ *
+ * `correct` has to be a definite boolean as well as the status being COMPLETED. The Windows
+ * development stand-in completes without a verdict, and "no verdict" is not "incorrect".
+ *
+ * Pure and exported, so the rule can be tested exhaustively without a database standing behind
+ * it: every failure the evaluator can report is a case here.
+ */
+export function yieldsAGrade(evaluation: {
+  status: SubmissionEvaluationStatus;
+  correct?: boolean;
+}): boolean {
+  return evaluation.status === 'COMPLETED' && typeof evaluation.correct === 'boolean';
+}
 
 /**
  * Everything the evaluation changes in the database, in one transaction.
@@ -555,7 +583,17 @@ export async function persistEvaluation(opts: {
 
       let outcome: PersistOutcome = 'no-autograde';
 
-      if (opts.autograderEnabled) {
+      /**
+       * An evaluation that failed says nothing about the work, so it must not move the grade.
+       *
+       * Leaving the row untouched puts the student where `missing-work.ts` already expects
+       * somebody in this position to be: they handed something in, so no derived zero follows
+       * either, and the problem simply reads as not marked yet. The gap belongs to us, and staff
+       * can see the FAILED attempt in the queue and mark it by hand.
+       */
+      if (opts.autograderEnabled && !yieldsAGrade(opts.evaluation)) {
+        outcome = 'grade-withheld';
+      } else if (opts.autograderEnabled) {
         const earnedPoints = opts.evaluation.correct ? opts.maxPoints : 0;
 
         if (
@@ -719,6 +757,20 @@ async function evaluateSubmission(id: string, token: string | null = null) {
       });
       console.log(
         `[SubmissionWorker] Submission ${id} is not the latest; left the standing grade alone.`,
+      );
+    } else if (outcome === 'grade-withheld') {
+      /**
+       * The evaluator could not reach a verdict, so there is no grade to give. WARNING rather
+       * than INFO: every route to here is something broken (a missing answer key, a crashed
+       * jar, output nobody could read), and the work is now sitting unmarked because of it.
+       */
+      await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADE_WITHHELD', 'WARNING', {
+        studentId: submission.studentId,
+        reason: 'the evaluation did not reach a verdict',
+        status: evaluation.status,
+      });
+      console.warn(
+        `[SubmissionWorker] Submission ${id} evaluated ${evaluation.status} with no verdict; left the grade alone.`,
       );
     }
 

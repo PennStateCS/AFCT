@@ -53,7 +53,7 @@ vi.mock('fs', () => ({
 vi.mock('child_process', () => ({ execSync: execSyncMock }));
 vi.mock('os', () => ({ default: { platform: platformMock }, platform: platformMock }));
 
-import { __test__ } from '@/lib/submission-worker';
+import { __test__, yieldsAGrade } from '@/lib/submission-worker';
 
 const {
   evaluateSubmission,
@@ -65,6 +65,40 @@ const {
 } = __test__;
 
 const CONFIG = { timeoutMs: 5_000, maxMemoryMb: 256, analyzerLimit: 100 };
+
+/**
+ * Which evaluations a grade may be computed from.
+ *
+ * The rows below are every shape `runJavaEvaluator` and `evaluateWithJar` can return, read off
+ * those two functions. All of the FAILED ones used to be scored `correct ? maxPoints : 0`, which
+ * made each of them a standing zero for the student, so this table is the guard on that.
+ */
+describe('yieldsAGrade', () => {
+  const cases: [string, { status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'; correct?: boolean }, boolean][] = [
+    ['a correct answer', { status: 'COMPLETED', correct: true }, true],
+    ['a wrong answer', { status: 'COMPLETED', correct: false }, true],
+    // Not the student's doing, any of them.
+    ['no file submitted', { status: 'FAILED', correct: false }, false],
+    ['the uploaded file missing from storage', { status: 'FAILED', correct: false }, false],
+    ['no answer key configured', { status: 'FAILED' }, false],
+    ['the answer key missing from storage', { status: 'FAILED' }, false],
+    ['the evaluator crashing', { status: 'FAILED' }, false],
+    ['output that would not parse', { status: 'FAILED' }, false],
+    ['JSON of the wrong shape', { status: 'FAILED' }, false],
+    ['an unexpected error inside the runner', { status: 'FAILED', correct: false }, false],
+    // Completed, but with nothing to say. "No verdict" is not "incorrect", which is the
+    // difference between leaving work unmarked and scoring it zero.
+    ['the Windows development stand-in', { status: 'COMPLETED', correct: undefined }, false],
+    ['a row still waiting', { status: 'PENDING', correct: true }, false],
+    ['a row being worked on', { status: 'PROCESSING', correct: true }, false],
+  ];
+
+  it.each(cases)('%s', (_name, evaluation, expected) => {
+    expect(yieldsAGrade(evaluation)).toBe(expected);
+  });
+});
+
+
 
 const makeSubmission = (over: Record<string, any> = {}): any => ({
   id: 'sub-1',

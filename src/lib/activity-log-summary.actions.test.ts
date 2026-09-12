@@ -367,6 +367,17 @@ const DETAIL: Array<[string, Meta, string | null]> = [
     { reason: 'grade held for manual review' },
     'grade held for manual review',
   ],
+  [
+    'SUBMISSION_AUTOGRADE_WITHHELD',
+    { reason: 'the evaluation did not reach a verdict', status: 'FAILED' },
+    'the evaluation did not reach a verdict (FAILED)',
+  ],
+  [
+    'SUBMISSION_AUTOGRADE_WITHHELD',
+    { reason: 'the evaluation did not reach a verdict' },
+    'the evaluation did not reach a verdict',
+  ],
+  ['SUBMISSION_AUTOGRADE_WITHHELD', {}, null],
   ['SUBMISSION_STALE_DISCARDED', {}, 'the submission was reclaimed while it was being graded'],
 
   // Submissions the system turned down. Each says why, since that is the whole entry.
