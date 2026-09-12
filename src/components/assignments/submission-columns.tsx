@@ -88,9 +88,9 @@ export function buildSubmissionColumns({
       cell: ({ row }) => {
         const submission = row.original;
         const submittedAt = new Date(submission.submittedAt);
-        const isLate =
-          submission.status?.toLowerCase() === 'late' ||
-          (hasValidDueDate && submittedAt.getTime() > dueDate!.getTime());
+        // Through the same helper the Status column uses. This was a second copy of the test
+        // thirty lines above the import, which is two places to fix and one to forget.
+        const isLate = getTimingStatusChip(submission, hasValidDueDate, dueDate).label === 'Late';
         return (
           <div className="flex flex-col gap-1">
             <span>{formatDateInTimeZone(submittedAt, timeZone)}</span>

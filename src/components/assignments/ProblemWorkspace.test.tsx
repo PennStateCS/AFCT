@@ -567,17 +567,20 @@ describe('marking an attempt late', () => {
     expect(screen.queryByText('Late')).not.toBeInTheDocument();
   });
 
-  it('trusts a LATE status even with no deadline to compare against', () => {
-    // The server decided this one. Without a due date there is nothing to measure it by, and
-    // dropping the badge here would hide a fact somebody already established.
+  // Replaces a test that asserted a LATE status marked the badge without any deadline. Nothing
+  // writes that status (see lib/submission-status), so it was green for a value the database
+  // cannot produce. What matters instead is that the two places this view shows lateness agree.
+  it('marks the badge and the Status chip together, from one deadline', () => {
     render(
       <ProblemWorkspace
         {...baseProps}
-        submissions={[at('2026-03-02T10:00:00.000Z', { status: 'LATE' })]}
+        effectiveDueDate="2026-03-01T00:00:00.000Z"
+        submissions={[at('2026-03-02T10:00:00.000Z')]}
       />,
     );
 
-    expect(screen.getAllByText('Late').length).toBeGreaterThan(0);
+    // The badge under the timestamp and the Status column's chip, both reading the same helper.
+    expect(screen.getAllByText('Late')).toHaveLength(2);
   });
 });
 
