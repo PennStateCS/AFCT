@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -768,5 +768,45 @@ describe('the grade panel a grader sees', () => {
       screen.queryByRole('button', { name: /release to autograder/i }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /lock this grade/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The prompt itself, which is the part a student actually reads.
+ *
+ * The workspace forwards the problem to the header, and it used to forward the plain
+ * description while reading the rich one through a cast that its own type did not declare. Any
+ * caller that built a problem object without it, which is what the staff submissions tab did,
+ * got the flattened text and showed raw LaTeX where an equation belonged.
+ */
+describe('the problem prompt', () => {
+  const withMath = {
+    ...problem,
+    description: 'Accept the language $a^n b^n$',
+    descriptionJson: {
+      version: 1,
+      document: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Accept the language ' },
+              { type: 'inlineMath', attrs: { latex: 'a^n b^n' } },
+            ],
+          },
+        ],
+      },
+    },
+  };
+
+  it('renders the equation rather than its source', async () => {
+    const { container } = render(<ProblemWorkspace {...baseProps} problem={withMath} />);
+
+    // KaTeX loads on demand, so the source shows for a moment before the maths replaces it.
+    await waitFor(() => {
+      expect(container.querySelector('[data-type="inline-math"] math')).not.toBeNull();
+    });
+    expect(screen.queryByText(/\$a\^n b\^n\$/)).not.toBeInTheDocument();
   });
 });
