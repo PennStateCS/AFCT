@@ -57,6 +57,7 @@ const ACTION_VERB: Record<string, string> = {
   SUBMISSION_AUTOGRADE_SKIPPED: 'Skipped',
   SUBMISSION_AUTOGRADE_WITHHELD: 'Withheld',
   REMOVE_ASSIGNMENT_PROBLEM_REFUSED: 'Refused',
+  PROBLEM_TYPE_CHANGE_REFUSED: 'Refused',
   SUBMISSION_RERUN: 'Re-ran',
   COURSE_SUBMISSIONS_RERUN: 'Re-ran',
   SUBMISSION_QUEUE_REAPED: 'Reclaimed',
@@ -767,6 +768,16 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
     // Kept apart from SKIPPED on purpose. That one is routine (newer work holds the grade);
     // this one means the evaluator broke and somebody's work is unmarked as a result, so a
     // study or an investigation must be able to tell the two apart years later.
+    // Which way the type was going and what stopped it, since a refused change leaves the
+    // problem as it was and the entry is the only record that anybody tried.
+    case 'PROBLEM_TYPE_CHANGE_REFUSED': {
+      const from = str(metadata, 'fromType');
+      const to = str(metadata, 'toType');
+      const reason = str(metadata, 'reason');
+      if (!from || !to) return reason;
+      return `${from} to ${to}${reason ? `, ${reason}` : ''}`;
+    }
+
     // What stood in the way, since the whole entry is "this removal would have deleted work".
     case 'REMOVE_ASSIGNMENT_PROBLEM_REFUSED': {
       const submissions = firstNum(metadata, 'submissions');

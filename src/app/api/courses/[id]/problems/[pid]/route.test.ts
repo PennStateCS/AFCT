@@ -33,9 +33,16 @@ vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
 vi.mock('@/lib/upload-limits', () => ({ getSystemUploadLimit: uploadLimitMock }));
 vi.mock('@/app/utils/xmlStructureValidate', () => ({ validateStructureXML: validateMock }));
+const readFileMock = vi.hoisted(() => vi.fn());
 vi.mock('fs', () => {
   const api = {
-    promises: { mkdir: mkdirMock, writeFile: writeFileMock, unlink: unlinkMock },
+    // readFile is how a type change re-checks the answer already on the problem.
+    promises: {
+      mkdir: mkdirMock,
+      writeFile: writeFileMock,
+      unlink: unlinkMock,
+      readFile: readFileMock,
+    },
   };
   return { default: api, ...api };
 });
@@ -48,6 +55,7 @@ beforeEach(() => {
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
   validateMock.mockReturnValue({ isValid: true });
+  readFileMock.mockResolvedValue('<structure></structure>');
   prismaMock.$queryRaw.mockResolvedValue([]);
   // Reset rather than just cleared: a test that makes the delete throw would otherwise leave
   // that implementation behind for the next one.
@@ -120,6 +128,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
+      type: 'FA',
       title: 'Problem',
       fileName: 'file.jff',
     });
@@ -171,6 +180,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
+      type: 'FA',
       title: 'P',
       fileName: 'answer.jff',
     });
@@ -186,6 +196,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
+      type: 'FA',
       title: 'P',
       fileName: 'answer.jff',
     });
@@ -202,6 +213,7 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
+      type: 'FA',
       title: 'Problem',
       fileName: 'file.jff',
     });
@@ -306,6 +318,7 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
+      type: 'FA',
       fileName: 'old.jff',
       originalFileName: 'old.jff',
     });
@@ -319,11 +332,64 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
     expect(activityLogMock).toHaveBeenCalled();
   });
 
+  /**
+   * Validation only ever ran on an upload, so a problem could be switched from FA to PDA while
+   * keeping its FA answer: the row claimed one thing and the key the evaluator marks against
+   * was another.
+   */
+  describe('changing the type without uploading a new answer', () => {
+    const changeTypeTo = (newType: string) => {
+      authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
+      prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
+      prismaMock.problem.findFirst.mockResolvedValue({
+        id: 'p1',
+        type: 'FA',
+        fileName: 'old.jff',
+        originalFileName: 'old.jff',
+      });
+      prismaMock.problem.update.mockResolvedValue({ id: 'p1' });
+      return PUT(putReq({ title: 'Traffic light', type: newType, maxPoints: '10' }), params());
+    };
+
+    it('refuses when the answer already there is not valid for the new type', async () => {
+      validateMock.mockReturnValue({ isValid: false, error: 'not a PDA' });
+
+      const res = await changeTypeTo('PDA');
+
+      expect(res.status).toBe(400);
+      expect(prismaMock.problem.update).not.toHaveBeenCalled();
+      // Re-read and re-checked against the NEW type, which is the whole point.
+      expect(readFileMock).toHaveBeenCalled();
+      expect(validateMock).toHaveBeenCalledWith(expect.any(String), 'PDA');
+    });
+
+    it('refuses when the answer file cannot be read at all', async () => {
+      // Already broken, and a type change is not the moment to paper over it.
+      readFileMock.mockRejectedValue(new Error('ENOENT'));
+
+      expect((await changeTypeTo('PDA')).status).toBe(400);
+      expect(prismaMock.problem.update).not.toHaveBeenCalled();
+    });
+
+    it('allows it when the answer already there satisfies the new type', async () => {
+      validateMock.mockReturnValue({ isValid: true });
+
+      expect((await changeTypeTo('PDA')).status).toBe(200);
+      expect(prismaMock.problem.update).toHaveBeenCalled();
+    });
+
+    it('does not re-read anything when the type is unchanged', async () => {
+      expect((await changeTypeTo('FA')).status).toBe(200);
+      expect(readFileMock).not.toHaveBeenCalled();
+    });
+  });
+
   it('replaces the solution file when a valid one is uploaded', async () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'FACULTY' } });
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.problem.findFirst.mockResolvedValue({
       id: 'p1',
+      type: 'FA',
       fileName: 'old.jff',
       originalFileName: 'old.jff',
     });

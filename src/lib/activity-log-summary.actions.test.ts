@@ -389,6 +389,13 @@ const DETAIL: Array<[string, Meta, string | null]> = [
     'would have deleted 2 grades',
   ],
   ['REMOVE_ASSIGNMENT_PROBLEM_REFUSED', {}, null],
+  [
+    'PROBLEM_TYPE_CHANGE_REFUSED',
+    { fromType: 'FA', toType: 'PDA', reason: 'answer file is not valid for the new type' },
+    'FA to PDA, answer file is not valid for the new type',
+  ],
+  ['PROBLEM_TYPE_CHANGE_REFUSED', { fromType: 'FA', toType: 'PDA' }, 'FA to PDA'],
+  ['PROBLEM_TYPE_CHANGE_REFUSED', {}, null],
   ['SUBMISSION_STALE_DISCARDED', {}, 'the submission was reclaimed while it was being graded'],
 
   // Submissions the system turned down. Each says why, since that is the whole entry.

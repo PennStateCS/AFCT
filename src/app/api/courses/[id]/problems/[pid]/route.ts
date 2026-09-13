@@ -83,6 +83,57 @@ export const PUT = withCourseAuth(
       let answerContentHash: string | null | undefined;
       let answerShapeHash: string | null | undefined;
 
+      /**
+       * Changing the type has to answer for the answer file already there.
+       *
+       * Validation only ever ran on an upload, so a problem could be switched from FA to PDA
+       * while keeping its FA answer. The row then claimed one thing and its answer key was
+       * another, and the evaluator would be asked to mark student work against it.
+       *
+       * A stored answer that happens to satisfy the new type is allowed through, which is why
+       * this re-reads rather than refusing outright. One that does not, or that cannot be read
+       * at all, means the type change needs a new answer file to come with it.
+       */
+      const typeChanged = type !== existingProblem.type;
+      const keepingExistingFile = !(file && file.size > 0);
+      if (typeChanged && keepingExistingFile && existingProblem.fileName) {
+        let existingXml: string | null = null;
+        try {
+          existingXml = await fs.promises.readFile(
+            resolveInsideDir(uploadsDir, existingProblem.fileName),
+            'utf8',
+          );
+        } catch {
+          existingXml = null;
+        }
+
+        const stillValid = existingXml !== null && validateStructureXML(existingXml, type).isValid;
+        if (!stillValid) {
+          await createEnhancedActivityLog(prisma, req, {
+            userId: user.id,
+            action: 'PROBLEM_TYPE_CHANGE_REFUSED',
+            severity: 'WARNING',
+            category: 'PROBLEM',
+            courseId,
+            problemId,
+            metadata: {
+              fromType: existingProblem.type,
+              toType: type,
+              reason:
+                existingXml === null
+                  ? 'answer file unreadable'
+                  : 'answer file is not valid for the new type',
+            },
+          });
+          return NextResponse.json(
+            {
+              error: `The answer file on this problem is not a valid ${type}. Upload a new answer file with the type change.`,
+            },
+            { status: 400 },
+          );
+        }
+      }
+
       // Handle file update if a new file is provided
       if (file && file.size > 0) {
         // Enforce the solution-file extension allow-list server-side.
