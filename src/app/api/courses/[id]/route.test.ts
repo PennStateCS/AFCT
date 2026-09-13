@@ -54,9 +54,13 @@ const toDateTimeMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/activity-log-utils', () => ({ createEnhancedActivityLog: activityLogMock }));
+const lockCourseWorkMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/course-status-checks', () => ({
   canArchiveCourse: canArchiveMock,
   canUnpublishCourse: canUnpublishMock,
+  // Both checks run inside the update's transaction now, holding the rows a submission would
+  // attach to, so their answer cannot go stale before the write.
+  lockCourseWork: lockCourseWorkMock,
 }));
 vi.mock('@/lib/date-convert', () => ({
   toDateTimeInTimezone: toDateTimeMock,
@@ -679,6 +683,30 @@ describe('PUT /api/courses/[id]', () => {
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'course-1' }) });
     expect(res.status).toBe(400);
+  });
+
+  /**
+   * Both lifecycle checks used to run before the transaction that writes, so a submission
+   * arriving in between was frozen out or cut off by a decision taken before it existed. They
+   * now run inside it, holding the rows a submission would attach to.
+   */
+  it('runs the lifecycle checks inside the update transaction', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    canArchiveMock.mockResolvedValue({ canArchive: true });
+
+    await putAs({ id: 'admin-1', role: 'ADMIN', isAdmin: true }, true);
+
+    expect(lockCourseWorkMock).toHaveBeenCalledWith(prismaMock, 'course-1');
+    // Through the transaction client, or the answer could go stale before the write.
+    expect(canArchiveMock.mock.calls[0]?.[0]).toBe(prismaMock);
+  });
+
+  it('does not take the lock when neither archiving nor unpublishing', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+
+    await putAs({ id: 'admin-1', role: 'ADMIN', isAdmin: true }, false);
+
+    expect(lockCourseWorkMock).not.toHaveBeenCalled();
   });
 
   it('returns 403 when archive check fails', async () => {

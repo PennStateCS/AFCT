@@ -4,7 +4,7 @@ import type { CourseRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { diffFields, logError } from '@/lib/api/activity';
-import { canArchiveCourse, canUnpublishCourse } from '@/lib/course-status-checks';
+import { canArchiveCourse, canUnpublishCourse, lockCourseWork } from '@/lib/course-status-checks';
 import { isAdmin, canManageCourse } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
@@ -318,6 +318,19 @@ export const GET = withCourseAuth(
 );
 
 /**
+ * Thrown inside the course-update transaction when archiving or unpublishing is refused, so the
+ * rollback and the 403 cannot disagree about whether anything was written.
+ */
+class CourseLifecycleRefusal extends Error {
+  constructor(
+    readonly action: 'COURSE_ARCHIVE_REJECTED' | 'COURSE_UNPUBLISH_REJECTED',
+    readonly reason: string | undefined,
+  ) {
+    super(reason ?? 'Refused');
+  }
+}
+
+/**
  * Updates a course's details and, when `instructorIds` is supplied, reconciles its
  * faculty roster (adds, promotes, or removes to match the desired set). Runs the
  * same archive/unpublish safety checks as the dedicated toggles, requires a
@@ -407,42 +420,13 @@ export const PUT = withCourseAuth(
       }
     }
 
-    // Centralized check for archiving
-    if (body.isArchived) {
-      const { canArchive, reason } = await canArchiveCourse(
-        prisma,
-        id,
-        body.startDate,
-        body.endDate,
-      );
-      if (!canArchive) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: session?.user?.id ?? null,
-          action: 'COURSE_ARCHIVE_REJECTED',
-          category: 'COURSE',
-          severity: 'WARNING',
-          courseId: id,
-          metadata: { reason },
-        });
-        return NextResponse.json({ error: reason }, { status: 403 });
-      }
-    }
-
-    // Centralized check for unpublishing
-    if (!body.isPublished) {
-      const { canUnpublish, reason } = await canUnpublishCourse(prisma, id);
-      if (!canUnpublish) {
-        await createEnhancedActivityLog(prisma, req, {
-          userId: session?.user?.id ?? null,
-          action: 'COURSE_UNPUBLISH_REJECTED',
-          category: 'COURSE',
-          severity: 'WARNING',
-          courseId: id,
-          metadata: { reason },
-        });
-        return NextResponse.json({ error: reason }, { status: 403 });
-      }
-    }
+    /**
+     * Both lifecycle checks run inside the update's own transaction, below, holding the rows a
+     * submission would attach to. Out here they were check-then-act: a submission arriving
+     * between the answer and the write was frozen out or cut off by a decision taken before it
+     * existed. The dedicated publish and archive endpoints do the same.
+     */
+    const needsWorkCheck = body.isArchived || !body.isPublished;
 
     try {
       // Prior values are snapshotted inside the transaction (below) so the audit
@@ -494,6 +478,24 @@ export const PUT = withCourseAuth(
             registrationCloseAt: true,
           },
         });
+
+        if (needsWorkCheck) {
+          await lockCourseWork(tx, id);
+          if (body.isArchived) {
+            const { canArchive, reason } = await canArchiveCourse(
+              tx,
+              id,
+              body.startDate,
+              body.endDate,
+            );
+            if (!canArchive) throw new CourseLifecycleRefusal('COURSE_ARCHIVE_REJECTED', reason);
+          }
+          if (!body.isPublished) {
+            const { canUnpublish, reason } = await canUnpublishCourse(tx, id);
+            if (!canUnpublish)
+              throw new CourseLifecycleRefusal('COURSE_UNPUBLISH_REJECTED', reason);
+          }
+        }
 
         await tx.course.update({
           where: { id },
@@ -702,6 +704,17 @@ export const PUT = withCourseAuth(
         viewerIsAdmin,
       });
     } catch (error) {
+      if (error instanceof CourseLifecycleRefusal) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: session?.user?.id ?? null,
+          action: error.action,
+          category: 'COURSE',
+          severity: 'WARNING',
+          courseId: id,
+          metadata: { reason: error.reason },
+        });
+        return NextResponse.json({ error: error.reason }, { status: 403 });
+      }
       console.error('PUT /api/courses/[id] error:', error);
       await logError(req, {
         userId: session?.user?.id ?? null,
