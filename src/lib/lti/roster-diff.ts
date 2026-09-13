@@ -15,7 +15,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import type { CourseRole } from '@prisma/client';
+import type { CourseRole, Prisma } from '@prisma/client';
 import { mapLtiRoles } from '@/lib/lti/course-link';
 import type { Member } from '@/lib/lti/nrps';
 
@@ -106,10 +106,20 @@ const displayName = (first: string | null, last: string | null, fallback: string
 export async function diffRoster(opts: {
   courseId: string;
   sources: { issuer: string; contextLinkId: string; members: Member[] }[];
+  /**
+   * Which client to read AFCT's own state through.
+   *
+   * A preview reads through `prisma` and shows somebody what would happen. Applying reads
+   * through the transaction that writes, so the answer cannot go stale: the diff used to be
+   * computed outside it, and a roster edit made by hand in between was then overwritten by a
+   * decision taken before it existed.
+   */
+  client?: Prisma.TransactionClient;
 }): Promise<RosterDiff> {
   const { courseId, sources } = opts;
+  const db: Prisma.TransactionClient = opts.client ?? prisma;
 
-  const roster = await prisma.roster.findMany({
+  const roster = await db.roster.findMany({
     where: { courseId },
     select: {
       userId: true,
@@ -126,7 +136,7 @@ export async function diffRoster(opts: {
    * is not an identifier. This is the same pair the unique index on LinkedIdentity holds.
    */
   const issuers = [...new Set(sources.map((s) => s.issuer))];
-  const identities = await prisma.linkedIdentity.findMany({
+  const identities = await db.linkedIdentity.findMany({
     where: { kind: 'LTI', issuer: { in: issuers } },
     select: { userId: true, subject: true, issuer: true },
   });
@@ -150,7 +160,7 @@ export async function diffRoster(opts: {
     .filter((e): e is string => Boolean(e));
   const byEmail = new Map(
     (
-      await prisma.user.findMany({
+      await db.user.findMany({
         where: { email: { in: emails } },
         select: { id: true, email: true },
       })

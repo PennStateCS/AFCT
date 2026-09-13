@@ -332,7 +332,10 @@ describe('recording which LMS section a student is in', () => {
     });
     await sync([member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })]);
 
-    const { changes } = await diffRoster({ courseId: COURSE, sources: [{ ...SOURCE, members: [] }] });
+    const { changes } = await diffRoster({
+      courseId: COURSE,
+      sources: [{ ...SOURCE, members: [] }],
+    });
     await applyRosterChanges({
       courseId: COURSE,
       changes,
@@ -341,5 +344,72 @@ describe('recording which LMS section a student is in', () => {
     });
 
     expect(await contextMembers()).toContain(ids.existing);
+  });
+});
+
+/**
+ * Comparing the LMS roster against AFCT's own, inside the transaction that acts on it.
+ *
+ * The diff used to be taken before the transaction, which made the whole sync a check-then-act
+ * over the roster: a student dropped or enrolled by hand in between was overwritten by a
+ * decision made before that happened.
+ */
+describe('applying the LMS rosters directly', () => {
+  it('works the changes out from the sources it is given', async () => {
+    const result = await applyRosterChanges({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-new', email: 'new@example.test' })] },
+      ],
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    expect(result.added).toBe(1);
+    expect(
+      await prisma.roster.findFirst({
+        where: { courseId: COURSE, user: { email: 'new@example.test' } },
+      }),
+    ).not.toBeNull();
+  });
+
+  it('sees a roster change made after the LMS was read, where a precomputed diff does not', async () => {
+    /**
+     * The window this closes is the one a person spends looking at the preview.
+     *
+     * The diff used to be taken when the preview was drawn and applied whenever the button was
+     * pressed, so anything done to the roster by hand in between was decided against a state
+     * that had already moved. Taking it inside the transaction narrows that to the transaction
+     * itself.
+     */
+    const sources = [
+      {
+        ...SOURCE,
+        members: [member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })],
+      },
+    ];
+
+    // What the preview would have worked out: nobody is enrolled yet, so this is an add.
+    const stale = await diffRoster({ courseId: COURSE, sources });
+    expect(stale.changes).toContainEqual(expect.objectContaining({ kind: 'add' }));
+
+    // Enrolled by hand while the preview sat on somebody's screen.
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'TA' },
+    });
+
+    const result = await applyRosterChanges({
+      courseId: COURSE,
+      sources,
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    // Nothing to add: the diff taken inside the transaction sees the enrolment that arrived.
+    expect(result.added).toBe(0);
+    // And the role somebody set by hand a moment ago survives.
+    expect(
+      await prisma.roster.findFirstOrThrow({ where: { courseId: COURSE, userId: ids.existing } }),
+    ).toMatchObject({ role: 'TA' });
   });
 });

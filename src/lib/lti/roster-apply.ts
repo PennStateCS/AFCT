@@ -14,7 +14,8 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { AuditContext } from '@/lib/linked-identity';
-import type { ContextRoster, RosterChange } from '@/lib/lti/roster-diff';
+import { diffRoster, type ContextRoster, type RosterChange } from '@/lib/lti/roster-diff';
+import type { Member } from '@/lib/lti/nrps';
 import { rememberContextMember } from '@/lib/lti/course-link';
 
 export type ApplyResult = {
@@ -43,7 +44,16 @@ export type ApplyResult = {
  */
 export async function applyRosterChanges(opts: {
   courseId: string;
-  changes: RosterChange[];
+  /**
+   * What to apply, or the LMS rosters to work it out from inside the transaction.
+   *
+   * Prefer `sources`. A diff computed outside the transaction that applies it is a
+   * check-then-act over the whole roster: a student dropped or enrolled by hand in between is
+   * overwritten by a decision taken before that happened. Passing `changes` is the preview's
+   * shape, kept for callers that have already decided and for tests.
+   */
+  sources?: { issuer: string; contextLinkId: string; members: Member[] }[];
+  changes?: RosterChange[];
   /**
    * Who each LMS course currently lists, one entry per source read.
    *
@@ -58,7 +68,7 @@ export async function applyRosterChanges(opts: {
   actorUserId: string;
   context: AuditContext;
 }): Promise<ApplyResult> {
-  const { courseId, changes, contexts, actorUserId } = opts;
+  const { courseId, actorUserId } = opts;
   const result: ApplyResult = {
     added: 0,
     dropped: 0,
@@ -78,7 +88,20 @@ export async function applyRosterChanges(opts: {
    */
   const events: { action: string; targetUserId: string; extra?: Record<string, unknown> }[] = [];
 
+  /** What was actually applied, for the summary below. Filled inside the transaction. */
+  let changes: RosterChange[] = opts.changes ?? [];
+
   await prisma.$transaction(async (tx) => {
+    /**
+     * Worked out here when the caller handed over the LMS rosters, so AFCT's own state is read
+     * inside the transaction that acts on it and cannot move in between.
+     */
+    const resolved = opts.sources
+      ? await diffRoster({ courseId, sources: opts.sources, client: tx })
+      : null;
+    if (resolved) changes = resolved.changes;
+    const contexts = resolved?.contexts ?? opts.contexts;
+
     /**
      * Sections first, so the roster changes below land against memberships that already match
      * what the LMS said. Each context is reconciled to exactly what its own roster listed:

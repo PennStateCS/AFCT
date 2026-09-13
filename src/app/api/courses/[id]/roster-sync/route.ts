@@ -80,7 +80,9 @@ async function preview(
   }
 
   const diff = await diffRoster({ courseId, sources });
-  return { ok: true as const, diff };
+  // The rosters travel with the preview so the apply can take its own diff inside the
+  // transaction that writes, rather than trusting one computed out here.
+  return { ok: true as const, diff, sources };
 }
 
 /**
@@ -133,12 +135,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const result = await preview(id, allowed.links);
   if (!result.ok) return apiError(502, result.message);
 
+  /**
+   * The LMS rosters go in, not the diff.
+   *
+   * `preview` already fetched them, which is the slow part and cannot be done inside a
+   * transaction anyway. What must not happen outside one is comparing them against AFCT's own
+   * roster: that read used to sit here, so a student dropped or enrolled by hand between the
+   * preview and the apply was overwritten by a decision taken before it happened. Handing over
+   * the sources lets the diff be taken inside the transaction that acts on it.
+   *
+   * Only ever from a fresh, complete read: preview refuses if any LMS source failed, and a
+   * partial roster cannot tell "no longer in this section" from "could not ask".
+   */
   const applied = await applyRosterChanges({
     courseId: id,
-    changes: result.diff.changes,
-    // Only ever from a fresh, complete read: preview refuses if any LMS source failed, and a
-    // partial roster cannot tell "no longer in this section" from "could not ask".
-    contexts: result.diff.contexts,
+    sources: result.sources,
     actorUserId: allowed.userId,
     context: request,
   });
