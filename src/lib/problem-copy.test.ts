@@ -29,7 +29,11 @@ vi.mock('@/lib/safe-upload', () => ({
   resolveInsideDir: (dir: string, name: string) => `${dir}/${name}`,
 }));
 
-import { copyAnswerKeysForProblems, copyProblemInto } from './problem-copy';
+import {
+  copyAnswerKeysForProblems,
+  copyProblemInto,
+  MissingAnswerKeyError,
+} from './problem-copy';
 
 const source = {
   id: 'p1',
@@ -142,8 +146,8 @@ describe('copying one problem', () => {
 
 describe('copying the answer keys for a whole assignment', () => {
   const problems = [
-    { id: 'p1', fileName: 'a.jff', originalFileName: 'first.jff' },
-    { id: 'p2', fileName: 'b.jff', originalFileName: 'second.jff' },
+    { id: 'p1', title: 'DFA Problem 1', fileName: 'a.jff', originalFileName: 'first.jff' },
+    { id: 'p2', title: 'DFA Problem 2', fileName: 'b.jff', originalFileName: 'second.jff' },
   ];
 
   it('returns one entry per problem, keyed by the source problem id', async () => {
@@ -173,6 +177,43 @@ describe('copying the answer keys for a whole assignment', () => {
 
     expect(byProblemId.get('p1')).toEqual({ fileName: null, originalFileName: 'first.jff' });
     expect(copiedPaths).toHaveLength(1);
+  });
+
+  /**
+   * A copy keeps each link's autograder setting, so an autograded problem whose answer file has
+   * gone produced another autograded problem with nothing to mark against. The operation said it
+   * worked, and the breakage surfaced weeks later as evaluation failures nobody could connect
+   * back to the duplication.
+   */
+  describe('an autograded problem whose answer file is gone', () => {
+    it('refuses the whole copy and names the problem', async () => {
+      fsMock.existsSync.mockReturnValueOnce(false);
+
+      await expect(copyAnswerKeysForProblems(problems, new Set(['p1']))).rejects.toThrow(
+        MissingAnswerKeyError,
+      );
+    });
+
+    it('reports what it had already copied, so the caller can tidy up', async () => {
+      // The second problem is the broken one, so the first has a file on disk by then.
+      fsMock.existsSync.mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+      await expect(
+        copyAnswerKeysForProblems(problems, new Set(['p2'])),
+      ).rejects.toMatchObject({
+        problemTitle: 'DFA Problem 2',
+        copiedPaths: ['/private/uploads/solutions/stored-first.jff'],
+      });
+    });
+
+    it('still allows the copy when that problem is not autograded', async () => {
+      // A problem marked by hand with no answer key is an ordinary thing to copy.
+      fsMock.existsSync.mockReturnValueOnce(false);
+
+      const { byProblemId } = await copyAnswerKeysForProblems(problems, new Set(['p2']));
+
+      expect(byProblemId.get('p1')).toEqual({ fileName: null, originalFileName: 'first.jff' });
+    });
   });
 
   it('does nothing when the assignment has no problems', async () => {
