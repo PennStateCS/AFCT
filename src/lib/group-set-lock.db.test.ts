@@ -1,6 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { deleteGroupIfSetUnlocked, lockGroupSetIfUsed } from './group-set-service';
+import {
+  deleteGroupIfSetUnlocked,
+  lockGroupSetIfUsed,
+  withUnlockedGroupSet,
+} from './group-set-service';
 import { GroupSetLockedError } from './group-sets';
 
 /**
@@ -202,5 +206,95 @@ describe('a lock landing while the delete is in flight', () => {
         expect(gone).toBe(true);
       }
     }
+  });
+});
+
+/**
+ * The same lock, generalised.
+ *
+ * Membership edits and group creation had the check-then-act the delete path already fixed:
+ * both read `lockedAt`, then wrote in a separate transaction. `withUnlockedGroupSet` puts the
+ * caller's work under the set's row lock, so what follows here is the delete's race test
+ * pointed at the helper every one of those routes now goes through.
+ */
+describe('working under the group-set lock', () => {
+  const memberships = async () =>
+    prisma.groupMembership.count({ where: { groupSetId: ids.groupSet } });
+
+  it('does the work when the set is unlocked', async () => {
+    const created = await withUnlockedGroupSet(ids.groupSet, async (tx) =>
+      tx.studentGroup.create({
+        data: { name: `Another ${SUFFIX}`, groupSetId: ids.groupSet },
+        select: { id: true },
+      }),
+    );
+
+    expect(created.id).toBeTruthy();
+  });
+
+  it('refuses, and rolls the work back, when the set is already locked', async () => {
+    await lockGroupSetIfUsed(prisma, ids.groupSet);
+
+    await expect(
+      withUnlockedGroupSet(ids.groupSet, async (tx) =>
+        tx.studentGroup.create({
+          data: { name: `Should not exist ${SUFFIX}`, groupSetId: ids.groupSet },
+        }),
+      ),
+    ).rejects.toThrow(GroupSetLockedError);
+
+    expect(
+      await prisma.studentGroup.findFirst({ where: { name: `Should not exist ${SUFFIX}` } }),
+    ).toBeNull();
+  });
+
+  it('waits for a lock landing mid-flight, then refuses', async () => {
+    // The case a mocked test cannot reach, and the whole reason the helper exists: a first
+    // submission stamps the set while a membership edit is already under way.
+    let releaseLocker!: () => void;
+    const lockerMayCommit = new Promise<void>((resolve) => {
+      releaseLocker = resolve;
+    });
+
+    const locker = prisma.$transaction(
+      async (tx) => {
+        await lockGroupSetIfUsed(tx, ids.groupSet);
+        await lockerMayCommit;
+      },
+      { timeout: 20_000, maxWait: 20_000 },
+    );
+
+    await wait(250);
+
+    const editing = withUnlockedGroupSet(ids.groupSet, async (tx) =>
+      tx.groupMembership.create({
+        data: {
+          groupSetId: ids.groupSet,
+          groupId: ids.group,
+          courseId: ids.course,
+          userId: ids.user,
+        },
+      }),
+    );
+    let settled = false;
+    void editing.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+
+    await wait(400);
+    // Blocked on the locker's row, not reading a stale `lockedAt` and carrying on.
+    expect(settled).toBe(false);
+    expect(await memberships()).toBe(0);
+
+    releaseLocker();
+    await locker;
+
+    await expect(editing).rejects.toThrow(GroupSetLockedError);
+    expect(await memberships()).toBe(0);
   });
 });

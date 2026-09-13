@@ -41,6 +41,37 @@ export async function assertGroupSetUnlocked(setId: string): Promise<void> {
 }
 
 /**
+ * Run a change to a group set with its lock held, refusing if the set is already locked.
+ *
+ * The generalisation of `deleteGroupIfSetUnlocked`, for the same reason and against the same
+ * race. Reading `lockedAt` and then writing is a check-then-act: the write runs at READ
+ * COMMITTED, so a submission or grade that commits in between is invisible to it and the
+ * change lands against a set that has since become permanently locked. Re-reading inside the
+ * transaction does not help, because Postgres only applies serializable guarantees between
+ * serializable transactions, and the submission path being one does nothing for this side.
+ *
+ * `FOR UPDATE` takes the set's row lock first, the same row `lockGroupSetIfUsed` updates.
+ * Whichever transaction arrives first wins and the other waits, so only two orders exist: the
+ * lock lands first and this refuses, or this commits first and the lock lands afterwards
+ * against a set whose memberships are already what they are. Both are consistent.
+ *
+ * Everything the caller does must go through the `tx` handed to it, or it is outside the lock
+ * and the race is back.
+ */
+export async function withUnlockedGroupSet<T>(
+  setId: string,
+  work: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ lockedAt: Date | null }>>`
+      SELECT "lockedAt" FROM "GroupSet" WHERE "id" = ${setId} FOR UPDATE
+    `;
+    if (rows[0]?.lockedAt) throw new GroupSetLockedError();
+    return work(tx);
+  });
+}
+
+/**
  * Delete a group, refusing if its set is locked, as one atomic step.
  *
  * Reading `lockedAt` and then deleting is a check-then-act, and re-reading inside the
