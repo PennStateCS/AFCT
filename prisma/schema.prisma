@@ -923,8 +923,14 @@ model GroupSet {
   groups      StudentGroup[]
   assignments Assignment[]
 
-  // Unique set name per course. Case-insensitive + trimmed uniqueness is enforced
-  // in the service layer (this DB constraint is the exact-match backstop).
+  /// Unique set name per course.
+  ///
+  /// This one is the exact-match rule. The case-insensitive one lives beside it as a unique
+  /// index over `(courseId, lower(name))`, added by hand because Prisma cannot express an
+  /// index over an expression: see the `group_set_name_case_insensitive` migration. Before it,
+  /// the routes checked case-insensitively while only the exact constraint stood behind them,
+  /// so two people creating "Project Teams" and "project teams" at the same moment both passed
+  /// the check and both rows landed.
   @@unique([courseId, name])
 }
 

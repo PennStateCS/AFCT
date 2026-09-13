@@ -315,6 +315,7 @@ erDiagram
   String userId FK
   Float scoreMaximum
   Float scoreGiven "nullable"
+  Boolean gradingComplete
   LtiScoreState state
   Int attempts
   String claimToken "nullable"
@@ -625,6 +626,17 @@ Properties as follows:
   > The grade to send, or null to clear the student's score in the LMS. Null is not zero: a
   > zero is a mark, a clear says there is no mark, which is what an extension granted after a
   > missing-work zero was sent has to be able to express.
+- `gradingComplete`
+  > Whether every problem on the assignment was settled for this student when the score was
+  > worked out.
+  >
+  > Decides the `gradingProgress` the LMS is told: `FullyGraded` when this is true, and
+  > `PendingManual` when it is not. AFCT's own gradebook leaves work awaiting a grade out of
+  > both halves of a student's total, so a half-marked assignment reads 50/50 there while the
+  > score sent is 50 out of the assignment's full value. Saying which of those the number is
+  > was the missing half: the score is honest, the label says it is not the final word.
+  >
+  > Defaults true, which is how every row written before this existed behaves.
 - `state`:
 - `attempts`: How many times sending has been tried. Drives the backoff and the give-up point.
 - `claimToken`
