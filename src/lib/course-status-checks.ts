@@ -126,3 +126,54 @@ export async function canUnpublishCourse(
 
   return { canUnpublish: true };
 }
+
+/**
+ * Hold the rows an assignment's student work hangs off, for the length of a transaction.
+ *
+ * The assignment-scoped counterpart of `lockCourseWork`, and the synchronisation point the
+ * unpublish guard shares with `createSubmission`. A submission locks its assignment-problem
+ * link (`lib/submission-eligibility`) and then re-reads the assignment under it, so holding the
+ * same links here is what puts the two in some order instead of letting them pass each other.
+ *
+ * The assignment's own row is taken as well, and not only for symmetry with the delete: an
+ * assignment with no problem links yet has nothing for the second statement to hold, and a
+ * problem being attached to it at that moment would bring a link this never saw. Attaching one
+ * takes `FOR KEY SHARE` on the assignment through its foreign key, which `FOR UPDATE` blocks.
+ *
+ * Assignment first, then the links. Nothing takes them the other way round: a submission never
+ * touches the assignment's row at all, because `Submission` references the link rather than the
+ * assignment, so there is no pair here that could meet in the middle.
+ */
+export async function lockAssignmentWork(
+  tx: Prisma.TransactionClient,
+  assignmentId: string,
+): Promise<void> {
+  await tx.$queryRaw`SELECT 1 FROM "Assignment" WHERE "id" = ${assignmentId} FOR UPDATE`;
+  await tx.$queryRaw`
+    SELECT 1 FROM "AssignmentProblem" WHERE "assignmentId" = ${assignmentId} FOR UPDATE
+  `;
+}
+
+/**
+ * Why this assignment may not be unpublished, or null when it may be.
+ *
+ * An assignment that students have handed work in against, or that carries marks, stays
+ * published: unpublishing hides it, and hidden work is work a student cannot see and an
+ * instructor can forget. Submissions are reported before grades because a submission is the
+ * more useful thing to tell somebody about.
+ *
+ * Takes a client rather than reaching for `prisma`, because the only reading that counts is the
+ * one taken inside the transaction that does the update, with `lockAssignmentWork` held.
+ */
+export async function unpublishBlockedBy(
+  tx: Prisma.TransactionClient,
+  assignmentId: string,
+): Promise<'submissions' | 'grades' | null> {
+  const [submissionCount, gradeCount] = await Promise.all([
+    tx.submission.count({ where: { assignmentId } }),
+    tx.assignmentProblemGrade.count({ where: { assignmentId } }),
+  ]);
+  if (submissionCount > 0) return 'submissions';
+  if (gradeCount > 0) return 'grades';
+  return null;
+}

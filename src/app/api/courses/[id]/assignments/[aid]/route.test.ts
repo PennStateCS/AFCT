@@ -502,7 +502,23 @@ const existingAssignment = {
   lateCutoff: null,
 };
 
+/**
+ * The update handlers run their guard inside a transaction now, so they need the same setup the
+ * delete does: the body runs against this mock, and nothing is on the assignment unless a test
+ * says so.
+ */
+const withUpdateTransaction = () => {
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+    fn(prismaMock),
+  );
+  prismaMock.$queryRaw.mockResolvedValue([]);
+  prismaMock.submission.count.mockResolvedValue(0);
+  prismaMock.assignmentProblemGrade.count.mockResolvedValue(0);
+};
+
 describe('PUT /api/courses/[id]/assignments/[aid]', () => {
+  beforeEach(withUpdateTransaction);
+
   it('returns 401 when unauthenticated', async () => {
     authMock.mockResolvedValue(null);
     const res = await PUT(putReq({ title: 'X' }), mutationParams);
@@ -536,11 +552,30 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
     expect(prismaMock.assignment.update).toHaveBeenCalled();
   });
 
+  it('unpublishes an assignment that carries no work', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignment.update.mockResolvedValue({
+      ...existingAssignment,
+      isPublished: false,
+    });
+
+    const res = await PUT(
+      putReq({ title: 'Old', dueDate: '2026-01-01', isPublished: false }),
+      mutationParams,
+    );
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isPublished: false }) }),
+    );
+  });
+
   it('blocks unpublishing when submissions exist', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+    prismaMock.submission.count.mockResolvedValue(1);
     const res = await PUT(putReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
     const body = await res.json();
     expect(body.error).toContain('submissions');
     // Business-rule block, not an authz denial: WARNING + *_REJECTED with FK context.
@@ -559,11 +594,11 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
 
   it('blocks unpublishing when grades exist (no submissions)', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+    prismaMock.assignmentProblemGrade.count.mockResolvedValue(1);
     const res = await PUT(putReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('grades');
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       expect.anything(),
@@ -575,6 +610,29 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
         metadata: { reason: 'has grades' },
       }),
     );
+  });
+
+  /**
+   * The guard is about unpublishing, not about the assignment being busy.
+   *
+   * Work on an assignment has never stopped its title or its deadline being changed, and the
+   * transaction the guard now runs in must not quietly start doing that. `isPublished` absent,
+   * or sent as `true`, takes no locks and asks nothing.
+   */
+  it.each([
+    ['an edit that leaves the publish state alone', { title: 'New', dueDate: '2026-01-01' }],
+    ['an edit that publishes it', { title: 'New', dueDate: '2026-01-01', isPublished: true }],
+  ])('allows %s even when the assignment has work', async (_label, body) => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignment.update.mockResolvedValue({ ...existingAssignment, title: 'New' });
+    prismaMock.submission.count.mockResolvedValue(5);
+    prismaMock.assignmentProblemGrade.count.mockResolvedValue(5);
+
+    const res = await PUT(putReq(body), mutationParams);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignment.update).toHaveBeenCalled();
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('returns 400 for an inconsistent late-submission window', async () => {
@@ -607,6 +665,8 @@ describe('PUT /api/courses/[id]/assignments/[aid]', () => {
 });
 
 describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
+  beforeEach(withUpdateTransaction);
+
   it('404s when the assignment is not in the course', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue(null);
     const res = await PATCH(
@@ -646,10 +706,11 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
 
   it('blocks unpublishing when submissions exist', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+    prismaMock.submission.count.mockResolvedValue(1);
     const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('submissions');
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       expect.anything(),
@@ -665,11 +726,11 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
 
   it('blocks unpublishing when grades exist (no submissions)', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+    prismaMock.assignmentProblemGrade.count.mockResolvedValue(1);
     const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
     expect(res.status).toBe(403);
     expect((await res.json()).error).toContain('grades');
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalledWith(
       prismaMock,
       expect.anything(),
@@ -680,6 +741,38 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
         assignmentId: 'a1',
         metadata: { reason: 'has grades' },
       }),
+    );
+  });
+
+  // The same rule as PUT: the two handlers share the guard, so they have to agree.
+  it.each([
+    ['an edit that leaves the publish state alone', { title: 'New' }],
+    ['an edit that publishes it', { isPublished: true }],
+  ])('allows %s even when the assignment has work', async (_label, body) => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignment.update.mockResolvedValue({ ...existingAssignment, title: 'New' });
+    prismaMock.submission.count.mockResolvedValue(5);
+    prismaMock.assignmentProblemGrade.count.mockResolvedValue(5);
+
+    const res = await PATCH(patchReq(body), mutationParams);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignment.update).toHaveBeenCalled();
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+  });
+
+  it('unpublishes an assignment that carries no work', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignment.update.mockResolvedValue({
+      ...existingAssignment,
+      isPublished: false,
+    });
+
+    const res = await PATCH(patchReq({ isPublished: false }), mutationParams);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isPublished: false }) }),
     );
   });
 
@@ -837,6 +930,8 @@ describe('DELETE /api/courses/[id]/assignments/[aid]', () => {
  * `assignmentId` it sees any submission or grade anywhere and refuses every unpublish.
  */
 describe('what the assignment lookups and unpublish guard are scoped to', () => {
+  beforeEach(withUpdateTransaction);
+
   const whereOf = (fn: { mock: { calls: unknown[][] } }) =>
     (fn.mock.calls[0][0] as { where: unknown }).where;
 
@@ -873,8 +968,6 @@ describe('what the assignment lookups and unpublish guard are scoped to', () => 
 
   it('asks about work on this assignment only before allowing an unpublish', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
-    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
-    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
     prismaMock.assignment.update.mockResolvedValue({
       ...existingAssignment,
       isPublished: false,
@@ -889,10 +982,35 @@ describe('what the assignment lookups and unpublish guard are scoped to', () => 
     );
     expect(res.status).toBe(200);
 
-    expect(whereOf(prismaMock.assignmentProblem.findFirst)).toEqual({
-      assignmentId: 'a1',
-      submissions: { some: {} },
+    expect(whereOf(prismaMock.submission.count)).toEqual({ assignmentId: 'a1' });
+    expect(whereOf(prismaMock.assignmentProblemGrade.count)).toEqual({ assignmentId: 'a1' });
+  });
+
+  /**
+   * And the rows it holds are this assignment's too. A lock statement missing its parameter
+   * would take every assignment-problem row in the installation, which is not a correctness
+   * bug but would stop every submission in every course for the length of the transaction.
+   */
+  it('locks this assignment and its own problem links', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ ...existingAssignment });
+    prismaMock.assignment.update.mockResolvedValue({
+      ...existingAssignment,
+      isPublished: false,
     });
-    expect(whereOf(prismaMock.assignmentProblemGrade.findFirst)).toEqual({ assignmentId: 'a1' });
+
+    await PATCH(
+      new Request('http://localhost/api/courses/c1/assignments/a1', {
+        method: 'PATCH',
+        body: JSON.stringify({ isPublished: false }),
+      }),
+      mutationParams,
+    );
+
+    const locked = prismaMock.$queryRaw.mock.calls.map((c) => [String(c[0]), ...c.slice(1)]);
+    expect(locked).toEqual([
+      [expect.stringContaining('"Assignment"'), 'a1'],
+      [expect.stringContaining('"AssignmentProblem"'), 'a1'],
+    ]);
+    expect(locked.every(([sql]) => String(sql).includes('FOR UPDATE'))).toBe(true);
   });
 });

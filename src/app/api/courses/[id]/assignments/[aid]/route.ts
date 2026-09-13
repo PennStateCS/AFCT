@@ -18,6 +18,7 @@ import { computeLateSubmissionState, resolveUnlockAt } from '@/lib/assignment-la
 import { effectiveDeadline } from '@/lib/effective-deadline';
 import { overridesForStudentWhere } from '@/lib/assignment-visibility';
 import { diffFields } from '@/lib/api/activity';
+import { lockAssignmentWork, unpublishBlockedBy } from '@/lib/course-status-checks';
 
 // Types
 interface AssignmentWithProblemsAndCourse {
@@ -55,64 +56,65 @@ interface AssignmentWithProblemsAndCourse {
 }
 
 /**
- * State-integrity guards shared by the full (PUT) and partial (PATCH) updates: an
- * assignment can't be unpublished once it has submissions or grades. Returns a
- * `NextResponse` to short-circuit the update, or `null` when the change is allowed.
+ * The unpublish guard refused the change, from inside the transaction that would have made it.
+ *
+ * Carries which kind of work stopped it so the handler can say the same thing it always has,
+ * and thrown rather than returned because the answer is only trustworthy while the rows are
+ * held. The log and the response are written after the rollback, on the outer client, so a
+ * refusal is still recorded.
  */
-async function assertAssignmentMutable(
-  req: Request,
-  params: {
-    userId: string;
-    courseId: string;
-    assignmentId: string | undefined;
-    data: { isPublished?: boolean };
-  },
-): Promise<NextResponse | null> {
-  const { userId, courseId, assignmentId, data } = params;
-
-  // `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish".
-  // Block unpublishing an assignment that already has submissions or grades.
-  if (data.isPublished === false) {
-    const hasSubmission = !!(await prisma.assignmentProblem.findFirst({
-      where: { assignmentId, submissions: { some: {} } },
-      select: { assignmentId: true },
-    }));
-    const hasGrade = !!(await prisma.assignmentProblemGrade.findFirst({
-      where: { assignmentId },
-      select: { assignmentId: true },
-    }));
-
-    if (hasSubmission) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId,
-        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
-        category: 'ASSIGNMENT',
-        severity: 'WARNING',
-        courseId,
-        assignmentId,
-        metadata: { reason: 'has submissions' },
-      });
-      return NextResponse.json(
-        { error: 'Assignment must not have any submissions' },
-        { status: 403 },
-      );
-    }
-
-    if (hasGrade) {
-      await createEnhancedActivityLog(prisma, req, {
-        userId,
-        action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
-        category: 'ASSIGNMENT',
-        severity: 'WARNING',
-        courseId,
-        assignmentId,
-        metadata: { reason: 'has grades' },
-      });
-      return NextResponse.json({ error: 'Assignment must not have any grades' }, { status: 403 });
-    }
+class UnpublishBlockedError extends Error {
+  constructor(readonly kind: 'submissions' | 'grades') {
+    super(`Assignment must not have any ${kind}`);
   }
+}
 
-  return null;
+/**
+ * The unpublish guard, run where it counts.
+ *
+ * `data.isPublished` is the requested NEXT state, so `=== false` means "unpublish". Anything
+ * else is an ordinary edit and takes no locks: an assignment full of work can still have its
+ * title or its deadline changed, and always could.
+ *
+ * It used to read the counts through `prisma` before the update, which is a check-then-act
+ * across three separate statements with nothing held between them. A submission arriving in
+ * that gap was refused by a decision taken before it existed: the submission's own transaction
+ * locked the problem link, re-read the assignment, found it published and committed, and the
+ * update then unpublished an assignment that by then had work. `lockAssignmentWork` is the
+ * same row `createSubmission` takes, so one of the two waits and both orders are consistent.
+ */
+async function assertUnpublishAllowed(
+  tx: Prisma.TransactionClient,
+  params: { assignmentId: string; data: { isPublished?: boolean } },
+): Promise<void> {
+  if (params.data.isPublished !== false) return;
+
+  await lockAssignmentWork(tx, params.assignmentId);
+  const blockedBy = await unpublishBlockedBy(tx, params.assignmentId);
+  if (blockedBy) throw new UnpublishBlockedError(blockedBy);
+}
+
+/**
+ * Record the refusal and answer with it, in the shape this route has always used.
+ *
+ * Written outside the transaction, on `prisma`, because the transaction that decided it has
+ * rolled back by the time this runs and a log written inside would have gone with it.
+ */
+async function refuseUnpublish(
+  req: Request,
+  error: UnpublishBlockedError,
+  params: { userId: string; courseId: string; assignmentId: string },
+): Promise<NextResponse> {
+  await createEnhancedActivityLog(prisma, req, {
+    userId: params.userId,
+    action: 'ASSIGNMENT_UNPUBLISH_REJECTED',
+    category: 'ASSIGNMENT',
+    severity: 'WARNING',
+    courseId: params.courseId,
+    assignmentId: params.assignmentId,
+    metadata: { reason: `has ${error.kind}` },
+  });
+  return NextResponse.json({ error: error.message }, { status: 403 });
 }
 
 /**
@@ -418,14 +420,6 @@ export const PUT = withCourseAuth(
     // Deadlines are anchored to the course's timezone, not the actor's.
     const courseTimezone = await resolveCourseTimezone(courseId);
 
-    const mutationBlock = await assertAssignmentMutable(req, {
-      userId: user.id,
-      courseId,
-      assignmentId: id,
-      data,
-    });
-    if (mutationBlock) return mutationBlock;
-
     try {
       const dueDate = data.dueDate
         ? toEndOfDayInTimezone(data.dueDate, courseTimezone)
@@ -456,24 +450,27 @@ export const PUT = withCourseAuth(
 
       const { allowLateSubmissions, lateCutoff } = lateState;
 
-      const updated = await prisma.assignment.update({
-        where: { id },
-        data: {
-          title: data.title,
-          ...descriptionWriteData(data),
-          // Use the computed value (keeps the existing due date when none was sent)
-          // rather than re-deriving from a possibly-undefined data.dueDate.
-          dueDate,
-          unlockAt: unlockState.unlockAt,
-          allowLateSubmissions,
-          lateCutoff,
-          // Only when the caller actually sent it: an older client that knows nothing about this
-          // setting must not switch it off by omission.
-          ...(typeof data.missingWorkIsZero === 'boolean'
-            ? { missingWorkIsZero: data.missingWorkIsZero }
-            : {}),
-          isPublished: data.isPublished,
-        },
+      const updated = await prisma.$transaction(async (tx) => {
+        await assertUnpublishAllowed(tx, { assignmentId: existing.id, data });
+        return tx.assignment.update({
+          where: { id },
+          data: {
+            title: data.title,
+            ...descriptionWriteData(data),
+            // Use the computed value (keeps the existing due date when none was sent)
+            // rather than re-deriving from a possibly-undefined data.dueDate.
+            dueDate,
+            unlockAt: unlockState.unlockAt,
+            allowLateSubmissions,
+            lateCutoff,
+            // Only when the caller actually sent it: an older client that knows nothing about this
+            // setting must not switch it off by omission.
+            ...(typeof data.missingWorkIsZero === 'boolean'
+              ? { missingWorkIsZero: data.missingWorkIsZero }
+              : {}),
+            isPublished: data.isPublished,
+          },
+        });
       });
 
       await createEnhancedActivityLog(prisma, req, {
@@ -498,6 +495,15 @@ export const PUT = withCourseAuth(
 
       return NextResponse.json(updated);
     } catch (error) {
+      // A refused unpublish is a business-rule answer, not a failure: it is logged and
+      // reported the way it always was, and never as a 500.
+      if (error instanceof UnpublishBlockedError) {
+        return refuseUnpublish(req, error, {
+          userId: user.id,
+          courseId,
+          assignmentId: existing.id,
+        });
+      }
       console.error('Assignment update failed:', error);
       await logError(req, {
         userId: user.id,
@@ -560,14 +566,6 @@ export const PATCH = withCourseAuth(
     // Deadlines are anchored to the course's timezone, not the actor's.
     const courseTimezone = await resolveCourseTimezone(courseId);
 
-    const mutationBlock = await assertAssignmentMutable(req, {
-      userId: user.id,
-      courseId,
-      assignmentId: id,
-      data,
-    });
-    if (mutationBlock) return mutationBlock;
-
     try {
       const effectiveDueDate =
         data.dueDate !== undefined
@@ -626,9 +624,9 @@ export const PATCH = withCourseAuth(
       if (data.lateCutoff !== undefined) updateData.lateCutoff = lateCutoff;
       if (data.isPublished !== undefined) updateData.isPublished = data.isPublished;
 
-      const updated = await prisma.assignment.update({
-        where: { id },
-        data: updateData,
+      const updated = await prisma.$transaction(async (tx) => {
+        await assertUnpublishAllowed(tx, { assignmentId: existing.id, data });
+        return tx.assignment.update({ where: { id }, data: updateData });
       });
 
       await createEnhancedActivityLog(prisma, req, {
@@ -655,6 +653,15 @@ export const PATCH = withCourseAuth(
 
       return NextResponse.json(updated);
     } catch (error) {
+      // A refused unpublish is a business-rule answer, not a failure: it is logged and
+      // reported the way it always was, and never as a 500.
+      if (error instanceof UnpublishBlockedError) {
+        return refuseUnpublish(req, error, {
+          userId: user.id,
+          courseId,
+          assignmentId: existing.id,
+        });
+      }
       console.error('Assignment partial update failed:', error);
       await logError(req, {
         userId: user.id,
