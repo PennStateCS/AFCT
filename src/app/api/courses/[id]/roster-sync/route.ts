@@ -136,6 +136,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const applied = await applyRosterChanges({
     courseId: id,
     changes: result.diff.changes,
+    // Only ever from a fresh, complete read: preview refuses if any LMS source failed, and a
+    // partial roster cannot tell "no longer in this section" from "could not ask".
+    contexts: result.diff.contexts,
     actorUserId: allowed.userId,
     context: request,
   });

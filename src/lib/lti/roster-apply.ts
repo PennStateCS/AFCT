@@ -14,7 +14,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { AuditContext } from '@/lib/linked-identity';
-import type { RosterChange } from '@/lib/lti/roster-diff';
+import type { ContextRoster, RosterChange } from '@/lib/lti/roster-diff';
 import { rememberContextMember } from '@/lib/lti/course-link';
 
 export type ApplyResult = {
@@ -44,10 +44,21 @@ export type ApplyResult = {
 export async function applyRosterChanges(opts: {
   courseId: string;
   changes: RosterChange[];
+  /**
+   * Who each LMS course currently lists, one entry per source read.
+   *
+   * Reconciled rather than appended to. Membership used to be recorded only while adding
+   * somebody, so a student already enrolled in AFCT never got a section against their name and
+   * grade passback had nothing to choose by; and nothing ever removed one, so a student moving
+   * from section A to section B ended up in both and passback refused as ambiguous.
+   *
+   * Omit it and nothing is touched, which is what a caller with an incomplete read should do.
+   */
+  contexts?: ContextRoster[];
   actorUserId: string;
   context: AuditContext;
 }): Promise<ApplyResult> {
-  const { courseId, changes, actorUserId } = opts;
+  const { courseId, changes, contexts, actorUserId } = opts;
   const result: ApplyResult = {
     added: 0,
     dropped: 0,
@@ -68,6 +79,30 @@ export async function applyRosterChanges(opts: {
   const events: { action: string; targetUserId: string; extra?: Record<string, unknown> }[] = [];
 
   await prisma.$transaction(async (tx) => {
+    /**
+     * Sections first, so the roster changes below land against memberships that already match
+     * what the LMS said. Each context is reconciled to exactly what its own roster listed:
+     * everyone present is recorded, and anyone no longer there is removed.
+     *
+     * Safe to delete only because a diff is built from a complete read of every source. A
+     * partial roster cannot tell absence from a failed fetch, which is why one failed source
+     * aborts the whole union rather than producing a diff to apply.
+     */
+    for (const context of contexts ?? []) {
+      const userIds = context.members.map((m) => m.userId);
+      await tx.ltiContextMember.deleteMany({
+        where: { contextLinkId: context.contextLinkId, userId: { notIn: userIds } },
+      });
+      for (const member of context.members) {
+        await rememberContextMember({
+          contextLinkId: context.contextLinkId,
+          userId: member.userId,
+          ltiUserId: member.ltiUserId,
+          tx,
+        });
+      }
+    }
+
     for (const change of changes) {
       switch (change.kind) {
         /**
@@ -85,8 +120,11 @@ export async function applyRosterChanges(opts: {
             change.existingUserId ??
             (await createAccount(tx, change, () => result.accountsCreated++));
 
-          // The LMS has just told us they are in this course, which is what decides where
-          // their grade goes when several LMS courses open this one.
+          /**
+           * Their section, for an account that did not exist when the reconciliation above ran.
+           * Everyone already in AFCT is handled there; this covers the one case it cannot,
+           * since the user id is only minted here.
+           */
           await rememberContextMember({
             contextLinkId,
             userId,

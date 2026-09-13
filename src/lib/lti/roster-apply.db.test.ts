@@ -90,17 +90,28 @@ afterAll(async () => {
 
 /** Diff then apply, the way the screen will. */
 async function sync(members: Member[]) {
-  const { changes } = await diffRoster({
+  const { changes, contexts } = await diffRoster({
     courseId: COURSE,
     sources: [{ ...SOURCE, members }],
   });
   return applyRosterChanges({
     courseId: COURSE,
     changes,
+    contexts,
     actorUserId: ids.actor,
     context: CONTEXT,
   });
 }
+
+/** Which AFCT accounts this LMS course currently records as its members. */
+const contextMembers = async (contextLinkId = CONTEXT_LINK) =>
+  (
+    await prisma.ltiContextMember.findMany({
+      where: { contextLinkId },
+      select: { userId: true },
+      orderBy: { userId: 'asc' },
+    })
+  ).map((m) => m.userId);
 
 describe('adding somebody the LMS lists', () => {
   it('creates an account, enrols them, and attaches their LMS identity', async () => {
@@ -274,5 +285,61 @@ describe('the record it leaves', () => {
     expect(entry.userId).toBe(ids.actor);
     expect(entry.severity).toBe('WARNING');
     expect(entry.metadata).toMatchObject({ added: 1, accountsCreated: 1 });
+  });
+});
+
+/**
+ * Which LMS course each student is currently in, which is what decides where a grade goes when
+ * several open the same AFCT course.
+ *
+ * This used to be written only while adding somebody, so a student already enrolled in AFCT
+ * never got a section against their name and passback had nothing to choose by. Nothing ever
+ * removed one either, so a student moving between sections ended up in both and passback
+ * refused as ambiguous. It is reconciled now: whoever the LMS lists is recorded, and whoever it
+ * no longer lists is removed.
+ */
+describe('recording which LMS section a student is in', () => {
+  it('records it for a student who was already enrolled in AFCT', async () => {
+    // Nothing to add: the enrolment is already right, which is exactly the case that used to
+    // leave no membership behind.
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+
+    await sync([member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })]);
+
+    expect(await contextMembers()).toContain(ids.existing);
+  });
+
+  it('removes a student the LMS course no longer lists', async () => {
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+    await sync([member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })]);
+    expect(await contextMembers()).toContain(ids.existing);
+
+    // The same section, now listing somebody else entirely.
+    await sync([member({ ltiUserId: 'lms-new', email: 'new@example.test' })]);
+
+    expect(await contextMembers()).not.toContain(ids.existing);
+  });
+
+  it('leaves memberships alone when no contexts are supplied', async () => {
+    // What a caller with an incomplete read must do: a partial roster cannot tell "no longer in
+    // this section" from "could not ask".
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+    await sync([member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })]);
+
+    const { changes } = await diffRoster({ courseId: COURSE, sources: [{ ...SOURCE, members: [] }] });
+    await applyRosterChanges({
+      courseId: COURSE,
+      changes,
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    expect(await contextMembers()).toContain(ids.existing);
   });
 });

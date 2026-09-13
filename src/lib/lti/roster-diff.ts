@@ -59,8 +59,30 @@ export type RosterChange =
       source: RosterSource;
     };
 
+/** One LMS context's roster, resolved to AFCT accounts. */
+export type ContextRoster = {
+  contextLinkId: string;
+  /** Everybody that LMS course currently lists as active, that AFCT could identify. */
+  members: { userId: string; ltiUserId: string }[];
+};
+
 export type RosterDiff = {
   changes: RosterChange[];
+  /**
+   * Who each LMS course listed, one entry per source read, empty list included.
+   *
+   * Separate from `changes` because it answers a different question. A change says what has to
+   * happen to somebody's enrolment; this says which LMS course they are currently in, which is
+   * what decides where their grade goes when several open the same AFCT course. Recording it
+   * only while adding somebody meant an existing student never got a section against their
+   * name, and passback then had nothing to choose by.
+   *
+   * Always one entry per source, so a section that now lists nobody still reconciles: the
+   * emptiness is the fact. That only holds because a diff is built from a complete read of
+   * every source, which is why a failed fetch aborts the whole union rather than producing a
+   * partial one. Absence is only meaningful against a roster that was actually read.
+   */
+  contexts: ContextRoster[];
   /** People in AFCT the LMS does not list, deliberately left alone. */
   keptStaff: { name: string; role: CourseRole }[];
   /** Already correct, so nothing to show. */
@@ -166,6 +188,19 @@ export async function diffRoster(opts: {
   // one section and takes another is staff, and demoting them would take work away.
   const RANK: Record<CourseRole, number> = { FACULTY: 3, TA: 2, STUDENT: 1 };
 
+  /**
+   * Who each source listed, kept per source rather than folded into the candidates.
+   *
+   * The candidates collapse a person to one entry however many sections hold them, which is
+   * right for deciding an enrolment and wrong for deciding sections: somebody in two is in
+   * both, and each has to be recorded against its own LMS course.
+   */
+  const contexts: ContextRoster[] = sources.map((source) => ({
+    contextLinkId: source.contextLinkId,
+    members: [],
+  }));
+  const contextByLinkId = new Map(contexts.map((c) => [c.contextLinkId, c]));
+
   for (const { issuer, contextLinkId, members } of sources) {
     const source = { issuer, contextLinkId };
     for (const member of members) {
@@ -176,6 +211,13 @@ export async function diffRoster(opts: {
         (member.email ? byEmail.get(member.email) : undefined) ??
         null;
       if (userId) seen.add(userId);
+
+      // Active only: listed but inactive in this section means they are not currently in it.
+      if (userId && member.active) {
+        contextByLinkId
+          .get(contextLinkId)
+          ?.members.push({ userId, ltiUserId: member.ltiUserId });
+      }
 
       /**
        * One entry per person, however many sources hold them. Keyed by the AFCT account when
@@ -272,5 +314,5 @@ export async function diffRoster(opts: {
     }
   }
 
-  return { changes, keptStaff, unchanged };
+  return { changes, keptStaff, unchanged, contexts };
 }
