@@ -37,11 +37,29 @@ export type AgsFailure =
    * a setting on the LMS, and saying so is the whole point of noticing it.
    */
   | 'redirected'
+  /**
+   * The AFCT course was deleted after the grade was queued.
+   *
+   * Terminal on purpose. A soft delete leaves the course, its assignments and its LTI links in
+   * place so they can be recovered, and everything a person can reach already treats it as
+   * gone. Anything still in the queue has to follow that rule too, or a course an administrator
+   * deleted keeps writing into somebody's LMS gradebook.
+   */
+  | 'course-deleted'
   /** This person has never launched, so the LMS user id is unknown. */
   | 'no-lms-identity'
   /**
    * The AFCT course is open from several LMS courses and AFCT cannot tell which one this
    * student belongs to, so it will not guess which gradebook to write to.
+   */
+  /**
+   * The student is in none of the connected LMS courses, or in more than one.
+   *
+   * A student belongs to exactly one LMS course per AFCT course; that is the rule, not a
+   * limitation of the queue. Cross-listed sections are several LMS courses opening one AFCT
+   * course, and a grade has one gradebook to go in. Refusing is the only safe answer: there is
+   * no way to pick between two without guessing, and a mark in the wrong section is worse than
+   * a mark that has not arrived yet.
    */
   | 'ambiguous-context'
   /**
@@ -588,6 +606,15 @@ export async function postScore(opts: {
    */
   scoreGiven: number | null;
   scoreMaximum: number;
+  /**
+   * Whether this is the final word on the student's mark.
+   *
+   * False sends `gradingProgress: 'PendingManual'`, which is AGS's way of saying the score is
+   * real but a grader still has work to do. AFCT sends a running total over the assignment's
+   * full value, so a half-marked assignment arrives lower than the student stands; the label is
+   * what stops that reading as a finished mark. Defaults true, matching what this always did.
+   */
+  gradingComplete?: boolean;
   timestamp?: Date;
   comment?: string | null;
 }): Promise<AgsResult<null>> {
@@ -612,7 +639,11 @@ export async function postScore(opts: {
     // partially-submitted attempt to report here. Clearing: back to having no result at all,
     // which is the pairing the reference implementation accepted.
     activityProgress: clearing ? 'Initialized' : 'Completed',
-    gradingProgress: clearing ? 'NotReady' : 'FullyGraded',
+    gradingProgress: clearing
+      ? 'NotReady'
+      : opts.gradingComplete === false
+        ? 'PendingManual'
+        : 'FullyGraded',
     ...(opts.comment ? { comment: opts.comment } : {}),
   });
   if (!sent.ok) return sent;
@@ -650,8 +681,10 @@ export function agsFailureMessage(reason: AgsFailure): string {
       // like a permissions problem and sent an administrator through LMS permission screens
       // that were already correct.
       return 'Your LMS gave AFCT a plain http address for its grade service and then redirected it to https, which drops the credentials AFCT sends and makes the request look unauthorised. Set your LMS to advertise https for its own address.';
+    case 'course-deleted':
+      return 'This course has been deleted in AFCT, so its grades are no longer sent to your LMS. Anything already in the LMS gradebook stays as it is.';
     case 'ambiguous-context':
-      return 'This AFCT course is connected to more than one LMS course, and AFCT cannot tell which one this student is in, so it has not sent the grade anywhere. Sync the roster from the LMS course this student belongs to.';
+      return 'This student appears in more than one of the LMS courses connected here, or in none of them, so AFCT cannot tell which gradebook their mark belongs in and has not sent it anywhere. A student can belong to only one LMS course per AFCT course: take them out of the others there, then sync the roster from the one they are in.';
     case 'line-item-lookup-incomplete':
     case 'line-item-lookup-failed':
       return 'AFCT could not check whether your LMS already has a column for this assignment, so it has not made one. The grade stays queued and will be sent when the LMS answers.';

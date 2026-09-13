@@ -11,6 +11,7 @@ import {
   assignmentProblemSelect,
   attachCopiedProblems,
   copyAnswerKeysForProblems,
+  MissingAnswerKeyError,
   type CopiedAnswerKey,
 } from '@/lib/problem-copy';
 
@@ -98,7 +99,14 @@ export const POST = withAssignmentAuth(
       // failure can unlink whatever was already written. See `copyAnswerKeysForProblems`.
       const solutionByProblemId = new Map<string, CopiedAnswerKey>();
       if (problemMode === 'duplicate') {
-        const copied = await copyAnswerKeysForProblems(source.problems.map((link) => link.problem));
+        const copied = await copyAnswerKeysForProblems(
+          source.problems.map((link) => link.problem),
+          // The copy keeps each link's autograder setting, so a problem that will be marked by
+          // the evaluator has to arrive with something to mark against.
+          new Set(
+            source.problems.filter((link) => link.autograderEnabled).map((link) => link.problem.id),
+          ),
+        );
         for (const [id, key] of copied.byProblemId) solutionByProblemId.set(id, key);
         copiedSolutionFiles.push(...copied.copiedPaths);
       }
@@ -210,6 +218,19 @@ export const POST = withAssignmentAuth(
 
       return NextResponse.json(created, { status: 201 });
     } catch (error) {
+      if (error instanceof MissingAnswerKeyError) {
+        // Cleaned up the same way every other failure here is, then said which problem it was:
+        // the title is the only part somebody can act on.
+        await Promise.all(
+          copiedSolutionFiles.map((f) => fs.promises.unlink(f).catch(() => undefined)),
+        );
+        return NextResponse.json(
+          {
+            error: `"${error.problemTitle}" could not be copied because its answer file is missing from the server. Upload its answer file again, or turn its autograder off, then try again.`,
+          },
+          { status: 409 },
+        );
+      }
       // The transaction is all-or-nothing, so on failure the only side effect to undo is
       // the solution files copied up front.
       await Promise.all(

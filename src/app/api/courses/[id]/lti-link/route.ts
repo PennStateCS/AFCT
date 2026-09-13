@@ -7,7 +7,11 @@ import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 
 async function staffFor(courseId: string) {
   const session = await auth();
-  if (!session?.user?.id) return { ok: false as const, response: apiError(401, 'Not signed in') };
+  // `inactive` as well as the id: a revoked session keeps its user id so the app can say who
+  // it was, and `canManageCourse` answers what a person may do, never whether their session is
+  // still good. Same rule as the auth wrappers.
+  if (!session?.user?.id || session.user.inactive)
+    return { ok: false as const, response: apiError(401, 'Not signed in') };
   const allowed = await canManageCourse(session.user, courseId);
   if (!allowed) return { ok: false as const, response: apiError(403, 'Forbidden') };
   return { ok: true as const, user: session.user };

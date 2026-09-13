@@ -15,9 +15,17 @@ const sub = (over: Partial<ProblemSubmission> = {}): ProblemSubmission => ({
 describe('getTimingStatusChip', () => {
   const due = new Date('2026-01-10T12:00:00.000Z');
 
-  it('marks a submission Late when its status is "late", ignoring the due date', () => {
+  // There was a test here asserting that a status of "late" marked the chip Late whatever the
+  // due date said. It passed because `ProblemSubmission.status` is typed `string`, so a test
+  // can invent a value the column cannot hold: `SubmissionStatus` is PENDING, PROCESSING,
+  // COMPLETED or FAILED. It pinned a branch that could never run in production.
+  it('does not invent a verdict when there is no deadline to judge against', () => {
+    // Every assignment has a due date (the column is not nullable), so arriving here without
+    // one means the caller failed to pass it. Saying "Late" would be a guess; what this must
+    // not do is quietly report the missing data as a fact, which is a live risk while the chip
+    // has no third state.
     const chip = getTimingStatusChip(sub({ status: 'late' }), false, null);
-    expect(chip).toMatchObject({ label: 'Late' });
+    expect(chip.label).toBe('On time');
   });
 
   it('marks Late when submitted after a valid due date', () => {

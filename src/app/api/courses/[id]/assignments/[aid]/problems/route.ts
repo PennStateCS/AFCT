@@ -259,10 +259,24 @@ export const POST = withAssignmentAuth(
 );
 
 /**
+ * Thrown inside the removal transaction when the problem still carries work, so the whole
+ * thing rolls back rather than the guard returning a response from inside a transaction.
+ */
+class AssignmentProblemHasWorkError extends Error {
+  constructor(
+    readonly submissions: number,
+    readonly grades: number,
+  ) {
+    super('Assignment problem still has work');
+  }
+}
+
+/**
  * Detaches a problem from an assignment, leaving the problem itself intact in the
- * course. Course staff (faculty or TAs) or a system admin. Both the assignment and
- * the problem must belong to the course in the path. The problem id travels in the
- * request body.
+ * course. Refused while the problem carries any submission or grade on this assignment, since
+ * both hang off the link this removes and would go with it. Course staff (faculty or TAs) or a
+ * system admin. Both the assignment and the problem must belong to the course in the path. The
+ * problem id travels in the request body.
  * @openapi
  * summary: Remove a problem from an assignment
  * parameters:
@@ -279,6 +293,7 @@ export const POST = withAssignmentAuth(
  *   401: { description: Not signed in. }
  *   403: { description: Caller is not course staff (faculty or TA) or a system admin. }
  *   404: { description: Assignment or problem not found in this course. }
+ *   409: { description: "The problem has submissions or grades, which removing it would delete." }
  *   500: { description: Server error. }
  */
 export const DELETE = withAssignmentAuth(
@@ -302,13 +317,63 @@ export const DELETE = withAssignmentAuth(
         return NextResponse.json({ error: 'Problem not found in this course.' }, { status: 404 });
       }
 
-      // Delete the link between the assignment and the problem
-      await prisma.assignmentProblem.deleteMany({
-        where: {
-          assignmentId,
-          problemId,
-        },
-      });
+      /**
+       * Removing the problem takes its work with it, so refuse while there is any.
+       *
+       * `Submission` and `AssignmentProblemGrade` both reference this link with
+       * `onDelete: Cascade`, so deleting it silently erases every attempt and every mark for
+       * that problem on that assignment. Nothing asked, nothing logged, nothing recoverable.
+       *
+       * The guard and the delete are one transaction, and it takes the link's row lock first,
+       * the same shape `deleteGroupIfSetUnlocked` uses. Counting and then deleting is a
+       * check-then-act: at READ COMMITTED a submission that commits after the count is
+       * invisible to it, and the delete would take the new work with it. Inserting a
+       * submission takes `FOR KEY SHARE` on this row, which `FOR UPDATE` conflicts with, so
+       * the two possible orders are the only outcomes. Either the lock is ours and the
+       * in-flight insert waits (and then fails its foreign key, which is the honest answer for
+       * a problem that is no longer on the assignment), or their insert holds the row and we
+       * see their work in the count and refuse.
+       */
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`
+            SELECT 1 FROM "AssignmentProblem"
+            WHERE "assignmentId" = ${assignmentId} AND "problemId" = ${problemId}
+            FOR UPDATE
+          `;
+
+          const [submissions, grades] = await Promise.all([
+            tx.submission.count({ where: { assignmentId, problemId } }),
+            tx.assignmentProblemGrade.count({ where: { assignmentId, problemId } }),
+          ]);
+          if (submissions > 0 || grades > 0) {
+            throw new AssignmentProblemHasWorkError(submissions, grades);
+          }
+
+          await tx.assignmentProblem.deleteMany({ where: { assignmentId, problemId } });
+        });
+      } catch (err) {
+        if (err instanceof AssignmentProblemHasWorkError) {
+          await createEnhancedActivityLog(prisma, req, {
+            userId: user.id,
+            action: 'REMOVE_ASSIGNMENT_PROBLEM_REFUSED',
+            severity: 'WARNING',
+            category: 'ASSIGNMENT',
+            courseId,
+            assignmentId,
+            problemId,
+            metadata: { submissions: err.submissions, grades: err.grades },
+          });
+          return NextResponse.json(
+            {
+              error:
+                'This problem has student work on it. Removing it would delete those submissions and grades, so it cannot be removed.',
+            },
+            { status: 409 },
+          );
+        }
+        throw err;
+      }
 
       // Retrieve updated problem list for this assignment
       const updated = (await prisma.assignment.findUnique({

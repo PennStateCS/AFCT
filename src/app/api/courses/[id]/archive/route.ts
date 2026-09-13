@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { z } from 'zod';
-import { canArchiveCourse } from '@/lib/course-status-checks';
+import { canArchiveCourse, lockCourseWork } from '@/lib/course-status-checks';
 import { isAdmin, COURSE_STAFF_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
@@ -63,6 +63,7 @@ export const PATCH = withCourseAuth(
       }
 
       // Centralized check for archiving (use DB dates to avoid client timezone drift)
+      let archiveDates: { startDate: Date; endDate: Date } | null = null;
       if (isArchived) {
         const courseDates = await prisma.course.findUnique({
           where: { id: courseId },
@@ -72,36 +73,58 @@ export const PATCH = withCourseAuth(
           return NextResponse.json({ error: 'Course not found' }, { status: 404 });
         }
 
-        const { canArchive, reason } = await canArchiveCourse(
-          prisma,
-          courseId,
-          courseDates.startDate.toISOString(),
-          courseDates.endDate.toISOString(),
-        );
-        if (!canArchive) {
-          await createEnhancedActivityLog(prisma, req, {
-            userId: user.id,
-            action: 'COURSE_ARCHIVE_REJECTED',
-            category: 'COURSE',
-            severity: 'WARNING',
-            courseId,
-            metadata: { reason },
-          });
-          return NextResponse.json({ error: reason }, { status: 403 });
-        }
+        archiveDates = courseDates;
       }
 
-      const updated = await prisma.course.update({
-        where: { id: courseId },
-        data: { isArchived },
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          isArchived: true,
-          updatedAt: true,
-        },
+      /**
+       * The safety check and the state change together, holding the rows a submission would
+       * attach to.
+       *
+       * Archiving an in-session course is refused once anybody has handed work in. Asking and
+       * then updating separately meant a submission arriving in between was frozen out by a
+       * decision taken before it existed. Un-archiving needs none of this: it only restores
+       * access.
+       */
+      let rejection: string | undefined;
+      const updated = await prisma.$transaction(async (tx) => {
+        if (archiveDates) {
+          await lockCourseWork(tx, courseId);
+          const { canArchive, reason } = await canArchiveCourse(
+            tx,
+            courseId,
+            archiveDates.startDate.toISOString(),
+            archiveDates.endDate.toISOString(),
+          );
+          if (!canArchive) {
+            rejection = reason;
+            return null;
+          }
+        }
+
+        return tx.course.update({
+          where: { id: courseId },
+          data: { isArchived },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            isArchived: true,
+            updatedAt: true,
+          },
+        });
       });
+
+      if (!updated) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'COURSE_ARCHIVE_REJECTED',
+          category: 'COURSE',
+          severity: 'WARNING',
+          courseId,
+          metadata: { reason: rejection },
+        });
+        return NextResponse.json({ error: rejection }, { status: 403 });
+      }
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

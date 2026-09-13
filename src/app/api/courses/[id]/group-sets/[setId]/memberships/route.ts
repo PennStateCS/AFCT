@@ -9,10 +9,16 @@ import { AssignMembershipsSchema } from '@/schemas/group-set';
 import { computeMembershipBasis, GroupSetLockedError } from '@/lib/group-sets';
 import {
   activeStudentIds,
-  assertGroupSetUnlocked,
+  withUnlockedGroupSet,
   findGroupSet,
   loadGroupSetDetail,
 } from '@/lib/group-set-service';
+
+/**
+ * Thrown inside the membership transaction when the set moved under the client's basis, so the
+ * rollback and the 409 cannot disagree about whether anything was written.
+ */
+class MembershipBasisConflictError extends Error {}
 
 /**
  * Atomically assigns, moves, and removes students within a group set. Each
@@ -65,7 +71,6 @@ export const POST = withCourseAuth(
 
       const set = await findGroupSet(courseId, setId);
       if (!set) return NextResponse.json({ error: 'Group set not found' }, { status: 404 });
-      await assertGroupSetUnlocked(setId);
 
       // Reject duplicate userIds so an ambiguous assign+remove can't slip through.
       const seen = new Set<string>();
@@ -119,14 +124,63 @@ export const POST = withCourseAuth(
         );
       }
 
-      // Optimistic concurrency: reject if the set changed since the client's basis.
-      if (expectedBasis !== undefined) {
-        const current = await prisma.groupMembership.findMany({
-          where: { groupSetId: setId },
-          select: { userId: true, groupId: true },
+      /**
+       * Everything that decides whether to write, and the write, under the set's row lock.
+       *
+       * Both guarantees this endpoint advertises used to be checked outside the transaction
+       * that keeps them: the sticky "locked once work exists" rule, and the optimistic basis.
+       * A first submission, or another member of staff saving their own edit, could commit in
+       * the gap and this request would rewrite the groups regardless. `withUnlockedGroupSet`
+       * takes the same row lock the submission path takes, and every read below goes through
+       * its `tx`, so what was true when the decision was made is still true when it lands.
+       *
+       * The conflict leaves by exception rather than by returning a response from inside the
+       * transaction, so the rollback and the 409 cannot disagree.
+       */
+      const touched = [...new Set([...removes, ...assigns.map((op) => op.userId)])];
+      let previous = new Map<string, string>();
+      let conflictMemberCount = 0;
+
+      try {
+        await withUnlockedGroupSet(setId, async (tx) => {
+          if (expectedBasis !== undefined) {
+            const current = await tx.groupMembership.findMany({
+              where: { groupSetId: setId },
+              select: { userId: true, groupId: true },
+            });
+            if (computeMembershipBasis(current) !== expectedBasis) {
+              conflictMemberCount = current.length;
+              throw new MembershipBasisConflictError();
+            }
+          }
+
+          // Where each affected student was before the edit. A move is an upsert and the
+          // request carries only the destination, so the group they came out of is only
+          // knowable now, and that is the half a group grade turns on.
+          previous = new Map(
+            (
+              await tx.groupMembership.findMany({
+                where: { groupSetId: setId, userId: { in: touched } },
+                select: { userId: true, groupId: true },
+              })
+            ).map((row) => [row.userId, row.groupId]),
+          );
+
+          if (removes.length > 0) {
+            await tx.groupMembership.deleteMany({
+              where: { groupSetId: setId, userId: { in: removes } },
+            });
+          }
+          for (const op of assigns) {
+            await tx.groupMembership.upsert({
+              where: { groupSetId_userId: { groupSetId: setId, userId: op.userId } },
+              create: { groupSetId: setId, groupId: op.groupId, courseId, userId: op.userId },
+              update: { groupId: op.groupId },
+            });
+          }
         });
-        const currentBasis = computeMembershipBasis(current);
-        if (currentBasis !== expectedBasis) {
+      } catch (err) {
+        if (err instanceof MembershipBasisConflictError) {
           await createEnhancedActivityLog(prisma, req, {
             userId: user.id,
             action: 'GROUP_SET_MEMBERSHIP_CONFLICT',
@@ -137,7 +191,7 @@ export const POST = withCourseAuth(
               courseId,
               groupSetId: setId,
               reason: 'group set changed by someone else while this edit was open',
-              memberCount: current.length,
+              memberCount: conflictMemberCount,
             },
           });
           return NextResponse.json(
@@ -148,35 +202,8 @@ export const POST = withCourseAuth(
             { status: 409 },
           );
         }
+        throw err;
       }
-
-      // Where each affected student was before the edit. A move is an upsert and the request
-      // carries only the destination, so the group they came out of is only knowable now, and
-      // that is the half a group grade turns on. One indexed read over the affected users.
-      const touched = [...new Set([...removes, ...assigns.map((op) => op.userId)])];
-      const previous = new Map(
-        (
-          await prisma.groupMembership.findMany({
-            where: { groupSetId: setId, userId: { in: touched } },
-            select: { userId: true, groupId: true },
-          })
-        ).map((row) => [row.userId, row.groupId]),
-      );
-
-      await prisma.$transaction(async (tx) => {
-        if (removes.length > 0) {
-          await tx.groupMembership.deleteMany({
-            where: { groupSetId: setId, userId: { in: removes } },
-          });
-        }
-        for (const op of assigns) {
-          await tx.groupMembership.upsert({
-            where: { groupSetId_userId: { groupSetId: setId, userId: op.userId } },
-            create: { groupSetId: setId, groupId: op.groupId, courseId, userId: op.userId },
-            update: { groupId: op.groupId },
-          });
-        }
-      });
 
       /**
        * One entry per student, then the summary. The summary used to carry the moves itself,

@@ -7,7 +7,17 @@ import { readJson } from '@/lib/api/request';
 import { logError } from '@/lib/api/activity';
 import { GroupNameBodySchema } from '@/schemas/group-set';
 import { normalizeName, GroupSetLockedError } from '@/lib/group-sets';
-import { findGroupSet, assertGroupSetUnlocked } from '@/lib/group-set-service';
+import { findGroupSet, withUnlockedGroupSet } from '@/lib/group-set-service';
+
+/**
+ * Thrown inside the creation transaction, so a name clash rolls the whole thing back rather
+ * than returning a response from inside one.
+ */
+class DuplicateGroupNameError extends Error {
+  constructor(name: string) {
+    super(`A group named "${name}" already exists in this set.`);
+  }
+}
 
 /**
  * Creates a group inside a set. Blocked when the set is locked. Group names are
@@ -43,22 +53,30 @@ export const POST = withCourseAuth(
 
       const set = await findGroupSet(courseId, setId);
       if (!set) return NextResponse.json({ error: 'Group set not found' }, { status: 404 });
-      await assertGroupSetUnlocked(setId);
+      /**
+       * The lock check, the name check and the insert, all under the set's row lock.
+       *
+       * Two check-then-acts lived here. The set could become permanently locked between the
+       * check and the create, and the name clash was tested case-insensitively while the
+       * database constraint behind it is case-sensitive, so `Project Teams` and
+       * `project teams` could both pass and both land.
+       *
+       * Holding the set's row fixes both, because every group created in a set now queues on
+       * the same row: the clash read cannot go stale under another creation, and a submission
+       * arriving mid-flight either locks first and this refuses, or waits and finds the group
+       * already there.
+       */
+      const group = await withUnlockedGroupSet(setId, async (tx) => {
+        const clash = await tx.studentGroup.findFirst({
+          where: { groupSetId: setId, name: { equals: name, mode: 'insensitive' } },
+          select: { id: true },
+        });
+        if (clash) throw new DuplicateGroupNameError(name);
 
-      const clash = await prisma.studentGroup.findFirst({
-        where: { groupSetId: setId, name: { equals: name, mode: 'insensitive' } },
-        select: { id: true },
-      });
-      if (clash) {
-        return NextResponse.json(
-          { error: `A group named "${name}" already exists in this set.` },
-          { status: 409 },
-        );
-      }
-
-      const group = await prisma.studentGroup.create({
-        data: { groupSetId: setId, name },
-        select: { id: true, name: true },
+        return tx.studentGroup.create({
+          data: { groupSetId: setId, name },
+          select: { id: true, name: true },
+        });
       });
 
       await createEnhancedActivityLog(prisma, req, {
@@ -81,6 +99,9 @@ export const POST = withCourseAuth(
 
       return NextResponse.json(group, { status: 201 });
     } catch (err) {
+      if (err instanceof DuplicateGroupNameError) {
+        return NextResponse.json({ error: err.message }, { status: 409 });
+      }
       if (err instanceof GroupSetLockedError) {
         return NextResponse.json({ error: err.message }, { status: 409 });
       }

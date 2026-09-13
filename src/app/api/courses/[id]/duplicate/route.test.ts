@@ -15,6 +15,18 @@ const prismaMock = vi.hoisted(() => ({
 
 const authMock = vi.hoisted(() => vi.fn());
 
+/**
+ * The shared answer-key copy, which this route now uses instead of its own.
+ *
+ * Mocked so a test can say the copy refused: a problem that will be autograded on the copy and
+ * whose recorded answer file has gone. The real one is covered in `lib/problem-copy.test.ts`.
+ */
+const copyAnswerKeysMock = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/problem-copy', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/problem-copy')>();
+  return { ...actual, copyAnswerKeysForProblems: copyAnswerKeysMock };
+});
+
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
 vi.mock('@/lib/auth', () => ({ auth: authMock }));
 vi.mock('@/lib/date-convert', () => ({
@@ -22,6 +34,13 @@ vi.mock('@/lib/date-convert', () => ({
 }));
 
 import { POST } from './route';
+import { MissingAnswerKeyError } from '@/lib/problem-copy';
+
+/**
+ * When the source course began. Assignment dates are copied shifted by the gap between this and
+ * the new course's start, so a copy lands in the same week of its own term.
+ */
+const SOURCE_START = new Date('2026-08-24T00:00:00.000Z');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -30,6 +49,8 @@ beforeEach(() => {
   prismaMock.assignment.findMany.mockResolvedValue([]);
   prismaMock.roster.findMany.mockResolvedValue([]);
   prismaMock.problem.findMany.mockResolvedValue([]);
+  // Nothing copied, and nothing broken, unless a test says otherwise.
+  copyAnswerKeysMock.mockResolvedValue({ byProblemId: new Map(), copiedPaths: [] });
 });
 
 describe('POST /api/courses/[id]/duplicate', () => {
@@ -167,7 +188,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
@@ -224,7 +248,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     prismaMock.problem.findMany.mockResolvedValue([
       { id: 'p1', title: 'Problem 1', courseId: 'c1', type: 'FA' },
     ]);
@@ -253,7 +280,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     // A realistic source row. The settings below are the point of the assertions further
     // down: with a bare {problemId, problem} mock the link assertion passed whether or not
     // the route carried anything, because there was nothing on the source to drop.
@@ -261,9 +291,12 @@ describe('POST /api/courses/[id]/duplicate', () => {
       {
         id: 'a1',
         title: 'Assignment 1',
-        dueDate: new Date(),
+        // A week into the source term, and unlocked the week before: the shift has to keep
+        // both in the same place relative to the new one.
+        dueDate: new Date('2026-08-31T23:59:00.000Z'),
+        unlockAt: new Date('2026-08-24T00:00:00.000Z'),
         allowLateSubmissions: true,
-        lateCutoff: new Date('2026-05-01T00:00:00.000Z'),
+        lateCutoff: new Date('2026-09-02T23:59:00.000Z'),
         ltiAutoSync: false,
         missingWorkIsZero: false,
         problems: [
@@ -321,13 +354,22 @@ describe('POST /api/courses/[id]/duplicate', () => {
       ],
     });
 
-    // Same for the assignment's own settings: a late policy of "allowed until 1 May" must
+    // Same for the assignment's own settings: a late policy of "allowed until the 2nd" must
     // not come back as "late submissions off", and sync deliberately off must stay off.
+    //
+    // The three dates move with the course, by the gap between the two terms' starts. Derived
+    // rather than written out, so the assertion says "shifted by the same delta" instead of
+    // pinning three instants that depend on how the harness parses a wall-clock string.
+    const shift = new Date(basePayload.startDate).getTime() - SOURCE_START.getTime();
+    const shifted = (iso: string) => new Date(new Date(iso).getTime() + shift);
+
     expect(tx.assignment.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           allowLateSubmissions: true,
-          lateCutoff: new Date('2026-05-01T00:00:00.000Z'),
+          unlockAt: shifted('2026-08-24T00:00:00.000Z'),
+          dueDate: shifted('2026-08-31T23:59:00.000Z'),
+          lateCutoff: shifted('2026-09-02T23:59:00.000Z'),
           ltiAutoSync: false,
           missingWorkIsZero: false,
           isPublished: false,
@@ -344,7 +386,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     prismaMock.assignment.findMany.mockResolvedValue([
       {
         id: 'a1',
@@ -396,7 +441,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     prismaMock.roster.findMany.mockResolvedValue([
       { userId: 'u2', role: 'FACULTY' },
       { userId: 'u3', role: 'TA' },
@@ -438,7 +486,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: null });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'Europe/London' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
@@ -465,7 +516,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'A1', dueDate: new Date(), problems: [] },
     ]);
@@ -525,7 +579,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     prismaMock.assignment.findMany.mockResolvedValue([
       { id: 'a1', title: 'A1', dueDate: new Date(), problems: [] },
     ]);
@@ -559,7 +616,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     prismaMock.problem.findMany.mockResolvedValue([{ id: 'p1', title: 'Problem 1' }]);
 
     const tx = {
@@ -590,7 +650,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     // u2 is both copied (FACULTY on the source) and explicitly selected; they must
     // get exactly one roster row.
     prismaMock.roster.findMany.mockResolvedValue([{ userId: 'u2', role: 'FACULTY' }]);
@@ -645,7 +708,10 @@ describe('POST /api/courses/[id]/duplicate', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
     prismaMock.$transaction.mockRejectedValue(new Error('tx failed'));
 
     const req = new NextRequest('http://localhost/api/courses/c1/duplicate', {
@@ -678,7 +744,10 @@ describe('where a duplicate copies from', () => {
     authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
     prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
-    prismaMock.course.findUnique.mockResolvedValueOnce({ timezone: 'UTC' }).mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValueOnce({
+      timezone: 'UTC',
+      startDate: SOURCE_START,
+    }).mockResolvedValue(null);
 
     const tx = {
       course: { create: vi.fn().mockResolvedValue({ id: 'new-course' }) },
@@ -721,5 +790,93 @@ describe('where a duplicate copies from', () => {
     await runDuplicate('problems');
 
     expect(whereOf(prismaMock.problem.findMany)).toEqual({ courseId: 'c1' });
+  });
+});
+
+/**
+ * The answer key rule, shared with assignment and problem duplication.
+ *
+ * This route used to carry its own copy of the logic and the two had drifted: a recorded answer
+ * file missing from disk was treated the same as a problem that never had one, so an autograded
+ * problem was duplicated into another autograded problem with nothing to mark against, and the
+ * operation reported success.
+ */
+describe('duplicating a course whose answer key is missing', () => {
+  const setup = () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.systemSettings.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prismaMock.course.findUnique
+      .mockResolvedValueOnce({ timezone: 'UTC', startDate: SOURCE_START })
+      .mockResolvedValue(null);
+    prismaMock.assignment.findMany.mockResolvedValue([
+      {
+        id: 'a1',
+        title: 'Assignment 1',
+        dueDate: new Date('2026-08-31T23:59:00.000Z'),
+        unlockAt: null,
+        allowLateSubmissions: false,
+        lateCutoff: null,
+        ltiAutoSync: false,
+        missingWorkIsZero: false,
+        problems: [
+          {
+            problemId: 'p1',
+            maxPoints: 10,
+            maxSubmissions: 1,
+            autograderEnabled: true,
+            showFeedback: true,
+            problem: { id: 'p1', title: 'DFA Problem 3' },
+          },
+        ],
+      },
+    ]);
+    prismaMock.problem.findMany.mockResolvedValue([
+      { id: 'p1', title: 'DFA Problem 3', courseId: 'c1', type: 'FA' },
+    ]);
+  };
+
+  const duplicate = () =>
+    POST(
+      new NextRequest('http://localhost/api/courses/c1/duplicate', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'New',
+          code: 'CS 101',
+          semester: 'Fall',
+          startDate: '2025-01-01T09:00',
+          endDate: '2025-05-01T09:00',
+          registrationOpenAt: '2024-12-01T09:00',
+          registrationCloseAt: '2025-01-15T09:00',
+          credits: 3,
+          instructorIds: ['fac-1'],
+          mode: 'assignments_with_problems',
+        }),
+      }),
+      { params: Promise.resolve({ id: 'c1' }) },
+    );
+
+  it('refuses the whole duplication and names the problem', async () => {
+    setup();
+    copyAnswerKeysMock.mockRejectedValue(new MissingAnswerKeyError('DFA Problem 3', []));
+
+    const res = await duplicate();
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.stringContaining('DFA Problem 3'),
+    });
+    // Nothing was created: the transaction never ran.
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('tells the shared helper which problems will be autograded on the copy', async () => {
+    // Per link, not per problem: the same problem can be autograded on one assignment and
+    // marked by hand on another, and any link that will be autograded needs its key.
+    setup();
+
+    await duplicate();
+
+    expect(copyAnswerKeysMock).toHaveBeenCalledWith(expect.anything(), new Set(['p1']));
   });
 });

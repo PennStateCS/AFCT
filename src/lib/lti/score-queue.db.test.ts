@@ -62,8 +62,8 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const queue = (userId = USERS[0]!, scoreGiven = 80) =>
-  queueScore({ assignmentId: ASSIGNMENT, userId, scoreGiven, scoreMaximum: 100 });
+const queue = (userId = USERS[0]!, scoreGiven = 80, gradingComplete = true) =>
+  queueScore({ assignmentId: ASSIGNMENT, userId, scoreGiven, scoreMaximum: 100, gradingComplete });
 
 describe('queueing a grade', () => {
   it('records what to send', async () => {
@@ -490,6 +490,7 @@ describe('the summary for an assignment', () => {
       userId: USERS[1]!,
       scoreGiven: 50,
       scoreMaximum: 100,
+      gradingComplete: true,
     });
 
     expect(await scoreQueueSummary(ASSIGNMENT)).toMatchObject({ pending: 1 });

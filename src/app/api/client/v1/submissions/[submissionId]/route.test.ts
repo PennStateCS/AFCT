@@ -7,8 +7,10 @@ const canManageMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   submission: { findUnique: vi.fn() },
-  assignment: { findUnique: vi.fn() },
+  assignment: { findUnique: vi.fn(), findFirst: vi.fn() },
   assignmentProblemGrade: { findUnique: vi.fn() },
+  // Read by the student content gate, which non-staff callers now go through.
+  assignmentOverride: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/client-auth', () => ({
@@ -46,6 +48,15 @@ beforeEach(() => {
   canAccessMock.mockResolvedValue(true);
   canManageMock.mockResolvedValue(false);
   prismaMock.assignment.findUnique.mockResolvedValue({ isPublished: true });
+  // In the audience, with nothing holding the assignment shut. The gate reads through
+  // assignment.findFirst, which the published check above does not use.
+  prismaMock.assignment.findFirst.mockResolvedValue({
+    unlockAt: null,
+    dueDate: new Date('2026-01-01T00:00:00Z'),
+    allowLateSubmissions: false,
+    lateCutoff: null,
+  });
+  prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
 });
 
 describe('GET /api/client/v1/submissions/[submissionId]', () => {
@@ -102,6 +113,107 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
     expect(canViewMock).toHaveBeenCalledWith(expect.anything(), 'c1', 'someone-else', {
       studentGroupId: 'group-1',
     });
+  });
+
+  /**
+   * A group assignment carries one grade row per member, so "the grade on this attempt" is not
+   * a single number: it depends on who is asking. Reading the uploader's row handed a member
+   * their groupmate's mark, which is wrong for them and a disclosure of the other student's
+   * individual adjustment.
+   */
+  it("gives a groupmate their own mark, not the uploader's", async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      // Alice uploaded for the group; u1 (Bob) is polling it.
+      studentId: 'alice',
+      studentGroupId: 'group-1',
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'w',
+    });
+    canViewMock.mockResolvedValue(true);
+    canManageMock.mockResolvedValue(false);
+    prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({ grade: 9 });
+
+    const res = await GET(makeReq('Bearer good'), ctx);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignmentProblemGrade.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          assignmentId_problemId_studentId: expect.objectContaining({ studentId: 'u1' }),
+        }),
+      }),
+    );
+  });
+
+  /**
+   * Published and enrolled was as far as this went, so a student taken out of an assignment's
+   * audience, or one whose assignment went back behind an unlock time, kept polling the result
+   * here after every browser surface had stopped showing it.
+   */
+  it.each([
+    ['taken out of the audience', () => prismaMock.assignment.findFirst.mockResolvedValue(null)],
+    [
+      'the assignment locked again',
+      () =>
+        prismaMock.assignment.findFirst.mockResolvedValue({
+          unlockAt: new Date('2099-01-01T00:00:00Z'),
+          dueDate: new Date('2099-02-01T00:00:00Z'),
+          allowLateSubmissions: false,
+          lateCutoff: null,
+        }),
+    ],
+  ])('404s for a student with %s', async (_what, arrange) => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      studentId: 'u1',
+      studentGroupId: null,
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'w',
+    });
+    canViewMock.mockResolvedValue(true);
+    arrange();
+
+    expect((await GET(makeReq('Bearer good'), ctx)).status).toBe(404);
+  });
+
+  it("still answers staff about the submission's own owner", async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      studentId: 'alice',
+      studentGroupId: 'group-1',
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'w',
+    });
+    canViewMock.mockResolvedValue(true);
+    canManageMock.mockResolvedValue(true);
+    prismaMock.assignment.findUnique.mockResolvedValue({ isPublished: true });
+    prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({ grade: 6 });
+
+    await GET(makeReq('Bearer good'), ctx);
+
+    expect(prismaMock.assignmentProblemGrade.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          assignmentId_problemId_studentId: expect.objectContaining({ studentId: 'alice' }),
+        }),
+      }),
+    );
   });
 
   it('passes studentGroupId: null for an individual submission', async () => {

@@ -67,6 +67,7 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
     submissions,
     commentAudience,
     gradeAudience,
+    effectiveDueDate,
   }: {
     onGradeInputChange: (value: string) => void;
     onSaveGrade: () => void;
@@ -84,9 +85,11 @@ vi.mock('@/components/assignments/ProblemWorkspace', () => ({
       onTargetChange: (t: 'student' | 'group') => void;
     } | null;
     gradeAudience?: { target: 'student' | 'group' } | null;
+    effectiveDueDate?: string | Date | null;
   }) => (
     <div data-testid="problem-workspace">
       <span data-testid="submission-count">{(submissions ?? []).length}</span>
+      <span data-testid="effective-due">{String(effectiveDueDate ?? '')}</span>
       <input
         data-testid="grade-input"
         value={gradeInput}
@@ -159,6 +162,18 @@ const students = [{ id: 's1', firstName: 'Ada', lastName: 'Lovelace' }];
 
 const emptyReviewData = { submissions: {}, comments: [], problemGrades: {} };
 
+/** The selected student has a later due date than the assignment's own. */
+const overriddenReviewData = {
+  ...emptyReviewData,
+  effective: {
+    unlockAt: null,
+    dueDate: '2026-03-05T04:59:59.999Z',
+    lateCutoff: null,
+    allowLateSubmissions: false,
+    source: 'student-override' as const,
+  },
+};
+
 /** The selected student submits this assignment with Group 3, alongside s2. */
 const groupReviewData = {
   ...emptyReviewData,
@@ -187,7 +202,6 @@ const baseProps = {
   courseId: 'c1',
   assignmentId: 'a1',
   maxAssignmentGrade: 100,
-  assignmentDueDate: null,
   problems: [{ id: 'p1', title: 'Problem One', type: 'FA', maxPoints: 10 }],
 };
 
@@ -224,6 +238,25 @@ describe('AssignmentSubmissions', () => {
     await waitFor(() => {
       expect(screen.getByTestId('problem-workspace')).toBeInTheDocument();
     });
+  });
+
+  it('hands the attempts table the deadline the selected student is held to', async () => {
+    // Staff are served the assignment's BASE dates, so the table cannot take the deadline from
+    // the assignment: a student with an extension would be labelled late. The review read
+    // already resolves their schedule, and this is the value that has to reach the table.
+    // It reached nothing at all before, so every attempt was called on time.
+    const fetchMock = routeFetch({
+      '/students?': () => ({ ok: true, json: async () => students }),
+      '/grades/summary': () => ({ ok: true, json: async () => ({}) }),
+      '/review-data/': () => ({ ok: true, json: async () => overriddenReviewData }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWithClient(<AssignmentSubmissions {...baseProps} />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('effective-due')).toHaveTextContent('2026-03-05T04:59:59.999Z'),
+    );
   });
 
   it('posts a single-problem grade then re-fetches review-data (invalidation)', async () => {

@@ -4,6 +4,8 @@ import { NextRequest } from 'next/server';
 const prismaMock = vi.hoisted(() => ({
   assignment: {
     findUnique: vi.fn(),
+    // The student content gate reads the assignment through findFirst, scoped to the audience.
+    findFirst: vi.fn(),
   },
   roster: {
     findUnique: vi.fn(),
@@ -25,6 +27,10 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     delete: vi.fn(),
   },
+  // Read by the archived-course check. Live course unless a test says otherwise.
+  course: { findUnique: vi.fn() },
+  // Read by the student content gate, which the POST runs for non-staff.
+  assignmentOverride: { findMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -45,6 +51,17 @@ beforeEach(() => {
   // Default: the problem is linked to the assignment. Tests that need the
   // "not linked" path override this.
   prismaMock.assignmentProblem.findUnique.mockResolvedValue({ assignmentId: 'a1' });
+  // A live course, and a student who is in the audience with nothing holding the assignment
+  // shut. Both are new gates on this route; tests about them override these.
+  prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
+  prismaMock.assignment.findUnique.mockResolvedValue({ courseId: 'c1', isPublished: true });
+  prismaMock.assignment.findFirst.mockResolvedValue({
+    unlockAt: null,
+    dueDate: new Date('2026-01-01T00:00:00Z'),
+    allowLateSubmissions: false,
+    lateCutoff: null,
+  });
 });
 
 describe('POST /api/comments', () => {
@@ -88,6 +105,64 @@ describe('POST /api/comments', () => {
     expect(res.status).toBe(201);
     expect(prismaMock.comment.create).toHaveBeenCalled();
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  /**
+   * Published is not the same as "assigned to them, and open", and an archived course is
+   * read-only. The route checked neither, so a student who knew the ids could comment on an
+   * assignment aimed at somebody else or one that has not opened, and a finished course still
+   * took new comments.
+   */
+  describe('what a student may comment on', () => {
+    const asStudent = () => {
+      authMock.mockResolvedValue({ user: { id: 'u1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        id: 'r1',
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
+      prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', courseId: 'c1' });
+      return POST(
+        new NextRequest('http://localhost/api/comments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'Hello', assignmentId: 'a1', problemId: 'p1' }),
+        }),
+      );
+    };
+
+    it('404-masks an assignment they are not in the audience for', async () => {
+      // Assigned to specific students, and not this one: the gate finds nothing.
+      prismaMock.assignment.findFirst.mockResolvedValue(null);
+
+      const res = await asStudent();
+
+      expect(res.status).toBe(404);
+      expect(prismaMock.comment.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses one that has not unlocked yet', async () => {
+      prismaMock.assignment.findFirst.mockResolvedValue({
+        unlockAt: new Date('2099-01-01T00:00:00Z'),
+        dueDate: new Date('2099-02-01T00:00:00Z'),
+        allowLateSubmissions: false,
+        lateCutoff: null,
+      });
+
+      const res = await asStudent();
+
+      expect(res.status).toBe(403);
+      expect(prismaMock.comment.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses any comment once the course is archived', async () => {
+      prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+      const res = await asStudent();
+
+      expect(res.status).toBe(409);
+      expect(prismaMock.comment.create).not.toHaveBeenCalled();
+    });
   });
 
   it('404-masks an unpublished assignment for a student commenter', async () => {

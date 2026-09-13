@@ -290,6 +290,102 @@ describe('a course connected to more than one LMS course', () => {
   });
 
   /**
+   * "Already linked" has to mean "already linked to *this* LMS".
+   *
+   * The check was a bare `Map<userId, subject>` built across every platform being synced, so a
+   * student who had launched from Canvas counted as linked while the Moodle connection was
+   * being synced too. Their Moodle identity was never created, and passback to Moodle then had
+   * no subject to send a score to.
+   *
+   * The student below is listed only by Moodle, which is ordinary once a course is taught
+   * across two sections in two systems.
+   */
+  it('links a Moodle identity for somebody already linked to Canvas', async () => {
+    await linkIdentity(ids.student, 'lms-student');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [] },
+        { ...secondSource, members: [member({ ltiUserId: 'moodle-student' })] },
+      ],
+    });
+
+    expect(result.changes).toContainEqual(
+      expect.objectContaining({
+        kind: 'link-identity',
+        userId: ids.student,
+        ltiUserId: 'moodle-student',
+        source: secondSource,
+      }),
+    );
+  });
+
+  /**
+   * Somebody taught in two connected LMS courses needs an identity in each.
+   *
+   * A person is one candidate however many sections hold them, which is right for deciding an
+   * enrolment and wrong for deciding identities: the diff could only ever emit one link per
+   * person, so the second LMS course never got one and passback there had nothing to address.
+   */
+  it('links an identity for every LMS course that lists them', async () => {
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-student' })] },
+        { ...secondSource, members: [member({ ltiUserId: 'moodle-student' })] },
+      ],
+    });
+
+    const links = result.changes.filter((c) => c.kind === 'link-identity');
+    expect(links).toHaveLength(2);
+    expect(links).toContainEqual(
+      expect.objectContaining({ ltiUserId: 'lms-student', source: SOURCE }),
+    );
+    expect(links).toContainEqual(
+      expect.objectContaining({ ltiUserId: 'moodle-student', source: secondSource }),
+    );
+  });
+
+  it('links only the one that is missing', async () => {
+    await linkIdentity(ids.student, 'lms-student');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-student' })] },
+        { ...secondSource, members: [member({ ltiUserId: 'moodle-student' })] },
+      ],
+    });
+
+    expect(result.changes.filter((c) => c.kind === 'link-identity')).toEqual([
+      expect.objectContaining({ ltiUserId: 'moodle-student', source: secondSource }),
+    ]);
+  });
+
+  it('leaves them alone once linked to the platform being synced', async () => {
+    await prisma.linkedIdentity.create({
+      data: {
+        userId: ids.student,
+        kind: 'LTI',
+        issuer: SECOND_ISSUER,
+        subject: 'moodle-student',
+        linkedVia: 'JUST_IN_TIME',
+      },
+    });
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [] },
+        { ...secondSource, members: [member({ ltiUserId: 'moodle-student' })] },
+      ],
+    });
+
+    expect(result.changes).toEqual([]);
+  });
+
+  /**
    * The case that made this an aggregate rather than a loop.
    *
    * A student finishes one section and stays in another: the LMS lists them inactive in the

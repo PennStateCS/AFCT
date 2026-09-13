@@ -47,21 +47,44 @@ export type ProblemCopyResult = {
  * problem's answer key with it. A source row pointing at a missing file is not an error
  * here, it just means the copy has no answer key either.
  */
+/**
+ * An autograded problem whose answer file is recorded but not on disk.
+ *
+ * Carries the title, because "which problem" is the only thing that makes this actionable, and
+ * the paths already copied so a caller that has not been tracking them can still tidy up.
+ */
+export class MissingAnswerKeyError extends Error {
+  constructor(
+    readonly problemTitle: string,
+    readonly copiedPaths: string[] = [],
+  ) {
+    super(`The answer file for "${problemTitle}" is missing`);
+  }
+}
+
 async function copyAnswerKey(
   source: Pick<Problem, 'fileName' | 'originalFileName'>,
 ): Promise<{
   newFileName: string | null;
   copiedPath: string | null;
+  /**
+   * The row names an answer file and the file is not there.
+   *
+   * Told apart from "this problem has no answer key", which is an ordinary state for a problem
+   * marked by hand. Both used to come back as a plain null, so a broken autograded problem was
+   * copied into another broken autograded problem and the operation reported success.
+   */
+  missing: boolean;
 }> {
-  if (!source.fileName) return { newFileName: null, copiedPath: null };
+  if (!source.fileName) return { newFileName: null, copiedPath: null, missing: false };
 
   const src = resolveInsideDir(uploadsDir, source.fileName);
-  if (!fs.existsSync(src)) return { newFileName: null, copiedPath: null };
+  if (!fs.existsSync(src)) return { newFileName: null, copiedPath: null, missing: true };
 
   const newFileName = safeStoredFilename(source.originalFileName ?? source.fileName);
   const dest = resolveInsideDir(uploadsDir, newFileName);
   await fs.promises.copyFile(src, dest);
-  return { newFileName, copiedPath: dest };
+  return { newFileName, copiedPath: dest, missing: false };
 }
 
 /**
@@ -132,15 +155,29 @@ export type CopiedAnswerKey = { fileName: string | null; originalFileName: strin
  * a null name. The copy is left without an answer key rather than pointing at nothing.
  */
 export async function copyAnswerKeysForProblems(
-  problems: Array<Pick<Problem, 'id' | 'fileName' | 'originalFileName'>>,
+  problems: Array<Pick<Problem, 'id' | 'title' | 'fileName' | 'originalFileName'>>,
+  /**
+   * Problems whose copy is autograded, and so cannot be made without an answer key.
+   *
+   * A missing file used to be treated the same as having none: the copy carried on and produced
+   * an autograded problem with nothing to mark against, reported success, and surfaced weeks
+   * later as evaluation failures nobody could connect to the duplication. Failing here instead
+   * says which problem is broken, while somebody is looking at it.
+   */
+  requiresAnswerKey: ReadonlySet<string> = new Set(),
 ): Promise<{ byProblemId: Map<string, CopiedAnswerKey>; copiedPaths: string[] }> {
   const byProblemId = new Map<string, CopiedAnswerKey>();
   const copiedPaths: string[] = [];
 
   for (const problem of problems) {
     const originalFileName = problem.originalFileName ?? null;
-    const { newFileName, copiedPath } = await copyAnswerKey(problem);
+    const { newFileName, copiedPath, missing } = await copyAnswerKey(problem);
     if (copiedPath) copiedPaths.push(copiedPath);
+    if (missing && requiresAnswerKey.has(problem.id)) {
+      // Thrown rather than returned: the caller's own failure path already unlinks everything
+      // copied so far, so the half-done copy cleans itself up.
+      throw new MissingAnswerKeyError(problem.title, copiedPaths);
+    }
     byProblemId.set(problem.id, { fileName: newFileName, originalFileName });
   }
 

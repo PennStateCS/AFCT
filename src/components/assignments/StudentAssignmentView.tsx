@@ -590,7 +590,7 @@ export default function StudentAssignmentPage({
               <ProblemWorkspace
                 problem={selectedProblemDetails}
                 submissions={selectedProblemSubmissions}
-                assignmentDueDate={assignment.dueDate}
+                effectiveDueDate={assignment.dueDate}
                 // Null on an individual assignment, so the card renders only when there is a
                 // group to name. "You" rather than a name: this is the student's own page.
                 isGroupWork={typeDisplay === 'Group'}

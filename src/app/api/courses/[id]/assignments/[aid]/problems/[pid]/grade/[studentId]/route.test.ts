@@ -10,8 +10,15 @@ const prismaMock = vi.hoisted(() => ({
     upsert: vi.fn(),
   },
   groupSet: { updateMany: vi.fn() },
+  // The student content gate reads both of these. Mocked because a missing model would make
+  // the gate throw and the route answer 500, which a status assertion could read as a refusal.
+  assignment: { findFirst: vi.fn() },
+  assignmentOverride: { findMany: vi.fn() },
   course: { findUnique: vi.fn() },
   $transaction: vi.fn(),
+  // The grade write locks the assignment-problem row and reads the current points from it, so
+  // a grade validated against an older ceiling cannot land after the ceiling has moved.
+  $queryRaw: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -35,6 +42,17 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
     // The grade target: a student on the roster, which is what the route now requires.
     prismaMock.roster.findUnique.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    // Assigned, with no unlock date: the ordinary case for a student reading their own grade.
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      unlockAt: null,
+      dueDate: new Date('2026-01-01T00:00:00Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
+    prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
+    // The locking read of the current points, matching the fixture above unless a test says
+    // the ceiling moved while the grade was in flight.
+    prismaMock.$queryRaw.mockResolvedValue([{ maxPoints: 100 }]);
     prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
       fn(prismaMock),
     );
@@ -130,6 +148,76 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
       expect(prismaMock.assignmentProblem.findUnique).toHaveBeenCalled();
     });
 
+    /**
+     * Published is not the same as "assigned to them, and open".
+     *
+     * The three other routes over a student's own work run the shared gate; this one stopped at
+     * published. Two answers to the same question is how a leak arrives later, so the cases the
+     * siblings handle are pinned here too.
+     */
+    it('404-masks an assignment the student is not in the audience for', async () => {
+      authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
+      // Assigned to specific students, and not this one.
+      prismaMock.assignment.findFirst.mockResolvedValue(null);
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(404);
+      // Masked before the grade was read at all, not filtered out of the answer.
+      expect(prismaMock.assignmentProblemGrade.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('answers as ungraded for an assignment that has not unlocked yet', async () => {
+      authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
+      prismaMock.assignment.findFirst.mockResolvedValue({
+        unlockAt: new Date('2099-01-01T00:00:00Z'),
+        dueDate: new Date('2099-02-01T00:00:00Z'),
+        allowLateSubmissions: false,
+        lateCutoff: null,
+      });
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      // It does exist for them, so the same shape an ungraded problem gives, not an error.
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ grade: null, feedback: null });
+      expect(prismaMock.assignmentProblemGrade.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('does not gate staff, who set the audience and read everybody', async () => {
+      authMock.mockResolvedValue({ user: { id: 'fac-1', role: 'FACULTY' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'FACULTY',
+        course: { isPublished: true },
+      });
+      // Would mask a student out entirely; staff must read the grade regardless.
+      prismaMock.assignment.findFirst.mockResolvedValue(null);
+      prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({
+        grade: 8,
+        feedback: 'ok',
+        updatedAt: new Date('2026-01-02T00:00:00Z'),
+      });
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({ grade: 8 });
+    });
+
     it('404-masks an unpublished assignment for the owning student', async () => {
       // Even reading their OWN grade, a student can't touch an unpublished assignment.
       authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
@@ -204,6 +292,35 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
         method: 'POST',
         body: JSON.stringify(body),
       });
+
+    /**
+     * A grade validated against points that move before it lands.
+     *
+     * The range was checked when the request arrived. Lowering the points is refused below a
+     * grade that already exists, but a grade being entered does not exist yet, so nothing
+     * stopped a grader validating 10 against 10 while the ceiling was on its way to 5, leaving
+     * 10 out of 5 behind.
+     */
+    describe('points that move while the grade is being entered', () => {
+      it('refuses the grade when the ceiling has dropped below it', async () => {
+        // Still 100 when the request arrived; 5 by the time the row was locked.
+        prismaMock.$queryRaw.mockResolvedValue([{ maxPoints: 5 }]);
+
+        const res = await POST(buildRequest({ grade: 10 }), {
+          params: Promise.resolve(defaultParams),
+        });
+
+        expect(res.status).toBe(409);
+        await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('5') });
+        expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
+      });
+
+      it('takes the problem row before it writes', async () => {
+        await POST(buildRequest({ grade: 10 }), { params: Promise.resolve(defaultParams) });
+
+        expect(String(prismaMock.$queryRaw.mock.calls[0]?.[0])).toContain('FOR NO KEY UPDATE');
+      });
+    });
 
     it('returns 401 when unauthenticated', async () => {
       authMock.mockResolvedValue(null);
@@ -430,6 +547,7 @@ describe('the grade target', () => {
     vi.clearAllMocks();
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    prismaMock.$queryRaw.mockResolvedValue([{ maxPoints: 100 }]);
     prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
       fn(prismaMock),
     );

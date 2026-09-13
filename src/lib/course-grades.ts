@@ -565,6 +565,50 @@ async function buildAccountability(
  * missing is how a student ends up with different answers in two places, which is the same
  * reasoning as the comment on the grade total in `queueChangedGrades`.
  */
+/**
+ * Points each student is accountable for on one assignment, which is the gradebook's own
+ * denominator: a problem counts once it has been marked, or once `lib/missing-work` says nobody
+ * handed it in, and work awaiting a grade counts toward neither half.
+ *
+ * Exposed for LTI, which needs to say whether a score is the final word. Comparing this against
+ * the assignment's full value answers that without a second definition of "finished marking",
+ * and a second definition is how the two would drift.
+ */
+export async function accountablePointsByStudent(
+  assignmentId: string,
+  now = new Date(),
+): Promise<Map<string, number>> {
+  const assignment = await prisma.assignment.findUnique({
+    where: { id: assignmentId },
+    select: { courseId: true },
+  });
+  if (!assignment) return new Map();
+
+  const roster = await prisma.roster.findMany({
+    where: { courseId: assignment.courseId, role: 'STUDENT' },
+    select: { userId: true, status: true, user: { select: { inactive: true } } },
+  });
+  const studentIds = roster.map((r) => r.userId);
+  if (studentIds.length === 0) return new Map();
+
+  const rows = (await loadAssignmentRows(assignment.courseId)).filter((a) => a.id === assignmentId);
+  if (rows.length === 0) return new Map();
+
+  const { assigned, groups } = await buildAssignedMapWithGroups(rows, studentIds);
+  const activeById = new Map(
+    roster.map((r) => [r.userId, r.status === 'ENROLLED' && !r.user?.inactive]),
+  );
+
+  const { points } = await buildAccountability(rows, studentIds, assigned, activeById, groups, now);
+
+  const out = new Map<string, number>();
+  for (const studentId of studentIds) {
+    const value = points[studentId]?.[assignmentId];
+    if (value !== undefined) out.set(studentId, value);
+  }
+  return out;
+}
+
 export async function studentsWithDerivedZeros(
   assignmentId: string,
   now = new Date(),

@@ -16,6 +16,13 @@ const prismaMock = vi.hoisted(() => ({
   },
   course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
+  // The removal guard counts work before it deletes, inside a transaction that takes the
+  // link's row lock. All four are mocked, or the guard would throw and the route answer 500,
+  // which a status assertion could mistake for a refusal.
+  submission: { count: vi.fn() },
+  assignmentProblemGrade: { count: vi.fn() },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -32,6 +39,14 @@ beforeEach(() => {
   // Not on any course roster by default; individual tests grant admin/staff via auth.
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  // Run the removal guard's transaction body against the same mock, the way the route's own
+  // `prisma` would. No work on the problem unless a test says otherwise.
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+    fn(prismaMock),
+  );
+  prismaMock.$queryRaw.mockResolvedValue([]);
+  prismaMock.submission.count.mockResolvedValue(0);
+  prismaMock.assignmentProblemGrade.count.mockResolvedValue(0);
 });
 
 describe('POST /api/courses/[id]/[aid]/problems (add problems)', () => {
@@ -380,6 +395,57 @@ describe('DELETE /api/courses/[id]/[aid]/problems (remove a problem)', () => {
     const res = await DELETE(req, { params: Promise.resolve({ id: 'c1', aid: 'a1' }) });
 
     expect(res.status).toBe(404);
+  });
+
+  /**
+   * Removal takes the work with it, because `Submission` and `AssignmentProblemGrade` both
+   * cascade from the assignment-problem link. Nothing stood between a click and every attempt
+   * and mark on that problem disappearing, unasked and unlogged.
+   */
+  const removing = () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', title: 'Problem' });
+    prismaMock.assignment.findUnique.mockResolvedValue({ problems: [] });
+    return DELETE(
+      new Request('http://localhost/api/courses/c1/assignments/a1/problems', {
+        method: 'DELETE',
+        body: JSON.stringify({ problemId: 'p1' }),
+      }),
+      { params: Promise.resolve({ id: 'c1', aid: 'a1' }) },
+    );
+  };
+
+  it('refuses to remove a problem students have submitted to', async () => {
+    prismaMock.submission.count.mockResolvedValue(3);
+
+    const res = await removing();
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignmentProblem.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses to remove a problem that has been graded, even with no submissions', async () => {
+    // Manually entered marks with nothing handed in: a real shape, and the one that looks
+    // safest to remove.
+    prismaMock.assignmentProblemGrade.count.mockResolvedValue(1);
+
+    const res = await removing();
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignmentProblem.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('takes the link row lock before counting, so the count cannot go stale', async () => {
+    // Counting and then deleting is a check-then-act: at READ COMMITTED a submission that
+    // commits after the count is invisible to it. The row lock is what makes the two
+    // possible orders the only outcomes.
+    await removing();
+
+    expect(prismaMock.$queryRaw).toHaveBeenCalled();
+    const sql = String(prismaMock.$queryRaw.mock.calls[0]?.[0]);
+    expect(sql).toContain('FOR UPDATE');
+    expect(prismaMock.assignmentProblem.deleteMany).toHaveBeenCalled();
   });
 
   it('removes problem and returns updated list', async () => {

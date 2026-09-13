@@ -9,10 +9,18 @@
 
 import { prisma } from '@/lib/prisma';
 import { queueScore, scoreQueueSummary, studentScoreState } from '@/lib/lti/score-queue';
-import { studentsWithDerivedZeros } from '@/lib/course-grades';
+import { accountablePointsByStudent, studentsWithDerivedZeros } from '@/lib/course-grades';
 
 /** Whether this course opens from any LMS. Nothing here does anything if it does not. */
 export async function courseIsLinked(courseId: string): Promise<boolean> {
+  // A soft-deleted course is gone as far as everything else is concerned, and that has to
+  // include the outside world: once `deletedAt` is set nothing new should reach the LMS on its
+  // behalf. Asked here because every queueing path goes through it.
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { deletedAt: true },
+  });
+  if (!course || course.deletedAt) return false;
   return (await prisma.ltiContextLink.count({ where: { courseId } })) > 0;
 }
 
@@ -72,6 +80,24 @@ export async function queueChangedGrades(
 
   const totalByStudent = new Map(totals.map((t) => [t.studentId, t._sum.grade ?? 0]));
 
+  /**
+   * Whether a student's score is the final word, which is what `gradingProgress` tells the LMS.
+   *
+   * The score sent is the sum of the marks that exist, over the assignment's full value. On a
+   * half-marked assignment that reads lower than the student stands: AFCT's gradebook leaves
+   * work awaiting a grade out of both halves, so it shows 50/50 where the LMS is sent 50/100.
+   * Rather than change the number or withhold it, the score goes as it is and says it is
+   * provisional, which is what AGS has `PendingManual` for.
+   *
+   * "Finished marking" is asked of the gradebook rather than counted here. Its accountable
+   * points are exactly the problems that have an answer, whether that is a mark somebody gave
+   * or a zero for work nobody handed in; anything still waiting is in neither. When that
+   * reaches the assignment's full value there is nothing left to decide.
+   */
+  const accountablePoints = await accountablePointsByStudent(assignmentId);
+  const gradingCompleteFor = (studentId: string) =>
+    (accountablePoints.get(studentId) ?? 0) >= scoreMaximum;
+
   /** Everyone who should hold a score in the LMS: marked work, missing work, or both. */
   const accountable = new Set<string>(totalByStudent.keys());
   for (const studentId of derivedZeros) {
@@ -82,7 +108,13 @@ export async function queueChangedGrades(
 
   const queued = await prisma.ltiScoreQueue.findMany({
     where: { assignmentId, ...(opts.userId ? { userId: opts.userId } : {}) },
-    select: { userId: true, scoreGiven: true, scoreMaximum: true, state: true },
+    select: {
+      userId: true,
+      scoreGiven: true,
+      scoreMaximum: true,
+      state: true,
+      gradingComplete: true,
+    },
   });
   const known = new Map(queued.map((row) => [row.userId, row]));
 
@@ -124,14 +156,20 @@ export async function queueChangedGrades(
      * earlier version of this re-queued failed rows and produced a duplicate gradebook column
      * per attempt. Faculty retry deliberately with "send grades now".
      */
+    const gradingComplete = scoreGiven === null ? true : gradingCompleteFor(userId);
+    // The label counts as part of the score: an assignment finishing its marking changes what
+    // the LMS should be told even when the number itself has not moved.
     const unchanged =
-      existing && existing.scoreGiven === scoreGiven && existing.scoreMaximum === scoreMaximum;
+      existing &&
+      existing.scoreGiven === scoreGiven &&
+      existing.scoreMaximum === scoreMaximum &&
+      existing.gradingComplete === gradingComplete;
     if (unchanged && (existing.state !== 'FAILED' || !opts.retryFailed)) continue;
 
     // Nothing to take back from a platform that was never told anything in the first place.
     if (scoreGiven === null && !existing) continue;
 
-    await queueScore({ assignmentId, userId, scoreGiven, scoreMaximum });
+    await queueScore({ assignmentId, userId, scoreGiven, scoreMaximum, gradingComplete });
     count++;
   }
 
@@ -168,7 +206,13 @@ export async function queueAutomaticAssignments(): Promise<number> {
   if (linkedCourses.length === 0) return 0;
 
   const assignments = await prisma.assignment.findMany({
-    where: { courseId: { in: linkedCourses.map((c) => c.courseId) }, ltiAutoSync: true },
+    where: {
+      courseId: { in: linkedCourses.map((c) => c.courseId) },
+      ltiAutoSync: true,
+      // The context links outlive a soft delete, so without this the background pass keeps
+      // finding a deleted course's assignments and queueing their grades.
+      course: { deletedAt: null },
+    },
     select: { id: true },
   });
 

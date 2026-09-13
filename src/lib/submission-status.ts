@@ -25,15 +25,26 @@ export type StatusChip = {
   variant: StatusBadgeVariant;
 };
 
+/**
+ * On time or late, decided by comparing the attempt against the deadline the submitter was
+ * held to. `dueDate` must be that student's *effective* deadline, override applied, not the
+ * assignment's own.
+ *
+ * There used to be a `submission.status === 'late'` arm ahead of the comparison, on the
+ * understanding that the server had already decided and its answer should win. It never had:
+ * `SubmissionStatus` is PENDING, PROCESSING, COMPLETED or FAILED, so nothing ever stored
+ * "late" and the arm could not fire. Its presence made a missing due date look survivable,
+ * which is how the staff Submissions tab came to call every attempt on time for months. If
+ * the server's decision should be authoritative here, and there is a case for it, that means
+ * storing what `evaluateSubmissionWindow` decided, not reading a value nothing writes.
+ */
 export const getTimingStatusChip = (
   submission: ProblemSubmission,
   hasValidDueDate: boolean,
   dueDate: Date | null,
 ): StatusChip => {
   const submittedAt = new Date(submission.submittedAt);
-  const isLate =
-    submission.status?.toLowerCase() === 'late' ||
-    (hasValidDueDate && !!dueDate && submittedAt.getTime() > dueDate.getTime());
+  const isLate = hasValidDueDate && !!dueDate && submittedAt.getTime() > dueDate.getTime();
 
   if (isLate) {
     return {

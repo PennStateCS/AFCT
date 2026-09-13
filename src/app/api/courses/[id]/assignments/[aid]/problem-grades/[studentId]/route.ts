@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { discloseGradeFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
@@ -67,6 +68,26 @@ export const GET = withCourseAuth(
       // Students can't read grades for an unpublished assignment (mask as 404).
       if (!assignment.isPublished && !isStaff) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      /**
+       * Published is not the same as "theirs, and open". The same gate the single-problem
+       * read, `student-context`, `review-data` and `submissions/[sid]` all run: this is the
+       * batch version of the same data and was the last one still stopping at published.
+       *
+       * Staff skip it. They set the audience and the unlock, and read everybody by design.
+       */
+      if (!isStaff) {
+        const gate = await resolveStudentContentGate(assignmentId, studentId);
+        // Not in the audience: mask exactly as if it did not exist.
+        if (!gate.assigned) {
+          return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+        }
+        // Assigned but not open yet. 204 is what this route already answers when there is
+        // nothing to show, so the client needs no new case.
+        if (gate.locked) {
+          return new NextResponse(null, { status: 204 });
+        }
       }
 
       const grades = await prisma.assignmentProblemGrade.findMany({
@@ -154,6 +175,9 @@ export const GET = withCourseAuth(
   { access: 'read', deniedAction: 'PROBLEM_GRADES_ACCESS_DENIED', deniedCategory: 'GRADE' },
 );
 
+/** Thrown inside the batch transaction when the points moved under one of these grades. */
+class GradeOutOfRangeError extends Error {}
+
 /**
  * Batch-saves this student's problem grades for the assignment in a single request;
  * the write counterpart to the GET above (co-located as the same resource). The body
@@ -207,14 +231,23 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
-      // The grade target must actually be enrolled in this course; never create
-      // grade rows for an arbitrary user id that isn't on the roster.
-      const enrolled = await prisma.roster.findFirst({
+      /**
+       * The grade target must be a student on this course's roster.
+       *
+       * Enrolment alone was not enough: faculty and TAs hold roster rows too, so this would
+       * happily open a grade row against a colleague. The single-problem route next door
+       * already requires the role, and two answers to "who can be graded" is how one of them
+       * ends up wrong.
+       */
+      const rosterEntry = await prisma.roster.findFirst({
         where: { courseId, userId: studentId },
-        select: { id: true },
+        select: { role: true },
       });
-      if (!enrolled) {
-        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
+      if (!rosterEntry || rosterEntry.role !== 'STUDENT') {
+        return NextResponse.json(
+          { error: 'Grades can only be recorded for students enrolled in this course.' },
+          { status: 404 },
+        );
       }
 
       // maxPoints per problem: used for validation and to reject problem ids that
@@ -274,42 +307,95 @@ export const POST = withCourseAuth(
       // feedback intact (a grade-only edit must not erase written feedback). Setting any
       // grade (including 0) for a group assignment also stamps the group set's sticky lock
       // in the same transaction.
-      const gradeOps = changes.map((change) =>
-        change.grade === null
-          ? prisma.assignmentProblemGrade.deleteMany({
+      const setsAnyGrade = changes.some((c) => c.grade !== null);
+      let outOfRange: { problemId: string; maxPoints: number } | null = null;
+
+      await prisma.$transaction(async (tx) => {
+        /**
+         * The assignment's problem rows first, and the points read back from them.
+         *
+         * The validation above used the points as they were when the request arrived, and the
+         * settings route can lower them. It refuses to go below a grade that already exists,
+         * but these grades do not exist yet, so nothing stopped the two from crossing and
+         * leaving 10 out of 5 behind. Taking the rows the settings route also takes means one
+         * of them waits. Same order as every other grade writer: the problem links, then the
+         * grade rows (see `lib/grade-writes`).
+         *
+         * Ordered by problem id because this is the one place that takes several of these rows
+         * at once. Two of these running on the same assignment would otherwise take them in
+         * whatever order the scan produced and could sit on each other's next row.
+         */
+        await tx.$queryRaw`
+          SELECT 1 FROM "AssignmentProblem" WHERE "assignmentId" = ${assignmentId}
+          ORDER BY "problemId"
+          FOR NO KEY UPDATE
+        `;
+        const locked = await tx.assignmentProblem.findMany({
+          where: { assignmentId },
+          select: { problemId: true, maxPoints: true },
+        });
+        const lockedMax = new Map(locked.map((ap) => [ap.problemId, ap.maxPoints]));
+
+        for (const change of changes) {
+          if (change.grade === null) continue;
+          const max = lockedMax.get(change.problemId);
+          // Detached from the assignment, or now worth less than this grade.
+          if (max === undefined || change.grade > max) {
+            outOfRange = { problemId: change.problemId, maxPoints: max ?? 0 };
+            throw new GradeOutOfRangeError();
+          }
+        }
+
+        for (const change of changes) {
+          if (change.grade === null) {
+            await tx.assignmentProblemGrade.deleteMany({
               where: { assignmentId, problemId: change.problemId, studentId },
-            })
-          : prisma.assignmentProblemGrade.upsert({
-              where: {
-                assignmentId_problemId_studentId: {
-                  assignmentId,
-                  problemId: change.problemId,
-                  studentId,
-                },
-              },
-              create: {
+            });
+            continue;
+          }
+          await tx.assignmentProblemGrade.upsert({
+            where: {
+              assignmentId_problemId_studentId: {
                 assignmentId,
                 problemId: change.problemId,
                 studentId,
-                grade: change.grade,
-                feedback: null,
-                gradedManually: true,
-                gradeSource: 'MANUAL',
               },
-              update: { grade: change.grade, gradedManually: true, gradeSource: 'MANUAL' },
-            }),
-      );
-      const setsAnyGrade = changes.some((c) => c.grade !== null);
-      const lockOps =
-        assignment.groupSetId && setsAnyGrade
-          ? [
-              prisma.groupSet.updateMany({
-                where: { id: assignment.groupSetId, lockedAt: null },
-                data: { lockedAt: new Date() },
-              }),
-            ]
-          : [];
-      await prisma.$transaction([...gradeOps, ...lockOps]);
+            },
+            create: {
+              assignmentId,
+              problemId: change.problemId,
+              studentId,
+              grade: change.grade,
+              feedback: null,
+              gradedManually: true,
+              gradeSource: 'MANUAL',
+            },
+            update: { grade: change.grade, gradedManually: true, gradeSource: 'MANUAL' },
+          });
+        }
+
+        if (assignment.groupSetId && setsAnyGrade) {
+          await tx.groupSet.updateMany({
+            where: { id: assignment.groupSetId, lockedAt: null },
+            data: { lockedAt: new Date() },
+          });
+        }
+      }).catch((err) => {
+        if (err instanceof GradeOutOfRangeError && outOfRange) {
+          return outOfRange;
+        }
+        throw err;
+      });
+
+      if (outOfRange) {
+        const refused: { problemId: string; maxPoints: number } = outOfRange;
+        return NextResponse.json(
+          {
+            error: `Problem ${refused.problemId} is now worth ${refused.maxPoints} points, so one of those grades is out of range. Check the grades and try again.`,
+          },
+          { status: 409 },
+        );
+      }
 
       // Audit each applied change (best-effort; grades are already committed).
       try {

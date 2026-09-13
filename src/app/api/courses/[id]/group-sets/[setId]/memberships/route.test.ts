@@ -17,7 +17,12 @@ const serviceMock = vi.hoisted(() => ({
   findGroupSet: vi.fn(),
   activeStudentIds: vi.fn(),
   loadGroupSetDetail: vi.fn(),
-  assertGroupSetUnlocked: vi.fn(),
+  /**
+   * Everything that decides whether to write now runs inside this, under the set's row lock.
+   * The default runs the caller's work against the same tx mock; a test that wants the locked
+   * case makes it throw, exactly as the real helper does when `lockedAt` is set.
+   */
+  withUnlockedGroupSet: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }));
@@ -28,7 +33,9 @@ vi.mock('@/lib/group-set-service', () => serviceMock);
 import { POST } from './route';
 
 const ctx = { params: { id: 'c1', setId: 'gs1' } } as never;
-const txMock = { groupMembership: { deleteMany: vi.fn(), upsert: vi.fn() } };
+const txMock = {
+  groupMembership: { deleteMany: vi.fn(), upsert: vi.fn(), findMany: vi.fn() },
+};
 const post = (body: unknown) =>
   POST(
     new NextRequest('http://localhost/api/courses/c1/group-sets/gs1/memberships', {
@@ -58,13 +65,17 @@ beforeEach(() => {
     { id: 'g1', name: 'Group A' },
     { id: 'g2', name: 'Group B' },
   ]);
-  // Where each affected student was before the edit, which the per-student entries record as
-  // their from-group. Empty by default: nobody was in a group yet.
-  prismaMock.groupMembership.findMany.mockResolvedValue([]);
   prismaMock.activityLog.createMany.mockResolvedValue({ count: 0 });
   txMock.groupMembership.deleteMany.mockReset();
   txMock.groupMembership.upsert.mockReset();
+  // Where each affected student was before the edit, and the basis read. Both are inside the
+  // lock now, so they come off the transaction client.
+  txMock.groupMembership.findMany.mockReset();
+  txMock.groupMembership.findMany.mockResolvedValue([]);
   prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn(txMock));
+  serviceMock.withUnlockedGroupSet.mockImplementation(
+    async (_setId: string, work: (tx: unknown) => unknown) => work(txMock),
+  );
 });
 
 describe('POST memberships', () => {
@@ -77,7 +88,10 @@ describe('POST memberships', () => {
       ],
     });
     expect(res.status).toBe(200);
-    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    // One transaction, and it is the one that holds the set's row lock: the basis check, the
+    // from-group read and the writes all run inside it, so none of them can go stale.
+    expect(serviceMock.withUnlockedGroupSet).toHaveBeenCalledTimes(1);
+    expect(serviceMock.withUnlockedGroupSet.mock.calls[0]?.[0]).toBe('gs1');
     expect(txMock.groupMembership.deleteMany).toHaveBeenCalledWith({
       where: { groupSetId: 'gs1', userId: { in: ['u3'] } },
     });
@@ -114,7 +128,7 @@ describe('POST memberships', () => {
   });
 
   it('409 when expectedBasis is stale', async () => {
-    prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 'u1', groupId: 'g1' }]);
+    txMock.groupMembership.findMany.mockResolvedValue([{ userId: 'u1', groupId: 'g1' }]);
     const res = await post({
       operations: [{ userId: 'u2', groupId: 'g2' }],
       expectedBasis: 'definitely-stale',
@@ -130,7 +144,8 @@ describe('POST memberships', () => {
   });
 
   it('409 when the set is locked (has submissions)', async () => {
-    serviceMock.assertGroupSetUnlocked.mockRejectedValue(new GroupSetLockedError());
+    // The real helper throws this from inside the transaction once `lockedAt` is set.
+    serviceMock.withUnlockedGroupSet.mockRejectedValue(new GroupSetLockedError());
     const res = await post({ operations: [{ userId: 'u1', groupId: 'g1' }] });
     expect(res.status).toBe(409);
   });
@@ -147,11 +162,11 @@ describe('membership audit', () => {
   // An earlier test leaves this rejecting, and clearAllMocks resets calls but not
   // implementations, so say what this block needs rather than inheriting a locked set.
   beforeEach(() => {
-    serviceMock.assertGroupSetUnlocked.mockResolvedValue(undefined);
+
   });
 
   it('records the group a student moved out of, not just the one they went to', async () => {
-    prismaMock.groupMembership.findMany.mockResolvedValue([{ userId: 'u1', groupId: 'g1' }]);
+    txMock.groupMembership.findMany.mockResolvedValue([{ userId: 'u1', groupId: 'g1' }]);
 
     const res = await post({ operations: [{ userId: 'u1', groupId: 'g2' }] });
     expect(res.status).toBe(200);
@@ -175,7 +190,7 @@ describe('membership audit', () => {
     // More than the old 100-name cap: the point is that none of them go missing.
     const many = Array.from({ length: 150 }, (_, i) => `u${i}`);
     serviceMock.activeStudentIds.mockResolvedValue(new Set(many));
-    prismaMock.groupMembership.findMany.mockResolvedValue([]);
+    txMock.groupMembership.findMany.mockResolvedValue([]);
 
     const res = await post({ operations: many.map((userId) => ({ userId, groupId: 'g1' })) });
     expect(res.status).toBe(200);
@@ -208,7 +223,7 @@ describe('whose previous groups the audit reads', () => {
     });
     expect(res.status).toBe(200);
 
-    expect(prismaMock.groupMembership.findMany.mock.calls[0][0]).toMatchObject({
+    expect(txMock.groupMembership.findMany.mock.calls[0]?.[0]).toMatchObject({
       where: { groupSetId: 'gs1', userId: { in: ['u3', 'u1'] } },
     });
   });

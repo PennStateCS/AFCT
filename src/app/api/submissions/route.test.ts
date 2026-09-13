@@ -16,8 +16,13 @@ const prismaMock = vi.hoisted(() => ({
   submission: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   submissionGrant: { findMany: vi.fn() },
   roster: { findFirst: vi.fn() },
-  // The submit route wraps its cap re-check + create in a serializable transaction;
-  // run the callback against the same mock so tx.submission.* hits these mocks.
+  // The submit transaction re-reads everything that decides whether the work may be accepted,
+  // with the rows held, so it needs the lock statement and the group-set stamp as well.
+  groupSet: { updateMany: vi.fn() },
+  $queryRaw: vi.fn(),
+  // The submit route wraps its authoritative re-check + create in a serializable transaction;
+  // run the callback against the same mock so tx.* hits these mocks, which is also what makes
+  // the re-reads see the same world the pre-reads did.
   $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(prismaMock)),
 }));
 
@@ -64,7 +69,7 @@ const makeFormData = (
     assignmentId: 'assignment-1',
     problemId: 'problem-1',
   },
-  file?: File,
+  file: File | null = makeFile(),
 ) => {
   const fd = new FormData();
   for (const [key, value] of Object.entries(fields)) fd.set(key, value);
@@ -83,6 +88,9 @@ const logActions = () => activityLogMock.mock.calls.map((call) => call[2]?.actio
 beforeEach(() => {
   vi.clearAllMocks();
   fsMock.existsSync.mockReturnValue(true);
+  // The row locks the authoritative re-check takes; nothing to return, but it has to answer.
+  prismaMock.$queryRaw.mockResolvedValue([]);
+  prismaMock.groupSet.updateMany.mockResolvedValue({ count: 0 });
   authMock.mockResolvedValue({ user: { id: 'user-1' } });
   prismaMock.submissionGrant.findMany.mockResolvedValue([]);
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
@@ -492,17 +500,9 @@ describe('POST /api/submissions', () => {
     expect(fsMock.writeFileSync).toHaveBeenCalled();
   });
 
-  // Branch 445 false side: create fails with no file uploaded, so there is no
-  // orphaned file to clean up.
-  it('returns 500 without attempting file cleanup when no file was uploaded', async () => {
-    prismaMock.submission.create.mockRejectedValue(new Error('db down'));
-
-    const res = await POST(makeRequest(makeFormData()));
-
-    expect(res.status).toBe(500);
-    expect(fsMock.unlinkSync).not.toHaveBeenCalled();
-    expect(logActions()).toContain('SUBMISSION_ERROR');
-  });
+  // There used to be a case here for "the insert failed and there was no file to clean up".
+  // A request with no file is refused long before the insert now, so that arm is unreachable
+  // from this route; `cleanupFile`'s own null guard stays as a defensive no-op.
 
   // Branch 466 false side: a thrown non-Error is stringified via String(error) in
   // the SUBMISSION_ERROR log.
@@ -571,22 +571,25 @@ describe('POST /api/submissions', () => {
     expect(createdLog?.[2]?.metadata?.status).toBe('PENDING');
   });
 
-  it('queues a submission without a file', async () => {
-    prismaMock.submission.create.mockResolvedValue({ id: 'submission-2', status: 'PENDING' });
+  /**
+   * An empty request used to be a real attempt: a row, one of the student's limited
+   * submissions spent, the resubmit cooldown started, and on a group assignment the group set
+   * stamped locked, which is sticky and never cleared. Nothing in the browser sends one, so
+   * every way to produce it was a client bug or a hand-made request.
+   */
+  it('refuses a submission with no file, before anything is counted or locked', async () => {
+    const res = await POST(makeRequest(makeFormData(undefined, null)));
 
-    const res = await POST(makeRequest(makeFormData()));
-
-    expect(res.status).toBe(202);
+    expect(res.status).toBe(400);
     expect(fsMock.writeFileSync).not.toHaveBeenCalled();
-    expect(prismaMock.submission.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          studentId: 'user-1',
-          fileName: null,
-          originalFileName: null,
-        }),
-      }),
-    );
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty file the same way', async () => {
+    const res = await POST(makeRequest(makeFormData(undefined, makeFile(0))));
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.submission.create).not.toHaveBeenCalled();
   });
 
   it('returns 500 and logs an error when creating the submission fails', async () => {
