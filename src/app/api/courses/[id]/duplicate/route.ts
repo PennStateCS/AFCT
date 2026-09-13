@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import fs from 'fs';
-import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { withAdminAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
-import { safeStoredFilename, resolveInsideDir } from '@/lib/safe-upload';
 import { descriptionCopyData } from '@/lib/description-write';
 import { createWithUniqueCourseCode } from '@/lib/course-code';
 import { parseValidDate } from '@/lib/date-format';
 import { toDateTimeInTimezone } from '@/lib/date-convert';
 import { toEmptyStringNotation } from '@/lib/empty-string-notation';
+import { copyAnswerKeysForProblems, MissingAnswerKeyError } from '@/lib/problem-copy';
 import type { Prisma, Problem } from '@prisma/client';
 
 // Permissive body schema: guarantees a well-typed object (and rejects malformed
@@ -234,24 +233,7 @@ export const POST = withAdminAuth(
       // the two rows don't share one file (a later delete/replace of one problem would
       // otherwise unlink the file the other still points at). Track the copies so a
       // rolled-back transaction leaves no orphaned files behind.
-      const solutionsDir = path.join('/private', 'uploads', 'solutions');
       const copiedSolutionFiles: string[] = [];
-      const copyProblemSolution = async (p: {
-        fileName: string | null;
-        originalFileName: string | null;
-      }): Promise<{ fileName?: string; originalFileName?: string }> => {
-        if (!p.fileName) return {};
-        const src = resolveInsideDir(solutionsDir, p.fileName);
-        // If the source is already missing, the original is broken too; the copy just
-        // has no solution file rather than a dangling pointer.
-        if (!fs.existsSync(src)) return {};
-        const newName = safeStoredFilename(p.originalFileName ?? p.fileName);
-        const dest = resolveInsideDir(solutionsDir, newName);
-        await fs.promises.copyFile(src, dest);
-        copiedSolutionFiles.push(dest);
-        return { fileName: newName, originalFileName: p.originalFileName ?? undefined };
-      };
-
       // Everything that isn't a DB write happens BEFORE the transaction. Prisma's
       // interactive transactions have a ~5s timeout and hold row locks for their
       // whole duration; copying solution files (slow filesystem I/O) inside one risks
@@ -286,15 +268,38 @@ export const POST = withAdminAuth(
           }
         }
 
-        // Copy each problem's solution file up front, keyed by the source problem id;
-        // the transaction reuses these instead of doing I/O while holding locks.
+        /**
+         * Copy each problem's answer file up front, through the shared helper.
+         *
+         * This route used to carry its own copy of the logic, and the two had drifted: a
+         * recorded answer file missing from disk was silently treated the same as a problem
+         * that never had one, so an autograded problem was duplicated into another autograded
+         * problem with nothing to mark against. The operation reported success and the breakage
+         * surfaced later as evaluation failures nobody could trace back to it.
+         *
+         * The autograded set is per link, not per problem: the same problem can be autograded
+         * on one assignment and marked by hand on another, and any link that will be autograded
+         * needs its answer key to survive the copy.
+         */
+        const autogradedProblemIds = new Set(
+          originalAssignments.flatMap((a) =>
+            a.problems.filter((ap) => ap.autograderEnabled).map((ap) => ap.problemId),
+          ),
+        );
+        const copied = await copyAnswerKeysForProblems(problemsToCopy, autogradedProblemIds);
+        copiedSolutionFiles.push(...copied.copiedPaths);
         const solutionByProblemId = new Map<
           string,
           { fileName?: string; originalFileName?: string }
-        >();
-        for (const p of problemsToCopy) {
-          solutionByProblemId.set(p.id, await copyProblemSolution(p));
-        }
+        >(
+          [...copied.byProblemId].map(([id, key]) => [
+            id,
+            {
+              fileName: key.fileName ?? undefined,
+              originalFileName: key.originalFileName ?? undefined,
+            },
+          ]),
+        );
 
         // A unique reg code is chosen before the insert, so a concurrent create could
         // claim it in between; retry the whole transaction with a fresh code on the
@@ -476,9 +481,18 @@ export const POST = withAdminAuth(
           }),
         );
       } catch (txErr) {
-        // A read, a file copy, or the transaction failed; remove any solution files
-        // we copied so they don't leak as orphans.
-        await Promise.all(copiedSolutionFiles.map((f) => fs.promises.unlink(f).catch(() => {})));
+        /**
+         * A read, a file copy, or the transaction failed; remove any answer files we copied so
+         * they don't leak as orphans.
+         *
+         * A refused copy carries its own list, because it threw part-way through and the local
+         * one was never filled in: the files written before the broken problem are on the error.
+         */
+        const orphans =
+          txErr instanceof MissingAnswerKeyError
+            ? [...copiedSolutionFiles, ...txErr.copiedPaths]
+            : copiedSolutionFiles;
+        await Promise.all(orphans.map((f) => fs.promises.unlink(f).catch(() => {})));
         throw txErr;
       }
 
@@ -502,6 +516,17 @@ export const POST = withAdminAuth(
 
       return NextResponse.json({ id: result.id, message: 'Course duplicated' }, { status: 201 });
     } catch (err) {
+      if (err instanceof MissingAnswerKeyError) {
+        // Nothing was created: the transaction never ran, and the files copied before the
+        // broken problem were unlinked above. Name the problem, which is the only actionable
+        // part of it.
+        return NextResponse.json(
+          {
+            error: `"${err.problemTitle}" could not be copied because its answer file is missing from the server. Upload its answer file again, or turn its autograder off, then try again.`,
+          },
+          { status: 409 },
+        );
+      }
       console.error('Duplicate course error:', err);
       await logError(req, {
         userId: actorId,
