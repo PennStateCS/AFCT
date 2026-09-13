@@ -1786,7 +1786,7 @@ export interface paths {
         get?: never;
         /**
          * Change an assignment's individual/group type
-         * @description Changes an assignment's individual/group type. Course staff (faculty or TAs) or a system  admin. `groupSetId: null` makes it individual; a set id makes it a group assignment tied  to that set. Because assignees and date overrides reference the old type's targets,  switching resets the audience to everyone and clears all assignees + overrides in one  transaction (staff rebuild them on the Assign To tab).
+         * @description Changes an assignment's individual/group type. Course staff (faculty or TAs) or a system  admin. `groupSetId: null` makes it individual; a set id makes it a group assignment tied  to that set. Because assignees and date overrides reference the old type's targets,  switching resets the audience to everyone and clears all assignees + overrides in one  transaction (staff rebuild them on the Assign To tab). Refused once any submission or grade  exists, because the change would reinterpret that work.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/type/route.ts)
          */
@@ -9109,6 +9109,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The assignment already has submissions or grades, so its type is frozen. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Server error. */
             500: {
                 headers: {
@@ -11876,7 +11885,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not course staff (faculty or TAs) or a system admin, or an archive/unpublish safety check failed. */
+            /** @description Not course staff (faculty or TAs) or a system admin, a non-administrator tried to change isArchived, or an archive/unpublish safety check failed. */
             403: {
                 headers: {
                     [name: string]: unknown;

@@ -9,6 +9,11 @@ const prismaMock = vi.hoisted(() => {
     assignmentOverride: { deleteMany: vi.fn() },
     groupSet: { findFirst: vi.fn() },
     roster: { findFirst: vi.fn() },
+    // The type guard counts work inside the transaction, under the link rows' lock. Mocked, or
+    // the guard throws and the route answers 500, which a status check could read as a refusal.
+    submission: { count: vi.fn() },
+    assignmentProblemGrade: { count: vi.fn() },
+    $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   };
   // Reset + delete + update run in one transaction; run the callback against this mock.
@@ -45,9 +50,43 @@ beforeEach(() => {
   prismaMock.$transaction.mockImplementation(async (cb: (tx: typeof prismaMock) => unknown) =>
     cb(prismaMock),
   );
+  prismaMock.$queryRaw.mockResolvedValue([]);
+  // No student work unless a test says otherwise.
+  prismaMock.submission.count.mockResolvedValue(0);
+  prismaMock.assignmentProblemGrade.count.mockResolvedValue(0);
 });
 
 describe('PUT /api/courses/[id]/assignments/[aid]/type', () => {
+  /**
+   * Changing the type rewrites what the existing work means: individual attempts land inside an
+   * assignment now read as group work, group attempts point at groups from a set the assignment
+   * no longer uses, and the same call clears every date override, so an extension disappears
+   * from under work handed in under it.
+   */
+  it.each([
+    ['submissions', () => prismaMock.submission.count.mockResolvedValue(1)],
+    ['grades', () => prismaMock.assignmentProblemGrade.count.mockResolvedValue(1)],
+  ])('refuses the change once there are %s', async (_what, arrange) => {
+    prismaMock.groupSet.findFirst.mockResolvedValue({ id: 'gs1' });
+    arrange();
+
+    const res = await put({ groupSetId: 'gs1' });
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.assignment.update).not.toHaveBeenCalled();
+    // And the audience survives: clearing it is half the damage.
+    expect(prismaMock.assignmentOverride.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentAssignee.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('holds the problem links while it counts', async () => {
+    prismaMock.groupSet.findFirst.mockResolvedValue({ id: 'gs1' });
+
+    await put({ groupSetId: 'gs1' });
+
+    expect(String(prismaMock.$queryRaw.mock.calls[0]?.[0])).toContain('FOR UPDATE');
+  });
+
   it('switches individual -> group, resets audience, and clears assignees + overrides', async () => {
     prismaMock.groupSet.findFirst.mockResolvedValue({ id: 'gs1' });
 
