@@ -19,6 +19,9 @@ const GroupGradeBody = z.object({
   overwrite: z.boolean().optional(),
 });
 
+/** Thrown inside the grading transaction so the read's row locks are released by the rollback. */
+class GroupGradeConflictError extends Error {}
+
 /**
  * Grades a whole group on one problem, writing one grade row per member.
  *
@@ -110,38 +113,53 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Grade out of range for this problem' }, { status: 400 });
       }
 
-      // Anyone already carrying a different grade. Reported rather than overwritten, so a
-      // deliberate individual adjustment is not silently erased by a routine group grade.
-      const existing = await prisma.assignmentProblemGrade.findMany({
-        where: { assignmentId, problemId, studentId: { in: memberIds } },
-        select: {
-          studentId: true,
-          grade: true,
-          student: { select: { firstName: true, lastName: true } },
-        },
-      });
-      const conflicts = existing
-        .filter((row) => row.grade !== grade)
-        .map((row) => ({
-          studentId: row.studentId,
-          name:
-            `${row.student.firstName ?? ''} ${row.student.lastName ?? ''}`.trim() || 'this student',
-          grade: row.grade,
-        }));
+      /**
+       * The conflict check and the write, in one transaction, with the members' existing grade
+       * rows held.
+       *
+       * The check used to run outside the transaction that writes. Another member of staff
+       * could adjust one member's grade in between, and this request would overwrite that
+       * adjustment without the caller ever being shown the 409 that exists to stop exactly
+       * that. `FOR UPDATE` on the rows being read is both the read and the lock, so a
+       * concurrent individual update of any of them waits for this to finish, and this reads
+       * the value that will still be there when it writes.
+       *
+       * What this does not cover: a member who has *no* grade row yet, where there is no row
+       * to lock and a concurrent insert can still be overwritten. Closing that needs
+       * serializable isolation on both this route and the single-student one, which is a
+       * larger change than the race it buys.
+       */
+      const conflicts: { studentId: string; name: string; grade: number | null }[] = [];
 
-      if (conflicts.length > 0 && !overwrite) {
-        return NextResponse.json(
-          {
-            error: 'Some members already have a different grade',
-            conflicts,
-          },
-          { status: 409 },
-        );
-      }
+      const outcome = await prisma.$transaction(async (tx) => {
+        const existing = await tx.$queryRaw<
+          { studentId: string; grade: number | null; firstName: string | null; lastName: string | null }[]
+        >`
+          SELECT g."studentId", g."grade", u."firstName", u."lastName"
+          FROM "AssignmentProblemGrade" g
+          JOIN "User" u ON u."id" = g."studentId"
+          WHERE g."assignmentId" = ${assignmentId}
+            AND g."problemId" = ${problemId}
+            AND g."studentId" = ANY(${memberIds})
+          FOR UPDATE OF g
+        `;
 
-      // One transaction: every member is graded together, or nobody is. A partial write here
-      // would leave a group half-graded with no sign of which half.
-      await prisma.$transaction(async (tx) => {
+        for (const row of existing) {
+          if (row.grade === grade) continue;
+          conflicts.push({
+            studentId: row.studentId,
+            name: `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || 'this student',
+            grade: row.grade,
+          });
+        }
+
+        // Reported rather than overwritten, so a deliberate individual adjustment is not
+        // silently erased by a routine group grade. Thrown so the read's locks are released
+        // with the rollback rather than held while a response is built.
+        if (conflicts.length > 0 && !overwrite) throw new GroupGradeConflictError();
+
+        // Every member is graded together, or nobody is. A partial write here would leave a
+        // group half-graded with no sign of which half.
         for (const studentId of memberIds) {
           await tx.assignmentProblemGrade.upsert({
             where: { assignmentId_problemId_studentId: { assignmentId, problemId, studentId } },
@@ -167,7 +185,17 @@ export const POST = withCourseAuth(
         // Entering a grade for a group assignment locks its set, same as the single-student
         // route: the membership a grade was based on must stop moving underneath it.
         await lockGroupSetIfUsed(tx, groupSetId);
+      }).catch((err) => {
+        if (err instanceof GroupGradeConflictError) return 'conflict' as const;
+        throw err;
       });
+
+      if (outcome === 'conflict') {
+        return NextResponse.json(
+          { error: 'Some members already have a different grade', conflicts },
+          { status: 409 },
+        );
+      }
 
       await createEnhancedActivityLog(prisma, req, {
         userId: graderId,

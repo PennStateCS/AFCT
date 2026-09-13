@@ -45,7 +45,24 @@ const post = (body: Record<string, unknown>) =>
 
 const tx = {
   assignmentProblemGrade: { upsert: vi.fn() },
+  // The conflict read moved inside the transaction and is now the row lock as well: one
+  // `SELECT ... FOR UPDATE` that both reads the members' grades and holds them until the
+  // write lands. Rows here are raw, so the student's name comes back flat.
+  $queryRaw: vi.fn(),
 };
+
+/** Existing member grades, in the shape the locking read returns. */
+const existingGrades = (
+  rows: { studentId: string; grade: number; firstName?: string; lastName?: string }[],
+) =>
+  tx.$queryRaw.mockResolvedValue(
+    rows.map((r) => ({
+      studentId: r.studentId,
+      grade: r.grade,
+      firstName: r.firstName ?? null,
+      lastName: r.lastName ?? null,
+    })),
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -65,7 +82,7 @@ beforeEach(() => {
       { roster: { userId: 's3' } },
     ],
   });
-  prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
+  tx.$queryRaw.mockResolvedValue([]);
   tx.assignmentProblemGrade.upsert.mockResolvedValue({});
   prismaMock.$transaction.mockImplementation(async (cb: (c: typeof tx) => unknown) => cb(tx));
 });
@@ -116,9 +133,7 @@ describe('POST group-grade', () => {
 
   describe('members who already differ', () => {
     beforeEach(() => {
-      prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
-        { studentId: 's2', grade: 5, student: { firstName: 'Grace', lastName: 'Hopper' } },
-      ]);
+      existingGrades([{ studentId: 's2', grade: 5, firstName: 'Grace', lastName: 'Hopper' }]);
     });
 
     // A deliberate individual adjustment must not be erased by a routine group grade.
@@ -128,7 +143,9 @@ describe('POST group-grade', () => {
       expect(res.status).toBe(409);
       const body = await res.json();
       expect(body.conflicts).toEqual([{ studentId: 's2', name: 'Grace Hopper', grade: 5 }]);
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      // The transaction runs (it is where the read and the lock live) and rolls back, so
+      // nothing was written.
+      expect(tx.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
     });
 
     it('applies once the grader confirms', async () => {
@@ -154,9 +171,7 @@ describe('POST group-grade', () => {
     // Members already carrying the same grade are not a conflict; re-applying is a no-op
     // from the grader's point of view and must not demand a confirmation.
     it('does not treat a matching grade as a conflict', async () => {
-      prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([
-        { studentId: 's2', grade: 8, student: { firstName: 'Grace', lastName: 'Hopper' } },
-      ]);
+      existingGrades([{ studentId: 's2', grade: 8, firstName: 'Grace', lastName: 'Hopper' }]);
 
       const res = await post({ grade: 8 });
 
@@ -258,10 +273,10 @@ describe('whose rows a group grade can reach', () => {
       id: 'g1',
       groupSetId: 'gs1',
     });
-    expect(whereOf(prismaMock.assignmentProblemGrade.findMany)).toEqual({
-      assignmentId: 'a1',
-      problemId: 'p1',
-      studentId: { in: ['s1', 's2', 's3'] },
-    });
+    // The read is raw SQL now, because it is the row lock as well. Scope still has to be the
+    // three things it always was: this assignment, this problem, these members.
+    const [sql, ...params] = tx.$queryRaw.mock.calls[0] as [string[], ...unknown[]];
+    expect(String(sql)).toContain('FOR UPDATE');
+    expect(params).toEqual(['a1', 'p1', ['s1', 's2', 's3']]);
   });
 });
