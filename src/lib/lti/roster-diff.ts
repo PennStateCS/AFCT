@@ -112,7 +112,15 @@ export async function diffRoster(opts: {
   const userByLtiId = new Map(
     identities.map((i) => [identityKey(i.issuer, i.subject), i.userId] as const),
   );
-  const ltiIdByUser = new Map(identities.map((i) => [i.userId, i.subject]));
+  /**
+   * Which users already hold an identity **on which platform**.
+   *
+   * Keyed by issuer as well as user, for the same reason `userByLtiId` above is. A course can
+   * be connected to more than one LMS, and this used to be a bare `Map<userId, subject>`: a
+   * student who had launched from Canvas counted as already linked while syncing Moodle, so
+   * the Moodle identity was never created and grade passback to Moodle had nothing to send to.
+   */
+  const linkedUserIssuers = new Set(identities.map((i) => identityKey(i.issuer, i.userId)));
 
   const emails = sources
     .flatMap((source) => source.members)
@@ -231,7 +239,7 @@ export async function diffRoster(opts: {
 
     // Enrolled and correct. The one thing that may still be missing is the LMS identity, which
     // is what grade passback needs, and a student who has never launched will not have one.
-    if (!ltiIdByUser.has(existing.userId)) {
+    if (!linkedUserIssuers.has(identityKey(source.issuer, existing.userId))) {
       changes.push({
         kind: 'link-identity',
         userId: existing.userId,

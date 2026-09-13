@@ -290,6 +290,60 @@ describe('a course connected to more than one LMS course', () => {
   });
 
   /**
+   * "Already linked" has to mean "already linked to *this* LMS".
+   *
+   * The check was a bare `Map<userId, subject>` built across every platform being synced, so a
+   * student who had launched from Canvas counted as linked while the Moodle connection was
+   * being synced too. Their Moodle identity was never created, and passback to Moodle then had
+   * no subject to send a score to.
+   *
+   * The student below is listed only by Moodle, which is ordinary once a course is taught
+   * across two sections in two systems.
+   */
+  it('links a Moodle identity for somebody already linked to Canvas', async () => {
+    await linkIdentity(ids.student, 'lms-student');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [] },
+        { ...secondSource, members: [member({ ltiUserId: 'moodle-student' })] },
+      ],
+    });
+
+    expect(result.changes).toContainEqual(
+      expect.objectContaining({
+        kind: 'link-identity',
+        userId: ids.student,
+        ltiUserId: 'moodle-student',
+        source: secondSource,
+      }),
+    );
+  });
+
+  it('leaves them alone once linked to the platform being synced', async () => {
+    await prisma.linkedIdentity.create({
+      data: {
+        userId: ids.student,
+        kind: 'LTI',
+        issuer: SECOND_ISSUER,
+        subject: 'moodle-student',
+        linkedVia: 'JUST_IN_TIME',
+      },
+    });
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [] },
+        { ...secondSource, members: [member({ ltiUserId: 'moodle-student' })] },
+      ],
+    });
+
+    expect(result.changes).toEqual([]);
+  });
+
+  /**
    * The case that made this an aggregate rather than a loop.
    *
    * A student finishes one section and stays in another: the LMS lists them inactive in the
