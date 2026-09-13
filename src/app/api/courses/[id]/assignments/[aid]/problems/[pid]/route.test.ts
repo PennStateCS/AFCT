@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   assignmentProblem: {
     findUnique: vi.fn(),
+    // The GET scopes its lookup to the course in the path, so it reads through findFirst.
+    findFirst: vi.fn(),
     update: vi.fn(),
   },
   course: {
@@ -220,13 +222,62 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
  * count is every attempt at the problem across every assignment, or every attempt on the
  * assignment across every problem.
  */
+/**
+ * Whose settings the GET will hand over.
+ *
+ * The wrapper authorises the caller against the course in the path and then passes the
+ * assignment and problem ids straight from the URL. Reading the pair without the course meant
+ * somebody who runs one course could pull another course's points, attempt cap, autograder
+ * settings and submission count out of it, knowing only its ids. The PUT next door always
+ * checked; the GET did not.
+ */
+describe('what the settings read is scoped to', () => {
+  const get = () =>
+    GET(new Request('http://localhost/api/courses/c1/assignments/a1/problems/p1'), {
+      params: Promise.resolve({ id: 'c1', aid: 'a1', pid: 'p1' }),
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
+    prismaMock.roster.findFirst.mockResolvedValue(null);
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    prismaMock.submission.count.mockResolvedValue(0);
+  });
+
+  it('asks for the pair inside this course, not the pair on its own', async () => {
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue({
+      maxPoints: 10,
+      maxSubmissions: 1,
+      autograderEnabled: true,
+      showFeedback: true,
+    });
+
+    await get();
+
+    expect(prismaMock.assignmentProblem.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { assignmentId: 'a1', problemId: 'p1', assignment: { courseId: 'c1' } },
+      }),
+    );
+  });
+
+  it('404s for a pair that belongs to a different course', async () => {
+    // The scoped query simply finds nothing, which is the same answer as a pair that does not
+    // exist: an instructor in this course learns nothing either way.
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+
+    expect((await get()).status).toBe(404);
+  });
+});
+
 describe('what the attempt count is scoped to', () => {
   it('counts attempts at this problem on this assignment', async () => {
     vi.clearAllMocks();
     authMock.mockResolvedValue({ user: { id: 'admin-1', isAdmin: true } });
     prismaMock.roster.findFirst.mockResolvedValue(null);
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
-    prismaMock.assignmentProblem.findUnique.mockResolvedValue({
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue({
       maxPoints: 20,
       maxSubmissions: 3,
       autograderEnabled: true,

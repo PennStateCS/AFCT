@@ -199,11 +199,19 @@ export const PUT = withCourseAuth(
  *   500: { description: Server error. }
  */
 export const GET = withCourseAuth(
-  async (_req, ctx: RouteCtx) => {
+  async (_req, ctx: RouteCtx, { courseId }) => {
     const { aid: assignmentId, pid: problemId } = await ctx.params;
 
-    const link = await prisma.assignmentProblem.findUnique({
-      where: { assignmentId_problemId: { assignmentId, problemId } },
+    /**
+     * Scoped to the course in the path, the way the PUT below already is.
+     *
+     * The wrapper authorises the caller against *this* course and then hands over the
+     * assignment and problem ids from the URL. Looking the pair up without the course meant
+     * somebody who runs one course could read another course's points, attempt cap, autograder
+     * settings and submission count just by knowing its ids.
+     */
+    const link = await prisma.assignmentProblem.findFirst({
+      where: { assignmentId, problemId, assignment: { courseId } },
       select: {
         maxPoints: true,
         maxSubmissions: true,
