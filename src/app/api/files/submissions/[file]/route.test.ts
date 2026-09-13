@@ -40,6 +40,24 @@ vi.mock('fs', async (importOriginal) => {
 
 import { GET } from './route';
 
+/**
+ * A roster row for a student in good standing, as both course-permission reads see it.
+ *
+ * `canAccessCourse` needs the status and the course fields; `canManageCourse` reads the role
+ * off the same row and finds a student, which is what keeps these callers non-staff.
+ */
+const enrolled = (over: Record<string, unknown> = {}) => ({
+  role: 'STUDENT',
+  status: 'ENROLLED',
+  course: {
+    isPublished: true,
+    deletedAt: null,
+    startDate: new Date('2020-01-01T00:00:00Z'),
+  },
+  ...over,
+});
+
+
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
@@ -198,6 +216,7 @@ describe('GET /api/files/submissions/[file]', () => {
 
   it('allows student to download own submission', async () => {
     authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+    prismaMock.roster.findFirst.mockResolvedValue(enrolled());
     prismaMock.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       originalFileName: 'solution.txt',
@@ -312,12 +331,14 @@ describe('a group submission', () => {
 
   it('serves it to the member who uploaded it', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-2' } });
+    prismaMock.roster.findFirst.mockResolvedValue(enrolled());
 
     expect((await get()).status).toBe(200);
   });
 
   it('serves it to a groupmate who did not upload it', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-3' } });
+    prismaMock.roster.findFirst.mockResolvedValue(enrolled());
     prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gm-1' });
 
     const res = await get();
@@ -339,7 +360,32 @@ describe('a group submission', () => {
 
   it('refuses a student who is in the course but not in that group', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-9' } });
+    prismaMock.roster.findFirst.mockResolvedValue(enrolled());
     prismaMock.groupMembership.findFirst.mockResolvedValue(null);
+
+    expect((await get()).status).toBe(403);
+  });
+
+  /**
+   * Dropping keeps the roster row, the work, and every group membership on purpose, and takes
+   * access away through `canAccessCourse` alone. That makes it the only thing standing between
+   * a dropped student and this file: "whose work is it" answers yes for them either way, since
+   * they uploaded it or are still recorded in the group.
+   */
+  const dropped = () => enrolled({ status: 'DROPPED' });
+
+  it('refuses the member who uploaded it once they have dropped the course', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-2' } });
+    prismaMock.roster.findFirst.mockResolvedValue(dropped());
+
+    expect((await get()).status).toBe(403);
+  });
+
+  it('refuses a dropped groupmate, whose membership outlives the enrolment', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-3' } });
+    prismaMock.roster.findFirst.mockResolvedValue(dropped());
+    // Still in the group: nothing removes the membership when somebody drops.
+    prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gm-1' });
 
     expect((await get()).status).toBe(403);
   });

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canViewStudentData } from '@/lib/permissions';
+import { canAccessCourse, canViewStudentData } from '@/lib/permissions';
 import { apiError } from '@/lib/api/http';
 import { logDenial, logError } from '@/lib/api/activity';
 import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
@@ -67,18 +67,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       return apiError(404, 'File not found');
     }
 
-    // The one rule for "whose work may this person read", shared with the desktop client's
-    // submission route so the two paths cannot answer differently: the student themselves,
-    // a member of the group that owns the work, course staff, or a system admin. The group
-    // check is scoped to the owning group, never "shares any group in this course".
-    const allowed = await canViewStudentData(
-      session.user,
-      submission.courseId,
-      submission.studentId,
-      {
+    /**
+     * Course access first, then whose work.
+     *
+     * `canViewStudentData` decides the second question only, and says so: it assumes course
+     * membership has already been gated, normally by `withCourseAuth`. This route cannot use
+     * that wrapper, because the path names a file rather than a course, so the gate has to be
+     * here. Without it a dropped student still reads their own work and their old group's,
+     * since dropping keeps the roster row and every group membership on purpose and denies
+     * access through this one function instead.
+     */
+    const allowed =
+      (await canAccessCourse(session.user, submission.courseId)) &&
+      // The one rule for "whose work may this person read", shared with the desktop client's
+      // submission route so the two paths cannot answer differently: the student themselves,
+      // a member of the group that owns the work, course staff, or a system admin. The group
+      // check is scoped to the owning group, never "shares any group in this course".
+      (await canViewStudentData(session.user, submission.courseId, submission.studentId, {
         studentGroupId: submission.studentGroupId,
-      },
-    );
+      }));
 
     if (!allowed) {
       return logDenial(req, {
@@ -88,7 +95,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
         courseId: submission.courseId,
         // The subject here is whose file was reached for, which is not the actor.
         metadata: {
-          reason: 'not the owning student, a member of the owning group, or course staff',
+          reason: 'no access to the course, or not the owning student, a member of the owning group, or course staff',
           targetUserId: submission.studentId,
           submissionId: submission.id,
         },
