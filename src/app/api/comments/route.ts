@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canAccessCourse, canManageCourse } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse, isCourseArchived } from '@/lib/permissions';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { apiError } from '@/lib/api/http';
 import { logDenial, logError } from '@/lib/api/activity';
 import { resolveStudentSubmissionGroupId } from '@/lib/assignment-groups';
@@ -102,6 +103,50 @@ export async function POST(request: NextRequest) {
         metadata: { reason: 'unpublished assignment' },
       });
       return apiError(404, 'Assignment not found');
+    }
+
+    /**
+     * An archived course is read-only for everyone, staff included.
+     *
+     * Every other write surface says so (submissions, grading, the course routes' own
+     * `blockWhenArchived`); this one did not, so a finished course still accepted comments.
+     */
+    if (await isCourseArchived(assignment.courseId)) {
+      return apiError(409, 'This course is archived and no longer accepts comments.');
+    }
+
+    /**
+     * Published is not the same as "theirs, and open".
+     *
+     * The route stopped at published, so a student who knew the ids could comment on an
+     * assignment targeted at somebody else, or on one that has not unlocked yet. The same gate
+     * the student-facing reads use, with the same masking: an assignment they are not in the
+     * audience for is answered exactly as if it did not exist.
+     */
+    if (!isStaff) {
+      const gate = await resolveStudentContentGate(assignmentId, user.id);
+      if (!gate.assigned) {
+        await createEnhancedActivityLog(prisma, request, {
+          userId: user.id,
+          action: 'COMMENT_CREATE_DENIED',
+          severity: 'SECURITY',
+          category: 'ASSIGNMENT',
+          courseId: assignment.courseId,
+          assignmentId,
+          metadata: { reason: 'not in the assignment audience' },
+        });
+        return apiError(404, 'Assignment not found');
+      }
+      if (gate.locked) {
+        return logDenial(request, {
+          userId: user.id,
+          action: 'COMMENT_CREATE_DENIED',
+          category: 'ASSIGNMENT',
+          courseId: assignment.courseId,
+          assignmentId,
+          metadata: { reason: 'assignment has not opened yet' },
+        });
+      }
     }
 
     // Students may only comment on their own thread. `studentId` (aboutStudentId)
@@ -282,6 +327,7 @@ export async function POST(request: NextRequest) {
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Comment not found. }
+ *   409: { description: The course is archived and read-only. }
  *   500: { description: Server error. }
  */
 export async function DELETE(request: NextRequest) {
@@ -321,6 +367,12 @@ export async function DELETE(request: NextRequest) {
         assignmentId: comment.assignmentId,
         metadata: { reason: 'comments are staff-only to delete', commentId },
       });
+    }
+
+    // Archived means read-only, deletes included: the record of a finished course is not
+    // something to tidy up afterwards.
+    if (await isCourseArchived(comment.assignment.courseId)) {
+      return apiError(409, 'This course is archived and its comments can no longer be changed.');
     }
 
     await prisma.comment.delete({ where: { id: commentId } });
