@@ -40,9 +40,22 @@ Last updated: 2026-07-27. Everything below is **NT** until run on real hardware.
 
 | #   | Item                                                                  | Status | Notes                              |
 | --- | --------------------------------------------------------------------- | ------ | ---------------------------------- |
-| 1   | Full-path launch: `& "$env:LOCALAPPDATA\AFCT\bin\afctctl.ps1" status` | NT     |                                    |
-| 2   | `.cmd` wrapper launch: `afctctl status` after adding bin to PATH      | NT     |                                    |
-| 3   | Installer did NOT modify PATH automatically                           | NT     | Should be a deliberate manual step |
+| 1   | Full-path launch: `& "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" status` | NT     | On a machine whose execution policy was never changed |
+| 2   | `afctctl status` from `C:\`, not from any AFCT directory              | NT     | Proves it needs no `cd`             |
+| 3   | `afctctl status` after adding bin to PATH                             | NT     |                                    |
+| 4   | Installer did NOT modify PATH automatically                           | NT     | Should be a deliberate manual step |
+
+## Startup behaviour
+
+| #   | Item                                                                  | Status | Notes                          |
+| --- | --------------------------------------------------------------------- | ------ | ------------------------------ |
+| 1   | Install prints a stage line per service, not one silent line          | NT     | PostgreSQL, app, worker, nginx |
+| 2   | A long stage prints a status heartbeat about every 30s                | NT     |                                |
+| 3   | Install finishes; `docker ps` shows all five containers               | NT     | The `--detach` regression      |
+| 4   | Rerunning the installer on a healthy stack skips the startup          | NT     | Should say "already running"   |
+| 5   | Rerunning it preserves the database (sign in with the same account)   | NT     |                                |
+| 6   | Startup failure writes a diagnostics archive and names its path       | NT     | Force by stopping Docker mid-run |
+| 7   | `shared\install.log` has a readable trace and no secrets in it        | NT     | Search it for the admin password |
 
 ## Operational commands
 

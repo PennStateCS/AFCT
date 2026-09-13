@@ -134,13 +134,43 @@ You can enter your own password or let the installer generate a strong one. A ge
 
 ## Step 5: Wait for AFCT to start
 
-The first startup may take several minutes while Docker Desktop downloads the large application images, creates the containers, initializes the database, and starts the application. The installer waits for AFCT to report that it is healthy and ends with a message similar to:
+The first startup takes several minutes. Docker Desktop downloads the application images, which are large, then starts the parts of AFCT in order, because each one waits for the one below it. The installer reports each stage as it happens:
 
 ```text
-AFCT Dashboard is ready
+[afct] Starting AFCT containers...
+[afct] PostgreSQL is starting...
+[afct] PostgreSQL is healthy.
+[afct] AFCT application is starting...
+[afct] AFCT application is healthy.
+[afct] Worker is running.
+[afct] nginx is healthy.
+[afct] Verifying the web service...
+[afct] AFCT Dashboard is ready.
 ```
 
-It also displays the AFCT address, the administrator email address, and the generated password when applicable.
+If a stage runs long, the installer prints a short status line every half minute so you can see it is still working. It also displays the AFCT address, the administrator email address, and the generated password when applicable.
+
+### AFCT is several containers, not one
+
+AFCT is a group of containers that work together, so Docker Desktop shows it as one **afct** application containing several containers: the database, the application, the background worker, the web server, and the backup service. A single `afct` entry in Docker Desktop does not mean AFCT is one container. Expand it to see them.
+
+### If startup takes too long
+
+The installer stops rather than waiting forever, and collects a diagnostic archive for you when it does. If it is still running and you want to know what it is waiting for, open a second PowerShell window and run:
+
+```powershell
+& "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" doctor
+```
+
+`afctctl doctor` checks each part of AFCT and prints one line per service, so you can see which one has not come up. It only looks; it never changes anything.
+
+If something is wrong and you want to send the details to someone, create a support archive:
+
+```powershell
+& "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" diagnostics
+```
+
+The archive is written to `%LOCALAPPDATA%\AFCT\shared` and the command prints its full path. Known passwords and keys are removed from it, but it still describes your computer and your AFCT configuration, so look through it before sending it to anyone.
 
 ## Step 6: Run `afctctl`
 
@@ -153,8 +183,12 @@ The installer places the command at:
 The installer does not change your `PATH`. Run the command with its full path:
 
 ```powershell
-& "$env:LOCALAPPDATA\AFCT\bin\afctctl.ps1" status
+& "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" status
 ```
+
+Use `afctctl.cmd`, not `afctctl.ps1`. Windows blocks PowerShell scripts by default, and running the `.ps1` directly fails with "running scripts is disabled on this system". The `.cmd` works on a default Windows installation with no changes to your security settings. You do not need to run `Set-ExecutionPolicy`, and you do not need an Administrator prompt.
+
+`afctctl` works from any directory. There is nothing to `cd` into.
 
 To make `afctctl` available by name in new terminals, add its directory to your user `PATH` once:
 
@@ -170,7 +204,7 @@ Open a new PowerShell window afterward, then run:
 afctctl status
 ```
 
-The examples below assume `afctctl` is on your `PATH`. If it is not, prefix each command with `& "$env:LOCALAPPDATA\AFCT\bin\afctctl.ps1"`.
+The examples below assume `afctctl` is on your `PATH`. If it is not, use the full path to `afctctl.cmd` instead, for example `& "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" status`.
 
 ## Step 7: Open AFCT
 
