@@ -8,6 +8,10 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     create: vi.fn(),
   },
+  // The enrolment re-checks the course with its row held, then creates, so that an
+  // administrator closing registration in between is not simply ignored.
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -36,6 +40,11 @@ beforeEach(() => {
   // The limiter is module-level state; a fresh user id per suite run keeps tests honest,
   // but clearing the bucket keeps them independent of execution order too.
   clearBucketsFor(['join-code:user-1', 'join-code:guesser']);
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+    fn(prismaMock),
+  );
+  // The locking re-read, answering with the same course the fast path saw.
+  prismaMock.$queryRaw.mockResolvedValue([buildCourse()]);
 });
 
 describe('POST /api/courses/join', () => {
@@ -174,6 +183,53 @@ describe('POST /api/courses/join', () => {
     expect(body.success).toBe(true);
     expect(prismaMock.roster.create).toHaveBeenCalledWith({
       data: { courseId: 'course-1', userId: 'user-1', role: 'STUDENT' },
+    });
+  });
+
+  /**
+   * Everything before the write reads the course and decides; none of it survived to the
+   * create. An administrator closing registration, unpublishing or archiving in between had
+   * their change ignored and the student landed on the roster anyway.
+   */
+  describe('a course that changes while the join is in flight', () => {
+    const joining = () => {
+      authMock.mockResolvedValue({ user: { id: 'user-1', isAdmin: false } });
+      prismaMock.course.findUnique.mockResolvedValue(buildCourse());
+      prismaMock.roster.findUnique.mockResolvedValue(null);
+      prismaMock.roster.create.mockResolvedValue({ id: 'roster-1' });
+      return POST(
+        new Request('http://localhost/api/courses/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: 'ABC123' }),
+        }),
+      );
+    };
+
+    it('refuses when registration closed between the read and the write', async () => {
+      prismaMock.$queryRaw.mockResolvedValue([
+        buildCourse({ registrationCloseAt: new Date('2000-01-02T00:00:00.000Z') }),
+      ]);
+
+      const res = await joining();
+
+      expect(res.status).toBe(400);
+      expect(prismaMock.roster.create).not.toHaveBeenCalled();
+    });
+
+    it('masks a course unpublished in the same window', async () => {
+      prismaMock.$queryRaw.mockResolvedValue([buildCourse({ isPublished: false })]);
+
+      const res = await joining();
+
+      expect(res.status).toBe(404);
+      expect(prismaMock.roster.create).not.toHaveBeenCalled();
+    });
+
+    it('holds the course row while it re-reads', async () => {
+      await joining();
+
+      expect(String(prismaMock.$queryRaw.mock.calls[0]?.[0])).toContain('FOR UPDATE');
     });
   });
 

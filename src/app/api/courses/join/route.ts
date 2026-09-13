@@ -30,6 +30,25 @@ const JoinBody = z.object({
 });
 
 /**
+ * Why registration is not open, or null when it is.
+ *
+ * One function because it is asked twice: once for a quick answer before any transaction, and
+ * again with the course row held, which is the answer that counts. Two copies of a window rule
+ * is how one of them ends up a day out.
+ */
+function registrationRefusal(
+  course: { registrationOpenAt: Date | string | null; registrationCloseAt: Date | string | null },
+  now: number,
+): string | null {
+  const openAt = parseValidDate(course.registrationOpenAt);
+  const closeAt = parseValidDate(course.registrationCloseAt);
+  if (!openAt || !closeAt) return 'Registration is currently closed for this course.';
+  if (now < openAt.getTime()) return 'Registration is not open yet for this course.';
+  if (now > closeAt.getTime()) return 'Registration is closed for this course.';
+  return null;
+}
+
+/**
  * Enrolls the signed-in user in a course via its registration code,
  * as a STUDENT. Users never learn that an unpublished/archived course exists
  * (masked as 404). Global admins can't self-enroll, and the registration window
@@ -130,37 +149,58 @@ export async function POST(req: Request) {
     );
   }
 
-  const registrationOpenAt = parseValidDate(course.registrationOpenAt);
-  const registrationCloseAt = parseValidDate(course.registrationCloseAt);
-
-  if (!registrationOpenAt || !registrationCloseAt) {
-    return NextResponse.json(
-      { error: 'Registration is currently closed for this course.' },
-      { status: 400 },
-    );
+  const refusal = registrationRefusal(course, Date.now());
+  if (refusal) {
+    return NextResponse.json({ error: refusal }, { status: 400 });
   }
 
-  const now = Date.now();
-  if (now < registrationOpenAt.getTime()) {
-    return NextResponse.json(
-      { error: 'Registration is not open yet for this course.' },
-      { status: 400 },
-    );
-  }
-
-  if (now > registrationCloseAt.getTime()) {
-    return NextResponse.json({ error: 'Registration is closed for this course.' }, { status: 400 });
-  }
-
-  // Create roster entry
+  /**
+   * Re-checked with the course row held, then enrolled.
+   *
+   * Everything above reads the course, decides, and returns a message; none of that survives
+   * to the write. An administrator closing registration, unpublishing or archiving in between
+   * would have their change ignored and the student would land on the roster anyway. Holding
+   * the course row is enough, because those are all `course.update`, which takes the same row.
+   *
+   * The fast path above stays: it answers the ordinary refusals without opening a transaction,
+   * and it is the same function, so the two cannot drift.
+   */
   try {
-    await prisma.roster.create({
-      data: {
-        courseId: course.id,
-        userId,
-        role: 'STUDENT', // self-service join always enrolls as a student
-      },
+    const refusedLate = await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<
+        {
+          isPublished: boolean;
+          isArchived: boolean;
+          registrationOpenAt: Date | null;
+          registrationCloseAt: Date | null;
+        }[]
+      >`
+        SELECT "isPublished", "isArchived", "registrationOpenAt", "registrationCloseAt"
+        FROM "Course" WHERE "id" = ${course.id} FOR UPDATE
+      `;
+      const fresh = rows[0];
+      // Gone, or no longer joinable: the same masking the reads above use.
+      if (!fresh || !fresh.isPublished || fresh.isArchived) return 'Course not found';
+
+      const late = registrationRefusal(fresh, Date.now());
+      if (late) return late;
+
+      await tx.roster.create({
+        data: {
+          courseId: course.id,
+          userId,
+          role: 'STUDENT', // self-service join always enrolls as a student
+        },
+      });
+      return null;
     });
+
+    if (refusedLate) {
+      return NextResponse.json(
+        { error: refusedLate },
+        { status: refusedLate === 'Course not found' ? 404 : 400 },
+      );
+    }
 
     await createEnhancedActivityLog(prisma, req, {
       userId,
