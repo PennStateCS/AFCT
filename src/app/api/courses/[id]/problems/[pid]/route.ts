@@ -222,14 +222,21 @@ export const PUT = withCourseAuth(
         throw dbErr;
       }
 
-      // Committed: only now is the superseded file safe to remove.
-      if (replacedFileName && replacedFileName !== fileName) {
-        try {
-          await fs.promises.unlink(resolveInsideDir(uploadsDir, replacedFileName));
-        } catch (err) {
-          console.warn('Could not delete superseded solution file:', err);
-        }
-      }
+      /**
+       * The superseded answer key is kept, not deleted.
+       *
+       * Two reasons, and the second is the one that made this a bug. A worker part-way through
+       * marking a submission has already resolved the old filename and opens it a moment later;
+       * deleting it out from under that run failed the evaluation with "answer file not found",
+       * for a student who had done nothing wrong. And every attempt already marked records the
+       * key it was measured against (`Submission.answerFileName`), which is only a true record
+       * while the file it names still exists.
+       *
+       * So these accumulate, deliberately. They are small XML files and they are the evidence
+       * behind a grade. Anything tidying them up later has to treat both the current
+       * `Problem.fileName` values and every `Submission.answerFileName` as live.
+       */
+      void replacedFileName;
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

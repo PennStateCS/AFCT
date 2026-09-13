@@ -443,6 +443,31 @@ describe('persisting an evaluation', () => {
     expect(after.evaluatedAt!.getTime()).toBeGreaterThanOrEqual(after.submittedAt.getTime());
   });
 
+  it('records the answer key the attempt was marked against', async () => {
+    // A key replaced later does not change what this attempt was measured against, and the
+    // grade it produced stands. That is only a true record while the file it names is kept,
+    // which is why a superseded key is no longer deleted.
+    const sub = await newSubmission();
+    const token = await claimSubmission(sub.id);
+
+    await persist(sub, token, { evaluation: { ...OK, answerFileName: 'answer-v1.jff' } });
+
+    expect(await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } })).toMatchObject({
+      answerFileName: 'answer-v1.jff',
+    });
+  });
+
+  it('names no key when the run never opened one', async () => {
+    const sub = await newSubmission();
+    const token = await claimSubmission(sub.id);
+
+    await persist(sub, token, { evaluation: FAILED });
+
+    expect(
+      (await prisma.submission.findUniqueOrThrow({ where: { id: sub.id } })).answerFileName,
+    ).toBeNull();
+  });
+
   /**
    * An evaluator failure is not a verdict, and must not be scored as one.
    *

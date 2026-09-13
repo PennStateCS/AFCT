@@ -214,6 +214,36 @@ describe('runJavaEvaluator — evaluator execution', () => {
     expect(loggedActions()).toContain('SUBMISSION_EVALUATION_SUCCESS');
   });
 
+  /**
+   * Which answer key marked it, recorded on the attempt.
+   *
+   * A key can be replaced mid-term and a grade already given stands, which is only a coherent
+   * position while the key that produced it can still be named. The superseded file is kept for
+   * the same reason.
+   */
+  it('names the answer key it marked against', async () => {
+    executeMock.mockResolvedValue({
+      stdout: '{"correct":true,"feedback":"Nice work"}',
+      stderr: '',
+    });
+
+    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
+
+    expect(result.answerFileName).toBe('answer.txt');
+  });
+
+  it('names none when it never opened one', async () => {
+    // No answer key configured: there was nothing to measure against, and saying otherwise
+    // would name a key that had no part in the result.
+    const submission = makeSubmission();
+    submission.assignmentProblem.problem.fileName = null;
+
+    const result = await runJavaEvaluator(submission, CONFIG);
+
+    expect(result).toMatchObject({ status: 'FAILED' });
+    expect(result.answerFileName ?? null).toBeNull();
+  });
+
   it('passes FA-specific args (maxStates + determinism) to the evaluator', async () => {
     const submission = makeSubmission();
     submission.assignmentProblem.problem.type = 'FA';

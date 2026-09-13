@@ -399,8 +399,16 @@ describe('PUT /api/courses/[id]/problems/[pid]', () => {
     const res = await PUT(putReq({ title: 'Updated', type: 'FA' }, file), params());
 
     expect(res.status).toBe(200);
-    expect(unlinkMock).toHaveBeenCalled(); // old file removed
     expect(writeFileMock).toHaveBeenCalled(); // new file written
+    /**
+     * And the old one is kept.
+     *
+     * It used to be deleted here. A worker part-way through marking a submission has already
+     * resolved that filename and opens it a moment later, so deleting it failed the evaluation
+     * for a student who had done nothing wrong. It is also the key every attempt already marked
+     * records itself as measured against, which is only true while the file is still there.
+     */
+    expect(unlinkMock).not.toHaveBeenCalled();
   });
 
   it('returns 400 when the uploaded file fails structure validation', async () => {

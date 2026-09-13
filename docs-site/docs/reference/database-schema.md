@@ -1311,6 +1311,7 @@ erDiagram
   String originalFileName "nullable"
   String contentHash "nullable"
   String shapeHash "nullable"
+  String answerFileName "nullable"
   String byteHash "nullable"
   Json provenanceFeatures "nullable"
   DateTime createdAt
@@ -1509,6 +1510,17 @@ Properties as follows:
   > same machine drawn differently, which is what a copied file looks like once somebody
   > has dragged the nodes about. Empty for a regular expression, which has no layout, and
   > for anything that could not be parsed.
+- `answerFileName`
+  > The answer key this attempt was marked against, as the stored filename.
+  >
+  > A problem's answer key can be replaced mid-term, and a grade already given stands: it was
+  > a true statement about the work when it was made, and silently re-marking it would move
+  > numbers nobody asked to move. That only means anything if the key it was measured against
+  > can still be named, which is what this does, and why a replaced key is now kept rather
+  > than deleted.
+  >
+  > Null for attempts marked before this existed, and for anything that never reached the
+  > evaluator: a submission with no file, a missing answer key, a failed run.
 - `byteHash`
   > sha256 of the file exactly as it arrived, with nothing normalised away. The two hashes
   > above look past the incidental on purpose, which is why neither can say "this is the
@@ -1789,6 +1801,7 @@ erDiagram
   String originalFileName "nullable"
   String contentHash "nullable"
   String shapeHash "nullable"
+  String answerFileName "nullable"
   String byteHash "nullable"
   Json provenanceFeatures "nullable"
   DateTime createdAt

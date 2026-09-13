@@ -41,7 +41,9 @@ Open **Manage** to:
 - **Duplicate Problem** to create a copy in the same bank
 - **Delete Problem** when the problem is not used by an assignment
 
-Editing a problem from the problem bank uses the same wizard and changes the definition only: title, description, type, state limit, deterministic requirement, and answer file. If you change the problem type, you must upload a new answer file of the matching type.
+Editing a problem from the problem bank uses the same wizard and changes the definition only: title, description, type, state limit, deterministic requirement, and answer file. If you change the problem type and keep the answer file already there, AFCT checks that it is valid for the new type and refuses the change if it is not, so a problem cannot end up claiming one type while its answer is another.
+
+**Replacing an answer file does not re-mark work that has already been graded.** Each attempt records the answer file it was measured against, and a grade already given stands: it was a true statement about that work when it was made. Only submissions graded after the change are measured against the new file. If you want earlier work re-marked, re-run those submissions from the assignment's **Submissions** tab, which is a deliberate act rather than something a file upload does quietly.
 
 Points, the accepted-submission limit, and automatic grading belong to each assignment, not to the bank problem. Set them when you add the problem to an assignment, or change them later from the assignment's **Problems** tab (**Manage** the problem and open its settings). The same problem can carry different values in different assignments.
 

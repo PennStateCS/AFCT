@@ -109,6 +109,14 @@ interface SubmissionEvaluationResult {
   correct?: boolean;
   evaluationRaw: unknown | null;
   status: SubmissionEvaluationStatus;
+  /**
+   * The answer key this run was measured against, as the stored filename.
+   *
+   * Only set once a key was actually opened, so every failure path leaves it undefined: there
+   * was nothing to measure against, and saying otherwise would name a key that had no part in
+   * the result.
+   */
+  answerFileName?: string | null;
 }
 
 async function logSubmissionActivity(
@@ -568,6 +576,8 @@ export async function persistEvaluation(opts: {
               ? Prisma.JsonNull
               : (opts.evaluation.evaluationRaw as Prisma.InputJsonValue),
           status: opts.evaluation.status,
+          // Recorded only when a key was opened; a failed run names none.
+          answerFileName: opts.evaluation.answerFileName ?? null,
           // The condition this attempt was graded under, recorded rather than looked up later.
           // The problem's setting can be changed mid-term, and a study that compares showing the
           // witness string against withholding it needs to know which one a given attempt got.
@@ -917,7 +927,12 @@ async function runJavaEvaluator(
       return fail('ERROR: Answer file not found on server.');
     }
 
-    return await evaluateWithJar(submission, config, answerFilePath, uploadedFilePath);
+    return {
+      ...(await evaluateWithJar(submission, config, answerFilePath, uploadedFilePath)),
+      // Which key marked it. A key replaced later does not change what this attempt was
+      // measured against, and the grade it produced stands.
+      answerFileName,
+    };
   } catch (cmdErr) {
     const feedback = `ERROR: Evaluation failed - ${cmdErr instanceof Error ? cmdErr.message : 'Unknown error'}`;
     await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {
