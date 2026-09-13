@@ -168,13 +168,30 @@ export const PUT = withCourseAuth(
                   userId,
                 })),
           });
-          // Drop overrides for targets that are no longer assigned.
+          /**
+           * Drop the exceptions for targets that are no longer assigned.
+           *
+           * Overrides were already cleared here; extra-submission grants were not, and they
+           * outlive the audience the same way. A student given three extra attempts, taken off
+           * the assignment, and put back on it weeks later came back holding those attempts,
+           * granted by nobody and visible to no one who would have had to decide it.
+           *
+           * Only when a target actually leaves. Switching to "everyone" keeps them, because
+           * those students and groups are still assigned: the exception was about them, not
+           * about how the audience happens to be expressed.
+           */
           if (isGroup) {
             await tx.assignmentOverride.deleteMany({
               where: { assignmentId: aid, groupId: { notIn: groupIds } },
             });
+            await tx.submissionGrant.deleteMany({
+              where: { assignmentId: aid, groupId: { notIn: groupIds } },
+            });
           } else {
             await tx.assignmentOverride.deleteMany({
+              where: { assignmentId: aid, userId: { notIn: userIds } },
+            });
+            await tx.submissionGrant.deleteMany({
               where: { assignmentId: aid, userId: { notIn: userIds } },
             });
           }
