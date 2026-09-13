@@ -2360,7 +2360,7 @@ export interface paths {
         post?: never;
         /**
          * Remove a user from a course
-         * @description Removes a user from a course roster. Permission is tiered: the shared wrapper  admits global admins and course faculty only (TAs and students are rejected up  front); the remaining rule (a faculty member may not remove another faculty  member) is enforced here (a global admin may). Two safety rules block the removal  outright: the user must have no submissions in the course, and a course can't lose  its last faculty member.
+         * @description Removes a user from a course roster. Permission is tiered: the shared wrapper  admits global admins and course faculty only (TAs and students are rejected up  front); the remaining rule (a faculty member may not remove another faculty  member) is enforced here (a global admin may). Two safety rules block the removal  outright: the user must have no submissions and no grades in the course, and a course can't lose  its last faculty member.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/roster/[userId]/route.ts)
          */
@@ -11361,7 +11361,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description User has submissions, or is the only faculty member. */
+            /** @description User has submissions or grades, or is the only faculty member. */
             400: {
                 headers: {
                     [name: string]: unknown;

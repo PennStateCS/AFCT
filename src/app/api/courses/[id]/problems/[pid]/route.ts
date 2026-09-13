@@ -215,6 +215,9 @@ export const PUT = withCourseAuth(
   { access: 'manage', deniedAction: 'PROBLEM_UPDATE_DENIED', blockWhenArchived: true },
 );
 
+/** Thrown inside the deletion transaction so the whole thing rolls back rather than half-applying. */
+class ProblemInUseError extends Error {}
+
 /**
  * Deletes a problem within a course and its solution file. Course staff (faculty or
  * TAs) or a system admin. The problem must belong to the course in the path. Refused
@@ -246,19 +249,51 @@ export const DELETE = withCourseAuth(
         return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
       }
 
-      // Refuse deletion while the problem is linked to any assignment. Problems are
-      // shared across assignments (many-to-many), so a silent cascade-unlink would
-      // remove it from other assignments too.
-      const linked = await prisma.assignmentProblem.findFirst({ where: { problemId } });
-      if (linked) {
-        return NextResponse.json(
-          { error: 'Problem is associated with an assignment and cannot be deleted' },
-          { status: 400 },
-        );
+      /**
+       * The link check and the delete, in one transaction, holding the problem's own row.
+       *
+       * Deletion is refused while the problem is attached to any assignment, because
+       * `AssignmentProblem.problem` cascades and problems are shared across assignments. The
+       * check and the delete were separate statements, so the link could appear in between:
+       * the delete would then take the new link with it, and the submissions and grades hanging
+       * off that link would cascade too.
+       *
+       * Creating an `AssignmentProblem` takes `FOR KEY SHARE` on this problem's row, which
+       * `FOR UPDATE` conflicts with, so only the two consistent orders remain. Either the lock
+       * is ours and the attach waits, then fails its foreign key against a problem that is
+       * gone, or the attach holds the row and we see the link and refuse.
+       */
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT 1 FROM "Problem" WHERE "id" = ${problemId} FOR UPDATE`;
+
+          const linked = await tx.assignmentProblem.findFirst({ where: { problemId } });
+          if (linked) throw new ProblemInUseError();
+
+          // With no link there can be no submission: a submission's foreign key is the link,
+          // not the problem. Kept as a belt-and-braces sweep, now inside the guard that makes
+          // it provably a no-op rather than outside it where a race gave it something to hit.
+          await tx.submission.deleteMany({ where: { problemId } });
+          await tx.problem.delete({ where: { id: problemId } });
+        });
+      } catch (err) {
+        if (err instanceof ProblemInUseError) {
+          return NextResponse.json(
+            { error: 'Problem is associated with an assignment and cannot be deleted' },
+            { status: 400 },
+          );
+        }
+        throw err;
       }
 
-      await prisma.submission.deleteMany({ where: { problemId } });
-
+      /**
+       * The file goes last, after the row is certainly gone.
+       *
+       * It used to be unlinked first, so a delete that failed for any reason, the race above
+       * included, left the problem in place with its answer key missing. The same ordering the
+       * update path already uses: the database is the thing that must not be wrong, and an
+       * orphaned file is a tidiness problem rather than a broken problem.
+       */
       if (existingProblem.fileName) {
         try {
           await fs.promises.unlink(resolveInsideDir(uploadsDir, existingProblem.fileName));
@@ -266,8 +301,6 @@ export const DELETE = withCourseAuth(
           console.warn('Could not delete problem file:', err);
         }
       }
-
-      await prisma.problem.delete({ where: { id: problemId } });
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

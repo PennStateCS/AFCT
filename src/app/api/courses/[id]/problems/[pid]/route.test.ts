@@ -14,6 +14,10 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
   },
   roster: { findFirst: vi.fn() },
+  // The link check and the delete run in one transaction now, holding the problem's row so an
+  // assignment cannot attach it in between.
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -44,6 +48,14 @@ beforeEach(() => {
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });
   validateMock.mockReturnValue({ isValid: true });
+  prismaMock.$queryRaw.mockResolvedValue([]);
+  // Reset rather than just cleared: a test that makes the delete throw would otherwise leave
+  // that implementation behind for the next one.
+  prismaMock.problem.delete.mockReset();
+  prismaMock.problem.delete.mockResolvedValue({});
+  prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+    fn(prismaMock),
+  );
 });
 
 const params = () => ({ params: Promise.resolve({ id: 'c1', pid: 'p1' }) });
@@ -133,6 +145,56 @@ describe('DELETE /api/courses/[id]/problems/[pid]', () => {
     const res = await DELETE(req, params());
 
     expect(res.status).toBe(200);
+    expect(unlinkMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Deleting a problem cascades through `AssignmentProblem.problem`, so a link appearing
+   * between the check and the delete would be taken with it, and the submissions and grades
+   * hanging off that link would go too. The row lock is what makes the two orders the only
+   * outcomes.
+   */
+  it('holds the problem row while it checks for assignment links', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.problem.findFirst.mockResolvedValue({ id: 'p1', title: 'P', fileName: null });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+
+    await DELETE(new Request('http://localhost/x', { method: 'DELETE' }), params());
+
+    expect(String(prismaMock.$queryRaw.mock.calls[0]?.[0])).toContain('FOR UPDATE');
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the answer file alone when the delete is refused', async () => {
+    // The file used to be unlinked before the row went, so a refused or failed delete left the
+    // problem in place with its answer key missing.
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'p1',
+      title: 'P',
+      fileName: 'answer.jff',
+    });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+
+    const res = await DELETE(new Request('http://localhost/x', { method: 'DELETE' }), params());
+
+    expect(res.status).toBe(400);
+    expect(unlinkMock).not.toHaveBeenCalled();
+  });
+
+  it('leaves the answer file alone when the database delete throws', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', role: 'ADMIN', isAdmin: true } });
+    prismaMock.problem.findFirst.mockResolvedValue({
+      id: 'p1',
+      title: 'P',
+      fileName: 'answer.jff',
+    });
+    prismaMock.assignmentProblem.findFirst.mockResolvedValue(null);
+    prismaMock.problem.delete.mockRejectedValue(new Error('db down'));
+
+    const res = await DELETE(new Request('http://localhost/x', { method: 'DELETE' }), params());
+
+    expect(res.status).toBe(500);
     expect(unlinkMock).not.toHaveBeenCalled();
   });
 
