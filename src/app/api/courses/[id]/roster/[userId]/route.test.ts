@@ -15,6 +15,11 @@ const prismaMock = vi.hoisted(() => ({
   assignmentAssignee: {
     deleteMany: vi.fn(),
   },
+  // Grades block a hard removal too: they hang off the User, so removing the roster row would
+  // hide them from the gradebook rather than remove them.
+  assignmentProblemGrade: {
+    findFirst: vi.fn(),
+  },
   assignmentOverride: {
     deleteMany: vi.fn(),
   },
@@ -65,6 +70,8 @@ beforeEach(() => {
   // Default: course is not archived; archived-block tests override. The wrapper's
   // isCourseArchived reads course.findUnique, so mirror that here.
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+  // No marks on the target unless a test says otherwise.
+  prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
   isCourseArchivedMock.mockImplementation(async () => {
     const course = await prismaMock.course.findUnique();
     return course?.isArchived === true;
@@ -287,6 +294,33 @@ describe('DELETE /api/courses/[id]/roster/[userId]', () => {
 
     expect(res.status).toBe(200);
     expect(activityLogMock).toHaveBeenCalled();
+  });
+
+  /**
+   * Grades belong to the User, not the Roster, so removing the roster row leaves them in the
+   * database while the gradebook, which builds its student list from the roster, stops showing
+   * them. A mark entered by hand for a student who never uploaded anything simply vanished from
+   * the course.
+   */
+  it('refuses to remove a student who has been graded, even with nothing submitted', async () => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    isAdminMock.mockReturnValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ role: 'STUDENT' });
+    prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1' }]);
+    prismaMock.submission.findFirst.mockResolvedValue(null);
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' });
+
+    const res = await DELETE(
+      new NextRequest('http://localhost/api/courses/c1/roster/u2', { method: 'DELETE' }),
+      { params: Promise.resolve({ id: 'c1', userId: 'u2' }) },
+    );
+
+    expect(res.status).toBe(400);
+    // And the answer points at the reversible option rather than just refusing.
+    await expect(res.json()).resolves.toMatchObject({
+      error: expect.stringContaining('Drop them instead'),
+    });
+    expect(prismaMock.roster.deleteMany).not.toHaveBeenCalled();
   });
 
   it('removes a student who has assignments but no submissions', async () => {
