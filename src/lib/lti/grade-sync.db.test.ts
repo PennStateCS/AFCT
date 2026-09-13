@@ -15,6 +15,7 @@ const COURSE = 'c-sync';
 const UNLINKED_COURSE = 'c-sync-unlinked';
 const ASSIGNMENT = 'a-sync';
 const PROBLEM = 'p-sync';
+const PROBLEM2 = 'p-sync-2';
 const STUDENT = 'u-sync';
 const OTHER = 'u-sync-other';
 
@@ -26,7 +27,7 @@ async function destroyFixtures() {
   await prisma.roster.deleteMany({ where: { courseId: { in: [COURSE, UNLINKED_COURSE] } } });
   await prisma.assignmentOverride.deleteMany({ where: { assignmentId: ASSIGNMENT } });
   await prisma.assignment.deleteMany({ where: { id: ASSIGNMENT } });
-  await prisma.problem.deleteMany({ where: { id: PROBLEM } });
+  await prisma.problem.deleteMany({ where: { id: { in: [PROBLEM, PROBLEM2] } } });
   await prisma.ltiPlatform.deleteMany({ where: { id: PLATFORM } });
   await prisma.course.deleteMany({ where: { id: { in: [COURSE, UNLINKED_COURSE] } } });
   await prisma.user.deleteMany({ where: { id: { in: [STUDENT, OTHER] } } });
@@ -418,5 +419,66 @@ describe('missing work, and taking a score back', () => {
     expect((await rowFor(STUDENT))?.scoreGiven).toBeNull();
     // Untouched: sending for one student must not rewrite anybody else's row.
     expect((await rowFor(OTHER))?.scoreGiven).toBe(0);
+  });
+});
+
+/**
+ * What reaches the LMS while an assignment is only half marked.
+ *
+ * The existing cases all use a single-problem assignment, where "graded" and "fully graded" are
+ * the same thing. With two problems they part company, and the two halves of the score come from
+ * different places: the numerator is the sum of the grade rows that exist, and the denominator is
+ * every problem on the assignment.
+ *
+ * AFCT's own gradebook does not do that. `buildAccountability` in `lib/course-grades` counts a
+ * problem toward the denominator only once it has been marked or once `lib/missing-work` says
+ * nobody handed it in, and says so in as many words: work awaiting a grade counts toward neither
+ * half. So the student below stands at 50/50 inside AFCT and 50/100 in the LMS, and the comment
+ * above the sum here claims the two agree.
+ *
+ * Pinned rather than changed, because which one is right is a policy decision and not a
+ * technical one. If this behaviour is deliberate, this test is the place that says so.
+ */
+describe('an assignment that is only partly graded', () => {
+  beforeEach(async () => {
+    // Two problems worth 50 each, replacing the single 100-point one.
+    await prisma.assignmentProblem.updateMany({
+      where: { assignmentId: ASSIGNMENT },
+      data: { maxPoints: 50 },
+    });
+    await prisma.problem.create({
+      data: { id: PROBLEM2, courseId: COURSE, title: 'Q2', type: 'FA' },
+    });
+    await prisma.assignmentProblem.create({
+      data: { assignmentId: ASSIGNMENT, problemId: PROBLEM2, maxPoints: 50 },
+    });
+  });
+
+  it('sends full marks on the graded half as half marks on the whole', async () => {
+    // Full marks on the first problem. The second has no grade row at all: nobody has marked it.
+    await grade(50);
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(1);
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      scoreGiven: 50,
+      // Every problem on the assignment, including the one nobody has looked at yet.
+      scoreMaximum: 100,
+    });
+  });
+
+  it('sends the same score once both halves are marked', async () => {
+    await grade(50);
+    await prisma.assignmentProblemGrade.create({
+      data: { studentId: STUDENT, assignmentId: ASSIGNMENT, problemId: PROBLEM2, grade: 0 },
+    });
+
+    await queueChangedGrades(ASSIGNMENT);
+
+    // The number the LMS receives is identical whether the second problem scored zero or was
+    // never marked, which is the part a student cannot tell apart from their side.
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      scoreGiven: 50,
+      scoreMaximum: 100,
+    });
   });
 });
