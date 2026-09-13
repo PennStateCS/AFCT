@@ -37,6 +37,15 @@ export type AgsFailure =
    * a setting on the LMS, and saying so is the whole point of noticing it.
    */
   | 'redirected'
+  /**
+   * The AFCT course was deleted after the grade was queued.
+   *
+   * Terminal on purpose. A soft delete leaves the course, its assignments and its LTI links in
+   * place so they can be recovered, and everything a person can reach already treats it as
+   * gone. Anything still in the queue has to follow that rule too, or a course an administrator
+   * deleted keeps writing into somebody's LMS gradebook.
+   */
+  | 'course-deleted'
   /** This person has never launched, so the LMS user id is unknown. */
   | 'no-lms-identity'
   /**
@@ -663,6 +672,8 @@ export function agsFailureMessage(reason: AgsFailure): string {
       // like a permissions problem and sent an administrator through LMS permission screens
       // that were already correct.
       return 'Your LMS gave AFCT a plain http address for its grade service and then redirected it to https, which drops the credentials AFCT sends and makes the request look unauthorised. Set your LMS to advertise https for its own address.';
+    case 'course-deleted':
+      return 'This course has been deleted in AFCT, so its grades are no longer sent to your LMS. Anything already in the LMS gradebook stays as it is.';
     case 'ambiguous-context':
       return 'This AFCT course is connected to more than one LMS course, and AFCT cannot tell which one this student is in, so it has not sent the grade anywhere. Sync the roster from the LMS course this student belongs to.';
     case 'line-item-lookup-incomplete':

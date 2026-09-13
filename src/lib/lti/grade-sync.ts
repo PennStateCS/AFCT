@@ -13,6 +13,14 @@ import { accountablePointsByStudent, studentsWithDerivedZeros } from '@/lib/cour
 
 /** Whether this course opens from any LMS. Nothing here does anything if it does not. */
 export async function courseIsLinked(courseId: string): Promise<boolean> {
+  // A soft-deleted course is gone as far as everything else is concerned, and that has to
+  // include the outside world: once `deletedAt` is set nothing new should reach the LMS on its
+  // behalf. Asked here because every queueing path goes through it.
+  const course = await prisma.course.findUnique({
+    where: { id: courseId },
+    select: { deletedAt: true },
+  });
+  if (!course || course.deletedAt) return false;
   return (await prisma.ltiContextLink.count({ where: { courseId } })) > 0;
 }
 
@@ -198,7 +206,13 @@ export async function queueAutomaticAssignments(): Promise<number> {
   if (linkedCourses.length === 0) return 0;
 
   const assignments = await prisma.assignment.findMany({
-    where: { courseId: { in: linkedCourses.map((c) => c.courseId) }, ltiAutoSync: true },
+    where: {
+      courseId: { in: linkedCourses.map((c) => c.courseId) },
+      ltiAutoSync: true,
+      // The context links outlive a soft delete, so without this the background pass keeps
+      // finding a deleted course's assignments and queueing their grades.
+      course: { deletedAt: null },
+    },
     select: { id: true },
   });
 

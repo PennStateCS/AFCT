@@ -1,6 +1,11 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { queueChangedGrades, assignmentSyncState, courseIsLinked } from './grade-sync';
+import {
+  queueChangedGrades,
+  queueAutomaticAssignments,
+  assignmentSyncState,
+  courseIsLinked,
+} from './grade-sync';
 
 /**
  * Working out which grades still need to reach the LMS, against a real Postgres.
@@ -544,5 +549,49 @@ describe('an assignment that is only partly graded', () => {
       scoreGiven: 50,
       scoreMaximum: 100,
     });
+  });
+});
+
+/**
+ * A soft-deleted course produces no new outbound LMS traffic.
+ *
+ * The delete leaves the course, its assignments and its LTI context links where they are, so
+ * they can be recovered. Everything a person can reach already treats the course as gone; the
+ * background pass and the queueing path have to agree, or a deleted course keeps writing into
+ * somebody's LMS gradebook.
+ */
+describe('a soft-deleted course', () => {
+  beforeEach(async () => {
+    await prisma.course.update({ where: { id: COURSE }, data: { deletedAt: new Date() } });
+  });
+
+  afterEach(async () => {
+    await prisma.course.updateMany({ where: { id: COURSE }, data: { deletedAt: null } });
+  });
+
+  it('is no longer treated as linked', async () => {
+    expect(await courseIsLinked(COURSE)).toBe(false);
+  });
+
+  it('queues nothing, even with a grade that has never been sent', async () => {
+    await grade(88);
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(0);
+    expect(await prisma.ltiScoreQueue.count()).toBe(0);
+  });
+
+  it('is skipped by the automatic pass, whose context links outlive the delete', async () => {
+    await prisma.assignment.update({ where: { id: ASSIGNMENT }, data: { ltiAutoSync: true } });
+    await grade(88);
+
+    expect(await queueAutomaticAssignments()).toBe(0);
+    expect(await prisma.ltiScoreQueue.count()).toBe(0);
+  });
+
+  it('syncs normally again once it is restored', async () => {
+    await prisma.course.update({ where: { id: COURSE }, data: { deletedAt: null } });
+    await grade(88);
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(1);
   });
 });

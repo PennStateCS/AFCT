@@ -59,6 +59,20 @@ export async function sendOneScore(): Promise<SendOutcome> {
   };
 
   /**
+   * A course deleted after this was queued sends nothing.
+   *
+   * The soft delete leaves the course, its assignments and its LTI links where they are, so
+   * nothing further up stops a claimed score from going out. Re-read here rather than trusted
+   * from queue time, because the delete may well have happened since. Terminal: retrying a
+   * deleted course forever is not a thing anybody wants to watch in the queue.
+   */
+  const course = await prisma.course.findUnique({
+    where: { id: claimed.assignment.courseId },
+    select: { deletedAt: true },
+  });
+  if (!course || course.deletedAt) return fail('course-deleted');
+
+  /**
    * Which LMS course to send to.
    *
    * Cross-listed sections mean several LMS courses can open one AFCT course. This used to try
