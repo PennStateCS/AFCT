@@ -136,7 +136,10 @@ async function createAssignment(opts: {
  */
 export async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user?.id) {
+  // `inactive` as well as the id: a revoked session keeps its user id so the app can say who
+  // it was, and `canManageCourse` answers what a person may do, never whether their session is
+  // still good. Same rule as the auth wrappers.
+  if (!session?.user?.id || session.user.inactive) {
     return page(message('Not signed in', 'Open the link from your LMS again.'), 401);
   }
 

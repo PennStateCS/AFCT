@@ -77,6 +77,18 @@ describe.each([
     expect(canManageCourseMock).not.toHaveBeenCalled();
   });
 
+  /**
+   * A revoked session keeps its user id deliberately, so the app can say who the caller was.
+   * `canManageCourse` answers what a person may do and knows nothing about session validity,
+   * so a route leaning on it alone accepted a disabled or password-revoked account.
+   */
+  it('refuses a session the app has revoked', async () => {
+    authMock.mockResolvedValue({ user: { id: 'staff1', isAdmin: false, inactive: true } });
+
+    expect((await call()).status).toBe(401);
+    expect(canManageCourseMock).not.toHaveBeenCalled();
+  });
+
   it('is a 404 for an assignment that does not exist', async () => {
     prismaMock.assignment.findUnique.mockResolvedValue(null);
 
