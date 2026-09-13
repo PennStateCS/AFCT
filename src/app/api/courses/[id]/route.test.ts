@@ -599,6 +599,74 @@ describe('PUT /api/courses/[id]', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
+  /**
+   * Archiving is admin-only, and the dedicated endpoint enforces that. This route takes the
+   * whole settings form, `isArchived` included, under ordinary manage access, which admits
+   * faculty and TAs. Sending the flag back unchanged is fine; changing it is not.
+   */
+  const settingsBody = (isArchived: boolean) =>
+    JSON.stringify({
+      name: 'Course 1',
+      code: 'CS101',
+      semester: 'Fall 2026',
+      credits: 3,
+      startDate: '2026-08-25T09:00',
+      endDate: '2026-12-15T17:00',
+      registrationOpenAt: '2026-07-01T09:00',
+      registrationCloseAt: '2026-09-01T09:00',
+      isPublished: true,
+      isArchived,
+      instructorIds: ['u1'],
+    });
+
+  const putAs = (user: Record<string, unknown>, isArchived: boolean) => {
+    authMock.mockResolvedValue({ user });
+    // Staff on this course, which is what gets them past the wrapper in the first place.
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'FACULTY',
+      status: 'ENROLLED',
+      course: { isPublished: true, deletedAt: null, startDate: new Date('2020-01-01') },
+    });
+    prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });
+    return PUT(
+      new Request('http://localhost/api/courses/1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: settingsBody(isArchived),
+      }),
+      { params: Promise.resolve({ id: 'course-1' }) },
+    );
+  };
+
+  it('refuses a faculty member trying to archive through the settings form', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+
+    const res = await putAs({ id: 'fac-1', role: 'FACULTY', isAdmin: false }, true);
+
+    expect(res.status).toBe(403);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  // The other direction was never reachable here: an archived course is frozen for every
+  // writer, so a restore attempt through this route is turned away before the flag is read.
+  // Worth pinning, because it is the reason the admin check only has to catch one direction.
+  it('cannot restore through this route at all, archived or not', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: true });
+
+    const res = await putAs({ id: 'fac-1', role: 'FACULTY', isAdmin: false }, false);
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('lets a faculty member save the form with the flag unchanged', async () => {
+    prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+
+    const res = await putAs({ id: 'fac-1', role: 'FACULTY', isAdmin: false }, false);
+
+    expect(res.status).not.toBe(403);
+  });
+
   it('returns 400 when isArchived is not a boolean', async () => {
     authMock.mockResolvedValue({ user: { id: 'admin-1', role: 'ADMIN', isAdmin: true } });
     prismaMock.user.findUnique.mockResolvedValue({ timezone: 'America/New_York' });

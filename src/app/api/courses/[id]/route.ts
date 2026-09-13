@@ -351,7 +351,7 @@ export const GET = withCourseAuth(
  *   200:
  *     description: The updated course with roster and assignments.
  *   400: { description: "Missing id, invalid isArchived, empty instructor list, or missing registration window." }
- *   403: { description: "Not course staff (faculty or TAs) or a system admin, or an archive/unpublish safety check failed." }
+ *   403: { description: "Not course staff (faculty or TAs) or a system admin, a non-administrator tried to change isArchived, or an archive/unpublish safety check failed." }
  *   500: { description: Server error. }
  */
 export const PUT = withCourseAuth(
@@ -373,6 +373,38 @@ export const PUT = withCourseAuth(
       courseTimezone = body.timezone;
     } else {
       return NextResponse.json({ error: 'Invalid timezone.' }, { status: 400 });
+    }
+
+    /**
+     * Archiving is an administrator's decision, wherever it is made.
+     *
+     * The dedicated archive endpoint says so and checks `isAdmin`, but this route takes the
+     * whole settings form, `isArchived` included, and runs under ordinary manage access, which
+     * admits faculty and TAs. That was a way round the rule, and the un-archive direction did
+     * not even pass through `canArchiveCourse`.
+     *
+     * The flag is still accepted so the form can send back what it was given; what is refused
+     * is a non-admin *changing* it.
+     */
+    if (!isAdmin(session?.user)) {
+      const current = await prisma.course.findUnique({
+        where: { id },
+        select: { isArchived: true },
+      });
+      if (current && current.isArchived !== body.isArchived) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: session?.user?.id ?? null,
+          action: 'COURSE_ARCHIVE_DENIED',
+          category: 'COURSE',
+          severity: 'SECURITY',
+          courseId: id,
+          metadata: { attempted: body.isArchived ? 'archive' : 'unarchive', via: 'course-update' },
+        });
+        return NextResponse.json(
+          { error: 'Only a system administrator can archive or restore a course.' },
+          { status: 403 },
+        );
+      }
     }
 
     // Centralized check for archiving
