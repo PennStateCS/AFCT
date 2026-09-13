@@ -329,6 +329,30 @@ export async function createSubmission(
     };
   }
 
+  /**
+   * There has to be a file, and it has to have something in it.
+   *
+   * Placed after the authorization checks, so a stranger still learns nothing about the
+   * assignment, and before everything that counts or locks, which is the part that matters: an
+   * empty request used to be accepted as a real attempt. It spent one of the student's limited
+   * submissions, started the resubmit cooldown, and on a group assignment stamped the group
+   * set's `lockedAt`, which is sticky and never cleared, so one empty POST permanently froze
+   * that set's memberships for the whole course and no member or member of staff could undo it.
+   *
+   * Rejecting here rather than lower down also means a client that forgot the file is told
+   * that, instead of getting a 409 or a 429 about a cap it never reached.
+   */
+  if (!file || file.size === 0) {
+    await audit('SUBMISSION_INVALID_REQUEST', 'WARNING', {
+      error: file ? 'The submitted file is empty.' : 'No file was submitted.',
+    });
+    return {
+      ok: false,
+      status: 400,
+      error: file ? 'The submitted file is empty.' : 'Select a file to submit.',
+    };
+  }
+
   // Per-problem cap: the base maxSubmissions plus any per-target grants (staff exempt;
   // base `<= 0` is unlimited). Fast path; the authoritative check runs again inside the
   // serializable transaction below.

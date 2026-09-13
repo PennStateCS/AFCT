@@ -142,12 +142,15 @@ function setup(o: Overrides = {}) {
   return { created, tx };
 }
 
+const file = (content = '<structure></structure>', name = 'answer.jff') =>
+  new File([content], name, { type: 'text/xml' });
+
 const call = (extra: Partial<Parameters<typeof createSubmission>[0]> = {}) =>
   createSubmission({
     user: STUDENT,
     assignmentId: 'a-1',
     problemId: 'p-1',
-    file: null,
+    file: file(),
     req: new Request('http://localhost/api/submissions'),
     source: 'web',
     ...extra,
@@ -632,9 +635,6 @@ describe('createSubmission', () => {
   });
 
   describe('file handling', () => {
-    const file = (content = '<structure></structure>', name = 'answer.jff') =>
-      new File([content], name, { type: 'text/xml' });
-
     it('rejects a file over the configured upload limit', async () => {
       setup();
       uploadLimitMock.mockResolvedValue({ maxBytes: 5, maxMb: 0.000005 });
@@ -695,19 +695,9 @@ describe('createSubmission', () => {
       expect(data.provenanceFeatures.features.length).toBeGreaterThan(0);
     });
 
-    it('records no fingerprint for a submission with no file', async () => {
-      const { tx } = setup();
-
-      await call({ file: null });
-
-      const [{ data }] = tx.submission.create.mock.calls[0] as [
-        { data: { contentHash: null; byteHash: null; provenanceFeatures: unknown } },
-      ];
-      expect(data.contentHash).toBeNull();
-      expect(data.byteHash).toBeNull();
-      // Prisma's JSON null, not a description of nothing.
-      expect(data.provenanceFeatures).toBeDefined();
-    });
+    // There used to be a case here checking what got fingerprinted when no file was sent.
+    // Nothing is, and nothing can be: a request with no file is now refused before the insert.
+    // The columns stay nullable for rows written before that was true.
 
     it('stores an accepted file under a generated name, never the client-supplied one', async () => {
       const { tx } = setup();
@@ -759,10 +749,17 @@ describe('createSubmission', () => {
       expect(tx.submission.create).not.toHaveBeenCalled();
     });
 
-    it('accepts a submission with no file at all', async () => {
+    it('refuses a submission with no file at all', async () => {
       setup();
       const res = await call({ file: null });
-      expect(res).toMatchObject({ ok: true });
+      expect(res).toMatchObject({ ok: false, status: 400 });
+      expect(fsMock.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    it('refuses an empty file', async () => {
+      setup();
+      const res = await call({ file: file('') });
+      expect(res).toMatchObject({ ok: false, status: 400 });
       expect(fsMock.writeFileSync).not.toHaveBeenCalled();
     });
   });
