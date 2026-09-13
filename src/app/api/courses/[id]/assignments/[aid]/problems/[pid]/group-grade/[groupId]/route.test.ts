@@ -45,6 +45,9 @@ const post = (body: Record<string, unknown>) =>
 
 const tx = {
   assignmentProblemGrade: { upsert: vi.fn() },
+  // Membership and the points are both re-read inside the transaction now, under the set's
+  // lock, so the writes are based on what is true at the moment they land.
+  studentGroup: { findFirst: vi.fn() },
   // The conflict read moved inside the transaction and is now the row lock as well: one
   // `SELECT ... FOR UPDATE` that both reads the members' grades and holds them until the
   // write lands. Rows here are raw, so the student's name comes back flat.
@@ -52,17 +55,42 @@ const tx = {
 };
 
 /** Existing member grades, in the shape the locking read returns. */
+/**
+ * The transaction takes three raw statements, in the order the shared lock order gives: the
+ * group set's row, the assignment-problem row (which also reads the current points), then the
+ * members' grade rows. One mock serves all three, so it answers by what is being asked.
+ */
+let gradeRows: {
+  studentId: string;
+  grade: number;
+  firstName: string | null;
+  lastName: string | null;
+}[] = [];
+let lockedMaxPoints = 10;
+
+const routeRawQuery = (parts: TemplateStringsArray | string[]) => {
+  const sql = Array.isArray(parts) ? parts.join('') : String(parts);
+  if (sql.includes('"GroupSet"')) return Promise.resolve([]);
+  if (sql.includes('"AssignmentProblem"')) return Promise.resolve([{ maxPoints: lockedMaxPoints }]);
+  return Promise.resolve(gradeRows);
+};
+
+/** Members who already carry a grade, in the shape the locking read returns. */
 const existingGrades = (
   rows: { studentId: string; grade: number; firstName?: string; lastName?: string }[],
-) =>
-  tx.$queryRaw.mockResolvedValue(
-    rows.map((r) => ({
-      studentId: r.studentId,
-      grade: r.grade,
-      firstName: r.firstName ?? null,
-      lastName: r.lastName ?? null,
-    })),
-  );
+) => {
+  gradeRows = rows.map((r) => ({
+    studentId: r.studentId,
+    grade: r.grade,
+    firstName: r.firstName ?? null,
+    lastName: r.lastName ?? null,
+  }));
+};
+
+/** What the problem is worth by the time the transaction locks it. */
+const pointsWhenLocked = (value: number) => {
+  lockedMaxPoints = value;
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -73,7 +101,7 @@ beforeEach(() => {
     assignment: { courseId: 'c1', groupSetId: 'gs1' },
     maxPoints: 10,
   });
-  prismaMock.studentGroup.findFirst.mockResolvedValue({
+  const members = {
     id: 'g1',
     name: 'Group 3',
     memberships: [
@@ -81,8 +109,13 @@ beforeEach(() => {
       { roster: { userId: 's2' } },
       { roster: { userId: 's3' } },
     ],
-  });
-  tx.$queryRaw.mockResolvedValue([]);
+  };
+  prismaMock.studentGroup.findFirst.mockResolvedValue(members);
+  // By default the transaction sees the same group the read before it saw.
+  tx.studentGroup.findFirst.mockResolvedValue(members);
+  gradeRows = [];
+  lockedMaxPoints = 10;
+  tx.$queryRaw.mockImplementation(routeRawQuery);
   tx.assignmentProblemGrade.upsert.mockResolvedValue({});
   prismaMock.$transaction.mockImplementation(async (cb: (c: typeof tx) => unknown) => cb(tx));
 });
@@ -176,6 +209,36 @@ describe('POST group-grade', () => {
       const res = await post({ grade: 8 });
 
       expect(res.status).toBe(200);
+    });
+  });
+
+  /**
+   * The points were validated against what they were when the request arrived.
+   *
+   * An instructor lowering them from the problem settings commits in that gap, and the grade
+   * lands above a ceiling that no longer exists: the gradebook shows more than the problem is
+   * worth, and AGS refuses a score above its own maximum outright. The transaction takes the
+   * problem's row and reads the points back from it, so the number it validates against is the
+   * one it is holding.
+   */
+  describe('points lowered while the grade is in flight', () => {
+    it('refuses a grade the problem is no longer worth', async () => {
+      pointsWhenLocked(5);
+
+      const res = await post({ grade: 8 });
+
+      expect(res.status).toBe(409);
+      await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('5') });
+      expect(tx.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
+    });
+
+    it('accepts one that still fits', async () => {
+      pointsWhenLocked(5);
+
+      const res = await post({ grade: 5 });
+
+      expect(res.status).toBe(200);
+      expect(tx.assignmentProblemGrade.upsert).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -273,10 +336,28 @@ describe('whose rows a group grade can reach', () => {
       id: 'g1',
       groupSetId: 'gs1',
     });
-    // The read is raw SQL now, because it is the row lock as well. Scope still has to be the
-    // three things it always was: this assignment, this problem, these members.
-    const [sql, ...params] = tx.$queryRaw.mock.calls[0] as [string[], ...unknown[]];
-    expect(String(sql)).toContain('FOR UPDATE');
-    expect(params).toEqual(['a1', 'p1', ['s1', 's2', 's3']]);
+    /**
+     * Three raw statements, in the shared lock order: the group set, the assignment-problem row
+     * (which is also where the current points come from), then the members' grade rows. All
+     * three hold what they read, and the last still has to be scoped to the three things it
+     * always was: this assignment, this problem, these members.
+     */
+    const raw = tx.$queryRaw.mock.calls.map((c) => [String(c[0]), ...c.slice(1)] as const);
+    expect(raw.map(([sql]) => sql)).toEqual([
+      expect.stringContaining('"GroupSet"'),
+      expect.stringContaining('"AssignmentProblem"'),
+      expect.stringContaining('"AssignmentProblemGrade"'),
+    ]);
+    // All three hold their rows. The link is the weaker mode on purpose, so that holding it
+    // does not also block students inserting submissions against the same problem.
+    expect(raw.map(([sql]) => (sql.includes('FOR NO KEY UPDATE') ? 'no-key' : 'update'))).toEqual([
+      'update',
+      'no-key',
+      'update',
+    ]);
+    expect(raw[2]?.slice(1)).toEqual(['a1', 'p1', ['s1', 's2', 's3']]);
+
+    // And the member list written to is the one read inside the transaction, not before it.
+    expect(whereOf(tx.studentGroup.findFirst)).toEqual({ id: 'g1', groupSetId: 'gs1' });
   });
 });

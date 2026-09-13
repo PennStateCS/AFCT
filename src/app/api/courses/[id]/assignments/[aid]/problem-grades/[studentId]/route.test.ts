@@ -14,6 +14,9 @@ const prismaMock = vi.hoisted(() => ({
   // Read by the student content gate. A missing model would make the gate throw and the route
   // answer 500, which a status assertion could mistake for a refusal.
   assignmentOverride: { findMany: vi.fn() },
+  // The batch write locks the assignment's problem rows and reads the current points back, so
+  // grades validated against an older ceiling cannot land after it has moved.
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
@@ -63,6 +66,11 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
       lateCutoff: null,
     });
     prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    // The batch transaction is interactive now, so the callback runs against the same mock.
+    prismaMock.$transaction.mockImplementation(async (fn: unknown) =>
+      typeof fn === 'function' ? (fn as (tx: unknown) => unknown)(prismaMock) : undefined,
+    );
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
   });
 
@@ -297,12 +305,13 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
       { problemId: 'prob-3', maxPoints: 30 },
     ]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
-    // $transaction receives an array of prisma promises; resolve it and let the
-    // individual upsert/deleteMany mocks record their own calls.
-    prismaMock.$transaction.mockImplementation(async (ops: unknown[]) => {
-      await Promise.all(ops as Promise<unknown>[]);
-      return [];
-    });
+    // The write is one interactive transaction now: it locks the assignment's problem rows,
+    // reads the current points back, revalidates, then writes. Run the callback against the
+    // same mock so the individual upsert/deleteMany mocks record their own calls.
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
     prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({});
     prismaMock.assignmentProblemGrade.deleteMany.mockResolvedValue({ count: 1 });
     activityLogMock.mockResolvedValue(undefined);
@@ -506,10 +515,11 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalledTimes(1);
     expect(prismaMock.assignmentProblemGrade.deleteMany).toHaveBeenCalledTimes(1);
 
-    // $transaction received exactly the two changed ops.
+    // One transaction, and only the two changed problems were written in it. It is interactive
+    // now rather than an array of operations, because it has to lock the assignment's problem
+    // rows and read the current points back before it writes anything.
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-    const txnOps = prismaMock.$transaction.mock.calls[0][0] as unknown[];
-    expect(txnOps).toHaveLength(2);
+    expect(String(prismaMock.$queryRaw.mock.calls[0]?.[0])).toContain('FOR NO KEY UPDATE');
 
     // Upsert targets prob-1 and its `update` sets only grade (no feedback).
     const upsertArg = prismaMock.assignmentProblemGrade.upsert.mock.calls[0][0];
@@ -645,10 +655,10 @@ describe('who a problem grade can be written for', () => {
     prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([{ problemId: 'prob-1', maxPoints: 10 }]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
-    prismaMock.$transaction.mockImplementation(async (ops: unknown[]) => {
-      await Promise.all(ops as Promise<unknown>[]);
-      return [];
-    });
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
     prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({});
     activityLogMock.mockResolvedValue(undefined);
 
@@ -721,10 +731,10 @@ describe('who a problem grade can be written for', () => {
       { problemId: 'prob-1', maxPoints: 10 },
     ]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
-    prismaMock.$transaction.mockImplementation(async (ops: unknown[]) => {
-      await Promise.all(ops as Promise<unknown>[]);
-      return [];
-    });
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
     prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({});
     activityLogMock.mockResolvedValue(undefined);
 

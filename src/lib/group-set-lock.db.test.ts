@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import {
   deleteGroupIfSetUnlocked,
@@ -296,5 +296,119 @@ describe('working under the group-set lock', () => {
 
     await expect(editing).rejects.toThrow(GroupSetLockedError);
     expect(await memberships()).toBe(0);
+  });
+});
+
+/**
+ * A group grade and a membership move, at the same moment.
+ *
+ * Group grading read its member list before the transaction and stamped the set locked at the
+ * end of it, which left the whole window open: an instructor could move somebody out and
+ * somebody else in, and the grade went to the people who used to be in the group, with the set
+ * then frozen that way for good.
+ *
+ * Both take the set's row now, first, so one of them waits. Either outcome is consistent; what
+ * must never happen is a grade written to a membership snapshot that has already moved.
+ */
+describe('grading a group while its membership is being changed', () => {
+  const OTHER_USER = `u2-${SUFFIX}`;
+
+  beforeEach(async () => {
+    await prisma.user.create({
+      data: { id: OTHER_USER, email: `${OTHER_USER}@example.test`, password: null },
+    });
+    // A membership points at a roster row, not a bare user: both have to be on the course.
+    await prisma.roster.createMany({
+      data: [ids.user, OTHER_USER].map((userId) => ({
+        courseId: ids.course,
+        userId,
+        role: 'STUDENT' as const,
+      })),
+    });
+    await prisma.groupMembership.create({
+      data: {
+        groupSetId: ids.groupSet,
+        groupId: ids.group,
+        courseId: ids.course,
+        userId: ids.user,
+      },
+    });
+  });
+
+  afterEach(async () => {
+    await prisma.groupMembership.deleteMany({ where: { courseId: ids.course } });
+    await prisma.roster.deleteMany({ where: { courseId: ids.course } });
+    await prisma.user.deleteMany({ where: { id: OTHER_USER } });
+  });
+
+  const membersOfGroup = async () =>
+    (
+      await prisma.groupMembership.findMany({
+        where: { groupId: ids.group },
+        select: { userId: true },
+        orderBy: { userId: 'asc' },
+      })
+    ).map((m) => m.userId);
+
+  /** The grading route's shape: lock the set, then read the membership it will write to. */
+  function gradeTheGroup(opts: { pauseMs: number }) {
+    return prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT 1 FROM "GroupSet" WHERE "id" = ${ids.groupSet} FOR UPDATE`;
+        await wait(opts.pauseMs);
+
+        const group = await tx.studentGroup.findFirstOrThrow({
+          where: { id: ids.group },
+          select: { memberships: { select: { userId: true } } },
+        });
+        const memberIds = group.memberships.map((m) => m.userId);
+
+        await lockGroupSetIfUsed(tx, ids.groupSet);
+        return memberIds;
+      },
+      { timeout: 20_000 },
+    );
+  }
+
+  it('grades the membership as it is when the grade lands, not as it was read earlier', async () => {
+    // The move gets the set's row first. Grading waits on it, then reads the membership that
+    // actually exists rather than the one the request set out with.
+    const moving = withUnlockedGroupSet(ids.groupSet, async (tx) => {
+      await tx.groupMembership.deleteMany({ where: { groupId: ids.group, userId: ids.user } });
+      await tx.groupMembership.create({
+        data: {
+          groupSetId: ids.groupSet,
+          groupId: ids.group,
+          courseId: ids.course,
+          userId: OTHER_USER,
+        },
+      });
+      await wait(300);
+    });
+    await wait(100);
+    const grading = gradeTheGroup({ pauseMs: 0 });
+
+    const [, gradedMembers] = await Promise.all([moving, grading]);
+
+    expect(gradedMembers).toEqual([OTHER_USER]);
+    expect(await membersOfGroup()).toEqual([OTHER_USER]);
+  });
+
+  it('refuses the membership move when the grade gets there first', async () => {
+    // The other order. Grading takes the row, stamps the set locked, and the move then finds a
+    // locked set and is refused: the membership a grade was based on stops moving.
+    const grading = gradeTheGroup({ pauseMs: 300 });
+    await wait(100);
+    const moving = withUnlockedGroupSet(ids.groupSet, async (tx) => {
+      await tx.groupMembership.deleteMany({ where: { groupId: ids.group, userId: ids.user } });
+    });
+
+    const [gradingResult, movingResult] = await Promise.allSettled([grading, moving]);
+
+    expect(gradingResult.status).toBe('fulfilled');
+    expect(movingResult.status).toBe('rejected');
+    expect((movingResult as PromiseRejectedResult).reason).toBeInstanceOf(GroupSetLockedError);
+    // The people the grade went to are still the people in the group.
+    expect(await membersOfGroup()).toEqual([ids.user]);
   });
 });

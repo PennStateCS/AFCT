@@ -16,6 +16,9 @@ const prismaMock = vi.hoisted(() => ({
   assignmentOverride: { findMany: vi.fn() },
   course: { findUnique: vi.fn() },
   $transaction: vi.fn(),
+  // The grade write locks the assignment-problem row and reads the current points from it, so
+  // a grade validated against an older ceiling cannot land after the ceiling has moved.
+  $queryRaw: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -47,6 +50,9 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
       lateCutoff: null,
     });
     prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
+    // The locking read of the current points, matching the fixture above unless a test says
+    // the ceiling moved while the grade was in flight.
+    prismaMock.$queryRaw.mockResolvedValue([{ maxPoints: 100 }]);
     prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
       fn(prismaMock),
     );
@@ -287,6 +293,35 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
         body: JSON.stringify(body),
       });
 
+    /**
+     * A grade validated against points that move before it lands.
+     *
+     * The range was checked when the request arrived. Lowering the points is refused below a
+     * grade that already exists, but a grade being entered does not exist yet, so nothing
+     * stopped a grader validating 10 against 10 while the ceiling was on its way to 5, leaving
+     * 10 out of 5 behind.
+     */
+    describe('points that move while the grade is being entered', () => {
+      it('refuses the grade when the ceiling has dropped below it', async () => {
+        // Still 100 when the request arrived; 5 by the time the row was locked.
+        prismaMock.$queryRaw.mockResolvedValue([{ maxPoints: 5 }]);
+
+        const res = await POST(buildRequest({ grade: 10 }), {
+          params: Promise.resolve(defaultParams),
+        });
+
+        expect(res.status).toBe(409);
+        await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('5') });
+        expect(prismaMock.assignmentProblemGrade.upsert).not.toHaveBeenCalled();
+      });
+
+      it('takes the problem row before it writes', async () => {
+        await POST(buildRequest({ grade: 10 }), { params: Promise.resolve(defaultParams) });
+
+        expect(String(prismaMock.$queryRaw.mock.calls[0]?.[0])).toContain('FOR NO KEY UPDATE');
+      });
+    });
+
     it('returns 401 when unauthenticated', async () => {
       authMock.mockResolvedValue(null);
 
@@ -512,6 +547,7 @@ describe('the grade target', () => {
     vi.clearAllMocks();
     prismaMock.roster.findFirst.mockResolvedValue({ role: 'FACULTY' });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    prismaMock.$queryRaw.mockResolvedValue([{ maxPoints: 100 }]);
     prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
       fn(prismaMock),
     );

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import { lockProblemForGrading } from '@/lib/grade-writes';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -22,6 +23,28 @@ const GroupGradeBody = z.object({
 
 /** Thrown inside the grading transaction so the read's row locks are released by the rollback. */
 class GroupGradeConflictError extends Error {}
+
+/**
+ * The group, or the problem link, went away while this was being written.
+ *
+ * Only reachable by racing a deletion or a group being moved to another set. The right answer is
+ * the one a request arriving a moment later would get, not a grade written to whoever used to be
+ * in the group.
+ */
+class GroupVanishedError extends Error {}
+
+/**
+ * The points were lowered under this grade before it landed.
+ *
+ * The range was checked when the request arrived, against a value that has since moved. Carries
+ * the current ceiling so the grader is told what the problem is now worth rather than being sent
+ * back to a number that is no longer true.
+ */
+class GradeOutOfRangeError extends Error {
+  constructor(readonly maxPoints: number) {
+    super('grade out of range');
+  }
+}
 
 /**
  * Grades a whole group on one problem, writing one grade row per member.
@@ -98,8 +121,9 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Group not found in this assignment' }, { status: 404 });
       }
 
-      const memberIds = [...new Set(group.memberships.map((m) => m.roster.userId))];
-      if (memberIds.length === 0) {
+      // A quick answer for an empty group. The list the grades are actually written to is read
+      // again inside the transaction, under the set's lock; this one is only for the message.
+      if (group.memberships.length === 0) {
         return NextResponse.json({ error: 'This group has no members' }, { status: 404 });
       }
 
@@ -135,9 +159,49 @@ export const POST = withCourseAuth(
        */
       const conflicts: { studentId: string; name: string; grade: number | null }[] = [];
 
+      let memberIds: string[] = [];
       const outcome = await prisma
         .$transaction(
           async (tx) => {
+            /**
+             * The set's row first, then the membership, then the points, then the grades.
+             *
+             * Membership was read before the transaction and the set was stamped locked at the
+             * end of it, which left the whole window open: an instructor could move somebody
+             * out and somebody else in, and this would write the grade to the people who used
+             * to be in the group and then freeze the set that way. Editing memberships takes
+             * this same row, so taking it first means one of the two waits.
+             *
+             * The order here is the shared one (see `lib/grade-writes`): GroupSet, then
+             * AssignmentProblem, then the grade rows.
+             */
+            await tx.$queryRaw`SELECT 1 FROM "GroupSet" WHERE "id" = ${groupSetId} FOR UPDATE`;
+
+            const freshGroup = await tx.studentGroup.findFirst({
+              where: { id: groupId, groupSetId },
+              select: {
+                id: true,
+                memberships: { select: { roster: { select: { userId: true } } } },
+              },
+            });
+            // Moved to another set, or emptied, since the read above.
+            if (!freshGroup || freshGroup.memberships.length === 0) throw new GroupVanishedError();
+
+            memberIds = [...new Set(freshGroup.memberships.map((m) => m.roster.userId))];
+
+            /**
+             * The points, from the row this just locked rather than the one read earlier.
+             *
+             * The range check above used the value as it was when the request arrived. Lowering
+             * the points is refused below a grade that already exists, but this grade does not
+             * exist yet, so nothing stopped the two from crossing.
+             */
+            const locked = await lockProblemForGrading(tx, { assignmentId, problemId });
+            if (!locked) throw new GroupVanishedError();
+            if (grade < 0 || grade > locked.maxPoints) {
+              throw new GradeOutOfRangeError(locked.maxPoints);
+            }
+
             const existing = await tx.$queryRaw<
               {
                 studentId: string;
@@ -233,6 +297,22 @@ export const POST = withCourseAuth(
 
       return NextResponse.json({ grade, memberIds, applied: memberIds.length });
     } catch (error) {
+      if (error instanceof GroupVanishedError) {
+        return NextResponse.json(
+          { error: 'This group is no longer part of this assignment.' },
+          { status: 404 },
+        );
+      }
+      if (error instanceof GradeOutOfRangeError) {
+        // The ceiling moved while this was in flight, so say what it is now rather than
+        // repeating the range the grader was working to.
+        return NextResponse.json(
+          {
+            error: `This problem is now worth ${error.maxPoints} points, so that grade is out of range. Check the grade and try again.`,
+          },
+          { status: 409 },
+        );
+      }
       /**
        * Two graders reached the same rows at the same moment and Postgres refused one of them.
        *

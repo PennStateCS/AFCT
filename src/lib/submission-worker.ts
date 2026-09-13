@@ -13,6 +13,7 @@ import { claimAndRunTrial, reapStuckTrials } from './trial-runner';
 import { getEvaluatorConfig, getQueueSettings, type EvaluatorConfig } from './eval-config';
 import { createEnhancedActivityLog, type LogSeverity } from './activity-log-utils';
 import { errMessage } from './errors';
+import { lockProblemForGrading } from './grade-writes';
 import {
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
@@ -604,7 +605,22 @@ export async function persistEvaluation(opts: {
       if (opts.autograderEnabled && !yieldsAGrade(opts.evaluation)) {
         outcome = 'grade-withheld';
       } else if (opts.autograderEnabled) {
-        const earnedPoints = opts.evaluation.correct ? opts.maxPoints : 0;
+        /**
+         * What the problem is worth now, from its own row, held.
+         *
+         * A correct answer scores full marks, so this number *is* the points. They were read
+         * when the worker picked the submission up, which can be a while before this commits,
+         * and an instructor lowering them in between would leave a mark above the ceiling the
+         * gradebook and the LMS both measure against. Same row and same order every grade
+         * writer uses (see `lib/grade-writes`).
+         */
+        const locked = await lockProblemForGrading(tx, {
+          assignmentId: opts.assignmentId,
+          problemId: opts.problemId,
+        });
+        // Detached from the assignment while this was in flight: the result is still recorded
+        // above, but there is no longer a problem for it to be worth anything on.
+        const earnedPoints = locked && opts.evaluation.correct ? locked.maxPoints : 0;
 
         if (
           await holdsTheStandingGrade(tx, {

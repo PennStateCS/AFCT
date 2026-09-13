@@ -21,6 +21,9 @@ const prismaMock = vi.hoisted(() => ({
     updateMany: vi.fn(),
     findUnique: vi.fn(),
   },
+  // The autograder locks the assignment-problem row and reads the current points from it, so a
+  // mark cannot land above a ceiling that moved while the worker was running.
+  $queryRaw: vi.fn(),
   // The grade fan-out runs in one transaction; the callback gets the same mock client so the
   // existing assertions on updateMany/createMany still see the calls.
   $transaction: vi.fn(),
@@ -133,6 +136,9 @@ beforeEach(() => {
   existsSyncMock.mockReturnValue(true);
   executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"ok"}', stderr: '' });
   activityLogMock.mockResolvedValue(undefined);
+  // What the problem is worth when the autograder locks its row. Ten unless a test says the
+  // points moved while the worker was running.
+  prismaMock.$queryRaw.mockResolvedValue([{ maxPoints: 10 }]);
   getEvaluatorConfigMock.mockResolvedValue(CONFIG);
   // No trial waiting, unless a test says otherwise.
   prismaMock.evaluatorTrial.findFirst.mockResolvedValue(null);

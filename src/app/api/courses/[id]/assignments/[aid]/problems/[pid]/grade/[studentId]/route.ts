@@ -7,6 +7,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
 import { lockGroupSetIfUsed } from '@/lib/group-set-service';
+import { lockProblemForGrading } from '@/lib/grade-writes';
 import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 
 const GradeBody = z.object({
@@ -128,6 +129,21 @@ export const GET = withCourseAuth(
   },
   { access: 'read', deniedAction: 'PROBLEM_GRADE_ACCESS_DENIED', deniedCategory: 'GRADE' },
 );
+
+/** The problem link went away while the grade was being written. */
+class ProblemVanishedError extends Error {}
+
+/**
+ * The points were lowered under this grade before it landed.
+ *
+ * Carries the current ceiling, so the grader is told what the problem is worth now rather than
+ * being sent back to a number that is no longer true.
+ */
+class GradeOutOfRangeError extends Error {
+  constructor(readonly maxPoints: number) {
+    super('grade out of range');
+  }
+}
 
 /**
  * Sets or clears a student's grade (and optional feedback) for one problem. Course
@@ -256,6 +272,20 @@ export const POST = withCourseAuth(
       // number (the null/undefined clear path returned above), so 0 is never treated as "no
       // grade".
       const saved = await prisma.$transaction(async (tx) => {
+        /**
+         * The problem's row first, and the points read from it rather than from earlier.
+         *
+         * The range was checked above against the value as it was when the request arrived.
+         * Lowering the points is refused below a grade that already exists, but this grade does
+         * not exist yet, so nothing stopped a grader validating 10 against 10 while the points
+         * were on their way to 5. Taking the row the settings route also takes means one of
+         * them waits: either the points move and this revalidates, or this lands and the
+         * settings route sees it and refuses to go below it.
+         */
+        const locked = await lockProblemForGrading(tx, { assignmentId, problemId });
+        if (!locked) throw new ProblemVanishedError();
+        if (grade < 0 || grade > locked.maxPoints) throw new GradeOutOfRangeError(locked.maxPoints);
+
         const row = await tx.assignmentProblemGrade.upsert({
           where: {
             assignmentId_problemId_studentId: {
@@ -310,6 +340,19 @@ export const POST = withCourseAuth(
         updatedAt: saved.updatedAt,
       });
     } catch (error) {
+      if (error instanceof ProblemVanishedError) {
+        return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+      }
+      if (error instanceof GradeOutOfRangeError) {
+        // The ceiling moved while this was in flight, so say what it is now rather than
+        // repeating the range the grader was working to.
+        return NextResponse.json(
+          {
+            error: `This problem is now worth ${error.maxPoints} points, so that grade is out of range. Check the grade and try again.`,
+          },
+          { status: 409 },
+        );
+      }
       console.error('POST /api/courses/[id]/[aid]/problems/[pid]/grade/[studentId] error:', error);
       await logError(req, {
         userId: graderId,
