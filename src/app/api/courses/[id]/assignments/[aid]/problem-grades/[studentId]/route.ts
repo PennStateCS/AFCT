@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { canManageCourse } from '@/lib/permissions';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { discloseGradeFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
@@ -67,6 +68,26 @@ export const GET = withCourseAuth(
       // Students can't read grades for an unpublished assignment (mask as 404).
       if (!assignment.isPublished && !isStaff) {
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+      }
+
+      /**
+       * Published is not the same as "theirs, and open". The same gate the single-problem
+       * read, `student-context`, `review-data` and `submissions/[sid]` all run: this is the
+       * batch version of the same data and was the last one still stopping at published.
+       *
+       * Staff skip it. They set the audience and the unlock, and read everybody by design.
+       */
+      if (!isStaff) {
+        const gate = await resolveStudentContentGate(assignmentId, studentId);
+        // Not in the audience: mask exactly as if it did not exist.
+        if (!gate.assigned) {
+          return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+        }
+        // Assigned but not open yet. 204 is what this route already answers when there is
+        // nothing to show, so the client needs no new case.
+        if (gate.locked) {
+          return new NextResponse(null, { status: 204 });
+        }
       }
 
       const grades = await prisma.assignmentProblemGrade.findMany({
@@ -207,14 +228,23 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
       }
 
-      // The grade target must actually be enrolled in this course; never create
-      // grade rows for an arbitrary user id that isn't on the roster.
-      const enrolled = await prisma.roster.findFirst({
+      /**
+       * The grade target must be a student on this course's roster.
+       *
+       * Enrolment alone was not enough: faculty and TAs hold roster rows too, so this would
+       * happily open a grade row against a colleague. The single-problem route next door
+       * already requires the role, and two answers to "who can be graded" is how one of them
+       * ends up wrong.
+       */
+      const rosterEntry = await prisma.roster.findFirst({
         where: { courseId, userId: studentId },
-        select: { id: true },
+        select: { role: true },
       });
-      if (!enrolled) {
-        return NextResponse.json({ error: 'Student not enrolled in this course' }, { status: 404 });
+      if (!rosterEntry || rosterEntry.role !== 'STUDENT') {
+        return NextResponse.json(
+          { error: 'Grades can only be recorded for students enrolled in this course.' },
+          { status: 404 },
+        );
       }
 
       // maxPoints per problem: used for validation and to reject problem ids that
