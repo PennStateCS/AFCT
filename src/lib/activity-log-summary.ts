@@ -56,6 +56,7 @@ const ACTION_VERB: Record<string, string> = {
   SUBMISSION_AUTOGRADED: 'Graded',
   SUBMISSION_AUTOGRADE_SKIPPED: 'Skipped',
   SUBMISSION_AUTOGRADE_WITHHELD: 'Withheld',
+  REMOVE_ASSIGNMENT_PROBLEM_REFUSED: 'Refused',
   SUBMISSION_RERUN: 'Re-ran',
   COURSE_SUBMISSIONS_RERUN: 'Re-ran',
   SUBMISSION_QUEUE_REAPED: 'Reclaimed',
@@ -766,6 +767,17 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
     // Kept apart from SKIPPED on purpose. That one is routine (newer work holds the grade);
     // this one means the evaluator broke and somebody's work is unmarked as a result, so a
     // study or an investigation must be able to tell the two apart years later.
+    // What stood in the way, since the whole entry is "this removal would have deleted work".
+    case 'REMOVE_ASSIGNMENT_PROBLEM_REFUSED': {
+      const submissions = firstNum(metadata, 'submissions');
+      const grades = firstNum(metadata, 'grades');
+      const parts = [
+        submissions > 0 ? `${submissions} submission${submissions === 1 ? '' : 's'}` : null,
+        grades > 0 ? `${grades} grade${grades === 1 ? '' : 's'}` : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? `would have deleted ${parts.join(' and ')}` : null;
+    }
+
     case 'SUBMISSION_AUTOGRADE_WITHHELD': {
       const reason = str(metadata, 'reason');
       const status = str(metadata, 'status');

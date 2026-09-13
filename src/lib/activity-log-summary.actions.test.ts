@@ -378,6 +378,17 @@ const DETAIL: Array<[string, Meta, string | null]> = [
     'the evaluation did not reach a verdict',
   ],
   ['SUBMISSION_AUTOGRADE_WITHHELD', {}, null],
+  [
+    'REMOVE_ASSIGNMENT_PROBLEM_REFUSED',
+    { submissions: 3, grades: 1 },
+    'would have deleted 3 submissions and 1 grade',
+  ],
+  [
+    'REMOVE_ASSIGNMENT_PROBLEM_REFUSED',
+    { submissions: 0, grades: 2 },
+    'would have deleted 2 grades',
+  ],
+  ['REMOVE_ASSIGNMENT_PROBLEM_REFUSED', {}, null],
   ['SUBMISSION_STALE_DISCARDED', {}, 'the submission was reclaimed while it was being graded'],
 
   // Submissions the system turned down. Each says why, since that is the whole entry.

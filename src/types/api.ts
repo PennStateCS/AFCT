@@ -1596,7 +1596,7 @@ export interface paths {
         post: operations["postCoursesByIdAssignmentsByAidProblems"];
         /**
          * Remove a problem from an assignment
-         * @description Detaches a problem from an assignment, leaving the problem itself intact in the  course. Course staff (faculty or TAs) or a system admin. Both the assignment and  the problem must belong to the course in the path. The problem id travels in the  request body.
+         * @description Detaches a problem from an assignment, leaving the problem itself intact in the  course. Refused while the problem carries any submission or grade on this assignment, since  both hang off the link this removes and would go with it. Course staff (faculty or TAs) or a  system admin. Both the assignment and the problem must belong to the course in the path. The  problem id travels in the request body.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/problems/route.ts)
          */
@@ -1652,7 +1652,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a course assignment
-         * @description Deletes an assignment, but only when it's safe: no submissions and no comments. Its  problem links are cleared first, then the assignment is removed. Course staff  (faculty or TAs) or a system admin.
+         * @description Deletes an assignment, but only when it carries no student work at all: no submissions, no  comments and no grades. Grades count because they hang off the problem links this clears, so  an assignment holding only marks would take them with it. Course staff (faculty or TAs) or a  system admin.
          *
          *     [View source](https://github.com/PennStateCS/AFCT/blob/main/src/app/api/courses/[id]/assignments/[aid]/route.ts)
          */
@@ -8396,6 +8396,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description The problem has submissions or grades, which removing it would delete. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Server error. */
             500: {
                 headers: {
@@ -8635,7 +8644,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Submissions or comments exist. */
+            /** @description Submissions, comments or grades exist. */
             400: {
                 headers: {
                     [name: string]: unknown;
