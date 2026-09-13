@@ -671,9 +671,25 @@ export const PATCH = withCourseAuth(
 );
 
 /**
- * Deletes an assignment, but only when it's safe: no submissions and no comments. Its
- * problem links are cleared first, then the assignment is removed. Course staff
- * (faculty or TAs) or a system admin.
+ * Thrown inside the deletion transaction so the whole thing rolls back, rather than a guard
+ * returning a response from inside one. Carries what was found, which is what the message says.
+ */
+class AssignmentHasWorkError extends Error {
+  constructor(submissions: number, comments: number, grades: number) {
+    const parts = [
+      submissions > 0 ? 'submissions' : null,
+      comments > 0 ? 'comments' : null,
+      grades > 0 ? 'grades' : null,
+    ].filter(Boolean);
+    super(`Cannot delete assignment: ${parts.join(', ')} exist`);
+  }
+}
+
+/**
+ * Deletes an assignment, but only when it carries no student work at all: no submissions, no
+ * comments and no grades. Grades count because they hang off the problem links this clears, so
+ * an assignment holding only marks would take them with it. Course staff (faculty or TAs) or a
+ * system admin.
  * @openapi
  * summary: Delete a course assignment
  * parameters:
@@ -681,7 +697,7 @@ export const PATCH = withCourseAuth(
  *   - { name: aid, in: path, required: true, schema: { type: string } }
  * responses:
  *   200: { description: Assignment deleted. }
- *   400: { description: Submissions or comments exist. }
+ *   400: { description: "Submissions, comments or grades exist." }
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Assignment not found in this course. }
@@ -700,26 +716,35 @@ export const DELETE = withCourseAuth(
     }
 
     try {
-      // Confirm it's safe to delete: no submissions and no comments.
-      const submissionCount = await prisma.submission.count({ where: { assignmentId: id } });
-      if (submissionCount > 0) {
-        return NextResponse.json(
-          { error: 'Cannot delete assignment: submissions exist' },
-          { status: 400 },
-        );
-      }
+      /**
+       * Grades count as work, and the guard has to still be true when the delete lands.
+       *
+       * Two problems lived here. Grades were never counted, and they cascade from the
+       * assignment-problem links this deletes, so an assignment carrying nothing but manually
+       * entered marks looked empty and took those marks with it. And the counts ran outside
+       * any transaction, so a submission arriving after the count was deleted by a decision
+       * taken before it existed.
+       *
+       * Both rows are locked first, because the work reaches the assignment by two different
+       * paths: a comment points at the assignment, while a submission and a grade point at an
+       * assignment-problem link. Locking only one of them leaves the other kind racing.
+       */
+      const deleted = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT 1 FROM "Assignment" WHERE "id" = ${id} FOR UPDATE`;
+        await tx.$queryRaw`SELECT 1 FROM "AssignmentProblem" WHERE "assignmentId" = ${id} FOR UPDATE`;
 
-      const commentCount = await prisma.comment.count({ where: { assignmentId: id } });
-      if (commentCount > 0) {
-        return NextResponse.json(
-          { error: 'Cannot delete assignment: comments exist' },
-          { status: 400 },
-        );
-      }
+        const [submissionCount, commentCount, gradeCount] = await Promise.all([
+          tx.submission.count({ where: { assignmentId: id } }),
+          tx.comment.count({ where: { assignmentId: id } }),
+          tx.assignmentProblemGrade.count({ where: { assignmentId: id } }),
+        ]);
+        if (submissionCount > 0 || commentCount > 0 || gradeCount > 0) {
+          throw new AssignmentHasWorkError(submissionCount, commentCount, gradeCount);
+        }
 
-      // Safe to delete: remove AssignmentProblem links first, then the assignment.
-      await prisma.assignmentProblem.deleteMany({ where: { assignmentId: id } });
-      const deleted = await prisma.assignment.delete({ where: { id } });
+        await tx.assignmentProblem.deleteMany({ where: { assignmentId: id } });
+        return tx.assignment.delete({ where: { id } });
+      });
 
       try {
         await createEnhancedActivityLog(prisma, req, {
@@ -742,6 +767,9 @@ export const DELETE = withCourseAuth(
 
       return NextResponse.json({ success: true });
     } catch (error) {
+      if (error instanceof AssignmentHasWorkError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
       console.error('Assignment delete failed:', error);
       await logError(req, {
         userId: user.id,

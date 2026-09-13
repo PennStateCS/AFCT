@@ -3,13 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const prismaMock = vi.hoisted(() => ({
   assignment: { findFirst: vi.fn(), update: vi.fn(), delete: vi.fn() },
   assignmentProblem: { findFirst: vi.fn(), deleteMany: vi.fn() },
-  assignmentProblemGrade: { findFirst: vi.fn() },
+  // Grades count as work now, and the guard runs inside a transaction that locks first.
+  assignmentProblemGrade: { findFirst: vi.fn(), count: vi.fn() },
   submission: { count: vi.fn() },
   comment: { count: vi.fn() },
   user: { findUnique: vi.fn() },
   systemSettings: { findUnique: vi.fn() },
   course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -712,6 +715,52 @@ describe('PATCH /api/courses/[id]/assignments/[aid]', () => {
 describe('DELETE /api/courses/[id]/assignments/[aid]', () => {
   const delReq = () =>
     new Request('http://localhost/api/courses/c1/assignments/a1', { method: 'DELETE' });
+
+  beforeEach(() => {
+    // Run the guard's transaction body against the same mock, the way the route's own `prisma`
+    // would. Nothing on the assignment unless a test says otherwise.
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.submission.count.mockResolvedValue(0);
+    prismaMock.comment.count.mockResolvedValue(0);
+    prismaMock.assignmentProblemGrade.count.mockResolvedValue(0);
+  });
+
+  /**
+   * Grades were never counted, and they cascade from the assignment-problem links this route
+   * deletes. An assignment carrying nothing but manually entered marks read as empty and took
+   * those marks with it.
+   */
+  it('400s when grades exist, even with no submissions or comments', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignmentProblemGrade.count.mockResolvedValue(2);
+
+    const res = await DELETE(delReq(), mutationParams);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('grades') });
+    expect(prismaMock.assignment.delete).not.toHaveBeenCalled();
+    expect(prismaMock.assignmentProblem.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('locks both rows before counting, since work arrives by two different paths', async () => {
+    // A comment points at the assignment; a submission and a grade point at an
+    // assignment-problem link. Locking one of them leaves the other kind racing.
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1' });
+    prismaMock.assignment.delete.mockResolvedValue({ title: 'Gone' });
+
+    await DELETE(delReq(), mutationParams);
+
+    const locked = prismaMock.$queryRaw.mock.calls.map((c) => String(c[0]));
+    expect(locked.some((sql) => sql.includes('"Assignment"') && sql.includes('FOR UPDATE'))).toBe(
+      true,
+    );
+    expect(
+      locked.some((sql) => sql.includes('"AssignmentProblem"') && sql.includes('FOR UPDATE')),
+    ).toBe(true);
+  });
 
   it('404s when the assignment is not in the course', async () => {
     prismaMock.assignment.findFirst.mockResolvedValue(null);
