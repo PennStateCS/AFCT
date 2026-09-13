@@ -58,7 +58,10 @@ function Invoke-AfctUninstall {
     if ((Test-AfctDockerReady) -and (Test-Path -LiteralPath $RuntimeCompose)) {
         if ($purge) {
             Write-AfctWarn "stopping AFCT and removing its data volumes (irreversible)..."
-            Invoke-AfctCompose down -v *> $null
+            # --volumes, not -v: see the note in Docker.ps1. A literal -v here binds to the
+            # common -Verbose parameter and never reaches docker, so the volumes the operator
+            # explicitly asked to purge would have been left in place.
+            Invoke-AfctCompose down --volumes *> $null
         } else {
             Write-AfctInfo "stopping AFCT containers (keeping data volumes)..."
             Invoke-AfctCompose down *> $null

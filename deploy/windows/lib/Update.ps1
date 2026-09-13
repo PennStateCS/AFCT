@@ -137,10 +137,11 @@ function Restore-AfctPreviousImages {
         & docker image tag $entry.Id $entry.Reference *> $null
         if ($LASTEXITCODE -ne 0) { return $false }
     }
-    Invoke-AfctCompose up -d | Out-Null
-    if ($LASTEXITCODE -ne 0) { return $false }
-    try { Wait-AfctHealth; Write-AfctSuccess 'The previous AFCT images were restored successfully.'; return $true }
-    catch { return $false }
+    # The bounded starter, like every other path that brings the stack up, so a rollback
+    # cannot be the one place that waits on a wedged CLI forever.
+    try { Invoke-AfctStartAndWait } catch { return $false }
+    Write-AfctSuccess 'The previous AFCT images were restored successfully.'
+    return $true
 }
 
 # Delete AFCT images that are neither running nor needed for rollback. Protected images are
@@ -234,9 +235,7 @@ function Restore-AfctPreviousRelease {
     $saved = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
     try {
         $env:AFCT_APP_TAG = $Tag
-        Invoke-AfctCompose up -d | Out-Null
-        if ($LASTEXITCODE -ne 0) { return $false }
-        Wait-AfctHealth
+        Invoke-AfctStartAndWait
         Write-AfctSuccess "The previously pinned AFCT release ($Tag) was restored."
         return $true
     } catch {
@@ -266,7 +265,7 @@ function Invoke-AfctUpdate {
 
     $ok = $true
     $failReason = ''
-    try { Start-AfctStack; Wait-AfctHealth } catch {
+    try { Invoke-AfctStartAndWait } catch {
         $ok = $false
         $failReason = ($_.Exception.Message -replace '^afct-fatal:\s*', '')
     }
@@ -288,7 +287,7 @@ function Invoke-AfctUpdate {
     # a different tag can simply redeploy the old tag, which still names the old images. A
     # same-tag update cannot: the pull moved the tag, so the recorded image IDs are the only way
     # back. Trying the image snapshot first in the cross-tag case redeploys the FAILING tag (it
-    # is still the effective one, so `up -d` resolves to it), which burns a second full health
+    # is still the effective one, so `up --detach` resolves to it), which burns a second full health
     # timeout and, if that attempt happened to pass, reported a rollback while running the new
     # version. Matches do_update in deploy/unix/lib/update.sh.
     if ($targetTag -cne $prevTag) {
@@ -313,7 +312,9 @@ function Start-AfctUpdater {
     else { Invoke-AfctCompose pull $UpdaterService | Out-Null; $code = $LASTEXITCODE }
     if ($code -ne 0) { return $false }
     Write-AfctInfo 'starting the updater...'
-    Invoke-AfctCompose up -d $UpdaterService | Out-Null
+    # --detach, not -d: a literal -d binds to the common -Verbose/-Debug parameter set and
+    # never reaches docker, which would leave this attached to the sidecar's logs forever.
+    Invoke-AfctCompose up --detach $UpdaterService | Out-Null
     return ($LASTEXITCODE -eq 0)
 }
 

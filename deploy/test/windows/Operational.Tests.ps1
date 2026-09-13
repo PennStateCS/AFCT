@@ -136,8 +136,10 @@ Describe 'Environment' {
 }
 
 # Wait-AfctHealth reads the controller globals; the docker-facing seams
-# (Get-AfctAppContainerState, Test-AfctHttpHealth) are mocked so each failure mode can be
-# driven without a daemon.
+# (Get-AfctStackState, Get-AfctAppContainerState, Test-AfctHttpHealth) are mocked so each
+# failure mode can be driven without a daemon. The whole-stack observer is stubbed as
+# "nothing is ready yet" so each test below is decided by the application state it sets,
+# which is the thing it is about; the ready path has its own coverage in Startup.Tests.ps1.
 Describe 'Wait-AfctHealth failure modes' {
     BeforeAll {
         $script:HealthTimeout = 30
@@ -149,10 +151,19 @@ Describe 'Wait-AfctHealth failure modes' {
         Mock -CommandName Write-AfctInfo -MockWith { }
         Mock -CommandName Write-AfctSuccess -MockWith { }
         Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
         Mock -CommandName Start-Sleep -MockWith { }
+        Mock -CommandName Get-AfctStackState -MockWith {
+            [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false
+                               HttpOk = $false; ExpectedTag = ''; ImageMatches = $true }
+        }
     }
 
-    It 'returns when the container is healthy' {
+    It 'returns when every service is ready' {
+        Mock -CommandName Get-AfctStackState -MockWith {
+            [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true
+                               HttpOk = $true; ExpectedTag = ''; ImageMatches = $true }
+        }
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
         Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
         { Wait-AfctHealth } | Should -Not -Throw
@@ -166,11 +177,11 @@ Describe 'Wait-AfctHealth failure modes' {
         { Wait-AfctHealth } | Should -Throw '*crash loop*'
         Should -Invoke Get-AfctAppContainerState -Exactly 3
     }
-    It 'still reports a plain timeout when the container never appears' {
+    It 'still reports a timeout when the container never appears' {
         $script:HealthTimeout = 3
         try {
             Mock -CommandName Get-AfctAppContainerState -MockWith { $null }
-            { Wait-AfctHealth } | Should -Throw '*did not become healthy*'
+            { Wait-AfctHealth } | Should -Throw '*did not finish starting*'
         } finally { $script:HealthTimeout = 30 }
     }
 }

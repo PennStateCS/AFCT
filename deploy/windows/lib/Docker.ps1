@@ -53,6 +53,25 @@ function Set-AfctRuntimeComposeEnv {
     $env:AFCT_RUNTIME_SHARED_DIR = ((Split-Path -Parent $EnvFile) -replace '\\', '/')
 }
 
+# NEVER pass a literal -d or -v to these helpers. Use --detach and --volumes.
+#
+# This is what made a Windows install hang for hours. `Invoke-AfctCompose up -d` looks like
+# it runs `docker compose up -d`, and it does not: the `[Parameter()]` attribute below makes
+# this an advanced function, which gives it PowerShell's common parameters, and a literal
+# `-d` is an unambiguous prefix of `-Debug`. PowerShell binds it there and it never reaches
+# docker. The command that actually ran was `docker compose up`, attached, which starts every
+# container and then streams their logs until interrupted. Docker Desktop showed the whole
+# stack running while the installer sat on one line forever, because from Compose's point of
+# view it was doing exactly what it was told.
+#
+# `-v` goes the same way, to `-Verbose`, which is how `down -v` in the uninstall path quietly
+# stopped removing the volumes it was asked to remove.
+#
+# Only literal tokens bind: a flag built into a variable is passed through. That is why this
+# survived review and testing and only showed up on a real machine. Short flags that collide
+# with no common parameter (-q, -f, -sf, -p) are safe, but the long form is the rule here so
+# nobody has to remember which ones those are.
+#
 # Invoke `docker compose` and return its combined output as strings. $LASTEXITCODE holds the
 # child exit code afterward. Never throws on a nonzero compose exit.
 function Invoke-AfctCompose {
@@ -73,6 +92,154 @@ function Invoke-AfctComposeConsole {
     $ErrorActionPreference = 'Continue'
     try { & docker @(Get-AfctComposeBaseArgs) @Args | Out-Host } finally { $ErrorActionPreference = $eap }
     return $LASTEXITCODE
+}
+
+# --------------------------------------------------------------------------- #
+# Bounded compose invocation
+# --------------------------------------------------------------------------- #
+# Starting the stack had no upper bound of any kind. The documented AFCT_HEALTH_TIMEOUT
+# governs the health wait, which does not begin until the CLI returns, so a CLI that never
+# returns is waited on forever.
+#
+# The swallowed `-d` above is what made that happen in practice, and it is fixed. This exists
+# because "the CLI came back" should not have been taken on trust in the first place: an
+# installer that can wait forever will eventually wait forever for some other reason, and an
+# instructor watching a frozen window has no way to tell the difference. A deadline means the
+# caller always gets an answer, and capturing the child's streams to files keeps this
+# process's pipeline out of the path of Compose's progress renderer as well.
+
+# Run a compose command with its output captured to files and a hard deadline. Returns
+# @{ ExitCode; TimedOut; StdOut; StdErr; Seconds }. Never throws; the caller decides what a
+# nonzero code or a timeout means.
+function Invoke-AfctComposeBounded {
+    param(
+        [int]$TimeoutSeconds,
+        # Named ComposeArgs, not Args: $Args is an automatic variable, and a parameter that
+        # shadows it reads back unreliably (notably inside a test double).
+        [Parameter(ValueFromRemainingArguments = $true)][string[]]$ComposeArgs
+    )
+    Set-AfctRuntimeComposeEnv
+
+    $stamp = [Guid]::NewGuid().ToString('N')
+    $outFile = Join-Path ([IO.Path]::GetTempPath()) "afct-compose-$stamp.out"
+    $errFile = Join-Path ([IO.Path]::GetTempPath()) "afct-compose-$stamp.err"
+
+    # Deterministic, non-interactive output for this one call. Compose reads both from the
+    # environment, and a version that does not know them ignores them, so no capability
+    # detection is needed. Scoped to this call: the image pull deliberately keeps Docker's
+    # interactive progress, which works well and is the one place a long wait is explained.
+    $savedAnsi = [Environment]::GetEnvironmentVariable('COMPOSE_ANSI')
+    $savedProgress = [Environment]::GetEnvironmentVariable('COMPOSE_PROGRESS')
+    $env:COMPOSE_ANSI = 'never'
+    $env:COMPOSE_PROGRESS = 'plain'
+
+    $started = Get-Date
+    try {
+        $all = @(Get-AfctComposeBaseArgs) + @($ComposeArgs)
+        # Quote here rather than handing Start-Process the array. -ArgumentList joins an
+        # array with spaces and quotes nothing, so the compose file path alone breaks the
+        # command for anybody whose profile directory has a space in it ("C:\Users\Jane
+        # Doe\..."), which is most people with a two-word name.
+        $proc = Start-Process -FilePath 'docker' -ArgumentList (ConvertTo-AfctCommandLine $all) `
+            -NoNewWindow -PassThru `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+        # Touch the handle. Start-Process -PassThru hands back a Process object that has not
+        # cached the native handle, and without it .ExitCode reads as $null even after a
+        # clean exit; every successful startup would then look like a failed one. Reading
+        # .Handle once is what caches it.
+        $null = $proc.Handle
+        $exited = $proc.WaitForExit($TimeoutSeconds * 1000)
+        if (-not $exited) {
+            Stop-AfctProcessTree $proc.Id
+            # Give the kill a moment to land so the output files are closed before they are
+            # read; a failure to reap is not worth failing the install over.
+            try { $proc.WaitForExit(5000) | Out-Null } catch { }
+            return @{
+                ExitCode = $null
+                TimedOut = $true
+                StdOut   = (Read-AfctTextFile $outFile)
+                StdErr   = (Read-AfctTextFile $errFile)
+                Seconds  = [int]((Get-Date) - $started).TotalSeconds
+            }
+        }
+        # The parameterless wait after a timed one, as .NET asks, so the child is fully
+        # reaped and ExitCode is populated rather than null.
+        $proc.WaitForExit()
+        return @{
+            ExitCode = $proc.ExitCode
+            TimedOut = $false
+            StdOut   = (Read-AfctTextFile $outFile)
+            StdErr   = (Read-AfctTextFile $errFile)
+            Seconds  = [int]((Get-Date) - $started).TotalSeconds
+        }
+    } finally {
+        if ($null -eq $savedAnsi) { Remove-Item Env:\COMPOSE_ANSI -ErrorAction SilentlyContinue }
+        else { $env:COMPOSE_ANSI = $savedAnsi }
+        if ($null -eq $savedProgress) { Remove-Item Env:\COMPOSE_PROGRESS -ErrorAction SilentlyContinue }
+        else { $env:COMPOSE_PROGRESS = $savedProgress }
+        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Build a Windows command line from an argument list.
+#
+# Anything containing whitespace or a quote is wrapped, and the backslash-before-quote rule
+# CommandLineToArgvW uses is honoured, so a path ending in a backslash does not escape the
+# closing quote. Without this, an install prefix with a space in it produces a command line
+# docker reads as extra arguments.
+function ConvertTo-AfctCommandLine {
+    param([string[]]$Arguments)
+    $parts = @()
+    foreach ($arg in $Arguments) {
+        if ($null -eq $arg) { continue }
+        if ($arg.Length -gt 0 -and $arg -notmatch '[\s"]') { $parts += $arg; continue }
+        $escaped = $arg -replace '(\\*)"', '$1$1\"'
+        $escaped = $escaped -replace '(\\+)$', '$1$1'
+        $parts += '"' + $escaped + '"'
+    }
+    return ($parts -join ' ')
+}
+
+# Read a captured stream as an array of lines. Missing or unreadable is an empty array, not
+# an error: this only ever runs while reporting something that already went wrong.
+function Read-AfctTextFile {
+    param([string]$Path)
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) { return @() }
+        return @(Get-Content -LiteralPath $Path -ErrorAction Stop)
+    } catch { return @() }
+}
+
+# Kill a stuck CLI and everything it started.
+#
+# The tree, not the process: `docker compose` runs the Compose binary as a child, so killing
+# docker.exe alone leaves that child behind still holding the same job. `taskkill /T` is the
+# Windows way to take the whole tree.
+#
+# This ends a *client* process. Containers belong to the Docker daemon and keep running
+# exactly as they were; nothing here stops, removes or recreates anything, and no volume is
+# touched. That is the entire reason a watchdog is safe to have: the worst case is that AFCT
+# stops watching a job the daemon has already finished.
+function Stop-AfctProcessTree {
+    param([int]$ProcessId)
+    try { & taskkill /PID $ProcessId /T /F *> $null } catch { }
+}
+
+# Does the installed Compose understand `up --wait`?
+#
+# Recorded rather than used. `up -d --wait` blocks until Compose decides the stack is up,
+# which would put the whole startup back behind one opaque call and take away the staged
+# progress an installer needs to not look frozen; and `--wait-timeout` bounds Compose's
+# waiting, not a process that has stopped making progress, which is the failure actually
+# seen. The bound comes from the watchdog above instead. Knowing whether the option exists
+# is still worth having in the deployment trace.
+function Test-AfctComposeSupportsWait {
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $out = & docker compose up --help 2>&1 | ForEach-Object { "$_" } }
+    finally { $ErrorActionPreference = $eap }
+    foreach ($line in @($out)) { if ($line -match '--wait\b') { return $true } }
+    return $false
 }
 
 # Fatal Docker Desktop preflight: the CLI must exist, the daemon must answer, and Compose v2
