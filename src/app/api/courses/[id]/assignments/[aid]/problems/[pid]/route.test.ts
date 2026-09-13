@@ -7,6 +7,11 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
     update: vi.fn(),
   },
+  // Lowering the points is refused below a grade already given, decided under the link's row
+  // lock so a grader cannot commit against the old maximum afterwards.
+  assignmentProblemGrade: { findFirst: vi.fn() },
+  $queryRaw: vi.fn(),
+  $transaction: vi.fn(),
   course: {
     findUnique: vi.fn(),
   },
@@ -39,7 +44,15 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
     prismaMock.assignmentProblem.findUnique.mockResolvedValue({
       assignment: { courseId: 'c1' },
       problem: { title: 'Problem 1' },
+      // The current points, which is what a lowering is measured against.
+      maxPoints: 10,
     });
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
+    // Nothing graded unless a test says otherwise.
+    prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
     prismaMock.assignmentProblem.update.mockResolvedValue({
       assignmentId: 'a1',
       problemId: 'p1',
@@ -98,6 +111,54 @@ describe('PUT /api/courses/[id]/[aid]/problems/[pid]', () => {
 
     const res = await PUT(req, { params: Promise.resolve({ id: 'c1', aid: 'a1', pid: 'p1' }) });
     expect(res.status).toBe(404);
+  });
+
+  /**
+   * Grades are checked against the points when they are entered, and nothing checked the other
+   * direction: dropping a 10-point problem to 5 left a student sitting at 10/5, which also
+   * reaches the LMS as a score above its own maximum.
+   */
+  describe('lowering the points', () => {
+    const setPointsTo = (maxPoints: number) =>
+      PUT(
+        new Request('http://localhost/x', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ maxPoints, maxSubmissions: -1, autograderEnabled: false }),
+        }),
+        { params: Promise.resolve({ id: 'c1', aid: 'a1', pid: 'p1' }) },
+      );
+
+    it('is refused below a grade already given', async () => {
+      prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ grade: 9 });
+
+      const res = await setPointsTo(5);
+
+      expect(res.status).toBe(409);
+      expect(prismaMock.assignmentProblem.update).not.toHaveBeenCalled();
+      await expect(res.json()).resolves.toMatchObject({ error: expect.stringContaining('9') });
+    });
+
+    it('is allowed when it still covers every grade given', async () => {
+      prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ grade: 4 });
+
+      expect((await setPointsTo(5)).status).toBe(200);
+      expect(prismaMock.assignmentProblem.update).toHaveBeenCalled();
+    });
+
+    it('holds the link row while it decides', async () => {
+      // The same row a grade write attaches to, so a grader validating against the old maximum
+      // cannot commit after the change.
+      await setPointsTo(5);
+
+      expect(String(prismaMock.$queryRaw.mock.calls[0]?.[0])).toContain('FOR UPDATE');
+    });
+
+    it('does not look at grades when the points are going up', async () => {
+      await setPointsTo(25);
+
+      expect(prismaMock.assignmentProblemGrade.findFirst).not.toHaveBeenCalled();
+    });
   });
 
   it('updates assignment problem settings', async () => {

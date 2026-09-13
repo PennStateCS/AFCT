@@ -14,6 +14,9 @@ import {
 // `string | undefined`) under noUncheckedIndexedAccess.
 type RouteCtx = { params: Promise<{ id: string; aid: string; pid: string }> };
 
+/** Thrown inside the settings transaction when the new points would sit below a grade given. */
+class MaxPointsBelowGradesError extends Error {}
+
 /**
  * Updates the per-assignment settings for one problem: its point value, submission
  * cap, and whether the autograder runs. Course staff (faculty or TAs) or a system
@@ -91,23 +94,68 @@ export const PUT = withCourseAuth(
         return NextResponse.json({ error: 'Assignment problem link not found.' }, { status: 404 });
       }
 
-      const updated = await prisma.assignmentProblem.update({
-        where: {
-          assignmentId_problemId: {
-            assignmentId,
-            problemId,
+      /**
+       * Lowering the points has to answer for the marks already given.
+       *
+       * Grades are validated against `maxPoints` when they are entered, and nothing checked the
+       * other direction: dropping a 10-point problem to 5 left a student sitting at 10/5. It
+       * reaches the LMS as `scoreGiven` above `scoreMaximum`, which is not a value AGS accepts.
+       *
+       * The link's row is held while this decides, which is also the row a grade write attaches
+       * to, so a grader validating against the old maximum cannot commit after the change.
+       */
+      let highestGrade: number | null = null;
+      const updated = await prisma
+        .$transaction(async (tx) => {
+          await tx.$queryRaw`
+          SELECT 1 FROM "AssignmentProblem"
+          WHERE "assignmentId" = ${assignmentId} AND "problemId" = ${problemId}
+          FOR UPDATE
+        `;
+
+          if (payload.maxPoints !== undefined && payload.maxPoints < link.maxPoints) {
+            const top = await tx.assignmentProblemGrade.findFirst({
+              where: { assignmentId, problemId },
+              orderBy: { grade: 'desc' },
+              select: { grade: true },
+            });
+            if (top?.grade != null && top.grade > payload.maxPoints) {
+              highestGrade = top.grade;
+              throw new MaxPointsBelowGradesError();
+            }
+          }
+
+          return tx.assignmentProblem.update({
+            where: {
+              assignmentId_problemId: {
+                assignmentId,
+                problemId,
+              },
+            },
+            data: payload,
+            select: {
+              assignmentId: true,
+              problemId: true,
+              maxPoints: true,
+              maxSubmissions: true,
+              autograderEnabled: true,
+              showFeedback: true,
+            },
+          });
+        })
+        .catch((err) => {
+          if (err instanceof MaxPointsBelowGradesError) return null;
+          throw err;
+        });
+
+      if (!updated) {
+        return NextResponse.json(
+          {
+            error: `A grade of ${highestGrade} has already been given on this problem, so it cannot be worth fewer than ${highestGrade} points. Change those grades first.`,
           },
-        },
-        data: payload,
-        select: {
-          assignmentId: true,
-          problemId: true,
-          maxPoints: true,
-          maxSubmissions: true,
-          autograderEnabled: true,
-          showFeedback: true,
-        },
-      });
+          { status: 409 },
+        );
+      }
 
       try {
         await createEnhancedActivityLog(prisma, req, {
