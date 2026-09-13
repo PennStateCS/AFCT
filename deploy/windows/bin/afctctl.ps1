@@ -99,20 +99,29 @@ if (-not [string]::IsNullOrEmpty($recordPath)) {
 # collected weeks later still says which tooling, which Docker, and which Compose project
 # produced it. Facts only: nothing here reads the environment file, so no configured value
 # can reach the log through this path.
+# A one-line answer from a bounded docker call, for the log header.
+function Format-AfctTraceResult {
+    param($Result)
+    if ($Result.TimedOut) { return 'did not respond' }
+    if ($Result.ExitCode -ne 0) { return 'unavailable' }
+    $line = (@($Result.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
+    if (-not $line) { return 'unknown' }
+    return $line.Trim()
+}
+
 function Write-AfctRunHeader {
     param([string]$Command)
     Write-AfctTrace '---'
     Write-AfctTrace "afctctl $Command (deployment tool $InstallerVersion)"
     Write-AfctTrace "prefix: $Prefix"
     if (Get-Command docker -ErrorAction SilentlyContinue) {
-        $eap = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
-        try {
-            $dv = & docker version --format '{{.Server.Version}}' 2>&1 | Select-Object -First 1
-            $cv = & docker compose version --short 2>&1 | Select-Object -First 1
-        } finally { $ErrorActionPreference = $eap }
-        Write-AfctTrace "docker engine: $dv"
-        Write-AfctTrace "docker compose: $cv"
+        # Bounded: this runs before every operational command, including the ones an
+        # operator reaches for when Docker Desktop is already misbehaving. Writing a header
+        # is never worth blocking the command it heads.
+        $dv = Invoke-AfctDockerBounded version --format '{{.Server.Version}}'
+        $cv = Invoke-AfctDockerBounded compose version --short
+        Write-AfctTrace ("docker engine: " + (Format-AfctTraceResult $dv))
+        Write-AfctTrace ("docker compose: " + (Format-AfctTraceResult $cv))
     } else {
         Write-AfctTrace 'docker: not on PATH'
     }

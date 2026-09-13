@@ -13,7 +13,7 @@ function Assert-AfctStack {
     if (-not (Test-Path -LiteralPath $RuntimeCompose)) {
         # Seed it from the active release if the template is present; otherwise the install
         # never completed.
-        if (Test-Path -LiteralPath $ComposeTemplate) { Sync-AfctRuntimeCompose }
+        if (Test-Path -LiteralPath $ComposeTemplate) { Sync-AfctRuntimeCompose | Out-Null }
         else { throw 'afct-fatal: no runtime Compose file was found. Run: afctctl install' }
     }
     if (-not (Test-Path -LiteralPath $EnvFile)) { throw 'afct-fatal: no configuration was found. Run: afctctl install' }
@@ -79,6 +79,25 @@ function Test-AfctDeploymentReady {
 # Nothing here stops, removes or recreates anything, and no configuration is rewritten: the
 # only two outcomes are "start it" and "leave it alone".
 function Invoke-AfctEnsureDeployed {
+    param([bool]$ForceReconcile)
+
+    # A new deployment-tool release can change the Compose definition itself: mounts,
+    # environment, health checks, security options, resource limits, networking, the
+    # container command. The new file is on disk the moment the release is installed, and
+    # the running containers know nothing about it. Skipping `up` because they look healthy
+    # would leave a deployment permanently running a configuration that no longer exists on
+    # disk, and the next thing to notice would be a support request.
+    #
+    # So a changed Compose file always gets one reconciliation pass. `up --detach` is the
+    # whole of it: Compose recreates only the services whose definition actually changed and
+    # leaves the rest alone. Nothing is stopped first, nothing is removed, no volume is
+    # touched.
+    if ($ForceReconcile) {
+        Write-AfctInfo 'the deployment configuration changed with this release; applying it to the running containers...'
+        Write-AfctTrace 'startup forced: runtime compose file changed'
+        Invoke-AfctDeployStack
+        return
+    }
     if (Test-AfctDeploymentReady) {
         Write-AfctSuccess 'AFCT is already running and healthy at the expected version.'
         Write-AfctTrace 'startup skipped: deployment already ready'
@@ -94,8 +113,9 @@ function Invoke-AfctEnsureDeployed {
 # original error still comes out unchanged, because replacing a real startup failure with
 # "could not collect diagnostics" would be strictly worse than having no bundle.
 function Invoke-AfctDeployWithDiagnostics {
+    param([bool]$ForceReconcile)
     try {
-        Invoke-AfctEnsureDeployed
+        Invoke-AfctEnsureDeployed -ForceReconcile:$ForceReconcile
     } catch {
         # Report the failure first, so the reason is on screen above the diagnostics run
         # rather than after it, then re-throw under the "already reported" sentinel so the
@@ -134,7 +154,9 @@ function Invoke-AfctInstall {
     param([bool]$Yes, [bool]$NonInteractive, [bool]$Reconfigure, [bool]$WithUpdater)
 
     Assert-AfctDockerReady
-    Sync-AfctRuntimeCompose
+    # Captured, not discarded: whether this release changed the Compose definition decides
+    # whether a healthy-looking stack may be left alone below.
+    $composeChanged = [bool](Sync-AfctRuntimeCompose)
 
     Test-AfctInstallDiskSpace
     if (-not (Test-AfctClockSync)) {
@@ -158,7 +180,7 @@ function Invoke-AfctInstall {
         # This path deploys without rewriting the file, so the key has to be topped up here.
         Confirm-AfctSecretKey $EnvFile
         Confirm-AfctBackupKey $EnvFile
-        Invoke-AfctDeployWithDiagnostics
+        Invoke-AfctDeployWithDiagnostics -ForceReconcile:$composeChanged
         $cfg = @{
             AppUrl = (Read-AfctEnvValue 'NEXTAUTH_URL' $EnvFile)
             AdminEmail = (Read-AfctEnvValue 'ADMIN_EMAIL' $EnvFile)
@@ -191,7 +213,7 @@ function Invoke-AfctInstall {
     # leaves the running version alone.
     if (-not $reconfiguring) { Set-AfctReleasePin }
 
-    Invoke-AfctDeployWithDiagnostics
+    Invoke-AfctDeployWithDiagnostics -ForceReconcile:$composeChanged
     Show-AfctCompletion $cfg
     Invoke-AfctMaybeEnableUpdater -WithUpdater:$WithUpdater -NonInteractive:$NonInteractive
 }

@@ -23,7 +23,8 @@ mocked, so none of this needs a Docker daemon.
 BeforeAll {
     $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
     $script:LibDir   = Join-Path $RepoRoot 'deploy\windows\lib'
-    foreach ($m in 'Output', 'Docker', 'Validation', 'Environment', 'Config', 'Compose', 'Diagnostics', 'Doctor') {
+    foreach ($m in 'Output', 'Docker', 'Validation', 'Environment', 'Config', 'Compose',
+                   'Update', 'Diagnostics', 'Doctor') {
         . (Join-Path $LibDir "$m.ps1")
     }
 
@@ -45,6 +46,9 @@ BeforeAll {
     $script:HealthTimeout  = 30
     $script:HealthInterval = 1
     $script:InstallerVersion = 'test'
+    $script:UpdaterService   = 'updater'
+    $script:InstallerBaseUrl = 'https://example.invalid'
+    $script:Prefix           = Join-Path $Work 'My AFCT'
 
     # Build a docker shim with the given .cmd body and put it first on PATH.
     function Use-DockerShim {
@@ -258,6 +262,132 @@ Describe 'Compose flags that PowerShell would otherwise swallow' {
     }
 }
 
+<#
+  A long Compose call must not look like a dead terminal.
+
+  `up --detach` is most of the wait on a first install, because Compose honours the
+  dependency conditions itself: it does not return until postgres is healthy, then the app
+  is healthy, then nginx has started. The per-service progress cannot begin until then, so
+  without this the window shows one line for minutes.
+#>
+Describe 'Startup heartbeat' {
+    AfterEach { $env:PATH = $script:OriginalPath }
+
+    It 'reports that it is still waiting, without extending the deadline' {
+        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        $script:beats = New-Object System.Collections.ArrayList
+        $started = Get-Date
+
+        $r = Invoke-AfctNativeBounded -FilePath 'docker' -ArgumentList @('compose', 'up') `
+            -TimeoutSeconds 4 -HeartbeatSeconds 1 -OnHeartbeat {
+                param($elapsed) $null = $script:beats.Add($elapsed)
+            }
+
+        $r.TimedOut | Should -BeTrue
+        # Several beats, and the last one strictly inside the deadline: a heartbeat that
+        # fired on the way out would prove nothing about the terminal staying alive.
+        @($script:beats).Count | Should -BeGreaterThan 1
+        ($script:beats | Select-Object -Last 1) | Should -BeLessThan 4
+        # And the deadline itself is unchanged by the slicing.
+        ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 20
+    }
+
+    It 'does not fire a heartbeat when the command returns promptly' {
+        Use-DockerShim "@echo off`r`nexit /b 0"
+        $script:beats = New-Object System.Collections.ArrayList
+        Invoke-AfctNativeBounded -FilePath 'docker' -ArgumentList @('compose', 'ps') `
+            -TimeoutSeconds 30 -HeartbeatSeconds 1 -OnHeartbeat {
+                param($elapsed) $null = $script:beats.Add($elapsed)
+            } | Out-Null
+        @($script:beats).Count | Should -Be 0
+    }
+
+    It 'prints a still-waiting line from the startup path' {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            # Stand in for Compose taking its time: fire the caller's own heartbeat block.
+            & $OnHeartbeat 30
+            & $OnHeartbeat 60
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 65 }
+        }
+        Start-AfctStack -TimeoutSeconds 300 | Out-Null
+        Should -Invoke Write-AfctInfo -ParameterFilter {
+            $Message -eq 'Docker Compose is still starting containers after 30s...'
+        }
+        Should -Invoke Write-AfctInfo -ParameterFilter {
+            $Message -eq 'Docker Compose is still starting containers after 60s...'
+        }
+    }
+}
+
+<#
+  Bounded inspection.
+
+  Diagnostics run after something has already failed, which is when the daemon is most
+  likely to be wedged. An unbounded inspection there replaces a reported failure with an
+  unreported one: "Collecting diagnostics..." and then nothing, forever.
+#>
+Describe 'Docker inspection cannot hang' {
+    AfterEach { $env:PATH = $script:OriginalPath }
+
+    It 'treats a wedged daemon as not ready rather than waiting for it' {
+        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        $env:AFCT_DOCKER_COMMAND_TIMEOUT = '2'
+        try {
+            $started = Get-Date
+            Test-AfctDockerReady | Should -BeFalse
+            ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 30
+        } finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
+    }
+
+    It 'says so, rather than hanging, when the preflight gets no answer' {
+        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        $env:AFCT_DOCKER_COMMAND_TIMEOUT = '2'
+        try { { Assert-AfctDockerReady } | Should -Throw '*did not respond*' }
+        finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
+    }
+
+    It 'reads a service as missing when compose ps or inspect never answers' {
+        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        $env:AFCT_DOCKER_COMMAND_TIMEOUT = '2'
+        try {
+            $started = Get-Date
+            Get-AfctServiceState 'app' | Should -Be 'missing|none|'
+            ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 30
+        } finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
+    }
+
+    It 'leaves no child process behind after a bounded inspection times out' {
+        Use-DockerShim "@echo off`r`nping -n 121 127.0.0.1 >nul`r`nexit /b 0"
+        Invoke-AfctDockerBounded -TimeoutSeconds 2 info | Out-Null
+        Start-Sleep -Seconds 1
+        @(Get-CimInstance Win32_Process -Filter "Name='PING.EXE'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -and $_.CommandLine -match '-n 121' }).Count | Should -Be 0
+    }
+
+    It 'records the timeout in the diagnostics bundle instead of an empty file' {
+        $dir = Join-Path $Work ('diag-' + [Guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        Save-AfctDiagnosticCommand $dir 'docker-info.txt' {
+            @{ TimedOut = $true; ExitCode = $null; StdOut = @('partial line'); StdErr = @() }
+        }
+        Test-Path -LiteralPath (Join-Path $dir 'docker-info.txt.timed-out.txt') | Should -BeTrue
+        $text = Get-Content -LiteralPath (Join-Path $dir 'docker-info.txt.timed-out.txt') -Raw
+        $text | Should -Match 'did not respond'
+        # Whatever it managed to say is kept: a partial answer is still evidence.
+        $text | Should -Match 'partial line'
+    }
+
+    It 'keeps collecting after one step fails outright' {
+        $dir = Join-Path $Work ('diag2-' + [Guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        { Save-AfctDiagnosticCommand $dir 'compose-ps.txt' { throw 'daemon exploded' } } | Should -Not -Throw
+        Test-Path -LiteralPath (Join-Path $dir 'compose-ps.txt.failed.txt') | Should -BeTrue
+    }
+}
+
 Describe 'Test-AfctServiceReady' {
     <#
       The worker defines no Docker health check, so Docker reports its health as "none".
@@ -284,10 +414,12 @@ Describe 'Get-AfctStackState' {
     BeforeEach {
         Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
         Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v1.2.3') -Encoding UTF8
+        Remove-Item Env:\AFCT_APP_TAG -ErrorAction SilentlyContinue
     }
 
     It 'is ready when every service is where it should be' {
         Mock -CommandName Get-AfctServiceState -MockWith {
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:abc' }
             if ($Service -eq 'worker') { return 'running|none|ghcr.io/x/afct-dashboard:v1.2.3' }
             return 'running|healthy|ghcr.io/x/afct-dashboard:v1.2.3'
         }
@@ -324,20 +456,115 @@ Describe 'Get-AfctStackState' {
         ($s.Services | Where-Object { $_.Name -eq 'postgres' }).Ready | Should -BeTrue
     }
 
-    It 'reports a version mismatch even when everything is running' {
+    <#
+      Every AFCT service is published under one release tag, so a stack whose app is new and
+      whose worker is a release behind is two releases sharing a database, not a deployment
+      anybody asked for. Checking the app alone called that correct.
+    #>
+    It 'rejects the deployment when any single versioned service is stale' -ForEach @(
+        @{ Stale = 'app' }, @{ Stale = 'worker' }, @{ Stale = 'nginx' }, @{ Stale = 'db-backup' }
+    ) {
+        $target = $Stale
         Mock -CommandName Get-AfctServiceState -MockWith {
-            if ($Service -eq 'worker') { return 'running|none|img:v0.9.0' }
-            return 'running|healthy|img:v0.9.0'
+            $tag = 'v1.2.3'
+            if ($Service -eq $target) { $tag = 'v0.9.9' }
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:abc' }
+            if ($Service -eq 'worker') { return "running|none|img:$tag" }
+            return "running|healthy|img:$tag"
         }
         $s = Get-AfctStackState
+        # Everything is up. That is exactly why the version check has to be separate.
         $s.AllReady | Should -BeTrue
         $s.ImageMatches | Should -BeFalse
+        @(Get-AfctStaleServices $s).Name | Should -Be $target
+    }
+
+    It 'ignores PostgreSQL, which is pinned by digest on its own schedule' {
+        Mock -CommandName Get-AfctServiceState -MockWith {
+            # A digest-pinned reference whose last colon belongs to the digest, not a tag.
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:deadbeef' }
+            if ($Service -eq 'worker') { return 'running|none|img:v1.2.3' }
+            return 'running|healthy|img:v1.2.3'
+        }
+        $s = Get-AfctStackState
+        $s.ImageMatches | Should -BeTrue
+        ($s.Services | Where-Object { $_.Name -eq 'postgres' }).Versioned | Should -BeFalse
+        ($s.Services | Where-Object { $_.Name -eq 'postgres' }).ExpectedImageTag | Should -Be ''
     }
 
     It 'skips the HTTP probe when asked to' {
         Mock -CommandName Get-AfctServiceState -MockWith { 'running|healthy|img:v1.2.3' }
         Get-AfctStackState -SkipHttp | Out-Null
         Should -Invoke Test-AfctHttpHealth -Exactly 0
+    }
+}
+
+<#
+Which release a deployment is supposed to be running.
+
+Compose resolves ${AFCT_APP_TAG:-main} from the process environment first and the env file
+second. Anything that asks "is the right version running" has to resolve it the same way,
+or a cross-version update whose CLI times out compares correctly-started new containers
+against the old pin still sitting in .env.production and calls them stale.
+#>
+Describe 'Get-AfctEffectiveAppTag' {
+    BeforeEach { Remove-Item Env:\AFCT_APP_TAG -ErrorAction SilentlyContinue }
+    AfterAll   { Remove-Item Env:\AFCT_APP_TAG -ErrorAction SilentlyContinue }
+
+    It 'reads the env file when nothing is exported' {
+        Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v1.2.3') -Encoding UTF8
+        Get-AfctEffectiveAppTag | Should -Be 'v1.2.3'
+    }
+
+    It 'uses the exported value when the env file has none' {
+        Set-Content -LiteralPath $EnvFile -Value @('ADMIN_EMAIL=a@b.c') -Encoding UTF8
+        $env:AFCT_APP_TAG = 'v2.0.0'
+        Get-AfctEffectiveAppTag | Should -Be 'v2.0.0'
+    }
+
+    It 'prefers the exported value over the env file, as Compose does' {
+        Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v1.2.3') -Encoding UTF8
+        $env:AFCT_APP_TAG = 'v2.0.0'
+        Get-AfctEffectiveAppTag | Should -Be 'v2.0.0'
+    }
+
+    It 'falls back to main, which is the Compose file default' {
+        Set-Content -LiteralPath $EnvFile -Value @('ADMIN_EMAIL=a@b.c') -Encoding UTF8
+        Get-AfctEffectiveAppTag | Should -Be 'main'
+    }
+
+    <#
+      The update-specific bug. A cross-version update exports the new tag and only writes it
+      into .env.production after the update succeeds. If the Compose CLI times out during
+      that window, the recovery check must judge the containers against the release being
+      deployed, not the one still recorded on disk.
+    #>
+    It 'judges a mid-update deployment against the release being deployed' {
+        Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v0.9.9') -Encoding UTF8
+        $env:AFCT_APP_TAG = 'v1.0.0'
+        Mock -CommandName Get-AfctServiceState -MockWith {
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:abc' }
+            if ($Service -eq 'worker') { return 'running|none|img:v1.0.0' }
+            return 'running|healthy|img:v1.0.0'
+        }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+
+        $s = Get-AfctStackState
+        $s.ExpectedTag | Should -Be 'v1.0.0'
+        $s.ImageMatches | Should -BeTrue
+    }
+
+    It 'still rejects containers left on the old release mid-update' {
+        Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v0.9.9') -Encoding UTF8
+        $env:AFCT_APP_TAG = 'v1.0.0'
+        Mock -CommandName Get-AfctServiceState -MockWith {
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:abc' }
+            if ($Service -eq 'worker') { return 'running|none|img:v0.9.9' }
+            return 'running|healthy|img:v0.9.9'
+        }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+
+        (Get-AfctStackState).ImageMatches | Should -BeFalse
     }
 }
 
@@ -392,7 +619,7 @@ Describe 'Wait-AfctHealth' {
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{
                 Services = @([pscustomobject]@{ Name = 'nginx'; Label = 'nginx'; Status = 'missing'
-                                                Health = 'none'; Image = ''; Ready = $false })
+                                                Health = 'none'; Image = ''; Ready = $false ; Versioned = $true; ExpectedImageTag = 'v1.2.3'; ActualImageTag = 'v1.2.3'; ImageMatches = $true })
                 AllReady = $false; AppReady = $false; HttpOk = $false
                 ExpectedTag = ''; ImageMatches = $true }
         }
@@ -412,7 +639,7 @@ Describe 'Wait-AfctHealth' {
             [pscustomobject]@{
                 Services = @(
                     [pscustomobject]@{ Name = 'postgres'; Label = 'PostgreSQL'; Status = 'running'
-                                       Health = 'healthy'; Image = 'p'; Ready = $true },
+                                       Health = 'healthy'; Image = 'p'; Ready = $true ; Versioned = $true; ExpectedImageTag = 'v1.2.3'; ActualImageTag = 'v1.2.3'; ImageMatches = $true },
                     [pscustomobject]@{ Name = 'app'; Label = 'AFCT application'
                                        Status = 'running'
                                        Health = $(if ($ready) { 'healthy' } else { 'starting' })
@@ -428,6 +655,135 @@ Describe 'Wait-AfctHealth' {
         Should -Invoke Write-AfctInfo -ParameterFilter { $Message -eq 'AFCT application is starting...' }
         Should -Invoke Write-AfctSuccess -ParameterFilter { $Message -eq 'PostgreSQL is healthy.' }
         Should -Invoke Write-AfctSuccess -ParameterFilter { $Message -eq 'AFCT application is healthy.' }
+    }
+}
+
+<#
+  Ready has to mean the same thing everywhere.
+
+  The health wait used to warn on a failed HTTP probe and return success anyway, so the
+  installer could announce "AFCT Dashboard is ready" for a deployment that served nothing.
+  The rerun check called that same state not-ready, so the installer and the thing that
+  verifies the installer disagreed about what finishing meant.
+#>
+Describe 'HTTP health is part of being ready' {
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Start-Sleep -MockWith { }
+        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
+        Mock -CommandName Get-AfctStackState -MockWith {
+            [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $true
+                               ExpectedTag = ''; ImageMatches = $true }
+        }
+    }
+
+    It 'succeeds when the web service answers straight away' {
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+        { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Not -Throw
+        Should -Invoke Test-AfctHttpHealth -Exactly 1
+    }
+
+    <#
+      nginx accepts connections a moment before the app answers through it, so one miss is
+      normal and must not fail an otherwise good install.
+    #>
+    It 'keeps polling when the web service is not up yet' {
+        $script:httpCalls = 0
+        Mock -CommandName Test-AfctHttpHealth -MockWith {
+            $script:httpCalls++
+            return ($script:httpCalls -ge 3)
+        }
+        { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Not -Throw
+        $script:httpCalls | Should -Be 3
+        # Said once, not once per poll.
+        Should -Invoke Write-AfctInfo -Exactly 1 -ParameterFilter {
+            $Message -eq 'Containers are healthy; waiting for the web service...'
+        }
+    }
+
+    It 'fails, naming the web service, when it never answers' {
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $false }
+        { Wait-AfctHealth -TimeoutSeconds 5 } | Should -Throw '*web service never answered*'
+    }
+
+    It 'never reports success while the web service is silent' {
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $false }
+        try { Wait-AfctHealth -TimeoutSeconds 5 } catch { }
+        Should -Invoke Write-AfctSuccess -Exactly 0 -ParameterFilter { $Message -match 'responding at' }
+    }
+}
+
+<#
+  One budget, spent in order.
+
+  Compose honours the dependency conditions itself, so `up` is already most of the wait.
+  Giving the health wait a fresh full timeout afterwards would quietly turn a configured 300
+  seconds into 600.
+#>
+Describe 'The shared startup budget' {
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Test-AfctComposeConfig -MockWith { }
+        Mock -CommandName Wait-AfctHealth -MockWith { }
+    }
+
+    It 'gives the health wait only what startup left' {
+        $script:HealthTimeout = 300
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 250 }
+        }
+        Invoke-AfctStartAndWait
+        Should -Invoke Wait-AfctHealth -Exactly 1 -ParameterFilter { $TimeoutSeconds -eq 50 }
+    }
+
+    It 'still calls the health wait when startup used the whole budget' {
+        # The floor inside Wait-AfctHealth keeps a zero or negative remainder from turning
+        # into an immediate silent success.
+        $script:HealthTimeout = 300
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 300 }
+        }
+        Invoke-AfctStartAndWait
+        Should -Invoke Wait-AfctHealth -Exactly 1 -ParameterFilter { $TimeoutSeconds -le 0 }
+    }
+}
+
+<#
+  A release can change the Compose definition itself.
+
+  The new file lands on disk when the release is installed; the running containers know
+  nothing about it. A rerun that skipped `up` because everything looked healthy would leave
+  the deployment permanently running a configuration that no longer exists.
+#>
+Describe 'Sync-AfctRuntimeCompose reports whether it changed anything' {
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        $script:ComposeTemplate = Join-Path $Work ('tmpl-' + [Guid]::NewGuid().ToString('N') + '.yml')
+        $script:RuntimeCompose  = Join-Path $RuntimeDir 'docker-compose.yml'
+        Set-Content -LiteralPath $ComposeTemplate -Value 'services: { app: {} }' -Encoding UTF8
+        Remove-Item -LiteralPath $RuntimeCompose -Force -ErrorAction SilentlyContinue
+    }
+
+    It 'is true on the first seed' {
+        Sync-AfctRuntimeCompose | Should -BeTrue
+    }
+
+    It 'is false when the template is byte-identical to what is already there' {
+        Sync-AfctRuntimeCompose | Out-Null
+        Sync-AfctRuntimeCompose | Should -BeFalse
+    }
+
+    It 'is true when the release changed the definition, and keeps the old one' {
+        Sync-AfctRuntimeCompose | Out-Null
+        Set-Content -LiteralPath $ComposeTemplate -Value 'services: { app: { read_only: true } }' -Encoding UTF8
+        Sync-AfctRuntimeCompose | Should -BeTrue
+        @(Get-ChildItem -LiteralPath $RuntimeDir -Filter 'docker-compose.yml.bak.*').Count |
+            Should -BeGreaterThan 0
     }
 }
 

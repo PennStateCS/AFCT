@@ -60,6 +60,27 @@ function Get-AfctReleaseTags {
 # build) so a box runs a reproducible version. An explicit AFCT_APP_TAG is honored only if
 # it names a real release (validated against the manifest when reachable). An existing
 # release pin is left alone.
+# Which release this deployment should be running, right now.
+#
+# Compose resolves `${AFCT_APP_TAG:-main}` from the process environment first and the
+# --env-file second, so anything that asks "is the right version running" has to resolve it
+# the same way or it will disagree with the containers it is looking at.
+#
+# The case that made this matter: a cross-version update exports AFCT_APP_TAG for the new
+# release and only writes it back into .env.production once the update succeeds. Reading the
+# file alone during that window answers with the OLD release, so a timeout-recovery check
+# would look at correctly-started new containers and call them stale.
+#
+# `main` is the last resort because that is the compose file's own default; a deployment with
+# no pin anywhere is running main by definition, not running nothing.
+function Get-AfctEffectiveAppTag {
+    $fromProcess = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
+    if (-not [string]::IsNullOrWhiteSpace($fromProcess)) { return $fromProcess }
+    $fromFile = Read-AfctEnvValue 'AFCT_APP_TAG' $EnvFile
+    if (-not [string]::IsNullOrWhiteSpace($fromFile)) { return $fromFile }
+    return 'main'
+}
+
 function Set-AfctReleasePin {
     $existing = Read-AfctEnvValue 'AFCT_APP_TAG' $EnvFile
     if ($existing -and $existing -cne 'main') { return }
@@ -337,7 +358,23 @@ function Invoke-AfctEnableUpdater {
 # Non-fatal: the base stack is already healthy. EXPERIMENTAL on Windows.
 function Invoke-AfctMaybeEnableUpdater {
     param([bool]$WithUpdater, [bool]$NonInteractive)
-    if ((Read-AfctEnvValue 'AFCT_UPDATER_ENABLED' $EnvFile) -eq 'true') { return }
+    if ((Read-AfctEnvValue 'AFCT_UPDATER_ENABLED' $EnvFile) -eq 'true') {
+        # "The flag says enabled" was taken as "the updater is running", so a deployment
+        # whose updater container had gone (an interrupted install, a manual removal) was
+        # never repaired: the enable path declined because the flag was already true, and
+        # nothing else looked. Ask the container, not the file.
+        #
+        # Repaired, not enforced. The updater is optional and experimental on Windows, and
+        # AFCT itself is already up by the time this runs, so a sidecar that will not start
+        # is worth saying out loud and nothing more.
+        $state = Get-AfctServiceState $UpdaterService
+        if (($state -split '\|', 3)[0] -eq 'missing') {
+            Write-AfctWarn 'the in-app updater is enabled in the configuration but its container is not running; starting it.'
+            if (Start-AfctUpdater) { Write-AfctSuccess 'In-app updater restarted.' }
+            else { Write-AfctWarn "the in-app updater could not be started. AFCT is unaffected; run 'afctctl enable-updater' to retry, or 'afctctl disable-updater' to turn it off." }
+        }
+        return
+    }
     if (-not $WithUpdater) {
         if ($NonInteractive -or [Console]::IsInputRedirected) { return }
         Write-AfctInfo 'Optional: the in-app updater sidecar lets admins upgrade and downgrade AFCT from'

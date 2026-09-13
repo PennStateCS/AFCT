@@ -58,6 +58,32 @@ function Hide-AfctSecretsInTree {
     }
 }
 
+# Run one bounded collection step and write what it produced into the bundle.
+#
+# A timeout is recorded as a file saying so, rather than an empty one or a missing one: the
+# difference between "Docker said nothing" and "Docker never answered" is most of the
+# diagnosis. Never throws, so one uncollectable item cannot cost the whole bundle.
+function Save-AfctDiagnosticCommand {
+    param([string]$BundleDir, [string]$Name, [scriptblock]$Collect)
+    $target = Join-Path $BundleDir $Name
+    try {
+        $result = & $Collect
+        if ($result.TimedOut) {
+            $lines = @(
+                'This command did not respond within its time limit and was stopped.',
+                'Docker Desktop was most likely unresponsive when these diagnostics were collected.',
+                'Partial output, if any, follows.',
+                ''
+            ) + @($result.StdOut) + @($result.StdErr)
+            Set-Content -LiteralPath "$target.timed-out.txt" -Encoding UTF8 -Value $lines
+            return
+        }
+        Set-Content -LiteralPath $target -Encoding UTF8 -Value (@($result.StdOut) + @($result.StdErr))
+    } catch {
+        Set-Content -LiteralPath "$target.failed.txt" -Encoding UTF8 -Value "Could not collect: $($_.Exception.Message)"
+    }
+}
+
 function Invoke-AfctDiagnostics {
     param([string]$Reason = 'manual')
     $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -79,12 +105,28 @@ function Invoke-AfctDiagnostics {
     )
     Set-Content -LiteralPath (Join-Path $bundleDir 'system.txt') -Value $sysLines -Encoding UTF8
 
+    <#
+      Every Docker call here is bounded, and this is the reason the bounding exists.
+
+      Diagnostics run after something has already failed, which is exactly when the daemon
+      is most likely to be wedged. Unbounded, the installer would print "Collecting
+      diagnostics..." and hang there forever, having replaced a reported failure with an
+      unreported one. A command that does not answer records that it did not answer and the
+      collection moves on: a bundle that says "docker info timed out" is a useful bundle.
+    #>
     if (Test-AfctDockerReady) {
-        & docker version *>&1 | Set-Content (Join-Path $bundleDir 'docker-version.txt')
-        & docker info *>&1 | Set-Content (Join-Path $bundleDir 'docker-info.txt')
+        Save-AfctDiagnosticCommand $bundleDir 'docker-version.txt' { Invoke-AfctDockerBounded version }
+        Save-AfctDiagnosticCommand $bundleDir 'docker-info.txt'    { Invoke-AfctDockerBounded info }
         if (Test-Path -LiteralPath $RuntimeCompose) {
-            Invoke-AfctCompose ps *>&1 | Set-Content (Join-Path $bundleDir 'compose-ps.txt')
-            Invoke-AfctCompose logs --no-color --tail 400 *>&1 | Set-Content (Join-Path $bundleDir 'compose-logs.txt')
+            Save-AfctDiagnosticCommand $bundleDir 'compose-ps.txt' {
+                Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerCommandTimeout) ps
+            }
+            # Logs get a longer allowance than an inspection: 400 lines from six services is
+            # real work even on a healthy daemon, and this is the single most useful file in
+            # the bundle.
+            Save-AfctDiagnosticCommand $bundleDir 'compose-logs.txt' {
+                Invoke-AfctComposeBounded -TimeoutSeconds ((Get-AfctDockerCommandTimeout) * 3) logs --no-color --tail 400
+            }
         }
     } else {
         Set-Content -LiteralPath (Join-Path $bundleDir 'docker-unavailable.txt') -Value 'Docker Desktop was unavailable or its daemon could not be reached.'

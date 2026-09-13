@@ -12,7 +12,14 @@ Set-StrictMode -Version Latest
 # throws; used by read-only/soft paths such as uninstall and diagnostics.
 function Test-AfctDockerReady {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
-    try { & docker info *> $null; return ($LASTEXITCODE -eq 0) } catch { return $false }
+    # Bounded, because `docker info` against a half-started or wedged Docker Desktop does not
+    # answer at all. This is called from uninstall and diagnostics, which run precisely when
+    # something is already wrong, so a daemon that never replies has to read as "not ready"
+    # rather than as a place to wait forever.
+    try {
+        $r = Invoke-AfctDockerBounded info
+        return ((-not $r.TimedOut) -and $r.ExitCode -eq 0)
+    } catch { return $false }
 }
 
 # Resolve the Compose project name (keeps data volumes attached). Persisted in deploy.state
@@ -108,39 +115,42 @@ function Invoke-AfctComposeConsole {
 # caller always gets an answer, and capturing the child's streams to files keeps this
 # process's pipeline out of the path of Compose's progress renderer as well.
 
-# Run a compose command with its output captured to files and a hard deadline. Returns
-# @{ ExitCode; TimedOut; StdOut; StdErr; Seconds }. Never throws; the caller decides what a
-# nonzero code or a timeout means.
-function Invoke-AfctComposeBounded {
+# How long any single Docker inspection may take before it is assumed wedged. Short, because
+# every command bounded by it answers in well under a second on a working daemon; the only
+# thing this number changes is how long a broken one can hold the installer.
+function Get-AfctDockerCommandTimeout {
+    $v = [int]([Environment]::GetEnvironmentVariable('AFCT_DOCKER_COMMAND_TIMEOUT'))
+    if ($v -le 0) { $v = 20 }
+    return $v
+}
+
+# Run a native command with its output captured to files and a hard deadline.
+#
+# Returns @{ ExitCode; TimedOut; StdOut; StdErr; Seconds }. Never throws: the caller decides
+# what a nonzero code or a timeout means. On a timeout the whole process tree is killed and
+# ExitCode is $null.
+#
+# -OnHeartbeat is called with the elapsed seconds roughly every -HeartbeatSeconds while the
+# wait runs long, so a caller can keep the terminal alive without this function knowing
+# anything about what it is running.
+function Invoke-AfctNativeBounded {
     param(
+        [string]$FilePath,
+        [string[]]$ArgumentList,
         [int]$TimeoutSeconds,
-        # Named ComposeArgs, not Args: $Args is an automatic variable, and a parameter that
-        # shadows it reads back unreliably (notably inside a test double).
-        [Parameter(ValueFromRemainingArguments = $true)][string[]]$ComposeArgs
+        [scriptblock]$OnHeartbeat,
+        [int]$HeartbeatSeconds = 30
     )
-    Set-AfctRuntimeComposeEnv
-
     $stamp = [Guid]::NewGuid().ToString('N')
-    $outFile = Join-Path ([IO.Path]::GetTempPath()) "afct-compose-$stamp.out"
-    $errFile = Join-Path ([IO.Path]::GetTempPath()) "afct-compose-$stamp.err"
-
-    # Deterministic, non-interactive output for this one call. Compose reads both from the
-    # environment, and a version that does not know them ignores them, so no capability
-    # detection is needed. Scoped to this call: the image pull deliberately keeps Docker's
-    # interactive progress, which works well and is the one place a long wait is explained.
-    $savedAnsi = [Environment]::GetEnvironmentVariable('COMPOSE_ANSI')
-    $savedProgress = [Environment]::GetEnvironmentVariable('COMPOSE_PROGRESS')
-    $env:COMPOSE_ANSI = 'never'
-    $env:COMPOSE_PROGRESS = 'plain'
-
+    $outFile = Join-Path ([IO.Path]::GetTempPath()) "afct-native-$stamp.out"
+    $errFile = Join-Path ([IO.Path]::GetTempPath()) "afct-native-$stamp.err"
     $started = Get-Date
     try {
-        $all = @(Get-AfctComposeBaseArgs) + @($ComposeArgs)
         # Quote here rather than handing Start-Process the array. -ArgumentList joins an
         # array with spaces and quotes nothing, so the compose file path alone breaks the
         # command for anybody whose profile directory has a space in it ("C:\Users\Jane
         # Doe\..."), which is most people with a two-word name.
-        $proc = Start-Process -FilePath 'docker' -ArgumentList (ConvertTo-AfctCommandLine $all) `
+        $proc = Start-Process -FilePath $FilePath -ArgumentList (ConvertTo-AfctCommandLine $ArgumentList) `
             -NoNewWindow -PassThru `
             -RedirectStandardOutput $outFile -RedirectStandardError $errFile
         # Touch the handle. Start-Process -PassThru hands back a Process object that has not
@@ -148,7 +158,20 @@ function Invoke-AfctComposeBounded {
         # clean exit; every successful startup would then look like a failed one. Reading
         # .Handle once is what caches it.
         $null = $proc.Handle
-        $exited = $proc.WaitForExit($TimeoutSeconds * 1000)
+
+        # Waited in slices rather than one long block, purely so a heartbeat can fire. The
+        # deadline is unchanged: the slices add up to exactly $TimeoutSeconds.
+        $slice = $HeartbeatSeconds
+        if ($slice -le 0 -or $slice -gt $TimeoutSeconds) { $slice = $TimeoutSeconds }
+        $waited = 0
+        $exited = $false
+        while ($waited -lt $TimeoutSeconds) {
+            $chunk = [Math]::Min($slice, $TimeoutSeconds - $waited)
+            if ($proc.WaitForExit($chunk * 1000)) { $exited = $true; break }
+            $waited += $chunk
+            if ($OnHeartbeat -and $waited -lt $TimeoutSeconds) { & $OnHeartbeat $waited }
+        }
+
         if (-not $exited) {
             Stop-AfctProcessTree $proc.Id
             # Give the kill a moment to land so the output files are closed before they are
@@ -173,11 +196,56 @@ function Invoke-AfctComposeBounded {
             Seconds  = [int]((Get-Date) - $started).TotalSeconds
         }
     } finally {
+        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# A plain `docker ...` call with a short deadline. For inspection: reading state, versions,
+# and anything collected while something has already gone wrong. A wedged daemon answers
+# none of these, and an installer that hangs while reporting a hang is worse than useless.
+function Invoke-AfctDockerBounded {
+    param(
+        [int]$TimeoutSeconds = 0,
+        [Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$DockerArgs
+    )
+    if ($TimeoutSeconds -le 0) { $TimeoutSeconds = Get-AfctDockerCommandTimeout }
+    return Invoke-AfctNativeBounded -FilePath 'docker' -ArgumentList $DockerArgs -TimeoutSeconds $TimeoutSeconds
+}
+
+# A `docker compose ...` call with a deadline, carrying this deployment's project, profile,
+# compose file and env file.
+function Invoke-AfctComposeBounded {
+    param(
+        [int]$TimeoutSeconds,
+        [scriptblock]$OnHeartbeat,
+        # Named ComposeArgs, not Args: $Args is an automatic variable, and a parameter that
+        # shadows it reads back unreliably (notably inside a test double).
+        #
+        # Position 0 on this one, so the compose verb is the only thing that binds
+        # positionally. Without it `Invoke-AfctComposeBounded -TimeoutSeconds 30 up --detach`
+        # hands "up" to whichever scalar parameter happens to come next in the declaration,
+        # which is the same class of silent misbinding as the -d that started all this.
+        [Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$ComposeArgs
+    )
+    Set-AfctRuntimeComposeEnv
+
+    # Deterministic, non-interactive output for this one call. Compose reads both from the
+    # environment, and a version that does not know them ignores them, so no capability
+    # detection is needed. Scoped to this call: the image pull deliberately keeps Docker's
+    # interactive progress, which works well and is the one place a long wait is explained.
+    $savedAnsi = [Environment]::GetEnvironmentVariable('COMPOSE_ANSI')
+    $savedProgress = [Environment]::GetEnvironmentVariable('COMPOSE_PROGRESS')
+    $env:COMPOSE_ANSI = 'never'
+    $env:COMPOSE_PROGRESS = 'plain'
+    try {
+        $all = @(Get-AfctComposeBaseArgs) + @($ComposeArgs)
+        return Invoke-AfctNativeBounded -FilePath 'docker' -ArgumentList $all `
+            -TimeoutSeconds $TimeoutSeconds -OnHeartbeat $OnHeartbeat
+    } finally {
         if ($null -eq $savedAnsi) { Remove-Item Env:\COMPOSE_ANSI -ErrorAction SilentlyContinue }
         else { $env:COMPOSE_ANSI = $savedAnsi }
         if ($null -eq $savedProgress) { Remove-Item Env:\COMPOSE_PROGRESS -ErrorAction SilentlyContinue }
         else { $env:COMPOSE_PROGRESS = $savedProgress }
-        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -248,12 +316,17 @@ function Assert-AfctDockerReady {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw 'afct-fatal: Docker Desktop is not installed. Install it: https://docs.docker.com/desktop/install/windows-install/'
     }
-    & docker info *> $null
-    if ($LASTEXITCODE -ne 0) {
+    # Both bounded: a preflight that hangs is the same outcome for the operator as a failed
+    # one, except that nothing tells them so.
+    $info = Invoke-AfctDockerBounded info
+    if ($info.TimedOut) {
+        throw 'afct-fatal: Docker Desktop did not respond. It may still be starting up, or it may need to be restarted. Wait for the Docker Desktop window to say it is running, then try again.'
+    }
+    if ($info.ExitCode -ne 0) {
         throw 'afct-fatal: Docker is installed, but its daemon is not reachable. Start Docker Desktop and try again.'
     }
-    & docker compose version *> $null
-    if ($LASTEXITCODE -ne 0) {
+    $cv = Invoke-AfctDockerBounded compose version
+    if ($cv.TimedOut -or $cv.ExitCode -ne 0) {
         throw 'afct-fatal: Docker Compose v2 was not found. Update Docker Desktop (it includes Compose).'
     }
 }

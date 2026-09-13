@@ -14,6 +14,12 @@ Set-StrictMode -Version Latest
 # Copy the active release's Compose template into the mutable runtime location. Creates the
 # runtime directory on first use; backs up an existing, differing runtime file first so a
 # release's Compose changes apply without silently discarding the prior file.
+#
+# Returns $true when the runtime file actually changed, which the caller needs: a release
+# that changes mounts, environment, health checks, security options or networking writes a
+# new file here while the containers keep running the old definition, and a rerun that
+# skipped `up` because everything looked healthy would leave the deployment permanently
+# behind its own configuration.
 function Sync-AfctRuntimeCompose {
     if (-not (Test-Path -LiteralPath $ComposeTemplate)) {
         throw "afct-fatal: the release Compose template is missing at $ComposeTemplate."
@@ -24,12 +30,13 @@ function Sync-AfctRuntimeCompose {
     if (Test-Path -LiteralPath $RuntimeCompose) {
         $a = (Get-FileHash -LiteralPath $ComposeTemplate -Algorithm SHA256).Hash
         $b = (Get-FileHash -LiteralPath $RuntimeCompose -Algorithm SHA256).Hash
-        if ($a -eq $b) { return }
+        if ($a -eq $b) { return $false }
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
         Copy-Item -LiteralPath $RuntimeCompose -Destination "$RuntimeCompose.bak.$stamp" -Force -ErrorAction SilentlyContinue
         Write-AfctInfo "the runtime Compose file changed with this release; saved the previous one as docker-compose.yml.bak.$stamp."
     }
     Copy-Item -LiteralPath $ComposeTemplate -Destination $RuntimeCompose -Force
+    return $true
 }
 
 function Test-AfctComposeConfig {
@@ -69,13 +76,45 @@ function Get-AfctImages {
 # perfectly good install, so for that one service running IS ready. Getting this wrong in
 # either direction is how a stack gets reported ready when it is not.
 function Get-AfctExpectedServices {
-    return @(
-        [pscustomobject]@{ Name = 'postgres';  Label = 'PostgreSQL';      RequiresHealth = $true },
-        [pscustomobject]@{ Name = $AppService; Label = 'AFCT application'; RequiresHealth = $true },
-        [pscustomobject]@{ Name = 'worker';    Label = 'Worker';          RequiresHealth = $false },
-        [pscustomobject]@{ Name = 'nginx';     Label = 'nginx';           RequiresHealth = $true },
-        [pscustomobject]@{ Name = 'db-backup'; Label = 'Backup service';  RequiresHealth = $true }
+    $services = @(
+        [pscustomobject]@{ Name = 'postgres';  Label = 'PostgreSQL';       RequiresHealth = $true;  Versioned = $false },
+        [pscustomobject]@{ Name = $AppService; Label = 'AFCT application'; RequiresHealth = $true;  Versioned = $true },
+        [pscustomobject]@{ Name = 'worker';    Label = 'Worker';           RequiresHealth = $false; Versioned = $true },
+        [pscustomobject]@{ Name = 'nginx';     Label = 'nginx';            RequiresHealth = $true;  Versioned = $true },
+        [pscustomobject]@{ Name = 'db-backup'; Label = 'Backup service';   RequiresHealth = $true;  Versioned = $true }
     )
+    # The updater is optional and off by default, so it is expected only when the operator
+    # has turned it on. Without this row, a deployment whose env file says the updater is
+    # enabled reads as complete while its container is missing, and the enable path then
+    # declines to fix it because the flag already says true.
+    #
+    # No circularity: `--profile updater` is already on every compose invocation when the
+    # flag is set (Get-AfctUpdaterProfileArgs), so a normal `up --detach` starts it along
+    # with everything else. Nothing has to start the updater to decide whether to expect it.
+    if ((Read-AfctEnvValue 'AFCT_UPDATER_ENABLED' $EnvFile) -eq 'true') {
+        $services += [pscustomobject]@{ Name = $UpdaterService; Label = 'In-app updater'
+                                        RequiresHealth = $true; Versioned = $true }
+    }
+    return $services
+}
+
+# The tag part of an image reference, or '' when it carries none.
+#
+# Splits on the last colon, but only after dropping a digest: postgres is pinned as
+# `postgres:15-alpine@sha256:...`, and taking the last colon of that would read the digest as
+# a tag and compare it against a release.
+function Get-AfctImageTag {
+    param([string]$Image)
+    if ([string]::IsNullOrWhiteSpace($Image)) { return '' }
+    $ref = $Image
+    $at = $ref.IndexOf('@')
+    if ($at -ge 0) { $ref = $ref.Substring(0, $at) }
+    $colon = $ref.LastIndexOf(':')
+    if ($colon -lt 0) { return '' }
+    # A registry port is not a tag: "localhost:5000/afct" has a colon and no tag.
+    $slash = $ref.LastIndexOf('/')
+    if ($colon -lt $slash) { return '' }
+    return $ref.Substring($colon + 1)
 }
 
 # Read one service's container state as "<status>|<health>|<image>".
@@ -90,17 +129,18 @@ function Get-AfctExpectedServices {
 # $LASTEXITCODE to -1 even on success, which would report a healthy stack as missing.
 function Get-AfctServiceState {
     param([string]$Service)
-    $id = (Invoke-AfctCompose ps -q $Service | Where-Object { $_ } | Select-Object -First 1)
+    # Both calls are bounded. This runs inside the startup poll and inside doctor, so a
+    # daemon that stops answering has to end the wait rather than become it.
+    $ps = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerCommandTimeout) ps -q $Service
+    if ($ps.TimedOut -or $ps.ExitCode -ne 0) { return 'missing|none|' }
+    $id = (@($ps.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
     if (-not $id) { return 'missing|none|' }
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $out = & docker inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}' $id 2>&1 | ForEach-Object { "$_" }
-    } finally { $ErrorActionPreference = $eap }
-    $code = $LASTEXITCODE
-    $state = $out | Select-Object -First 1
-    if ($code -ne 0 -or -not $state) { return 'missing|none|' }
-    return $state
+
+    $inspect = Invoke-AfctDockerBounded inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}' $id.Trim()
+    if ($inspect.TimedOut -or $inspect.ExitCode -ne 0) { return 'missing|none|' }
+    $state = (@($inspect.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
+    if (-not $state) { return 'missing|none|' }
+    return $state.Trim()
 }
 
 # The app's "<status>|<health>" pair, which is what the existing status and health callers
@@ -131,33 +171,48 @@ function Test-AfctServiceReady {
 # probe has its own ten-second timeout and belongs at the end, not in a poll.
 function Get-AfctStackState {
     param([switch]$SkipHttp)
+
+    # One expected release for the whole reading, resolved the way Compose resolves it. Asked
+    # once so every service in a single reading is judged against the same answer.
+    $wantTag = Get-AfctEffectiveAppTag
+
     $services = @()
     $allReady = $true
+    $allMatch = $true
     foreach ($svc in Get-AfctExpectedServices) {
         $state = Get-AfctServiceState $svc.Name
         $parts = $state -split '\|', 3
         $ready = Test-AfctServiceReady -State $state -RequiresHealth $svc.RequiresHealth
         if (-not $ready) { $allReady = $false }
+
+        # Every AFCT service is built and published together under one release tag, so a
+        # stack whose app is new and whose worker is a release behind is not a deployment
+        # anybody asked for: it is two releases sharing a database. Checking the app alone
+        # would have called that correct. PostgreSQL is pinned by digest on its own schedule
+        # and is deliberately not compared against the AFCT release.
+        $actualTag = Get-AfctImageTag $parts[2]
+        $matches = $true
+        if ($svc.Versioned -and $parts[0] -ne 'missing' -and $actualTag) {
+            $matches = ($actualTag -ceq $wantTag)
+        }
+        if (-not $matches) { $allMatch = $false }
+
         $services += [pscustomobject]@{
-            Name   = $svc.Name
-            Label  = $svc.Label
-            Status = $parts[0]
-            Health = $parts[1]
-            Image  = $parts[2]
-            Ready  = $ready
+            Name             = $svc.Name
+            Label            = $svc.Label
+            Status           = $parts[0]
+            Health           = $parts[1]
+            Image            = $parts[2]
+            Ready            = $ready
+            Versioned        = $svc.Versioned
+            ExpectedImageTag = $(if ($svc.Versioned) { $wantTag } else { '' })
+            ActualImageTag   = $actualTag
+            ImageMatches     = $matches
         }
     }
     $app = $services | Where-Object { $_.Name -eq $AppService } | Select-Object -First 1
     $httpOk = $false
     if (-not $SkipHttp) { $httpOk = (Test-AfctHttpHealth) }
-
-    # The pinned release, compared against what the app container is actually running. A
-    # stack that is up but on the wrong tag is not the deployment the operator asked for, so
-    # a rerun must not mistake it for one and skip the work. No pin recorded means nothing to
-    # disagree with.
-    $wantTag = Read-AfctEnvValue 'AFCT_APP_TAG' $EnvFile
-    $imageMatches = $true
-    if ($wantTag -and $app -and $app.Image) { $imageMatches = ($app.Image -like "*:$wantTag") }
 
     return [pscustomobject]@{
         Services     = $services
@@ -165,8 +220,14 @@ function Get-AfctStackState {
         AppReady     = ($null -ne $app -and $app.Ready)
         HttpOk       = $httpOk
         ExpectedTag  = $wantTag
-        ImageMatches = $imageMatches
+        ImageMatches = $allMatch
     }
+}
+
+# The versioned services that are running something other than the expected release.
+function Get-AfctStaleServices {
+    param($State)
+    return @($State.Services | Where-Object { $_.Versioned -and -not $_.ImageMatches })
 }
 
 # One line per service, for a heartbeat or a failure report. "nginx: running (healthy)".
@@ -201,7 +262,22 @@ function Start-AfctStack {
 
     Write-AfctInfo 'Starting AFCT containers...'
     Write-AfctTrace "compose up --detach starting (deadline ${TimeoutSeconds}s)"
-    $result = Invoke-AfctComposeBounded -TimeoutSeconds $TimeoutSeconds up --detach
+
+    # A line every half minute while Compose works, because this call is most of the wait on
+    # a first install: Compose honours the dependency conditions itself, so it does not
+    # return until postgres is healthy, then the app is healthy, then nginx has started. The
+    # per-service progress below cannot begin until it comes back, and several minutes of a
+    # motionless window is what a non-technical operator reads as a crash.
+    #
+    # Deliberately just a clock, not a service summary. Reading service state means running
+    # `compose ps` against a project that `compose up` is holding, and Compose serialises on
+    # that project; a progress line is not worth contending with the thing whose progress it
+    # is reporting.
+    $heartbeat = {
+        param($elapsed)
+        Write-AfctInfo "Docker Compose is still starting containers after ${elapsed}s..."
+    }
+    $result = Invoke-AfctComposeBounded -TimeoutSeconds $TimeoutSeconds -OnHeartbeat $heartbeat up --detach
 
     if ($result.TimedOut) {
         # The CLI stopped making progress. That is not the same as the stack failing to
@@ -292,6 +368,9 @@ function Wait-AfctHealth {
     $restarting = 0
     $announced = @{}
     $lastHeartbeat = 0
+    # Remembered so the timeout message can say which half never finished: containers that
+    # never came up, or containers that did and a web service that never answered.
+    $containersReady = $false
 
     while ($elapsed -lt $TimeoutSeconds) {
         $state = Get-AfctStackState -SkipHttp
@@ -336,11 +415,27 @@ function Wait-AfctHealth {
         }
 
         if ($state.AllReady) {
-            Write-AfctInfo 'Verifying the web service...'
-            if (Test-AfctHttpHealth) { Write-AfctSuccess "The web service is responding at $HealthPath." }
-            else { Write-AfctWarn 'the containers are healthy, but the local web endpoint did not respond yet.' }
-            Write-AfctTrace "stack ready after ${elapsed}s: $(Format-AfctStackState $state)"
-            return
+            # Containers being healthy is not the same as AFCT answering, and this used to
+            # treat it as if it were: a failed HTTP probe printed a warning and returned
+            # success, so the installer could announce "AFCT Dashboard is ready" for a
+            # deployment that served nothing. Worse, the rerun check called that same state
+            # not-ready, so the installer and the thing that verifies the installer
+            # disagreed about what finished meant.
+            #
+            # The endpoint is now part of being ready, and a miss is not fatal on its own:
+            # nginx accepts connections a moment before the app is answering through it, so
+            # this keeps polling inside the same remaining budget rather than failing on the
+            # first attempt.
+            if (-not $announced.ContainsKey('http:waiting')) {
+                $announced['http:waiting'] = $true
+                Write-AfctInfo 'Containers are healthy; waiting for the web service...'
+            }
+            if (Test-AfctHttpHealth) {
+                Write-AfctSuccess "The web service is responding at $HealthPath."
+                Write-AfctTrace "stack ready after ${elapsed}s: $(Format-AfctStackState $state)"
+                return
+            }
+            $containersReady = $true
         }
 
         # A periodic line while the wait runs long, so a slow first start still looks alive
@@ -357,6 +452,9 @@ function Wait-AfctHealth {
 
     $final = Get-AfctStackState -SkipHttp
     Write-AfctTrace "health wait timed out after ${elapsed}s: $(Format-AfctStackState $final)"
+    if ($containersReady) {
+        throw "afct-fatal: the AFCT containers all started, but the web service never answered at $HealthPath within $TimeoutSeconds seconds. Check the logs: afctctl logs"
+    }
     throw "afct-fatal: AFCT did not finish starting within $TimeoutSeconds seconds. Current state: $(Format-AfctStackState $final)"
 }
 

@@ -35,20 +35,68 @@ BeforeAll {
     $script:HealthTimeout  = 30
     $script:HealthInterval = 1
     $script:InstallerVersion = 'test'
+    $script:UpdaterService   = 'updater'
+    $script:InstallerBaseUrl = 'https://example.invalid'
 
-    # A stack state with every service ready, which individual tests then spoil.
-    function New-StackState {
-        param([bool]$AllReady = $true, [bool]$HttpOk = $true, [bool]$ImageMatches = $true)
+    # A stack state with every service ready at the expected release, which individual
+    # tests then spoil one dimension at a time. Mirrors the real shape exactly, including
+    # the per-service version fields, because Set-StrictMode makes a missing property a
+    # thrown error rather than a null.
+    function New-ServiceRow {
+        param([string]$Name, [string]$Label, [bool]$RequiresHealth, [bool]$Versioned,
+              [string]$Status = 'running', [string]$Tag = 'v1.2.3', [string]$Want = 'v1.2.3')
+        $health = 'healthy'
+        if (-not $RequiresHealth) { $health = 'none' }
+        if ($Status -eq 'missing') { $health = 'none'; $Tag = '' }
+        $ready = ($Status -eq 'running') -and (($health -eq 'healthy') -or (-not $RequiresHealth))
+        $matches = (-not $Versioned) -or ($Status -eq 'missing') -or (-not $Tag) -or ($Tag -ceq $Want)
+        $expected = ''
+        if ($Versioned) { $expected = $Want }
         [pscustomobject]@{
-            Services = @(
-                [pscustomobject]@{ Name = 'postgres'; Label = 'PostgreSQL'; Status = 'running'; Health = 'healthy'; Image = 'p:v1.2.3'; Ready = $true },
-                [pscustomobject]@{ Name = 'app'; Label = 'AFCT application'; Status = 'running'; Health = 'healthy'; Image = 'a:v1.2.3'; Ready = $AllReady },
-                [pscustomobject]@{ Name = 'worker'; Label = 'Worker'; Status = 'running'; Health = 'none'; Image = 'a:v1.2.3'; Ready = $true },
-                [pscustomobject]@{ Name = 'nginx'; Label = 'nginx'; Status = 'running'; Health = 'healthy'; Image = 'n:v1.2.3'; Ready = $AllReady },
-                [pscustomobject]@{ Name = 'db-backup'; Label = 'Backup service'; Status = 'running'; Health = 'healthy'; Image = 'b:v1.2.3'; Ready = $true }
-            )
-            AllReady = $AllReady; AppReady = $AllReady; HttpOk = $HttpOk
-            ExpectedTag = 'v1.2.3'; ImageMatches = $ImageMatches
+            Name = $Name; Label = $Label; Status = $Status; Health = $health
+            Image = "img:$Tag"; Ready = $ready; Versioned = $Versioned
+            ExpectedImageTag = $expected; ActualImageTag = $Tag; ImageMatches = $matches
+        }
+    }
+
+    function New-StackState {
+        param(
+            [bool]$HttpOk = $true,
+            # Name a service to knock out, and/or a service to leave on an older release.
+            [string]$Missing = '',
+            [string]$StaleService = '',
+            [string]$StaleTag = 'v0.9.9',
+            [bool]$WithUpdater = $false
+        )
+        $want = 'v1.2.3'
+        $spec = @(
+            @{ Name = 'postgres';  Label = 'PostgreSQL';       Health = $true;  Ver = $false },
+            @{ Name = 'app';       Label = 'AFCT application'; Health = $true;  Ver = $true },
+            @{ Name = 'worker';    Label = 'Worker';           Health = $false; Ver = $true },
+            @{ Name = 'nginx';     Label = 'nginx';            Health = $true;  Ver = $true },
+            @{ Name = 'db-backup'; Label = 'Backup service';   Health = $true;  Ver = $true }
+        )
+        if ($WithUpdater) {
+            $spec += @{ Name = 'updater'; Label = 'In-app updater'; Health = $true; Ver = $true }
+        }
+        $rows = @()
+        foreach ($item in $spec) {
+            $status = 'running'
+            if ($item.Name -eq $Missing) { $status = 'missing' }
+            $tag = $want
+            if ($item.Name -eq $StaleService) { $tag = $StaleTag }
+            $rows += New-ServiceRow -Name $item.Name -Label $item.Label `
+                -RequiresHealth $item.Health -Versioned $item.Ver `
+                -Status $status -Tag $tag -Want $want
+        }
+        $app = $rows | Where-Object { $_.Name -eq 'app' } | Select-Object -First 1
+        [pscustomobject]@{
+            Services     = $rows
+            AllReady     = (@($rows | Where-Object { -not $_.Ready }).Count -eq 0)
+            AppReady     = $app.Ready
+            HttpOk       = $HttpOk
+            ExpectedTag  = $want
+            ImageMatches = (@($rows | Where-Object { $_.Versioned -and -not $_.ImageMatches }).Count -eq 0)
         }
     }
 }
@@ -78,7 +126,7 @@ Describe 'Rerunning the installer' {
     }
 
     It 'starts the stack when only PostgreSQL came up' {
-        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -AllReady $false }
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -Missing 'app' }
         Invoke-AfctEnsureDeployed
         Should -Invoke Invoke-AfctDeployStack -Exactly 1
     }
@@ -90,7 +138,7 @@ Describe 'Rerunning the installer' {
     }
 
     It 'starts the stack when the running application is the wrong version' {
-        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -ImageMatches $false }
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -StaleService 'app' }
         Invoke-AfctEnsureDeployed
         Should -Invoke Invoke-AfctDeployStack -Exactly 1
     }
@@ -117,6 +165,158 @@ Describe 'Rerunning the installer' {
         Should -Invoke Write-AfctEnvironmentFile -Exactly 0
         Should -Invoke Backup-AfctEnvFile -Exactly 0
         (Get-Content -LiteralPath $EnvFile -Raw) | Should -Be $before
+    }
+}
+
+<#
+  A changed Compose definition always gets one reconciliation pass.
+
+  The rerun optimisation is only safe while the definition on disk is the one the containers
+  are running. A new deployment-tool release can change mounts, environment, health checks,
+  security options, resource limits, networking or the container command, and the healthy
+  containers would keep running the old one indefinitely.
+#>
+Describe 'Reconciling after the Compose definition changes' {
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Invoke-AfctDeployStack -MockWith { }
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 0 }
+        }
+        Mock -CommandName Write-AfctEnvironmentFile -MockWith { }
+    }
+
+    It 'reconciles a healthy stack when the definition changed' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState }
+        Mock -CommandName Test-AfctDeploymentReady -MockWith { $true }
+
+        Invoke-AfctEnsureDeployed -ForceReconcile $true
+
+        Should -Invoke Invoke-AfctDeployStack -Exactly 1
+        # And it does not even ask: the answer would not change what it does.
+        Should -Invoke Test-AfctDeploymentReady -Exactly 0
+    }
+
+    It 'leaves a healthy stack alone when the definition did not change' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState }
+        Invoke-AfctEnsureDeployed -ForceReconcile $false
+        Should -Invoke Invoke-AfctDeployStack -Exactly 0
+    }
+
+    It 'reconciles a partial stack the same way it always would' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -Missing 'nginx' }
+        Invoke-AfctEnsureDeployed -ForceReconcile $true
+        Should -Invoke Invoke-AfctDeployStack -Exactly 1
+    }
+
+    <#
+      Reconciling is `up --detach` and nothing else. Compose recreates only the services
+      whose definition actually changed; nothing is stopped first, nothing is removed, and
+      no volume is touched. A reconciliation that took the database with it would be far
+      worse than a stale container.
+    #>
+    It 'reconciles without any destructive command, and without rewriting configuration' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState }
+        Mock -CommandName Backup-AfctEnvFile -MockWith { }
+        $before = Get-Content -LiteralPath $EnvFile -Raw
+
+        Invoke-AfctEnsureDeployed -ForceReconcile $true
+
+        # Deployment goes through the one shared path, which the startup tests already prove
+        # issues only `up --detach`.
+        Should -Invoke Invoke-AfctDeployStack -Exactly 1
+        Should -Invoke Invoke-AfctComposeBounded -Exactly 0
+        Should -Invoke Write-AfctEnvironmentFile -Exactly 0
+        Should -Invoke Backup-AfctEnvFile -Exactly 0
+        (Get-Content -LiteralPath $EnvFile -Raw) | Should -Be $before
+    }
+}
+
+<#
+  The optional updater.
+
+  It is off by default. When it is on, its container is part of the deployment, and a
+  deployment whose env file says enabled while the container is gone was previously read as
+  complete: the enable path declined because the flag already said true, and nothing else
+  looked.
+#>
+Describe 'The in-app updater when it is enabled' {
+    AfterEach {
+        Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v1.2.3') -Encoding UTF8
+    }
+
+    It 'is not expected at all while it is disabled' {
+        Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v1.2.3') -Encoding UTF8
+        @(Get-AfctExpectedServices).Name | Should -Not -Contain 'updater'
+    }
+
+    It 'joins the expected services once it is enabled' {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+        $svc = @(Get-AfctExpectedServices) | Where-Object { $_.Name -eq 'updater' }
+        $svc | Should -Not -BeNullOrEmpty
+        # Published under the same release tag as everything else.
+        $svc.Versioned | Should -BeTrue
+    }
+
+    It 'reports a deployment as incomplete when the enabled updater is missing' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -WithUpdater $true -Missing 'updater' }
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Test-AfctDeploymentReady | Should -BeFalse
+    }
+
+    It 'reports a deployment as complete when the enabled updater is running' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -WithUpdater $true }
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Test-AfctDeploymentReady | Should -BeTrue
+    }
+
+    It 'restarts an enabled updater whose container has gone' {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Get-AfctServiceState -MockWith { 'missing|none|' }
+        Mock -CommandName Start-AfctUpdater -MockWith { $true }
+
+        Invoke-AfctMaybeEnableUpdater -WithUpdater $false -NonInteractive $true
+
+        Should -Invoke Start-AfctUpdater -Exactly 1
+    }
+
+    <#
+      Optional means optional. AFCT is already up by the time this runs, so a sidecar that
+      will not start is worth saying out loud and nothing more.
+    #>
+    It 'does not fail the install when the updater will not start' {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Get-AfctServiceState -MockWith { 'missing|none|' }
+        Mock -CommandName Start-AfctUpdater -MockWith { $false }
+
+        { Invoke-AfctMaybeEnableUpdater -WithUpdater $false -NonInteractive $true } | Should -Not -Throw
+        Should -Invoke Write-AfctWarn -ParameterFilter { $Message -match 'could not be started' }
+    }
+
+    It 'leaves a running updater alone' {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Get-AfctServiceState -MockWith { 'running|healthy|img:v1.2.3' }
+        Mock -CommandName Start-AfctUpdater -MockWith { $true }
+
+        Invoke-AfctMaybeEnableUpdater -WithUpdater $false -NonInteractive $true
+
+        Should -Invoke Start-AfctUpdater -Exactly 0
     }
 }
 
@@ -183,8 +383,9 @@ Describe 'Doctor' {
     It 'passes and names every service when the stack is healthy' {
         Mock -CommandName Get-AfctStackState -MockWith { New-StackState }
         Invoke-AfctDoctor | Should -BeTrue
-        foreach ($label in 'PostgreSQL is healthy', 'AFCT application is healthy',
-                           'Worker is running', 'nginx is healthy', 'Backup service is healthy') {
+        foreach ($label in 'PostgreSQL is healthy', 'AFCT application is healthy (v1.2.3)',
+                           'Worker is running (v1.2.3)', 'nginx is healthy (v1.2.3)',
+                           'Backup service is healthy (v1.2.3)') {
             Should -Invoke Write-AfctSuccess -ParameterFilter { $Message -eq $label }
         }
     }
@@ -194,21 +395,26 @@ Describe 'Doctor' {
       up. Reporting only the application said nothing about nginx at all.
     #>
     It 'names the service that is not ready' {
-        Mock -CommandName Get-AfctStackState -MockWith {
-            $s = New-StackState
-            $nginx = $s.Services | Where-Object { $_.Name -eq 'nginx' }
-            $nginx.Status = 'missing'; $nginx.Health = 'none'; $nginx.Ready = $false
-            $s.AllReady = $false
-            $s
-        }
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -Missing 'nginx' }
         Invoke-AfctDoctor | Should -BeFalse
         Should -Invoke Write-AfctWarn -ParameterFilter { $Message -eq 'nginx is not running' }
     }
 
-    It 'warns when the running application is not the pinned version' {
-        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -ImageMatches $false }
+    <#
+      Naming the service and both versions is the point. "Something is on the wrong
+      release" sends an operator looking through five containers by hand.
+    #>
+    It 'names the stale service and both versions' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-StackState -StaleService 'worker' }
         Invoke-AfctDoctor | Should -BeFalse
-        Should -Invoke Write-AfctWarn -ParameterFilter { $Message -match 'not the pinned version' }
+        Should -Invoke Write-AfctWarn -ParameterFilter {
+            $Message -eq 'Worker is running but is on v0.9.9; expected v1.2.3'
+        }
+        # The services that ARE correct still report their version, so the contrast is
+        # visible without running anything else.
+        Should -Invoke Write-AfctSuccess -ParameterFilter { $Message -eq 'AFCT application is healthy (v1.2.3)' }
+        # PostgreSQL is pinned by digest on its own schedule and carries no release suffix.
+        Should -Invoke Write-AfctSuccess -ParameterFilter { $Message -eq 'PostgreSQL is healthy' }
     }
 
     <#

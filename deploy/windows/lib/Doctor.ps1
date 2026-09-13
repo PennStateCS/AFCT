@@ -52,20 +52,30 @@ function Invoke-AfctDoctor {
             # be running. Anything else would either fail a good install or pass a bad one.
             $state = Get-AfctStackState -SkipHttp
             foreach ($svc in $state.Services) {
-                $label = "$($svc.Label) is ready"
+                # Name the version on the line rather than in a separate summary, because
+                # "something is on the wrong release" is not actionable and "Worker is on
+                # v0.9.9, expected v0.9.10" is. Tags only, never image ids: the id says
+                # nothing an operator can act on.
+                $version = ''
+                if ($svc.Versioned -and $svc.ActualImageTag) { $version = " ($($svc.ActualImageTag))" }
+
+                if ($svc.Ready -and -not $svc.ImageMatches) {
+                    Write-AfctWarn "$($svc.Label) is running but is on $($svc.ActualImageTag); expected $($svc.ExpectedImageTag)"
+                    $warn++
+                    continue
+                }
                 if ($svc.Ready) {
-                    if ($svc.Health -eq 'healthy') { $label = "$($svc.Label) is healthy" }
-                    else { $label = "$($svc.Label) is running" }
-                } elseif ($svc.Status -eq 'missing') {
-                    $label = "$($svc.Label) is not running"
-                } else {
+                    if ($svc.Health -eq 'healthy') { Write-AfctSuccess "$($svc.Label) is healthy$version" }
+                    else { Write-AfctSuccess "$($svc.Label) is running$version" }
+                    $ok++
+                    continue
+                }
+                if ($svc.Status -eq 'missing') { Write-AfctWarn "$($svc.Label) is not running" }
+                else {
                     $label = "$($svc.Label) is $($svc.Status)"
                     if ($svc.Health -and $svc.Health -ne 'none') { $label += " ($($svc.Health))" }
+                    Write-AfctWarn $label
                 }
-                if (& $check $label $svc.Ready) { $ok++ } else { $warn++ }
-            }
-            if (-not $state.ImageMatches) {
-                Write-AfctWarn "the running application is not the pinned version ($($state.ExpectedTag))"
                 $warn++
             }
             if (& $check 'Local AFCT health endpoint responds' (Test-AfctHttpHealth)) { $ok++ } else { $warn++ }
