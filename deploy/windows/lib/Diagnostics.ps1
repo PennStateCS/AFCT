@@ -10,13 +10,18 @@ Set-StrictMode -Version Latest
 
 # Copy an env file with the values of known-sensitive keys replaced. Comments and blank
 # lines are preserved. Matches by key name (case-insensitive).
+#
+# The pattern has to be wide enough to catch a key nobody thought of and narrow enough to
+# leave the settings that make the bundle worth reading. Matching a bare "AUTH" would redact
+# NEXTAUTH_URL, which is the address the operator configured and the first thing anybody
+# looking at a broken deployment wants to see; NEXTAUTH_SECRET is caught by SECRET anyway.
 function Copy-AfctRedactedEnv {
     param([string]$Source, [string]$Destination)
     $out = foreach ($line in Get-Content -LiteralPath $Source -ErrorAction SilentlyContinue) {
         if ($line -match '^\s*#' -or $line -match '^\s*$') { $line }
         elseif ($line -match '=') {
             $key = ($line -split '=', 2)[0]
-            if ($key.Trim().ToUpper() -match 'PASSWORD|SECRET|TOKEN|PRIVATE|CREDENTIAL|DATABASE_URL|API_KEY') { "$key=***REDACTED***" }
+            if ($key.Trim().ToUpper() -match 'PASSWORD|PASSWD|SECRET|TOKEN|PRIVATE|CREDENTIAL|DATABASE_URL|API_KEY|_KEY$|ENCRYPTION|PASSPHRASE|SALT') { "$key=***REDACTED***" }
             else { $line }
         }
         else { $line }
@@ -29,10 +34,19 @@ function Copy-AfctRedactedEnv {
 function Hide-AfctSecretsInTree {
     param([string]$Root, [string]$EnvFile)
     if (-not (Test-Path -LiteralPath $EnvFile)) { return }
+    # Every value worth hunting for by content, not only the four that used to be listed.
+    # The key-name pass above hides them inside the env copy; this pass catches the same
+    # values echoed anywhere else in the bundle, which is where they actually leak: a
+    # DATABASE_URL in a stack trace, a key in a container log line.
+    #
+    # Short values are skipped. Replacing a two-character string everywhere would corrupt
+    # unrelated text without protecting anything, and no real secret here is that short.
     $secrets = @()
-    foreach ($key in 'POSTGRES_PASSWORD', 'DATABASE_URL', 'NEXTAUTH_SECRET', 'ADMIN_PASSWORD') {
+    foreach ($key in 'POSTGRES_PASSWORD', 'DATABASE_URL', 'NEXTAUTH_SECRET', 'ADMIN_PASSWORD',
+                     'AFCT_SECRET_KEY', 'BACKUP_ENCRYPTION_KEY', 'BACKUP_PASSPHRASE',
+                     'SMTP_PASSWORD', 'GITHUB_TOKEN', 'REGISTRY_TOKEN') {
         $value = Read-AfctEnvValue $key $EnvFile
-        if ($value) { $secrets += $value }
+        if ($value -and $value.Length -ge 8) { $secrets += $value }
     }
     if (-not $secrets) { return }
     foreach ($file in Get-ChildItem -LiteralPath $Root -File -Recurse -ErrorAction SilentlyContinue) {
