@@ -452,6 +452,70 @@ describe('an assignment that is only partly graded', () => {
     await prisma.assignmentProblem.create({
       data: { assignmentId: ASSIGNMENT, problemId: PROBLEM2, maxPoints: 50 },
     });
+    /**
+     * Published, enrolled, and not yet due.
+     *
+     * All three matter. "Has marking finished" is answered by the gradebook's accountable
+     * points, which are built from the roster and the assignment's own state, so without a
+     * roster row the answer is zero for everybody and every one of these tests would read as
+     * incomplete whatever the code did. The future deadline keeps the unmarked problem
+     * genuinely outstanding rather than settled as a zero for work nobody handed in.
+     */
+    await prisma.assignment.update({
+      where: { id: ASSIGNMENT },
+      data: { isPublished: true, dueDate: new Date('2099-01-01T00:00:00Z') },
+    });
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: STUDENT, role: 'STUDENT' },
+    });
+  });
+
+  /**
+   * The number is the running total over the assignment's full value, which is lower than the
+   * student stands while half of it is unmarked. Rather than change the number or hold it back,
+   * the score goes as it is and says it is not the final word: AGS has `PendingManual` for
+   * exactly this, and the sender turns this flag into that.
+   */
+  it('marks the queued score as not yet complete', async () => {
+    await grade(50);
+
+    await queueChangedGrades(ASSIGNMENT);
+
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      scoreGiven: 50,
+      scoreMaximum: 100,
+      gradingComplete: false,
+    });
+  });
+
+  it('marks it complete once every problem is marked', async () => {
+    await grade(50);
+    await prisma.assignmentProblemGrade.create({
+      data: { studentId: STUDENT, assignmentId: ASSIGNMENT, problemId: PROBLEM2, grade: 0 },
+    });
+
+    await queueChangedGrades(ASSIGNMENT);
+
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      gradingComplete: true,
+    });
+  });
+
+  it('re-queues when only the completeness changes', async () => {
+    // The label is part of what the LMS is told, so an assignment finishing its marking has to
+    // reach the platform even though the number did not move.
+    await grade(50);
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(1);
+
+    await prisma.assignmentProblemGrade.create({
+      data: { studentId: STUDENT, assignmentId: ASSIGNMENT, problemId: PROBLEM2, grade: 0 },
+    });
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(1);
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      scoreGiven: 50,
+      gradingComplete: true,
+    });
   });
 
   it('sends full marks on the graded half as half marks on the whole', async () => {

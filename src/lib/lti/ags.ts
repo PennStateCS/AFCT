@@ -588,6 +588,15 @@ export async function postScore(opts: {
    */
   scoreGiven: number | null;
   scoreMaximum: number;
+  /**
+   * Whether this is the final word on the student's mark.
+   *
+   * False sends `gradingProgress: 'PendingManual'`, which is AGS's way of saying the score is
+   * real but a grader still has work to do. AFCT sends a running total over the assignment's
+   * full value, so a half-marked assignment arrives lower than the student stands; the label is
+   * what stops that reading as a finished mark. Defaults true, matching what this always did.
+   */
+  gradingComplete?: boolean;
   timestamp?: Date;
   comment?: string | null;
 }): Promise<AgsResult<null>> {
@@ -612,7 +621,11 @@ export async function postScore(opts: {
     // partially-submitted attempt to report here. Clearing: back to having no result at all,
     // which is the pairing the reference implementation accepted.
     activityProgress: clearing ? 'Initialized' : 'Completed',
-    gradingProgress: clearing ? 'NotReady' : 'FullyGraded',
+    gradingProgress: clearing
+      ? 'NotReady'
+      : opts.gradingComplete === false
+        ? 'PendingManual'
+        : 'FullyGraded',
     ...(opts.comment ? { comment: opts.comment } : {}),
   });
   if (!sent.ok) return sent;

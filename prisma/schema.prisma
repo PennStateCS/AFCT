@@ -206,28 +206,30 @@ model User {
   /// When this record was last changed.
   updatedAt DateTime @updatedAt
 
-  rosterEntries       Roster[]
-  submissions         Submission[]
-  problemGrades       AssignmentProblemGrade[]
-  activityLogs        ActivityLog[]
-  commentsAbout       Comment[]                @relation("CommentsAboutStudent") // Comments about this student's work
-  commentsAuthored    Comment[]                @relation("CommentAuthor") // Comments this user wrote
-  clientTokens        ClientApiToken[] // Bearer tokens issued to the native (Java) client
-  clientAuthCodes     ClientAuthCode[] // Short-lived codes from the browser sign-in consent screen
-  singleUseTokens     SingleUseToken[] // Password-reset and similar one-shot links
-  linkedIdentities    LinkedIdentity[] // Institutional sign-ins and LMS launches mapped to this account
-  assignmentAssignees AssignmentAssignee[]     @relation("AssigneeTarget") // assignments this student is individually assigned
-  assignmentOverrides AssignmentOverride[]     @relation("OverrideTarget") // deadline overrides targeting this student
-  overridesCreated    AssignmentOverride[]     @relation("OverrideCreatedBy") // overrides this user created
-  submissionGrants    SubmissionGrant[]        @relation("SubmissionGrantTarget") // extra-submission grants targeting this student
-  grantsCreated       SubmissionGrant[]        @relation("SubmissionGrantCreatedBy") // grants this user created
-  ltiLinksCreated     LtiContextLink[] // LMS course links this user decided
-  ltiDeepLinksCreated LtiDeepLink[] // assignment links this user added to an LMS course
-  ltiPendingLinks     LtiPendingLink[] // launches waiting for this user to pick a course
-  ltiPendingDeepLinks LtiPendingDeepLink[] // deep-linking requests waiting on this user
-  ltiContextMembers   LtiContextMember[] // the LMS courses this person has been seen in
-  ltiScores           LtiScoreQueue[] // their grades queued for an LMS gradebook
-  evaluatorTrials     EvaluatorTrial[] // staff dry runs of the evaluator this user asked for
+  rosterEntries           Roster[]
+  submissions             Submission[]
+  problemGrades           AssignmentProblemGrade[]
+  activityLogs            ActivityLog[]
+  commentsAbout           Comment[]                @relation("CommentsAboutStudent") // Comments about this student's work
+  commentsAuthored        Comment[]                @relation("CommentAuthor") // Comments this user wrote
+  clientTokens            ClientApiToken[] // Bearer tokens issued to the native (Java) client
+  clientAuthCodes         ClientAuthCode[] // Short-lived codes from the browser sign-in consent screen
+  singleUseTokens         SingleUseToken[] // Password-reset and similar one-shot links
+  linkedIdentities        LinkedIdentity[] // Institutional sign-ins and LMS launches mapped to this account
+  assignmentAssignees     AssignmentAssignee[]     @relation("AssigneeTarget") // assignments this student is individually assigned
+  assignmentOverrides     AssignmentOverride[]     @relation("OverrideTarget") // deadline overrides targeting this student
+  overridesCreated        AssignmentOverride[]     @relation("OverrideCreatedBy") // overrides this user created
+  submissionGrants        SubmissionGrant[]        @relation("SubmissionGrantTarget") // extra-submission grants targeting this student
+  grantsCreated           SubmissionGrant[]        @relation("SubmissionGrantCreatedBy") // grants this user created
+  ltiLinksCreated         LtiContextLink[] // LMS course links this user decided
+  ltiDeepLinksCreated     LtiDeepLink[] // assignment links this user added to an LMS course
+  ltiPendingLinks         LtiPendingLink[] // launches waiting for this user to pick a course
+  ltiPendingDeepLinks     LtiPendingDeepLink[] // deep-linking requests waiting on this user
+  ltiContextMembers       LtiContextMember[] // the LMS courses this person has been seen in
+  ltiScores               LtiScoreQueue[] // their grades queued for an LMS gradebook
+  evaluatorTrials         EvaluatorTrial[] // staff dry runs of the evaluator this user asked for
+  /// Launches that matched this account and are waiting for a password to confirm it.
+  ltiPendingIdentityLinks LtiPendingIdentityLink[]
 
   @@index([isAdmin])
   @@index([inactive])
@@ -236,8 +238,6 @@ model User {
   // is a join order (the names live here, not on Roster), so this cannot make that plan
   // index-only; it does keep the sort side off a full scan as courses reach the thousands.
   @@index([lastName, firstName])
-  /// Launches that matched this account and are waiting for a password to confirm it.
-  ltiPendingIdentityLinks LtiPendingIdentityLink[]
 }
 
 /// Bearer token for the native submission client. The browser signs in with a session cookie;
@@ -298,9 +298,9 @@ model LinkedIdentity {
   userId String
 
   /// How the link came to exist.
-  linkedVia IdentityLinkMethod
+  linkedVia    IdentityLinkMethod
   /// When this record was created.
-  createdAt DateTime           @default(now())
+  createdAt    DateTime           @default(now())
   /// Last time somebody signed in through it, so a stale link can be spotted.
   lastSignInAt DateTime?
 
@@ -348,7 +348,7 @@ model LtiPlatform {
   /// refused, so nothing AFCT sends to a Brightspace course would ever arrive.
   tokenAudience String?
   /// Where AFCT fetches the platform's public keys, to verify that a launch really came from it.
-  keysetUrl    String
+  keysetUrl     String
 
   /// When this record was created.
   createdAt DateTime @default(now())
@@ -356,9 +356,9 @@ model LtiPlatform {
   updatedAt DateTime @updatedAt
 
   /// The LMS courses that open into AFCT through this registration.
-  contextLinks LtiContextLink[]
+  contextLinks     LtiContextLink[]
   /// Launches waiting for somebody to say which AFCT course they open.
-  pendingLinks LtiPendingLink[]
+  pendingLinks     LtiPendingLink[]
   /// Deep-linking requests waiting for somebody to choose an assignment.
   pendingDeepLinks LtiPendingDeepLink[]
 
@@ -390,14 +390,14 @@ model LtiPlatform {
 /// @namespace LTI
 model LtiKeyPair {
   /// Unique identifier.
-  id         String  @id @default(cuid())
+  id          String   @id @default(cuid())
   /// The `kid` in the published JWKS and in the header of every token AFCT signs. This is how
   /// a platform decides which published key to verify a token against, so it never changes.
-  kid        String  @unique
+  kid         String   @unique
   /// PEM, published to anyone who asks.
-  publicKey  String
+  publicKey   String
   /// PEM, encrypted at rest. Never leaves the server.
-  privateKey String
+  privateKey  String
   /// When this key becomes eligible to sign. Set ahead of time to give platforms a chance to
   /// fetch it first; a platform that has not refreshed its cache cannot verify a token signed
   /// by a key it has never seen.
@@ -431,7 +431,7 @@ model SingleUseToken {
   /// What the token authorises. A token issued for one purpose is refused for another.
   purpose   SingleUseTokenPurpose
 
-  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Who the token is for. Optional because not every future purpose has a user behind it
   /// (an LTI launch nonce, for instance, is issued before anyone is identified).
   userId String?
@@ -631,7 +631,7 @@ model Assignment {
   overrides    AssignmentOverride[]
   /// Send grades to the LMS as they change. Off means faculty send them by hand. Only has any
   /// effect when the course is linked to an LMS.
-  ltiAutoSync  Boolean         @default(true)
+  ltiAutoSync  Boolean              @default(true)
   ltiLineItems LtiLineItem[] // gradebook columns in linked LMS courses
   ltiDeepLinks LtiDeepLink[] // LMS links that open this assignment
   ltiScores    LtiScoreQueue[] // grades queued for an LMS gradebook
@@ -803,11 +803,11 @@ model AssignmentProblem {
 
   // Per-assignment configuration
   /// What this problem is worth on this assignment.
-  maxPoints         Float   @default(0)
+  maxPoints         Float    @default(0)
   /// How many attempts a student gets. Zero or less means unlimited.
-  maxSubmissions    Int     @default(1)
+  maxSubmissions    Int      @default(1)
   /// Whether attempts are graded automatically.
-  autograderEnabled Boolean @default(true)
+  autograderEnabled Boolean  @default(true)
   /// When this problem was attached to this assignment.
   ///
   /// Recorded so that adding a problem to an assignment whose due date has passed does not
@@ -823,7 +823,7 @@ model AssignmentProblem {
   /// This is a study variable (RQ5 compares the witness string being shown against not), which is
   /// why `Submission.feedbackShown` records the value each attempt was actually graded under
   /// rather than this being read back later as though it had never changed.
-  showFeedback      Boolean @default(true)
+  showFeedback      Boolean  @default(true)
 
   submissions Submission[]
   grades      AssignmentProblemGrade[]
@@ -1101,9 +1101,9 @@ model Submission {
 
   // Queue
   /// Where the attempt is: waiting, being graded, finished or failed.
-  status      SubmissionStatus @default(PENDING)
+  status          SubmissionStatus @default(PENDING)
   /// When the student sent the attempt.
-  submittedAt DateTime         @default(now())
+  submittedAt     DateTime         @default(now())
   /// When grading finished and this attempt's result became readable, set in the same write
   /// that lands the result and cleared whenever the result is cleared for a rerun.
   ///
@@ -1113,9 +1113,9 @@ model Submission {
   /// takes four minutes would otherwise make anybody submitting in those four minutes look
   /// like they had seen the mark. Empty for a submission that has never reached a result, and
   /// for anything graded before this column existed, which reads as "not known".
-  evaluatedAt DateTime?
+  evaluatedAt     DateTime?
   /// How many times grading has been tried for this attempt.
-  attempts    Int              @default(0) // Number of times the worker has claimed this submission
+  attempts        Int              @default(0) // Number of times the worker has claimed this submission
   /// Who owns this row while it is being evaluated: a fresh random value on every claim,
   /// cleared when the evaluation lands or the submission is put back on the queue.
   ///
@@ -1494,7 +1494,7 @@ model LtiContextLink {
   /// Who AFCT has seen in this LMS course.
   members LtiContextMember[]
 
-  linkedBy   User?   @relation(fields: [linkedByUserId], references: [id], onDelete: SetNull)
+  linkedBy       User?   @relation(fields: [linkedByUserId], references: [id], onDelete: SetNull)
   /// Who decided this. Null once that account is gone; the link outlives the person.
   linkedByUserId String?
 
@@ -1637,9 +1637,21 @@ model LtiScoreQueue {
   /// missing-work zero was sent has to be able to express.
   scoreGiven   Float?
 
-  state LtiScoreState @default(PENDING)
+  /// Whether every problem on the assignment was settled for this student when the score was
+  /// worked out.
+  ///
+  /// Decides the `gradingProgress` the LMS is told: `FullyGraded` when this is true, and
+  /// `PendingManual` when it is not. AFCT's own gradebook leaves work awaiting a grade out of
+  /// both halves of a student's total, so a half-marked assignment reads 50/50 there while the
+  /// score sent is 50 out of the assignment's full value. Saying which of those the number is
+  /// was the missing half: the score is honest, the label says it is not the final word.
+  ///
+  /// Defaults true, which is how every row written before this existed behaves.
+  gradingComplete Boolean @default(true)
+
+  state    LtiScoreState @default(PENDING)
   /// How many times sending has been tried. Drives the backoff and the give-up point.
-  attempts Int @default(0)
+  attempts Int           @default(0)
 
   /// Which send owns this row, as a random value written when a sender claims it.
   ///
@@ -1652,10 +1664,10 @@ model LtiScoreQueue {
   /// fences the sender that is still running.
   claimToken String?
   /// Why the last attempt failed, for the screen that shows faculty what happened.
-  lastError String?
+  lastError  String?
 
   /// Not before this time. Set into the future to back off after a failure.
-  nextAttemptAt DateTime @default(now())
+  nextAttemptAt DateTime  @default(now())
   /// When the LMS accepted it.
   sentAt        DateTime?
 
@@ -1854,14 +1866,14 @@ model MailQueue {
   /// mailing somebody a link that stopped working an hour ago.
   tokenHash String?
 
-  state MailState @default(PENDING)
+  state     MailState @default(PENDING)
   /// How many times sending has been tried. Drives the backoff and the give-up point.
-  attempts Int @default(0)
+  attempts  Int       @default(0)
   /// Why the last attempt failed. Sanitised: never a password, never a token.
   lastError String?
 
   /// Not before this time. Set into the future to back off after a failure.
-  nextAttemptAt DateTime @default(now())
+  nextAttemptAt DateTime  @default(now())
   /// When the mail server accepted it.
   sentAt        DateTime?
 
@@ -1958,7 +1970,6 @@ model EvaluatorTrial {
   /// The expiry sweep.
   @@index([expiresAt])
 }
-
 
 /// A launch that matched an AFCT administrator, waiting for them to prove it is them.
 ///

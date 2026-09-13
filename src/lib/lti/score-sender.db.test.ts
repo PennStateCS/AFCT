@@ -106,7 +106,13 @@ async function seed(opts: { withIdentity?: boolean; lineItemsUrl?: string | null
       },
     });
   }
-  await queueScore({ assignmentId: ASSIGNMENT, userId: USER, scoreGiven: 88, scoreMaximum: 100 });
+  await queueScore({
+    assignmentId: ASSIGNMENT,
+    userId: USER,
+    scoreGiven: 88,
+    scoreMaximum: 100,
+    gradingComplete: true,
+  });
 }
 
 beforeEach(destroyFixtures);

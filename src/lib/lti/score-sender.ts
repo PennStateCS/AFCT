@@ -150,6 +150,7 @@ export async function sendOneScore(): Promise<SendOutcome> {
       ltiUserId,
       scoreGiven: claimed.scoreGiven,
       scoreMaximum: claimed.scoreMaximum,
+      gradingComplete: claimed.gradingComplete,
     });
     if (sent.ok) {
       await markSent({

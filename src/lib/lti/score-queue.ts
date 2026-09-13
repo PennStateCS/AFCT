@@ -45,10 +45,13 @@ export async function queueScore(opts: {
   /** The grade, or null to clear the student's score in the LMS. See the schema comment. */
   scoreGiven: number | null;
   scoreMaximum: number;
+  /** Whether every problem was marked for this student. Decides the LMS's gradingProgress. */
+  gradingComplete: boolean;
 }): Promise<void> {
   const fields = {
     scoreGiven: opts.scoreGiven,
     scoreMaximum: opts.scoreMaximum,
+    gradingComplete: opts.gradingComplete,
     state: 'PENDING' as LtiScoreState,
     attempts: 0,
     lastError: null,
