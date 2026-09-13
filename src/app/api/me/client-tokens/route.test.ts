@@ -47,6 +47,42 @@ describe('signed out', () => {
 });
 
 /**
+ * A session AFCT has revoked still carries its user id.
+ *
+ * That is deliberate: the session callback keeps the id so the rest of the app can say who the
+ * caller was, and marks `inactive` for everything to refuse. A route testing only for the id
+ * therefore accepts a disabled account, a deleted one, and one whose password was just reset
+ * because it had been compromised. Issuing is the sharp end: these tokens carry a 30-day sliding
+ * life and deliberately do not follow browser session rules, so this route could turn a session
+ * the app had just revoked into a month of access.
+ */
+describe('a revoked session', () => {
+  beforeEach(() => {
+    authMock.mockResolvedValue({ user: { id: 'me', inactive: true } });
+  });
+
+  it('cannot mint a token', async () => {
+    expect((await POST(req())).status).toBe(401);
+    // Not merely refused at the end: nothing was issued.
+    expect(issueMock).not.toHaveBeenCalled();
+  });
+
+  it('cannot list tokens', async () => {
+    expect((await GET()).status).toBe(401);
+    expect(prismaMock.clientApiToken.findMany).not.toHaveBeenCalled();
+  });
+
+  it('cannot revoke a token', async () => {
+    const res = await DELETE(new Request('http://localhost'), {
+      params: Promise.resolve({ id: 't1' }),
+    });
+
+    expect(res.status).toBe(401);
+    expect(prismaMock.clientApiToken.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * A token is a way into someone's account. Every query is keyed on the session rather than on
  * anything the caller supplies, so asking for another person's tokens is not a thing this route
  * can be talked into.

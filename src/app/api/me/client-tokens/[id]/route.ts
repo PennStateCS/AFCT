@@ -22,7 +22,10 @@ type RouteCtx = { params: Promise<{ id: string }> };
  */
 export async function DELETE(req: Request, ctx: RouteCtx) {
   const session = await auth();
-  if (!session?.user?.id) {
+  // `inactive` as well as the id, matching the auth wrappers. A revoked session keeps its user
+  // id on purpose so the rest of the app can tell who it was, and an id alone is not permission:
+  // a disabled or deleted account, or one whose password was just reset, still presents one.
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   }
 

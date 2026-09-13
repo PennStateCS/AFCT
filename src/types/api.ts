@@ -2785,7 +2785,7 @@ export interface paths {
         };
         /**
          * Get a submission file
-         * @description Serves a submission's uploaded file. Restricted to the submitting student, course  staff (faculty or TAs), or a system admin. Every successful serve is audited, as a  view by default and as a download when `?download=1` is set. Traversal filenames are  rejected.
+         * @description Serves a submission's uploaded file. Restricted to the submitting student, anyone in the  group that owns the work, course staff (faculty or TAs), or a system admin. Every successful  serve is audited, as a view by default and as a download when `?download=1` is set.  Traversal filenames are rejected.
          *
          *     **Auth:** required
          *
@@ -12866,7 +12866,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not the submitting student, course staff, or a system admin. */
+            /** @description Not the submitting student, a member of the group that owns the work, course staff, or a system admin. */
             403: {
                 headers: {
                     [name: string]: unknown;
