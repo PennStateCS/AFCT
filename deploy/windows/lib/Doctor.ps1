@@ -4,6 +4,11 @@
 # Reads controller globals ($RuntimeCompose, $ComposeTemplate, $EnvFile, $AppService,
 # $InstallerVersion). Windows PowerShell 5.1 compatible. Read-only: it inspects, never
 # changes state. Returns $true when there are no warnings or failures.
+#
+# Read-only is a rule, not a description. Every docker call below is an inspection
+# (`compose config`, `compose ps`, `docker inspect`) and an HTTP GET; nothing here starts,
+# stops, recreates or removes anything, and a doctor run on a broken deployment must leave it
+# exactly as broken as it found it so the operator can still diagnose it.
 
 Set-StrictMode -Version Latest
 
@@ -37,10 +42,32 @@ function Invoke-AfctDoctor {
         if (Test-Path -LiteralPath $RuntimeCompose) {
             Invoke-AfctCompose config | Out-Null
             if (& $check 'Docker Compose configuration is valid' ($LASTEXITCODE -eq 0)) { $ok++ } else { $warn++ }
-            $state = Get-AfctAppContainerState
-            $healthy = $false
-            if ($state) { $healthy = ($state -split '\|', 2)[1] -eq 'healthy' }
-            if (& $check 'Application container is healthy' $healthy) { $ok++ } else { $warn++ }
+            # Every expected service, not just the application. After an interrupted
+            # install the useful question is which part of the stack did not come up, and
+            # reporting only the app is how a missing nginx or worker stayed invisible.
+            #
+            # What counts as passing differs per service, and the shared table
+            # (Get-AfctExpectedServices) is what decides: a service with a Docker health
+            # check has to report healthy, and the worker, which defines none, only has to
+            # be running. Anything else would either fail a good install or pass a bad one.
+            $state = Get-AfctStackState -SkipHttp
+            foreach ($svc in $state.Services) {
+                $label = "$($svc.Label) is ready"
+                if ($svc.Ready) {
+                    if ($svc.Health -eq 'healthy') { $label = "$($svc.Label) is healthy" }
+                    else { $label = "$($svc.Label) is running" }
+                } elseif ($svc.Status -eq 'missing') {
+                    $label = "$($svc.Label) is not running"
+                } else {
+                    $label = "$($svc.Label) is $($svc.Status)"
+                    if ($svc.Health -and $svc.Health -ne 'none') { $label += " ($($svc.Health))" }
+                }
+                if (& $check $label $svc.Ready) { $ok++ } else { $warn++ }
+            }
+            if (-not $state.ImageMatches) {
+                Write-AfctWarn "the running application is not the pinned version ($($state.ExpectedTag))"
+                $warn++
+            }
             if (& $check 'Local AFCT health endpoint responds' (Test-AfctHttpHealth)) { $ok++ } else { $warn++ }
         }
     } else {

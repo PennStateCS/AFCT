@@ -42,6 +42,76 @@ function Test-AfctDataWithoutConfig {
     return $false
 }
 
+# --------------------------------------------------------------------------- #
+# Rerunning the installer
+# --------------------------------------------------------------------------- #
+
+# Is the deployment already up, at the version this install is pinned to?
+#
+# A rerun after an apparent hang used to replay the whole startup, including the part that
+# hung, because nothing ever asked whether the stack was already running. The tester who
+# prompted this work reran the installer with all five containers up and healthy and watched
+# it stop at the same line.
+#
+# "Container exists" is not the question. Every expected service has to be ready on its own
+# terms, the application has to answer over HTTP, and the running image has to be the pinned
+# one, or the rerun does the work. Anything short of that falls through to a normal startup,
+# which is also what repairs a partial stack: `up` reconciles what is missing and leaves what
+# is already correct alone.
+function Test-AfctDeploymentReady {
+    if (-not (Test-Path -LiteralPath $RuntimeCompose)) { return $false }
+    $state = Get-AfctStackState
+    Write-AfctTrace "deployment state: $(Format-AfctStackState $state)"
+    if (-not $state.AllReady) { return $false }
+    if (-not $state.ImageMatches) {
+        Write-AfctInfo "the running application is not the pinned version ($($state.ExpectedTag)); it will be redeployed."
+        return $false
+    }
+    if (-not $state.HttpOk) {
+        Write-AfctInfo 'the containers are running but the web service did not answer; the stack will be restarted.'
+        return $false
+    }
+    return $true
+}
+
+# Bring the stack up, or skip it when the deployment is already the one being asked for.
+#
+# Nothing here stops, removes or recreates anything, and no configuration is rewritten: the
+# only two outcomes are "start it" and "leave it alone".
+function Invoke-AfctEnsureDeployed {
+    if (Test-AfctDeploymentReady) {
+        Write-AfctSuccess 'AFCT is already running and healthy at the expected version.'
+        Write-AfctTrace 'startup skipped: deployment already ready'
+        return
+    }
+    Invoke-AfctDeployStack
+}
+
+# Collect diagnostics after a startup failure, then re-throw what actually went wrong.
+#
+# The failure is the thing the operator needs, so it stays the error. Diagnostics are a
+# best-effort extra: if collecting them fails as well, that is reported as a note and the
+# original error still comes out unchanged, because replacing a real startup failure with
+# "could not collect diagnostics" would be strictly worse than having no bundle.
+function Invoke-AfctDeployWithDiagnostics {
+    try {
+        Invoke-AfctEnsureDeployed
+    } catch {
+        # Report the failure first, so the reason is on screen above the diagnostics run
+        # rather than after it, then re-throw under the "already reported" sentinel so the
+        # controller exits nonzero without printing the same line a second time.
+        $message = "$($_.Exception.Message)" -replace '^afct-fatal:\s*', ''
+        Write-AfctError $message
+        try {
+            Write-AfctInfo 'Collecting diagnostics...'
+            Invoke-AfctDiagnostics 'startup-failure' | Out-Null
+        } catch {
+            Write-AfctWarn "diagnostics could not be collected: $($_.Exception.Message)"
+        }
+        throw "afct-reported: $message"
+    }
+}
+
 function Show-AfctCompletion {
     param([hashtable]$Config)
     Write-AfctInfo ''
@@ -88,7 +158,7 @@ function Invoke-AfctInstall {
         # This path deploys without rewriting the file, so the key has to be topped up here.
         Confirm-AfctSecretKey $EnvFile
         Confirm-AfctBackupKey $EnvFile
-        Invoke-AfctDeployStack
+        Invoke-AfctDeployWithDiagnostics
         $cfg = @{
             AppUrl = (Read-AfctEnvValue 'NEXTAUTH_URL' $EnvFile)
             AdminEmail = (Read-AfctEnvValue 'ADMIN_EMAIL' $EnvFile)
@@ -121,7 +191,7 @@ function Invoke-AfctInstall {
     # leaves the running version alone.
     if (-not $reconfiguring) { Set-AfctReleasePin }
 
-    Invoke-AfctDeployStack
+    Invoke-AfctDeployWithDiagnostics
     Show-AfctCompletion $cfg
     Invoke-AfctMaybeEnableUpdater -WithUpdater:$WithUpdater -NonInteractive:$NonInteractive
 }
