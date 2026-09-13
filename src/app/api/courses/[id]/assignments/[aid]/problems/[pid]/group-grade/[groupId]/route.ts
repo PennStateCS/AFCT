@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -124,17 +125,27 @@ export const POST = withCourseAuth(
        * concurrent individual update of any of them waits for this to finish, and this reads
        * the value that will still be there when it writes.
        *
-       * What this does not cover: a member who has *no* grade row yet, where there is no row
-       * to lock and a concurrent insert can still be overwritten. Closing that needs
-       * serializable isolation on both this route and the single-student one, which is a
-       * larger change than the race it buys.
+       * A member with *no* grade row yet cannot be locked, because there is no row. That half
+       * is covered by this transaction being Serializable: the read below sees no row for them,
+       * one appears before the write, and its own snapshot refuses rather than flattening a
+       * grade it never saw. The other grader's isolation level makes no difference, which
+       * `lib/grade-isolation.db.test.ts` establishes rather than assumes; dropping this one to
+       * READ COMMITTED is what brings the overwrite back. A serialization failure arrives as
+       * P2034 and is answered as a conflict to retry.
        */
       const conflicts: { studentId: string; name: string; grade: number | null }[] = [];
 
-      const outcome = await prisma.$transaction(async (tx) => {
-        const existing = await tx.$queryRaw<
-          { studentId: string; grade: number | null; firstName: string | null; lastName: string | null }[]
-        >`
+      const outcome = await prisma
+        .$transaction(
+          async (tx) => {
+            const existing = await tx.$queryRaw<
+              {
+                studentId: string;
+                grade: number | null;
+                firstName: string | null;
+                lastName: string | null;
+              }[]
+            >`
           SELECT g."studentId", g."grade", u."firstName", u."lastName"
           FROM "AssignmentProblemGrade" g
           JOIN "User" u ON u."id" = g."studentId"
@@ -144,51 +155,54 @@ export const POST = withCourseAuth(
           FOR UPDATE OF g
         `;
 
-        for (const row of existing) {
-          if (row.grade === grade) continue;
-          conflicts.push({
-            studentId: row.studentId,
-            name: `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || 'this student',
-            grade: row.grade,
-          });
-        }
+            for (const row of existing) {
+              if (row.grade === grade) continue;
+              conflicts.push({
+                studentId: row.studentId,
+                name: `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || 'this student',
+                grade: row.grade,
+              });
+            }
 
-        // Reported rather than overwritten, so a deliberate individual adjustment is not
-        // silently erased by a routine group grade. Thrown so the read's locks are released
-        // with the rollback rather than held while a response is built.
-        if (conflicts.length > 0 && !overwrite) throw new GroupGradeConflictError();
+            // Reported rather than overwritten, so a deliberate individual adjustment is not
+            // silently erased by a routine group grade. Thrown so the read's locks are released
+            // with the rollback rather than held while a response is built.
+            if (conflicts.length > 0 && !overwrite) throw new GroupGradeConflictError();
 
-        // Every member is graded together, or nobody is. A partial write here would leave a
-        // group half-graded with no sign of which half.
-        for (const studentId of memberIds) {
-          await tx.assignmentProblemGrade.upsert({
-            where: { assignmentId_problemId_studentId: { assignmentId, problemId, studentId } },
-            create: {
-              assignmentId,
-              problemId,
-              studentId,
-              grade,
-              gradedManually: true,
-              gradeSource: 'MANUAL',
-              groupGradeGroupId: group.id,
-              groupGradeValue: grade,
-            },
-            update: {
-              grade,
-              gradedManually: true,
-              gradeSource: 'MANUAL',
-              groupGradeGroupId: group.id,
-              groupGradeValue: grade,
-            },
-          });
-        }
-        // Entering a grade for a group assignment locks its set, same as the single-student
-        // route: the membership a grade was based on must stop moving underneath it.
-        await lockGroupSetIfUsed(tx, groupSetId);
-      }).catch((err) => {
-        if (err instanceof GroupGradeConflictError) return 'conflict' as const;
-        throw err;
-      });
+            // Every member is graded together, or nobody is. A partial write here would leave a
+            // group half-graded with no sign of which half.
+            for (const studentId of memberIds) {
+              await tx.assignmentProblemGrade.upsert({
+                where: { assignmentId_problemId_studentId: { assignmentId, problemId, studentId } },
+                create: {
+                  assignmentId,
+                  problemId,
+                  studentId,
+                  grade,
+                  gradedManually: true,
+                  gradeSource: 'MANUAL',
+                  groupGradeGroupId: group.id,
+                  groupGradeValue: grade,
+                },
+                update: {
+                  grade,
+                  gradedManually: true,
+                  gradeSource: 'MANUAL',
+                  groupGradeGroupId: group.id,
+                  groupGradeValue: grade,
+                },
+              });
+            }
+            // Entering a grade for a group assignment locks its set, same as the single-student
+            // route: the membership a grade was based on must stop moving underneath it.
+            await lockGroupSetIfUsed(tx, groupSetId);
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        )
+        .catch((err) => {
+          if (err instanceof GroupGradeConflictError) return 'conflict' as const;
+          throw err;
+        });
 
       if (outcome === 'conflict') {
         return NextResponse.json(
@@ -219,6 +233,20 @@ export const POST = withCourseAuth(
 
       return NextResponse.json({ grade, memberIds, applied: memberIds.length });
     } catch (error) {
+      /**
+       * Two graders reached the same rows at the same moment and Postgres refused one of them.
+       *
+       * This is the pair of transactions doing their job, not a fault: the group route and the
+       * single-student route each read what the other writes, which is what lets Postgres see
+       * the conflict at all. Retrying is safe and is the only thing to do, so say so rather
+       * than reporting a server error.
+       */
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        return NextResponse.json(
+          { error: 'Another grade for this problem was saved at the same moment. Try again.' },
+          { status: 409 },
+        );
+      }
       console.error('POST group-grade error:', error);
       await logError(req, {
         userId: graderId,
