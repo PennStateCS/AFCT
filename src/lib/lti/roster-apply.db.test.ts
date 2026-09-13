@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { applyRosterChanges } from './roster-apply';
 import { diffRoster } from './roster-diff';
@@ -411,5 +411,98 @@ describe('applying the LMS rosters directly', () => {
     expect(
       await prisma.roster.findFirstOrThrow({ where: { courseId: COURSE, userId: ids.existing } }),
     ).toMatchObject({ role: 'TA' });
+  });
+});
+
+/**
+ * A student in more than one of the connected LMS courses.
+ *
+ * A student belongs to exactly one LMS course per AFCT course: their mark has one gradebook to
+ * go in, and with two AFCT cannot tell which, so passback refuses. That refusal is correct but
+ * it arrives at grading time. The sync has the whole picture, so it says so while somebody is
+ * looking at the roster.
+ */
+describe('noticing a student in two connected LMS courses', () => {
+  const SECOND_PLATFORM = 'ltip-apply-2';
+  const SECOND_LINK = 'cl-apply-2';
+  const SECOND_ISSUER = 'https://moodle.example.test';
+
+  beforeEach(async () => {
+    await prisma.ltiPlatform.create({
+      data: {
+        id: SECOND_PLATFORM,
+        name: 'Moodle',
+        issuer: SECOND_ISSUER,
+        clientId: 'client-apply-2',
+        deploymentId: '1',
+        authLoginUrl: `${SECOND_ISSUER}/auth`,
+        tokenUrl: `${SECOND_ISSUER}/token`,
+        keysetUrl: `${SECOND_ISSUER}/jwks`,
+      },
+    });
+    await prisma.ltiContextLink.create({
+      data: { id: SECOND_LINK, platformId: SECOND_PLATFORM, contextId: 'ctx-2', courseId: COURSE },
+    });
+  });
+
+  afterEach(async () => {
+    await prisma.ltiContextMember.deleteMany({ where: { contextLinkId: SECOND_LINK } });
+    await prisma.ltiContextLink.deleteMany({ where: { platformId: SECOND_PLATFORM } });
+    await prisma.ltiPlatform.deleteMany({ where: { id: SECOND_PLATFORM } });
+    await prisma.linkedIdentity.deleteMany({ where: { issuer: SECOND_ISSUER } });
+  });
+
+  const logged = async () =>
+    prisma.activityLog.findMany({
+      where: { action: 'LTI_STUDENT_IN_SEVERAL_CONTEXTS', courseId: COURSE },
+      select: { severity: true, metadata: true },
+    });
+
+  it('records it against the student, as a warning', async () => {
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+
+    await applyRosterChanges({
+      courseId: COURSE,
+      sources: [
+        {
+          ...SOURCE,
+          members: [member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })],
+        },
+        {
+          issuer: SECOND_ISSUER,
+          contextLinkId: SECOND_LINK,
+          members: [member({ ltiUserId: 'moodle-existing', email: 'existing@example.test' })],
+        },
+      ],
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    const entries = await logged();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.severity).toBe('WARNING');
+  });
+
+  it('says nothing when each student is in only one of them', async () => {
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+
+    await applyRosterChanges({
+      courseId: COURSE,
+      sources: [
+        {
+          ...SOURCE,
+          members: [member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })],
+        },
+        { issuer: SECOND_ISSUER, contextLinkId: SECOND_LINK, members: [] },
+      ],
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    expect(await logged()).toHaveLength(0);
   });
 });

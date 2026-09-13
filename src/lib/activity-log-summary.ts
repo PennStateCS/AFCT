@@ -58,6 +58,7 @@ const ACTION_VERB: Record<string, string> = {
   SUBMISSION_AUTOGRADE_WITHHELD: 'Withheld',
   REMOVE_ASSIGNMENT_PROBLEM_REFUSED: 'Refused',
   PROBLEM_TYPE_CHANGE_REFUSED: 'Refused',
+  LTI_STUDENT_IN_SEVERAL_CONTEXTS: 'Found',
   SUBMISSION_RERUN: 'Re-ran',
   COURSE_SUBMISSIONS_RERUN: 'Re-ran',
   SUBMISSION_QUEUE_REAPED: 'Reclaimed',
@@ -768,6 +769,15 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
     // Kept apart from SKIPPED on purpose. That one is routine (newer work holds the grade);
     // this one means the evaluator broke and somebody's work is unmarked as a result, so a
     // study or an investigation must be able to tell the two apart years later.
+    // Said at sync time rather than left for grading time, which is when it would otherwise
+    // surface as a grade that will not send.
+    case 'LTI_STUDENT_IN_SEVERAL_CONTEXTS': {
+      const n = firstNum(metadata, 'contexts');
+      return n > 0
+        ? `in more than one of this course's ${n} connected LMS courses`
+        : 'in more than one connected LMS course';
+    }
+
     // Which way the type was going and what stopped it, since a refused change leaves the
     // problem as it was and the entry is the only record that anybody tried.
     case 'PROBLEM_TYPE_CHANGE_REFUSED': {

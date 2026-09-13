@@ -52,6 +52,15 @@ export type AgsFailure =
    * The AFCT course is open from several LMS courses and AFCT cannot tell which one this
    * student belongs to, so it will not guess which gradebook to write to.
    */
+  /**
+   * The student is in none of the connected LMS courses, or in more than one.
+   *
+   * A student belongs to exactly one LMS course per AFCT course; that is the rule, not a
+   * limitation of the queue. Cross-listed sections are several LMS courses opening one AFCT
+   * course, and a grade has one gradebook to go in. Refusing is the only safe answer: there is
+   * no way to pick between two without guessing, and a mark in the wrong section is worse than
+   * a mark that has not arrived yet.
+   */
   | 'ambiguous-context'
   /**
    * AFCT could not read the whole list of columns, so it does not know whether one already
@@ -675,7 +684,7 @@ export function agsFailureMessage(reason: AgsFailure): string {
     case 'course-deleted':
       return 'This course has been deleted in AFCT, so its grades are no longer sent to your LMS. Anything already in the LMS gradebook stays as it is.';
     case 'ambiguous-context':
-      return 'This AFCT course is connected to more than one LMS course, and AFCT cannot tell which one this student is in, so it has not sent the grade anywhere. Sync the roster from the LMS course this student belongs to.';
+      return 'This student appears in more than one of the LMS courses connected here, or in none of them, so AFCT cannot tell which gradebook their mark belongs in and has not sent it anywhere. A student can belong to only one LMS course per AFCT course: take them out of the others there, then sync the roster from the one they are in.';
     case 'line-item-lookup-incomplete':
     case 'line-item-lookup-failed':
       return 'AFCT could not check whether your LMS already has a column for this assignment, so it has not made one. The grade stays queued and will be sent when the LMS answers.';

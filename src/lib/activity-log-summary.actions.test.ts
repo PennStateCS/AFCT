@@ -396,6 +396,12 @@ const DETAIL: Array<[string, Meta, string | null]> = [
   ],
   ['PROBLEM_TYPE_CHANGE_REFUSED', { fromType: 'FA', toType: 'PDA' }, 'FA to PDA'],
   ['PROBLEM_TYPE_CHANGE_REFUSED', {}, null],
+  [
+    'LTI_STUDENT_IN_SEVERAL_CONTEXTS',
+    { contexts: 2 },
+    "in more than one of this course's 2 connected LMS courses",
+  ],
+  ['LTI_STUDENT_IN_SEVERAL_CONTEXTS', {}, 'in more than one connected LMS course'],
   ['SUBMISSION_STALE_DISCARDED', {}, 'the submission was reclaimed while it was being graded'],
 
   // Submissions the system turned down. Each says why, since that is the whole entry.

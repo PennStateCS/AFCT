@@ -86,7 +86,13 @@ export async function applyRosterChanges(opts: {
    * roster change made by hand, so a drop reads the same however it happened, with the source
    * in the metadata.
    */
-  const events: { action: string; targetUserId: string; extra?: Record<string, unknown> }[] = [];
+  const events: {
+    action: string;
+    targetUserId: string;
+    extra?: Record<string, unknown>;
+    /** WARNING rather than INFO: this one is a problem to fix, not a change that was made. */
+    severity?: 'INFO' | 'WARNING';
+  }[] = [];
 
   /** What was actually applied, for the summary below. Filled inside the transaction. */
   let changes: RosterChange[] = opts.changes ?? [];
@@ -122,6 +128,33 @@ export async function applyRosterChanges(opts: {
           userId: member.userId,
           ltiUserId: member.ltiUserId,
           tx,
+        });
+      }
+    }
+
+    /**
+     * A student in more than one of the connected LMS courses, noticed while the rosters are in
+     * hand rather than weeks later when their grade will not send.
+     *
+     * A student belongs to exactly one LMS course per AFCT course: their mark has one gradebook
+     * to go in, and with two AFCT cannot tell which, so passback refuses. That refusal is
+     * correct but it arrives at grading time, which is the worst moment to learn about a roster
+     * problem. The sync has the whole picture, so it says so here.
+     */
+    if (contexts && contexts.length > 1) {
+      const seenIn = new Map<string, number>();
+      for (const context of contexts) {
+        for (const member of context.members) {
+          seenIn.set(member.userId, (seenIn.get(member.userId) ?? 0) + 1);
+        }
+      }
+      const inSeveral = [...seenIn.entries()].filter(([, n]) => n > 1).map(([userId]) => userId);
+      for (const userId of inSeveral) {
+        events.push({
+          action: 'LTI_STUDENT_IN_SEVERAL_CONTEXTS',
+          targetUserId: userId,
+          severity: 'WARNING',
+          extra: { contexts: contexts.length },
         });
       }
     }
@@ -227,7 +260,7 @@ export async function applyRosterChanges(opts: {
       userId: actorUserId,
       courseId,
       action: event.action,
-      severity: 'INFO',
+      severity: event.severity ?? 'INFO',
       category: 'COURSE',
       // `via` marks it as a sync rather than somebody working through the roster by hand.
       metadata: { targetUserId: event.targetUserId, via: 'LTI_ROSTER_SYNC', ...event.extra },
