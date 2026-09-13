@@ -7,8 +7,10 @@ const canManageMock = vi.hoisted(() => vi.fn());
 const activityLogMock = vi.hoisted(() => vi.fn());
 const prismaMock = vi.hoisted(() => ({
   submission: { findUnique: vi.fn() },
-  assignment: { findUnique: vi.fn() },
+  assignment: { findUnique: vi.fn(), findFirst: vi.fn() },
   assignmentProblemGrade: { findUnique: vi.fn() },
+  // Read by the student content gate, which non-staff callers now go through.
+  assignmentOverride: { findMany: vi.fn() },
 }));
 
 vi.mock('@/lib/client-auth', () => ({
@@ -46,6 +48,15 @@ beforeEach(() => {
   canAccessMock.mockResolvedValue(true);
   canManageMock.mockResolvedValue(false);
   prismaMock.assignment.findUnique.mockResolvedValue({ isPublished: true });
+  // In the audience, with nothing holding the assignment shut. The gate reads through
+  // assignment.findFirst, which the published check above does not use.
+  prismaMock.assignment.findFirst.mockResolvedValue({
+    unlockAt: null,
+    dueDate: new Date('2026-01-01T00:00:00Z'),
+    allowLateSubmissions: false,
+    lateCutoff: null,
+  });
+  prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
 });
 
 describe('GET /api/client/v1/submissions/[submissionId]', () => {
@@ -138,6 +149,42 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
         }),
       }),
     );
+  });
+
+  /**
+   * Published and enrolled was as far as this went, so a student taken out of an assignment's
+   * audience, or one whose assignment went back behind an unlock time, kept polling the result
+   * here after every browser surface had stopped showing it.
+   */
+  it.each([
+    ['taken out of the audience', () => prismaMock.assignment.findFirst.mockResolvedValue(null)],
+    [
+      'the assignment locked again',
+      () =>
+        prismaMock.assignment.findFirst.mockResolvedValue({
+          unlockAt: new Date('2099-01-01T00:00:00Z'),
+          dueDate: new Date('2099-02-01T00:00:00Z'),
+          allowLateSubmissions: false,
+          lateCutoff: null,
+        }),
+    ],
+  ])('404s for a student with %s', async (_what, arrange) => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      studentId: 'u1',
+      studentGroupId: null,
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'w',
+    });
+    canViewMock.mockResolvedValue(true);
+    arrange();
+
+    expect((await GET(makeReq('Bearer good'), ctx)).status).toBe(404);
   });
 
   it("still answers staff about the submission's own owner", async () => {

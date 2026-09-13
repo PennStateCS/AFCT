@@ -11,6 +11,9 @@ const prismaMock = vi.hoisted(() => ({
   groupMembership: {
     findFirst: vi.fn(),
   },
+  // Read by the student content gate, which non-staff callers now go through.
+  assignment: { findFirst: vi.fn() },
+  assignmentOverride: { findMany: vi.fn() },
 }));
 
 const authMock = vi.hoisted(() => vi.fn());
@@ -62,6 +65,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.roster.findFirst.mockResolvedValue(null);
   prismaMock.groupMembership.findFirst.mockResolvedValue(null);
+  // In the audience, with nothing holding the assignment shut, unless a test says otherwise.
+  prismaMock.assignment.findFirst.mockResolvedValue({
+    unlockAt: null,
+    dueDate: new Date('2026-01-01T00:00:00Z'),
+    allowLateSubmissions: false,
+    lateCutoff: null,
+  });
+  prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
 });
 
 describe('GET /api/files/submissions/[file]', () => {
@@ -388,6 +399,47 @@ describe('a group submission', () => {
     prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gm-1' });
 
     expect((await get()).status).toBe(403);
+  });
+
+  /**
+   * Course access and ownership were as far as this went, so a student taken out of an
+   * assignment's audience, or one whose assignment was put back behind an unlock time, could
+   * still fetch the bytes directly while every other surface had stopped showing them.
+   */
+  it('refuses a member who is no longer in the assignment audience', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-3' } });
+    prismaMock.roster.findFirst.mockResolvedValue(enrolled());
+    prismaMock.groupMembership.findFirst.mockResolvedValue({ id: 'gm-1' });
+    // The gate finds nothing: the assignment is aimed at specific students, not this one.
+    prismaMock.assignment.findFirst.mockResolvedValue(null);
+
+    expect((await get()).status).toBe(403);
+  });
+
+  it('refuses while the assignment has not unlocked', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-2' } });
+    prismaMock.roster.findFirst.mockResolvedValue(enrolled());
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      unlockAt: new Date('2099-01-01T00:00:00Z'),
+      dueDate: new Date('2099-02-01T00:00:00Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
+
+    expect((await get()).status).toBe(403);
+  });
+
+  it('does not gate staff, who set the audience', async () => {
+    authMock.mockResolvedValue({ user: { id: 'fac-1' } });
+    prismaMock.roster.findFirst.mockResolvedValue({
+      role: 'FACULTY',
+      status: 'ENROLLED',
+      course: { isPublished: true, deletedAt: null, startDate: new Date('2020-01-01') },
+    });
+    // Would mask a student out entirely.
+    prismaMock.assignment.findFirst.mockResolvedValue(null);
+
+    expect((await get()).status).toBe(200);
   });
 
   it('serves it to a TA', async () => {

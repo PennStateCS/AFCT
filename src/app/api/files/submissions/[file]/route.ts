@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canAccessCourse, canViewStudentData } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse, canViewStudentData } from '@/lib/permissions';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { apiError } from '@/lib/api/http';
 import { logDenial, logError } from '@/lib/api/activity';
 import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
@@ -87,7 +88,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
         studentGroupId: submission.studentGroupId,
       }));
 
-    if (!allowed) {
+    /**
+     * For a student, the same audience and unlock gate the assignment's own reads run.
+     *
+     * Course access and ownership were as far as this went, so a student taken out of an
+     * assignment's audience, or one whose assignment was put back behind an unlock time, could
+     * still fetch the bytes directly while every other surface had stopped showing them. Staff
+     * skip it: they set the audience, and they read everybody's work by design.
+     */
+    const gated =
+      allowed &&
+      (await (async () => {
+        if (await canManageCourse(session.user, submission.courseId)) return true;
+        const gate = await resolveStudentContentGate(submission.assignmentId, session.user.id);
+        return gate.assigned && !gate.locked;
+      })());
+
+    if (!gated) {
       return logDenial(req, {
         userId: session.user.id,
         action: 'SUBMISSION_FILE_ACCESS_DENIED',
@@ -95,7 +112,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
         courseId: submission.courseId,
         // The subject here is whose file was reached for, which is not the actor.
         metadata: {
-          reason: 'no access to the course, or not the owning student, a member of the owning group, or course staff',
+          reason:
+            'no access to the course or the assignment, or not the owning student, a member of the owning group, or course staff',
           targetUserId: submission.studentId,
           submissionId: submission.id,
         },

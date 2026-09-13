@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { withClientAuth } from '@/lib/api/with-client-auth';
 import { apiError } from '@/lib/api/http';
 import { canAccessCourse, canManageCourse, canViewStudentData, isAdmin } from '@/lib/permissions';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { discloseSubmissionFeedback, feedbackVisibilityMap } from '@/lib/feedback-visibility';
 
@@ -78,6 +79,20 @@ export const GET = withClientAuth(async (req, ctx: RouteCtx, { user }) => {
       select: { isPublished: true },
     });
     if (!assignment?.isPublished || !(await canAccessCourse(user, submission.courseId))) {
+      return apiError(404, 'Submission not found');
+    }
+
+    /**
+     * The same audience and unlock gate the browser's student reads run.
+     *
+     * Published and enrolled was as far as this went, so a student taken out of an assignment's
+     * audience, or one whose assignment was put back behind an unlock time, kept polling the
+     * result here after every browser surface had stopped showing it. The gate answers for the
+     * caller rather than for the submission's owner: on a group attempt the two differ, and
+     * what matters is whether *this* student may still see the work.
+     */
+    const gate = await resolveStudentContentGate(submission.assignmentId, user.id);
+    if (!gate.assigned || gate.locked) {
       return apiError(404, 'Submission not found');
     }
   }
