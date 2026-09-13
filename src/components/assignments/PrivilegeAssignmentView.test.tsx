@@ -197,11 +197,22 @@ vi.mock('@/components/dialogs/AssignmentProblemSettingsDialog', () => ({
 
 vi.mock('@/components/AssignmentSubmissions', () => ({
   __esModule: true,
-  default: ({ courseId, assignmentId }: { courseId: string; assignmentId: string }) => (
+  default: ({
+    courseId,
+    assignmentId,
+    problems,
+  }: {
+    courseId: string;
+    assignmentId: string;
+    problems?: unknown[];
+  }) => (
     <div
       data-testid="assignment-submissions"
       data-course={courseId}
       data-assignment={assignmentId}
+      // Serialised rather than asserted through a spy, so the test sees exactly what the tab
+      // was handed and not what a later render happened to leave on a mock.
+      data-problems={JSON.stringify(problems ?? [])}
     />
   ),
 }));
@@ -213,6 +224,7 @@ type Problem = {
   title: string;
   type: string;
   description: string | null;
+  descriptionJson?: unknown;
   fileName: string | null;
   originalFileName: string | null;
   maxStates: number;
@@ -467,6 +479,36 @@ describe('PrivilegeAssignmentView — tabs', () => {
     searchState.value = 'tab=submissions';
     renderView();
     expect(screen.getByTestId('assignment-submissions')).toBeInTheDocument();
+  });
+
+  /**
+   * The rich description has to travel with the plain one.
+   *
+   * This tab builds its own list of problems field by field rather than passing the ones it
+   * was given, and it copied `description` and not `descriptionJson`. Everything downstream
+   * then did the only thing it could with a missing rich document and rendered the flattened
+   * text, so a problem whose prompt contains an equation showed its raw LaTeX here while the
+   * same problem rendered properly everywhere else.
+   */
+  it('hands the submissions tab the rich description as well as the plain one', () => {
+    searchState.value = 'tab=submissions';
+    const rich = {
+      version: 1,
+      document: {
+        type: 'doc',
+        content: [{ type: 'blockMath', attrs: { latex: 'x^2' } }],
+      },
+    };
+    renderView({
+      initialAssignment: makeAssignment({
+        problems: [{ problem: problem({ descriptionJson: rich }), maxPoints: 10 }],
+      }),
+    });
+
+    const handed = JSON.parse(
+      screen.getByTestId('assignment-submissions').getAttribute('data-problems') ?? '[]',
+    );
+    expect(handed).toEqual([expect.objectContaining({ id: 'p1', descriptionJson: rich })]);
   });
 });
 

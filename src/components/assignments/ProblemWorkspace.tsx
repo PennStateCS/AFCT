@@ -24,6 +24,14 @@ type Problem = {
   id: string;
   title: string;
   description?: string | null;
+  /**
+   * The rich form of the same text, carrying the headings, links and equations the plain
+   * `description` can only flatten. It has to travel with it: every surface that forwards one
+   * and not the other silently renders the flattened copy, which is how a problem's equations
+   * came out as raw LaTeX on the submissions tab while the same problem rendered correctly on
+   * the problems tab.
+   */
+  descriptionJson?: unknown;
   type?: string | null;
   maxPoints?: number | null;
   maxStates?: number | null;
@@ -271,7 +279,7 @@ export default function ProblemWorkspace({
             // its own card in the right column now, where the grader's version of it lives.
             title={problem.title}
             description={problem.description ?? undefined}
-            descriptionJson={(problem as { descriptionJson?: unknown }).descriptionJson}
+            descriptionJson={problem.descriptionJson}
             type={problem.type ?? undefined}
             maxStates={problem.maxStates ?? undefined}
             isDeterministic={problem.isDeterministic ?? undefined}

@@ -454,6 +454,7 @@ export default function AssignmentDashboardPage({
         id: ap.problem.id,
         title: ap.problem.title,
         description: ap.problem.description ?? undefined,
+        descriptionJson: ap.problem.descriptionJson,
         type: ap.problem.type ? String(ap.problem.type) : undefined,
         maxStates: ap.problem.maxStates ?? undefined,
         isDeterministic: ap.problem.isDeterministic ?? undefined,

@@ -53,6 +53,8 @@ type Problem = {
   id: string;
   title: string;
   description?: string;
+  /** The rich form of the description. Travels with it; see ProblemWorkspace's own type. */
+  descriptionJson?: unknown;
   type?: string;
   maxPoints?: number;
   maxStates?: number;
