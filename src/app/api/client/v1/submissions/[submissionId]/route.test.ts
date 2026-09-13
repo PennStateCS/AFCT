@@ -104,6 +104,71 @@ describe('GET /api/client/v1/submissions/[submissionId]', () => {
     });
   });
 
+  /**
+   * A group assignment carries one grade row per member, so "the grade on this attempt" is not
+   * a single number: it depends on who is asking. Reading the uploader's row handed a member
+   * their groupmate's mark, which is wrong for them and a disclosure of the other student's
+   * individual adjustment.
+   */
+  it("gives a groupmate their own mark, not the uploader's", async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      // Alice uploaded for the group; u1 (Bob) is polling it.
+      studentId: 'alice',
+      studentGroupId: 'group-1',
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'w',
+    });
+    canViewMock.mockResolvedValue(true);
+    canManageMock.mockResolvedValue(false);
+    prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({ grade: 9 });
+
+    const res = await GET(makeReq('Bearer good'), ctx);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.assignmentProblemGrade.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          assignmentId_problemId_studentId: expect.objectContaining({ studentId: 'u1' }),
+        }),
+      }),
+    );
+  });
+
+  it("still answers staff about the submission's own owner", async () => {
+    resolveMock.mockResolvedValue(validUser);
+    prismaMock.submission.findUnique.mockResolvedValue({
+      id: 's1',
+      studentId: 'alice',
+      studentGroupId: 'group-1',
+      courseId: 'c1',
+      assignmentId: 'a1',
+      problemId: 'p1',
+      status: 'COMPLETED',
+      correct: true,
+      feedback: 'w',
+    });
+    canViewMock.mockResolvedValue(true);
+    canManageMock.mockResolvedValue(true);
+    prismaMock.assignment.findUnique.mockResolvedValue({ isPublished: true });
+    prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({ grade: 6 });
+
+    await GET(makeReq('Bearer good'), ctx);
+
+    expect(prismaMock.assignmentProblemGrade.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          assignmentId_problemId_studentId: expect.objectContaining({ studentId: 'alice' }),
+        }),
+      }),
+    );
+  });
+
   it('passes studentGroupId: null for an individual submission', async () => {
     resolveMock.mockResolvedValue(validUser);
     prismaMock.submission.findUnique.mockResolvedValue({

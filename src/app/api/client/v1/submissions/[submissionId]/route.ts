@@ -82,13 +82,22 @@ export const GET = withClientAuth(async (req, ctx: RouteCtx, { user }) => {
     }
   }
 
-  // The grade lives on the per-problem grade record, not the submission.
+  /**
+   * The grade lives on the per-problem grade record, not the submission, and on a group
+   * assignment there is one such record per member.
+   *
+   * So whose record depends on who is asking. A group submission is shared: any member may
+   * poll the attempt one of them uploaded. Reading the uploader's row would hand a member
+   * somebody else's mark, which is both wrong and a disclosure of an individual adjustment
+   * their groupmate received. Staff asked about this submission's owner and get exactly that.
+   */
+  const gradeStudentId = staff ? submission.studentId : user.id;
   const gradeRow = await prisma.assignmentProblemGrade.findUnique({
     where: {
       assignmentId_problemId_studentId: {
         assignmentId: submission.assignmentId,
         problemId: submission.problemId,
-        studentId: submission.studentId,
+        studentId: gradeStudentId,
       },
     },
     select: { grade: true },
