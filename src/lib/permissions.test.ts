@@ -13,6 +13,7 @@ import {
   canAccessCourse,
   canManageCourse,
   isCourseArchived,
+  isCourseDeleted,
   isCourseStaffAnywhere,
   staffManagesStudent,
   isMemberOfGroup,
@@ -159,6 +160,75 @@ describe('canAccessCourse', () => {
 
   it('anonymous callers may not', async () => {
     await expect(canAccessCourse(null, 'c')).resolves.toBe(false);
+  });
+
+  /**
+   * Reading through a caller-supplied client is what lets a transaction ask this question
+   * again, with the rows it is about to write held. Everything the answer turns on is mutable,
+   * so a transaction that trusted a reading taken before it opened was deciding against a
+   * world that could already have moved. Asking `prisma` from inside a transaction would be no
+   * better: it reads committed state on another connection without holding any of it.
+   */
+  describe('reading through a caller-supplied client', () => {
+    const txClient = () => ({
+      roster: { findFirst: vi.fn() },
+      course: { findUnique: vi.fn() },
+    });
+
+    it('asks the given client about the roster, not the default one', async () => {
+      const tx = txClient();
+      tx.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        status: 'ENROLLED',
+        course: { isPublished: true, deletedAt: null, startDate: new Date('2000-01-01') },
+      });
+      // The outer client would say no, so a true here can only have come from the tx client.
+      prismaMock.roster.findFirst.mockResolvedValue(null);
+
+      await expect(
+        canAccessCourse({ id: 'u', isAdmin: false }, 'c', tx as never),
+      ).resolves.toBe(true);
+      expect(tx.roster.findFirst).toHaveBeenCalled();
+      expect(prismaMock.roster.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('sees a drop that only the given client knows about', async () => {
+      const tx = txClient();
+      tx.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        status: 'DROPPED',
+        course: { isPublished: true, deletedAt: null, startDate: new Date('2000-01-01') },
+      });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        status: 'ENROLLED',
+        course: { isPublished: true, deletedAt: null, startDate: new Date('2000-01-01') },
+      });
+
+      await expect(
+        canAccessCourse({ id: 'u', isAdmin: false }, 'c', tx as never),
+      ).resolves.toBe(false);
+    });
+
+    it('checks the admin soft-delete short-circuit through the given client too', async () => {
+      const tx = txClient();
+      tx.course.findUnique.mockResolvedValue({ deletedAt: new Date() });
+      prismaMock.course.findUnique.mockResolvedValue({ deletedAt: null });
+
+      await expect(canAccessCourse({ id: 'a', isAdmin: true }, 'c', tx as never)).resolves.toBe(
+        false,
+      );
+      expect(prismaMock.course.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('isCourseDeleted reads through the given client', async () => {
+      const tx = txClient();
+      tx.course.findUnique.mockResolvedValue({ deletedAt: new Date() });
+      prismaMock.course.findUnique.mockResolvedValue({ deletedAt: null });
+
+      await expect(isCourseDeleted('c', tx as never)).resolves.toBe(true);
+      expect(prismaMock.course.findUnique).not.toHaveBeenCalled();
+    });
   });
 });
 

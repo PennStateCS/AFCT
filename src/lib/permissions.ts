@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import type { CourseRole } from '@prisma/client';
+import type { CourseRole, Prisma } from '@prisma/client';
 import { courseHasStarted } from '@/lib/course-status';
 
 /**
@@ -56,20 +56,33 @@ export async function getCourseRole(
  *
  * One query (role + the course's published flag); admins short-circuit before it.
  */
-export async function canAccessCourse(user: PermissionUser, courseId: string): Promise<boolean> {
+export async function canAccessCourse(
+  user: PermissionUser,
+  courseId: string,
+  /**
+   * Which client to read through.
+   *
+   * A route asks this before it does any work, through `prisma`. A transaction that is about to
+   * write something the answer gates has to ask again through its own `tx`, because everything
+   * here is mutable: a course can be unpublished, soft-deleted or archived, and a student can be
+   * dropped, all while a request that already passed is still in flight. Same function either
+   * way, so the two readings cannot disagree about the rule.
+   */
+  client: Prisma.TransactionClient = prisma,
+): Promise<boolean> {
   if (isAdmin(user)) {
     // A soft-deleted course is inaccessible to everyone, even a system admin.
     // Best-effort: if the lookup errors, fall through and allow, so a transient DB
     // fault surfaces from the handler rather than masking as a denial.
     try {
-      if (await isCourseDeleted(courseId)) return false;
+      if (await isCourseDeleted(courseId, client)) return false;
     } catch {
       /* fall through */
     }
     return true;
   }
   if (!user?.id) return false;
-  const entry = await prisma.roster.findFirst({
+  const entry = await client.roster.findFirst({
     where: { courseId, userId: user.id },
     select: {
       role: true,
@@ -141,8 +154,11 @@ export async function isCourseArchived(courseId: string): Promise<boolean> {
  * (admins included). A `null`/missing course reads as not deleted, so the handler
  * still runs and returns its own 404.
  */
-export async function isCourseDeleted(courseId: string): Promise<boolean> {
-  const course = await prisma.course.findUnique({
+export async function isCourseDeleted(
+  courseId: string,
+  client: Prisma.TransactionClient = prisma,
+): Promise<boolean> {
+  const course = await client.course.findUnique({
     where: { id: courseId },
     select: { deletedAt: true },
   });

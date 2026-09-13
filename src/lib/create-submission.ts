@@ -62,6 +62,11 @@ const REFUSALS: Record<
   EligibilityRefusal['kind'],
   { status: number; error: string; action: string }
 > = {
+  'no-access': {
+    status: 403,
+    error: 'Forbidden',
+    action: 'SUBMISSION_FORBIDDEN',
+  },
   archived: {
     status: 409,
     error: 'This course is archived and no longer accepts submissions.',
@@ -632,6 +637,25 @@ export async function createSubmission(
           });
           // Gone entirely while this was in flight. Nothing to attach the work to.
           if (!freshAssignment) throw new AssignmentVanishedError();
+
+          /**
+           * Course access, asked again through this transaction.
+           *
+           * Every condition behind it is mutable and none of them were re-read: the course
+           * being published, not soft-deleted and already started, and the student still
+           * enrolled rather than dropped. An administrator unpublishing or deleting a course,
+           * or staff dropping a student, could commit after the check at the top and the work
+           * still landed. Only `isArchived` was looked at again, which is one of five.
+           *
+           * The same function the fast path calls, reading through `tx`, so there is one rule
+           * rather than two that can drift. Ordered after the locks above, which is what makes
+           * it authoritative: a lifecycle change holds those same rows while it decides, so
+           * either it commits first and this sees it, or this commits first and it sees the
+           * submission and refuses.
+           */
+          if (!(await canAccessCourse(user, courseId, tx))) {
+            throw new NoLongerEligibleError({ kind: 'no-access' });
+          }
 
           const fresh = resolveSubmitterContext({
             assignment: freshAssignment,

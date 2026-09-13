@@ -1057,6 +1057,35 @@ describe('a change that lands mid-submission', () => {
     expect(tx.submission.create).not.toHaveBeenCalled();
   });
 
+  /**
+   * Course access is five conditions, and only one of them was re-read.
+   *
+   * `canAccessCourse` is the gate every course-scoped route goes through, and for a student it
+   * turns on the course being published, not soft-deleted and already started, and on their
+   * still being enrolled rather than dropped. All of that is mutable, and the transaction
+   * re-read `isArchived` alone. It asks the same function now, through `tx`, so the answer is
+   * the one that holds while the rows are held. What each of those five conditions means is
+   * `canAccessCourse`'s own business, and is tested in `permissions.test.ts`.
+   */
+  it('refuses once the course stops being one the student may reach', async () => {
+    const { tx } = setup();
+    // True for the courtesy check before the transaction, false for the one inside it. Which
+    // of the five conditions changed does not matter here: the point is that it is asked again.
+    canAccessMock.mockImplementation(async (_user, _courseId, client) => client === undefined);
+
+    expect(await call()).toMatchObject({ ok: false, status: 403, error: 'Forbidden' });
+    expect(tx.submission.create).not.toHaveBeenCalled();
+    expect(auditActions()).toContain('SUBMISSION_FORBIDDEN');
+  });
+
+  it('asks about course access through the transaction, not the outer client', async () => {
+    // Asking `prisma` again inside the transaction would read committed state without holding
+    // it, which is the same stale answer in a costlier place.
+    const { tx } = setup();
+    await call();
+    expect(canAccessMock).toHaveBeenCalledWith(STUDENT, 'course-1', tx);
+  });
+
   it('refuses once the assignment itself has gone', async () => {
     const { tx } = setup({ fresh: { assignment: null } });
 
@@ -1138,8 +1167,12 @@ describe('a change that lands mid-submission', () => {
     expect(locked.some((sql) => sql.includes('"GroupSet"') && sql.includes('FOR UPDATE'))).toBe(
       true,
     );
+    // The weaker mode on the link is deliberate: it still excludes the graders and the points
+    // update, and it does not block the insert of the submission's own row. See `grade-writes`.
     expect(
-      locked.some((sql) => sql.includes('"AssignmentProblem"') && sql.includes('FOR UPDATE')),
+      locked.some(
+        (sql) => sql.includes('"AssignmentProblem"') && sql.includes('FOR NO KEY UPDATE'),
+      ),
     ).toBe(true);
   });
 });

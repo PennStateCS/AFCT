@@ -120,6 +120,12 @@ export function resolveSubmitterContext(opts: {
 
 /** Why a submission may not be accepted. Null means it may. */
 export type EligibilityRefusal =
+  /**
+   * The course stopped being one this person may reach: unpublished, soft-deleted, not yet
+   * started, or the student dropped from it. Decided by `canAccessCourse`, not here, because
+   * that is the single gate every other course-scoped route goes through.
+   */
+  | { kind: 'no-access' }
   | { kind: 'archived' }
   | { kind: 'unpublished' }
   | { kind: 'not-assigned' }
@@ -222,6 +228,10 @@ export function resolveLimit(opts: {
  *
  * Group set first, then the link, and every other path that takes both does the same, so two of
  * them cannot deadlock by meeting in the middle.
+ *
+ * The link is taken `FOR NO KEY UPDATE` for the reason `lib/grade-writes` explains: the row is
+ * the target of the submission's own foreign key, and the stronger mode would have each
+ * submission block the next one's insert on top of the ordering it actually needs.
  */
 export async function lockSubmissionRows(
   tx: Prisma.TransactionClient,
@@ -233,6 +243,6 @@ export async function lockSubmissionRows(
   await tx.$queryRaw`
     SELECT 1 FROM "AssignmentProblem"
     WHERE "assignmentId" = ${opts.assignmentId} AND "problemId" = ${opts.problemId}
-    FOR UPDATE
+    FOR NO KEY UPDATE
   `;
 }
