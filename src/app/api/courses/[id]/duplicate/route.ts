@@ -198,12 +198,37 @@ export const POST = withAdminAuth(
       // form displayed.
       const sourceCourse = await prisma.course.findUnique({
         where: { id: courseId },
-        select: { timezone: true },
+        // The start date as well as the timezone: assignment dates are shifted by the gap
+        // between the two terms, so a copy lands in the same week of its own semester.
+        select: { timezone: true, startDate: true },
       });
       if (!sourceCourse) {
         return NextResponse.json({ error: 'Source course not found.' }, { status: 404 });
       }
       const courseTimezone = sourceCourse.timezone || 'UTC';
+
+      /**
+       * Assignment dates move with the course, by the gap between the two terms' start dates.
+       *
+       * They used to be copied verbatim, so a Fall course duplicated into Spring arrived with
+       * every assignment already unlocked, due and closed months before the new term began. The
+       * copy is unpublished, which is the only reason that was survivable: publish it without
+       * checking each date and the whole course is shut on day one.
+       *
+       * Shifting by the start-date delta keeps each assignment in the same week of its own
+       * semester, which is what a faculty member duplicating a course is asking for. Gaps
+       * between an assignment's own unlock, due and cutoff are preserved, so their ordering
+       * cannot break. Nulls stay null: an assignment with no unlock date still has none.
+       *
+       * Measured from the same instant written to the course row, not from the raw string: the
+       * form sends a wall-clock time and the course's own timezone decides what instant that
+       * is, so anything else would be off by the zone's offset.
+       */
+      const termShiftMs =
+        toDateTimeInTimezone(startDate, courseTimezone).getTime() -
+        sourceCourse.startDate.getTime();
+      const shiftDate = (value: Date | null | undefined): Date | null =>
+        value ? new Date(value.getTime() + termShiftMs) : null;
 
       // Solution files live here. Duplicated problems get their OWN physical copy so
       // the two rows don't share one file (a later delete/replace of one problem would
@@ -389,8 +414,8 @@ export const POST = withAdminAuth(
                     title: a.title,
                     // Carry the rich description verbatim so a copy is not silently downgraded.
                     ...descriptionCopyData(a),
-                    dueDate: a.dueDate,
-                    unlockAt: a.unlockAt,
+                    dueDate: shiftDate(a.dueDate) ?? a.dueDate,
+                    unlockAt: shiftDate(a.unlockAt),
                     // Audience and group mode do not survive the crossing, for the same
                     // reason the import does not carry them: they name students, groups and
                     // a group set that belong to the source course, and the copy has none of
@@ -406,7 +431,7 @@ export const POST = withAdminAuth(
                     // so a copy keeps it. It was being dropped, which quietly turned late
                     // submissions off.
                     allowLateSubmissions: a.allowLateSubmissions,
-                    lateCutoff: a.lateCutoff,
+                    lateCutoff: shiftDate(a.lateCutoff),
                     // Off, whatever the source said. A new course is connected to no LMS, and
                     // the import route treats the destination's situation as what matters: a
                     // copy that quietly starts publishing grades the day somebody links the
