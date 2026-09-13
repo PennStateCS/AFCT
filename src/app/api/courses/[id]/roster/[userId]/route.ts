@@ -337,6 +337,42 @@ export const PATCH = withCourseAuth(
                 throw new LastFacultyError();
               }
             }
+
+            /**
+             * A student with work in the course cannot become staff.
+             *
+             * The gradebook builds its rows from roster entries with role STUDENT, so promoting
+             * somebody leaves their submissions and grades in the database and takes them out
+             * of the course's own view of its marks. Nothing is deleted and nothing says so:
+             * the person and their marks simply stop being there.
+             *
+             * Refused rather than cleaned up, because "this student is now a TA" and "this
+             * student's work no longer counts" are two different decisions and only one of them
+             * was made. A promotion for somebody who has not handed anything in still works,
+             * which is the ordinary case: a student joining the teaching team next term.
+             */
+            if (target.role === 'STUDENT' && newRole !== 'STUDENT') {
+              const assignments = await tx.assignment.findMany({
+                where: { courseId },
+                select: { id: true },
+              });
+              const assignmentIdList = assignments.map((a) => a.id);
+              if (assignmentIdList.length > 0) {
+                const [submission, grade] = await Promise.all([
+                  tx.submission.findFirst({
+                    where: { studentId: userId, assignmentId: { in: assignmentIdList } },
+                    select: { id: true },
+                  }),
+                  tx.assignmentProblemGrade.findFirst({
+                    where: { studentId: userId, assignmentId: { in: assignmentIdList } },
+                    select: { assignmentId: true },
+                  }),
+                ]);
+                if (submission) throw new RosterHasWorkError('submissions');
+                if (grade) throw new RosterHasWorkError('grades');
+              }
+            }
+
             return tx.roster.update({ where: { id: target.id }, data: { role: newRole } });
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -345,6 +381,14 @@ export const PATCH = withCourseAuth(
         if (err instanceof LastFacultyError) {
           return NextResponse.json(
             { error: 'Cannot demote the only course faculty member' },
+            { status: 400 },
+          );
+        }
+        if (err instanceof RosterHasWorkError) {
+          return NextResponse.json(
+            {
+              error: `This student has ${err.what} in the course and cannot be made staff. Their work would stay in the database but leave the gradebook.`,
+            },
             { status: 400 },
           );
         }

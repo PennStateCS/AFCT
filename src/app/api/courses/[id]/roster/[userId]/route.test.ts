@@ -70,7 +70,10 @@ beforeEach(() => {
   // Default: course is not archived; archived-block tests override. The wrapper's
   // isCourseArchived reads course.findUnique, so mirror that here.
   prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
-  // No marks on the target unless a test says otherwise.
+  // No work on the target unless a test says otherwise. Both the hard removal and the
+  // student-to-staff conversion read these.
+  prismaMock.assignment.findMany.mockResolvedValue([]);
+  prismaMock.submission.findFirst.mockResolvedValue(null);
   prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue(null);
   isCourseArchivedMock.mockImplementation(async () => {
     const course = await prismaMock.course.findUnique();
@@ -513,6 +516,56 @@ describe('PATCH /api/courses/[id]/roster/[userId]', () => {
       body: JSON.stringify({ role: 'STUDENT' }),
     });
     const res = await PATCH(req, { params: Promise.resolve({ id: 'c1', userId: 'u2' }) });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.roster.update).toHaveBeenCalled();
+  });
+
+  /**
+   * The gradebook builds its rows from roster entries with role STUDENT, so promoting a student
+   * who has work leaves their submissions and grades in the database and takes them out of the
+   * course's own view of its marks. Nothing is deleted and nothing says so.
+   */
+  it.each([
+    ['submissions', () => prismaMock.submission.findFirst.mockResolvedValue({ id: 's1' })],
+    [
+      'grades',
+      () => prismaMock.assignmentProblemGrade.findFirst.mockResolvedValue({ assignmentId: 'a1' }),
+    ],
+  ])('refuses to make a student with %s into staff', async (_what, arrange) => {
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1' }]);
+    arrange();
+
+    const res = await PATCH(
+      new NextRequest('http://localhost/api/courses/c1/roster/u2', {
+        method: 'PATCH',
+        body: JSON.stringify({ role: 'TA' }),
+      }),
+      { params: Promise.resolve({ id: 'c1', userId: 'u2' }) },
+    );
+
+    expect(res.status).toBe(400);
+    expect(prismaMock.roster.update).not.toHaveBeenCalled();
+  });
+
+  it('still promotes a student who has handed nothing in', async () => {
+    // The ordinary case: somebody joining the teaching team next term.
+    authMock.mockResolvedValue({ user: { id: 'u1', isAdmin: true } });
+    canManageCourseMock.mockResolvedValue(true);
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role: 'STUDENT' });
+    prismaMock.assignment.findMany.mockResolvedValue([{ id: 'a1' }]);
+    prismaMock.roster.update.mockResolvedValue({ id: 'r1', role: 'TA' });
+
+    const res = await PATCH(
+      new NextRequest('http://localhost/api/courses/c1/roster/u2', {
+        method: 'PATCH',
+        body: JSON.stringify({ role: 'TA' }),
+      }),
+      { params: Promise.resolve({ id: 'c1', userId: 'u2' }) },
+    );
 
     expect(res.status).toBe(200);
     expect(prismaMock.roster.update).toHaveBeenCalled();
