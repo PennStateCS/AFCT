@@ -210,6 +210,16 @@ export async function diffRoster(opts: {
     members: [],
   }));
   const contextByLinkId = new Map(contexts.map((c) => [c.contextLinkId, c]));
+  const issuerByContextLinkId = new Map(sources.map((s) => [s.contextLinkId, s.issuer]));
+  /** A readable name per resolved user, for the link changes built after the loop. */
+  const nameByUserId = new Map<string, string>();
+  /**
+   * Who will get at least one identity link below.
+   *
+   * Only so the loop knows not to count them unchanged: a person still owed an identity in one
+   * of their LMS courses is not a person with nothing to do.
+   */
+  const missingIdentityUserIds = new Set<string>();
 
   for (const { issuer, contextLinkId, members } of sources) {
     const source = { issuer, contextLinkId };
@@ -224,9 +234,14 @@ export async function diffRoster(opts: {
 
       // Active only: listed but inactive in this section means they are not currently in it.
       if (userId && member.active) {
-        contextByLinkId
-          .get(contextLinkId)
-          ?.members.push({ userId, ltiUserId: member.ltiUserId });
+        contextByLinkId.get(contextLinkId)?.members.push({ userId, ltiUserId: member.ltiUserId });
+        nameByUserId.set(
+          userId,
+          displayName(member.firstName, member.lastName, member.email ?? member.ltiUserId),
+        );
+        if (!linkedUserIssuers.has(identityKey(issuer, userId))) {
+          missingIdentityUserIds.add(userId);
+        }
       }
 
       /**
@@ -289,20 +304,41 @@ export async function diffRoster(opts: {
       continue;
     }
 
-    // Enrolled and correct. The one thing that may still be missing is the LMS identity, which
-    // is what grade passback needs, and a student who has never launched will not have one.
-    if (!linkedUserIssuers.has(identityKey(source.issuer, existing.userId))) {
+    /**
+     * Enrolled and correct. What may still be missing is an LMS identity, which is what grade
+     * passback needs, and a student who has never launched will not have one.
+     *
+     * Emitted below rather than here, one per LMS course that lists them. A person is one
+     * candidate however many sections hold them, which is right for deciding an enrolment and
+     * wrong for deciding identities: somebody taught in two connected LMS courses needs one in
+     * each, and a single change per person could only ever create the first.
+     */
+    if (!missingIdentityUserIds.has(existing.userId)) unchanged++;
+  }
+
+  /**
+   * One link per LMS course that currently lists the person and has no identity for them there.
+   *
+   * Built from the per-source rosters rather than the candidates, because that is the only
+   * place a person still appears once per section. Limited to people AFCT already knows: a
+   * brand-new account has no id yet and its `add` links the identity for the source it came
+   * from, with any second one picked up by the next sync.
+   */
+  for (const context of contexts) {
+    const issuer = issuerByContextLinkId.get(context.contextLinkId);
+    if (!issuer) continue;
+    for (const member of context.members) {
+      const existing = rosterByUser.get(member.userId);
+      if (!existing) continue;
+      if (linkedUserIssuers.has(identityKey(issuer, member.userId))) continue;
       changes.push({
         kind: 'link-identity',
-        userId: existing.userId,
-        name,
+        userId: member.userId,
+        name: nameByUserId.get(member.userId) ?? member.userId,
         ltiUserId: member.ltiUserId,
-        source,
+        source: { issuer, contextLinkId: context.contextLinkId },
       });
-      continue;
     }
-
-    unchanged++;
   }
 
   /**

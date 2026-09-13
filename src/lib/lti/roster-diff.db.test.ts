@@ -321,6 +321,48 @@ describe('a course connected to more than one LMS course', () => {
     );
   });
 
+  /**
+   * Somebody taught in two connected LMS courses needs an identity in each.
+   *
+   * A person is one candidate however many sections hold them, which is right for deciding an
+   * enrolment and wrong for deciding identities: the diff could only ever emit one link per
+   * person, so the second LMS course never got one and passback there had nothing to address.
+   */
+  it('links an identity for every LMS course that lists them', async () => {
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-student' })] },
+        { ...secondSource, members: [member({ ltiUserId: 'moodle-student' })] },
+      ],
+    });
+
+    const links = result.changes.filter((c) => c.kind === 'link-identity');
+    expect(links).toHaveLength(2);
+    expect(links).toContainEqual(
+      expect.objectContaining({ ltiUserId: 'lms-student', source: SOURCE }),
+    );
+    expect(links).toContainEqual(
+      expect.objectContaining({ ltiUserId: 'moodle-student', source: secondSource }),
+    );
+  });
+
+  it('links only the one that is missing', async () => {
+    await linkIdentity(ids.student, 'lms-student');
+
+    const result = await diffRoster({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-student' })] },
+        { ...secondSource, members: [member({ ltiUserId: 'moodle-student' })] },
+      ],
+    });
+
+    expect(result.changes.filter((c) => c.kind === 'link-identity')).toEqual([
+      expect.objectContaining({ ltiUserId: 'moodle-student', source: secondSource }),
+    ]);
+  });
+
   it('leaves them alone once linked to the platform being synced', async () => {
     await prisma.linkedIdentity.create({
       data: {
