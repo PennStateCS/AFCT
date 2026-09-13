@@ -10,6 +10,10 @@ const prismaMock = vi.hoisted(() => ({
     upsert: vi.fn(),
   },
   groupSet: { updateMany: vi.fn() },
+  // The student content gate reads both of these. Mocked because a missing model would make
+  // the gate throw and the route answer 500, which a status assertion could read as a refusal.
+  assignment: { findFirst: vi.fn() },
+  assignmentOverride: { findMany: vi.fn() },
   course: { findUnique: vi.fn() },
   $transaction: vi.fn(),
 }));
@@ -35,6 +39,14 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
     // The grade target: a student on the roster, which is what the route now requires.
     prismaMock.roster.findUnique.mockResolvedValue({ role: 'STUDENT' });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
+    // Assigned, with no unlock date: the ordinary case for a student reading their own grade.
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      unlockAt: null,
+      dueDate: new Date('2026-01-01T00:00:00Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
+    prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
     prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
       fn(prismaMock),
     );
@@ -128,6 +140,76 @@ describe('/api/courses/[id]/[aid]/problems/[pid]/grade/[studentId]', () => {
 
       expect(res.status).toBe(200);
       expect(prismaMock.assignmentProblem.findUnique).toHaveBeenCalled();
+    });
+
+    /**
+     * Published is not the same as "assigned to them, and open".
+     *
+     * The three other routes over a student's own work run the shared gate; this one stopped at
+     * published. Two answers to the same question is how a leak arrives later, so the cases the
+     * siblings handle are pinned here too.
+     */
+    it('404-masks an assignment the student is not in the audience for', async () => {
+      authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
+      // Assigned to specific students, and not this one.
+      prismaMock.assignment.findFirst.mockResolvedValue(null);
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(404);
+      // Masked before the grade was read at all, not filtered out of the answer.
+      expect(prismaMock.assignmentProblemGrade.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('answers as ungraded for an assignment that has not unlocked yet', async () => {
+      authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'STUDENT',
+        course: { isPublished: true },
+      });
+      prismaMock.assignment.findFirst.mockResolvedValue({
+        unlockAt: new Date('2099-01-01T00:00:00Z'),
+        dueDate: new Date('2099-02-01T00:00:00Z'),
+        allowLateSubmissions: false,
+        lateCutoff: null,
+      });
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      // It does exist for them, so the same shape an ungraded problem gives, not an error.
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ grade: null, feedback: null });
+      expect(prismaMock.assignmentProblemGrade.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('does not gate staff, who set the audience and read everybody', async () => {
+      authMock.mockResolvedValue({ user: { id: 'fac-1', role: 'FACULTY' } });
+      prismaMock.roster.findFirst.mockResolvedValue({
+        role: 'FACULTY',
+        course: { isPublished: true },
+      });
+      // Would mask a student out entirely; staff must read the grade regardless.
+      prismaMock.assignment.findFirst.mockResolvedValue(null);
+      prismaMock.assignmentProblemGrade.findUnique.mockResolvedValue({
+        grade: 8,
+        feedback: 'ok',
+        updatedAt: new Date('2026-01-02T00:00:00Z'),
+      });
+
+      const res = await GET(new Request('http://localhost'), {
+        params: Promise.resolve(defaultParams),
+      });
+
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toMatchObject({ grade: 8 });
     });
 
     it('404-masks an unpublished assignment for the owning student', async () => {

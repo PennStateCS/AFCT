@@ -7,6 +7,7 @@ import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
 import { logDenial, logError } from '@/lib/api/activity';
 import { lockGroupSetIfUsed } from '@/lib/group-set-service';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 
 const GradeBody = z.object({
   grade: z.number().nullish(),
@@ -74,6 +75,31 @@ export const GET = withCourseAuth(
       // Students can't read a grade for an unpublished assignment (mask as 404).
       if (!assignmentProblem.assignment.isPublished && !isStaff) {
         return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+      }
+
+      /**
+       * Published is not the same as "theirs, and open".
+       *
+       * This route used to stop at published, while the three sibling routes over the same
+       * data (`student-context`, `review-data`, `submissions/[sid]`) all run the shared gate.
+       * Two answers to "may this student see this assignment" is how a real leak arrives
+       * later, even where today's gap is narrow.
+       *
+       * Staff skip it: they are the ones who set the audience and the unlock, and they read
+       * everybody's work by design.
+       */
+      if (!isStaff) {
+        const gate = await resolveStudentContentGate(assignmentId, studentId);
+        // Not in the audience: mask exactly as if it did not exist, as the siblings do.
+        if (!gate.assigned) {
+          return NextResponse.json({ error: 'Problem not found' }, { status: 404 });
+        }
+        // Assigned but not open yet. The assignment does exist for them, so answer with the
+        // same shape an ungraded problem gives rather than an error the client must special
+        // case. Nothing here is theirs yet anyway.
+        if (gate.locked) {
+          return NextResponse.json({ grade: null, feedback: null });
+        }
       }
 
       const grade = await prisma.assignmentProblemGrade.findUnique({
