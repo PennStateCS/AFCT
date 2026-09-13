@@ -8,12 +8,16 @@ import { AssignmentTypeApiSchema } from '@/schemas/assignment';
 
 type Ctx = { params: Promise<{ id: string; aid: string }> };
 
+/** Thrown inside the transaction so the whole change rolls back rather than half-applying. */
+class AssignmentHasWorkError extends Error {}
+
 /**
  * Changes an assignment's individual/group type. Course staff (faculty or TAs) or a system
  * admin. `groupSetId: null` makes it individual; a set id makes it a group assignment tied
  * to that set. Because assignees and date overrides reference the old type's targets,
  * switching resets the audience to everyone and clears all assignees + overrides in one
- * transaction (staff rebuild them on the Assign To tab).
+ * transaction (staff rebuild them on the Assign To tab). Refused once any submission or grade
+ * exists, because the change would reinterpret that work.
  * @openapi
  * summary: Change an assignment's individual/group type
  * parameters:
@@ -34,6 +38,7 @@ type Ctx = { params: Promise<{ id: string; aid: string }> };
  *   401: { description: Not signed in. }
  *   403: { description: Not course staff or a system admin. }
  *   404: { description: Assignment not found in this course. }
+ *   409: { description: "The assignment already has submissions or grades, so its type is frozen." }
  *   500: { description: Server error. }
  */
 export const PUT = withCourseAuth(
@@ -65,9 +70,33 @@ export const PUT = withCourseAuth(
         }
       }
 
-      // Switching type invalidates the current audience + exceptions, so reset to everyone
-      // and clear the assignee + override rows together with the type change.
+      /**
+       * The type is frozen once there is student work, and the guard holds the lock.
+       *
+       * Changing it rewrites what the existing work means. Individual attempts end up inside an
+       * assignment now read as group work, and group attempts end up pointing at groups from a
+       * set the assignment no longer uses, which is what decides who a grade fans out to. The
+       * same call also clears every date override, so a student's extension disappears from
+       * under work already handed in under it.
+       *
+       * Locked first for the same reason the deletes are: counting and then updating is a
+       * check-then-act, and a submission that commits in the gap would be reinterpreted by a
+       * decision taken before it existed. Submissions and grades both reach the assignment
+       * through its problem links, so those are the rows to hold.
+       */
       const updated = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT 1 FROM "AssignmentProblem" WHERE "assignmentId" = ${aid} FOR UPDATE`;
+
+        const [submissionCount, gradeCount] = await Promise.all([
+          tx.submission.count({ where: { assignmentId: aid } }),
+          tx.assignmentProblemGrade.count({ where: { assignmentId: aid } }),
+        ]);
+        if (submissionCount > 0 || gradeCount > 0) {
+          throw new AssignmentHasWorkError();
+        }
+
+        // Switching type invalidates the current audience + exceptions, so reset to everyone
+        // and clear the assignee + override rows together with the type change.
         await tx.assignmentAssignee.deleteMany({ where: { assignmentId: aid } });
         await tx.assignmentOverride.deleteMany({ where: { assignmentId: aid } });
         return tx.assignment.update({
@@ -92,6 +121,15 @@ export const PUT = withCourseAuth(
 
       return NextResponse.json(updated);
     } catch (error) {
+      if (error instanceof AssignmentHasWorkError) {
+        return NextResponse.json(
+          {
+            error:
+              'This assignment already has student work, so individual and group cannot be switched. Duplicate it instead.',
+          },
+          { status: 409 },
+        );
+      }
       console.error('Assignment type change failed:', error);
       await logError(req, {
         userId: user.id,

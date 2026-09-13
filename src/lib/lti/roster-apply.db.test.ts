@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
 import { applyRosterChanges } from './roster-apply';
 import { diffRoster } from './roster-diff';
@@ -90,17 +90,28 @@ afterAll(async () => {
 
 /** Diff then apply, the way the screen will. */
 async function sync(members: Member[]) {
-  const { changes } = await diffRoster({
+  const { changes, contexts } = await diffRoster({
     courseId: COURSE,
     sources: [{ ...SOURCE, members }],
   });
   return applyRosterChanges({
     courseId: COURSE,
     changes,
+    contexts,
     actorUserId: ids.actor,
     context: CONTEXT,
   });
 }
+
+/** Which AFCT accounts this LMS course currently records as its members. */
+const contextMembers = async (contextLinkId = CONTEXT_LINK) =>
+  (
+    await prisma.ltiContextMember.findMany({
+      where: { contextLinkId },
+      select: { userId: true },
+      orderBy: { userId: 'asc' },
+    })
+  ).map((m) => m.userId);
 
 describe('adding somebody the LMS lists', () => {
   it('creates an account, enrols them, and attaches their LMS identity', async () => {
@@ -274,5 +285,224 @@ describe('the record it leaves', () => {
     expect(entry.userId).toBe(ids.actor);
     expect(entry.severity).toBe('WARNING');
     expect(entry.metadata).toMatchObject({ added: 1, accountsCreated: 1 });
+  });
+});
+
+/**
+ * Which LMS course each student is currently in, which is what decides where a grade goes when
+ * several open the same AFCT course.
+ *
+ * This used to be written only while adding somebody, so a student already enrolled in AFCT
+ * never got a section against their name and passback had nothing to choose by. Nothing ever
+ * removed one either, so a student moving between sections ended up in both and passback
+ * refused as ambiguous. It is reconciled now: whoever the LMS lists is recorded, and whoever it
+ * no longer lists is removed.
+ */
+describe('recording which LMS section a student is in', () => {
+  it('records it for a student who was already enrolled in AFCT', async () => {
+    // Nothing to add: the enrolment is already right, which is exactly the case that used to
+    // leave no membership behind.
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+
+    await sync([member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })]);
+
+    expect(await contextMembers()).toContain(ids.existing);
+  });
+
+  it('removes a student the LMS course no longer lists', async () => {
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+    await sync([member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })]);
+    expect(await contextMembers()).toContain(ids.existing);
+
+    // The same section, now listing somebody else entirely.
+    await sync([member({ ltiUserId: 'lms-new', email: 'new@example.test' })]);
+
+    expect(await contextMembers()).not.toContain(ids.existing);
+  });
+
+  it('leaves memberships alone when no contexts are supplied', async () => {
+    // What a caller with an incomplete read must do: a partial roster cannot tell "no longer in
+    // this section" from "could not ask".
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+    await sync([member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })]);
+
+    const { changes } = await diffRoster({
+      courseId: COURSE,
+      sources: [{ ...SOURCE, members: [] }],
+    });
+    await applyRosterChanges({
+      courseId: COURSE,
+      changes,
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    expect(await contextMembers()).toContain(ids.existing);
+  });
+});
+
+/**
+ * Comparing the LMS roster against AFCT's own, inside the transaction that acts on it.
+ *
+ * The diff used to be taken before the transaction, which made the whole sync a check-then-act
+ * over the roster: a student dropped or enrolled by hand in between was overwritten by a
+ * decision made before that happened.
+ */
+describe('applying the LMS rosters directly', () => {
+  it('works the changes out from the sources it is given', async () => {
+    const result = await applyRosterChanges({
+      courseId: COURSE,
+      sources: [
+        { ...SOURCE, members: [member({ ltiUserId: 'lms-new', email: 'new@example.test' })] },
+      ],
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    expect(result.added).toBe(1);
+    expect(
+      await prisma.roster.findFirst({
+        where: { courseId: COURSE, user: { email: 'new@example.test' } },
+      }),
+    ).not.toBeNull();
+  });
+
+  it('sees a roster change made after the LMS was read, where a precomputed diff does not', async () => {
+    /**
+     * The window this closes is the one a person spends looking at the preview.
+     *
+     * The diff used to be taken when the preview was drawn and applied whenever the button was
+     * pressed, so anything done to the roster by hand in between was decided against a state
+     * that had already moved. Taking it inside the transaction narrows that to the transaction
+     * itself.
+     */
+    const sources = [
+      {
+        ...SOURCE,
+        members: [member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })],
+      },
+    ];
+
+    // What the preview would have worked out: nobody is enrolled yet, so this is an add.
+    const stale = await diffRoster({ courseId: COURSE, sources });
+    expect(stale.changes).toContainEqual(expect.objectContaining({ kind: 'add' }));
+
+    // Enrolled by hand while the preview sat on somebody's screen.
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'TA' },
+    });
+
+    const result = await applyRosterChanges({
+      courseId: COURSE,
+      sources,
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    // Nothing to add: the diff taken inside the transaction sees the enrolment that arrived.
+    expect(result.added).toBe(0);
+    // And the role somebody set by hand a moment ago survives.
+    expect(
+      await prisma.roster.findFirstOrThrow({ where: { courseId: COURSE, userId: ids.existing } }),
+    ).toMatchObject({ role: 'TA' });
+  });
+});
+
+/**
+ * A student in more than one of the connected LMS courses.
+ *
+ * A student belongs to exactly one LMS course per AFCT course: their mark has one gradebook to
+ * go in, and with two AFCT cannot tell which, so passback refuses. That refusal is correct but
+ * it arrives at grading time. The sync has the whole picture, so it says so while somebody is
+ * looking at the roster.
+ */
+describe('noticing a student in two connected LMS courses', () => {
+  const SECOND_PLATFORM = 'ltip-apply-2';
+  const SECOND_LINK = 'cl-apply-2';
+  const SECOND_ISSUER = 'https://moodle.example.test';
+
+  beforeEach(async () => {
+    await prisma.ltiPlatform.create({
+      data: {
+        id: SECOND_PLATFORM,
+        name: 'Moodle',
+        issuer: SECOND_ISSUER,
+        clientId: 'client-apply-2',
+        deploymentId: '1',
+        authLoginUrl: `${SECOND_ISSUER}/auth`,
+        tokenUrl: `${SECOND_ISSUER}/token`,
+        keysetUrl: `${SECOND_ISSUER}/jwks`,
+      },
+    });
+    await prisma.ltiContextLink.create({
+      data: { id: SECOND_LINK, platformId: SECOND_PLATFORM, contextId: 'ctx-2', courseId: COURSE },
+    });
+  });
+
+  afterEach(async () => {
+    await prisma.ltiContextMember.deleteMany({ where: { contextLinkId: SECOND_LINK } });
+    await prisma.ltiContextLink.deleteMany({ where: { platformId: SECOND_PLATFORM } });
+    await prisma.ltiPlatform.deleteMany({ where: { id: SECOND_PLATFORM } });
+    await prisma.linkedIdentity.deleteMany({ where: { issuer: SECOND_ISSUER } });
+  });
+
+  const logged = async () =>
+    prisma.activityLog.findMany({
+      where: { action: 'LTI_STUDENT_IN_SEVERAL_CONTEXTS', courseId: COURSE },
+      select: { severity: true, metadata: true },
+    });
+
+  it('records it against the student, as a warning', async () => {
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+
+    await applyRosterChanges({
+      courseId: COURSE,
+      sources: [
+        {
+          ...SOURCE,
+          members: [member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })],
+        },
+        {
+          issuer: SECOND_ISSUER,
+          contextLinkId: SECOND_LINK,
+          members: [member({ ltiUserId: 'moodle-existing', email: 'existing@example.test' })],
+        },
+      ],
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    const entries = await logged();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.severity).toBe('WARNING');
+  });
+
+  it('says nothing when each student is in only one of them', async () => {
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: ids.existing, role: 'STUDENT' },
+    });
+
+    await applyRosterChanges({
+      courseId: COURSE,
+      sources: [
+        {
+          ...SOURCE,
+          members: [member({ ltiUserId: 'lms-existing', email: 'existing@example.test' })],
+        },
+        { issuer: SECOND_ISSUER, contextLinkId: SECOND_LINK, members: [] },
+      ],
+      actorUserId: ids.actor,
+      context: CONTEXT,
+    });
+
+    expect(await logged()).toHaveLength(0);
   });
 });

@@ -1,6 +1,11 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
-import { queueChangedGrades, assignmentSyncState, courseIsLinked } from './grade-sync';
+import {
+  queueChangedGrades,
+  queueAutomaticAssignments,
+  assignmentSyncState,
+  courseIsLinked,
+} from './grade-sync';
 
 /**
  * Working out which grades still need to reach the LMS, against a real Postgres.
@@ -15,6 +20,7 @@ const COURSE = 'c-sync';
 const UNLINKED_COURSE = 'c-sync-unlinked';
 const ASSIGNMENT = 'a-sync';
 const PROBLEM = 'p-sync';
+const PROBLEM2 = 'p-sync-2';
 const STUDENT = 'u-sync';
 const OTHER = 'u-sync-other';
 
@@ -26,7 +32,7 @@ async function destroyFixtures() {
   await prisma.roster.deleteMany({ where: { courseId: { in: [COURSE, UNLINKED_COURSE] } } });
   await prisma.assignmentOverride.deleteMany({ where: { assignmentId: ASSIGNMENT } });
   await prisma.assignment.deleteMany({ where: { id: ASSIGNMENT } });
-  await prisma.problem.deleteMany({ where: { id: PROBLEM } });
+  await prisma.problem.deleteMany({ where: { id: { in: [PROBLEM, PROBLEM2] } } });
   await prisma.ltiPlatform.deleteMany({ where: { id: PLATFORM } });
   await prisma.course.deleteMany({ where: { id: { in: [COURSE, UNLINKED_COURSE] } } });
   await prisma.user.deleteMany({ where: { id: { in: [STUDENT, OTHER] } } });
@@ -418,5 +424,174 @@ describe('missing work, and taking a score back', () => {
     expect((await rowFor(STUDENT))?.scoreGiven).toBeNull();
     // Untouched: sending for one student must not rewrite anybody else's row.
     expect((await rowFor(OTHER))?.scoreGiven).toBe(0);
+  });
+});
+
+/**
+ * What reaches the LMS while an assignment is only half marked.
+ *
+ * The existing cases all use a single-problem assignment, where "graded" and "fully graded" are
+ * the same thing. With two problems they part company, and the two halves of the score come from
+ * different places: the numerator is the sum of the grade rows that exist, and the denominator is
+ * every problem on the assignment.
+ *
+ * AFCT's own gradebook does not do that. `buildAccountability` in `lib/course-grades` counts a
+ * problem toward the denominator only once it has been marked or once `lib/missing-work` says
+ * nobody handed it in, and says so in as many words: work awaiting a grade counts toward neither
+ * half. So the student below stands at 50/50 inside AFCT and 50/100 in the LMS, and the comment
+ * above the sum here claims the two agree.
+ *
+ * Pinned rather than changed, because which one is right is a policy decision and not a
+ * technical one. If this behaviour is deliberate, this test is the place that says so.
+ */
+describe('an assignment that is only partly graded', () => {
+  beforeEach(async () => {
+    // Two problems worth 50 each, replacing the single 100-point one.
+    await prisma.assignmentProblem.updateMany({
+      where: { assignmentId: ASSIGNMENT },
+      data: { maxPoints: 50 },
+    });
+    await prisma.problem.create({
+      data: { id: PROBLEM2, courseId: COURSE, title: 'Q2', type: 'FA' },
+    });
+    await prisma.assignmentProblem.create({
+      data: { assignmentId: ASSIGNMENT, problemId: PROBLEM2, maxPoints: 50 },
+    });
+    /**
+     * Published, enrolled, and not yet due.
+     *
+     * All three matter. "Has marking finished" is answered by the gradebook's accountable
+     * points, which are built from the roster and the assignment's own state, so without a
+     * roster row the answer is zero for everybody and every one of these tests would read as
+     * incomplete whatever the code did. The future deadline keeps the unmarked problem
+     * genuinely outstanding rather than settled as a zero for work nobody handed in.
+     */
+    await prisma.assignment.update({
+      where: { id: ASSIGNMENT },
+      data: { isPublished: true, dueDate: new Date('2099-01-01T00:00:00Z') },
+    });
+    await prisma.roster.create({
+      data: { courseId: COURSE, userId: STUDENT, role: 'STUDENT' },
+    });
+  });
+
+  /**
+   * The number is the running total over the assignment's full value, which is lower than the
+   * student stands while half of it is unmarked. Rather than change the number or hold it back,
+   * the score goes as it is and says it is not the final word: AGS has `PendingManual` for
+   * exactly this, and the sender turns this flag into that.
+   */
+  it('marks the queued score as not yet complete', async () => {
+    await grade(50);
+
+    await queueChangedGrades(ASSIGNMENT);
+
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      scoreGiven: 50,
+      scoreMaximum: 100,
+      gradingComplete: false,
+    });
+  });
+
+  it('marks it complete once every problem is marked', async () => {
+    await grade(50);
+    await prisma.assignmentProblemGrade.create({
+      data: { studentId: STUDENT, assignmentId: ASSIGNMENT, problemId: PROBLEM2, grade: 0 },
+    });
+
+    await queueChangedGrades(ASSIGNMENT);
+
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      gradingComplete: true,
+    });
+  });
+
+  it('re-queues when only the completeness changes', async () => {
+    // The label is part of what the LMS is told, so an assignment finishing its marking has to
+    // reach the platform even though the number did not move.
+    await grade(50);
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(1);
+
+    await prisma.assignmentProblemGrade.create({
+      data: { studentId: STUDENT, assignmentId: ASSIGNMENT, problemId: PROBLEM2, grade: 0 },
+    });
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(1);
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      scoreGiven: 50,
+      gradingComplete: true,
+    });
+  });
+
+  it('sends full marks on the graded half as half marks on the whole', async () => {
+    // Full marks on the first problem. The second has no grade row at all: nobody has marked it.
+    await grade(50);
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(1);
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      scoreGiven: 50,
+      // Every problem on the assignment, including the one nobody has looked at yet.
+      scoreMaximum: 100,
+    });
+  });
+
+  it('sends the same score once both halves are marked', async () => {
+    await grade(50);
+    await prisma.assignmentProblemGrade.create({
+      data: { studentId: STUDENT, assignmentId: ASSIGNMENT, problemId: PROBLEM2, grade: 0 },
+    });
+
+    await queueChangedGrades(ASSIGNMENT);
+
+    // The number the LMS receives is identical whether the second problem scored zero or was
+    // never marked, which is the part a student cannot tell apart from their side.
+    expect(await prisma.ltiScoreQueue.findFirstOrThrow()).toMatchObject({
+      scoreGiven: 50,
+      scoreMaximum: 100,
+    });
+  });
+});
+
+/**
+ * A soft-deleted course produces no new outbound LMS traffic.
+ *
+ * The delete leaves the course, its assignments and its LTI context links where they are, so
+ * they can be recovered. Everything a person can reach already treats the course as gone; the
+ * background pass and the queueing path have to agree, or a deleted course keeps writing into
+ * somebody's LMS gradebook.
+ */
+describe('a soft-deleted course', () => {
+  beforeEach(async () => {
+    await prisma.course.update({ where: { id: COURSE }, data: { deletedAt: new Date() } });
+  });
+
+  afterEach(async () => {
+    await prisma.course.updateMany({ where: { id: COURSE }, data: { deletedAt: null } });
+  });
+
+  it('is no longer treated as linked', async () => {
+    expect(await courseIsLinked(COURSE)).toBe(false);
+  });
+
+  it('queues nothing, even with a grade that has never been sent', async () => {
+    await grade(88);
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(0);
+    expect(await prisma.ltiScoreQueue.count()).toBe(0);
+  });
+
+  it('is skipped by the automatic pass, whose context links outlive the delete', async () => {
+    await prisma.assignment.update({ where: { id: ASSIGNMENT }, data: { ltiAutoSync: true } });
+    await grade(88);
+
+    expect(await queueAutomaticAssignments()).toBe(0);
+    expect(await prisma.ltiScoreQueue.count()).toBe(0);
+  });
+
+  it('syncs normally again once it is restored', async () => {
+    await prisma.course.update({ where: { id: COURSE }, data: { deletedAt: null } });
+    await grade(88);
+
+    expect(await queueChangedGrades(ASSIGNMENT)).toBe(1);
   });
 });

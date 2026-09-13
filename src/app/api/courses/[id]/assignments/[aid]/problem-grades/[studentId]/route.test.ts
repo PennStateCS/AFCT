@@ -11,6 +11,12 @@ const prismaMock = vi.hoisted(() => ({
   },
   course: { findUnique: vi.fn() },
   roster: { findFirst: vi.fn() },
+  // Read by the student content gate. A missing model would make the gate throw and the route
+  // answer 500, which a status assertion could mistake for a refusal.
+  assignmentOverride: { findMany: vi.fn() },
+  // The batch write locks the assignment's problem rows and reads the current points back, so
+  // grades validated against an older ceiling cannot land after it has moved.
+  $queryRaw: vi.fn(),
   $transaction: vi.fn(),
 }));
 
@@ -50,7 +56,21 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     canManageCourseMock.mockResolvedValue(true);
     canAccessCourseMock.mockResolvedValue(true);
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
-    prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid, isPublished: true });
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: defaultParams.aid,
+      isPublished: true,
+      // The gate's half of the same read: assigned, with no unlock date.
+      unlockAt: null,
+      dueDate: new Date('2026-01-01T00:00:00Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
+    prismaMock.assignmentOverride.findMany.mockResolvedValue([]);
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    // The batch transaction is interactive now, so the callback runs against the same mock.
+    prismaMock.$transaction.mockImplementation(async (fn: unknown) =>
+      typeof fn === 'function' ? (fn as (tx: unknown) => unknown)(prismaMock) : undefined,
+    );
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
   });
 
@@ -74,6 +94,49 @@ describe('GET /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
 
     expect(res.status).toBe(403);
     expect(prismaMock.assignment.findFirst).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Published is not the same as "assigned to them, and open". This is the batch form of the
+   * single-problem read, over the same rows, and was the last of the four routes over a
+   * student's own work still stopping at published.
+   */
+  it('404-masks an assignment the student is not in the audience for', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+    canManageCourseMock.mockResolvedValue(false);
+    // Assigned to specific students, and not this one. The route's own read of the assignment
+    // still succeeds; it is the gate that finds nothing.
+    prismaMock.assignment.findFirst
+      .mockResolvedValueOnce({ id: defaultParams.aid, isPublished: true })
+      .mockResolvedValueOnce(null);
+
+    const res = await GET(new Request('http://localhost'), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.assignmentProblemGrade.findMany).not.toHaveBeenCalled();
+  });
+
+  it('answers 204 for an assignment that has not unlocked yet', async () => {
+    authMock.mockResolvedValue({ user: { id: 'student-1', role: 'STUDENT' } });
+    canManageCourseMock.mockResolvedValue(false);
+    prismaMock.assignment.findFirst.mockResolvedValue({
+      id: defaultParams.aid,
+      isPublished: true,
+      unlockAt: new Date('2099-01-01T00:00:00Z'),
+      dueDate: new Date('2099-02-01T00:00:00Z'),
+      allowLateSubmissions: false,
+      lateCutoff: null,
+    });
+
+    const res = await GET(new Request('http://localhost'), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    // The same "nothing to show" answer the route already gives, so the client needs no new case.
+    expect(res.status).toBe(204);
+    expect(prismaMock.assignmentProblemGrade.findMany).not.toHaveBeenCalled();
   });
 
   it('returns 404 when assignment does not exist', async () => {
@@ -235,19 +298,20 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: defaultParams.aid, isPublished: true });
     // The grade target is enrolled in the course by default.
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       { problemId: 'prob-1', maxPoints: 10 },
       { problemId: 'prob-2', maxPoints: 20 },
       { problemId: 'prob-3', maxPoints: 30 },
     ]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
-    // $transaction receives an array of prisma promises; resolve it and let the
-    // individual upsert/deleteMany mocks record their own calls.
-    prismaMock.$transaction.mockImplementation(async (ops: unknown[]) => {
-      await Promise.all(ops as Promise<unknown>[]);
-      return [];
-    });
+    // The write is one interactive transaction now: it locks the assignment's problem rows,
+    // reads the current points back, revalidates, then writes. Run the callback against the
+    // same mock so the individual upsert/deleteMany mocks record their own calls.
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
     prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({});
     prismaMock.assignmentProblemGrade.deleteMany.mockResolvedValue({ count: 1 });
     activityLogMock.mockResolvedValue(undefined);
@@ -261,6 +325,19 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     });
 
     expect(res.status).toBe(401);
+  });
+
+  // Faculty and TAs hold roster rows too, so "enrolled" on its own opened a grade row against
+  // a colleague. The single-problem route next door already required the role.
+  it.each(['FACULTY', 'TA'] as const)('refuses to grade a %s on the roster', async (role) => {
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'r1', role });
+
+    const res = await POST(buildRequest({ grades: { 'prob-1': 5 } }), {
+      params: Promise.resolve(defaultParams),
+    });
+
+    expect(res.status).toBe(404);
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
   it('returns 404 when the grade target is not enrolled in the course', async () => {
@@ -438,10 +515,11 @@ describe('POST /api/courses/[id]/[aid]/problem-grades/[studentId]', () => {
     expect(prismaMock.assignmentProblemGrade.upsert).toHaveBeenCalledTimes(1);
     expect(prismaMock.assignmentProblemGrade.deleteMany).toHaveBeenCalledTimes(1);
 
-    // $transaction received exactly the two changed ops.
+    // One transaction, and only the two changed problems were written in it. It is interactive
+    // now rather than an array of operations, because it has to lock the assignment's problem
+    // rows and read the current points back before it writes anything.
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
-    const txnOps = prismaMock.$transaction.mock.calls[0][0] as unknown[];
-    expect(txnOps).toHaveLength(2);
+    expect(String(prismaMock.$queryRaw.mock.calls[0]?.[0])).toContain('FOR NO KEY UPDATE');
 
     // Upsert targets prob-1 and its `update` sets only grade (no feedback).
     const upsertArg = prismaMock.assignmentProblemGrade.upsert.mock.calls[0][0];
@@ -574,13 +652,13 @@ describe('who a problem grade can be written for', () => {
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'assignment-1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([{ problemId: 'prob-1', maxPoints: 10 }]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
-    prismaMock.$transaction.mockImplementation(async (ops: unknown[]) => {
-      await Promise.all(ops as Promise<unknown>[]);
-      return [];
-    });
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
     prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({});
     activityLogMock.mockResolvedValue(undefined);
 
@@ -648,15 +726,15 @@ describe('who a problem grade can be written for', () => {
     authMock.mockResolvedValue({ user: { id: 'staff-1', role: 'FACULTY' } });
     prismaMock.course.findUnique.mockResolvedValue({ isArchived: false });
     prismaMock.assignment.findFirst.mockResolvedValue({ id: 'assignment-1', isPublished: true });
-    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1' });
+    prismaMock.roster.findFirst.mockResolvedValue({ id: 'roster-1', role: 'STUDENT' });
     prismaMock.assignmentProblem.findMany.mockResolvedValue([
       { problemId: 'prob-1', maxPoints: 10 },
     ]);
     prismaMock.assignmentProblemGrade.findMany.mockResolvedValue([]);
-    prismaMock.$transaction.mockImplementation(async (ops: unknown[]) => {
-      await Promise.all(ops as Promise<unknown>[]);
-      return [];
-    });
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+      fn(prismaMock),
+    );
     prismaMock.assignmentProblemGrade.upsert.mockResolvedValue({});
     activityLogMock.mockResolvedValue(undefined);
 

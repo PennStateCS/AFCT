@@ -15,7 +15,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import type { CourseRole } from '@prisma/client';
+import type { CourseRole, Prisma } from '@prisma/client';
 import { mapLtiRoles } from '@/lib/lti/course-link';
 import type { Member } from '@/lib/lti/nrps';
 
@@ -59,8 +59,30 @@ export type RosterChange =
       source: RosterSource;
     };
 
+/** One LMS context's roster, resolved to AFCT accounts. */
+export type ContextRoster = {
+  contextLinkId: string;
+  /** Everybody that LMS course currently lists as active, that AFCT could identify. */
+  members: { userId: string; ltiUserId: string }[];
+};
+
 export type RosterDiff = {
   changes: RosterChange[];
+  /**
+   * Who each LMS course listed, one entry per source read, empty list included.
+   *
+   * Separate from `changes` because it answers a different question. A change says what has to
+   * happen to somebody's enrolment; this says which LMS course they are currently in, which is
+   * what decides where their grade goes when several open the same AFCT course. Recording it
+   * only while adding somebody meant an existing student never got a section against their
+   * name, and passback then had nothing to choose by.
+   *
+   * Always one entry per source, so a section that now lists nobody still reconciles: the
+   * emptiness is the fact. That only holds because a diff is built from a complete read of
+   * every source, which is why a failed fetch aborts the whole union rather than producing a
+   * partial one. Absence is only meaningful against a roster that was actually read.
+   */
+  contexts: ContextRoster[];
   /** People in AFCT the LMS does not list, deliberately left alone. */
   keptStaff: { name: string; role: CourseRole }[];
   /** Already correct, so nothing to show. */
@@ -84,10 +106,20 @@ const displayName = (first: string | null, last: string | null, fallback: string
 export async function diffRoster(opts: {
   courseId: string;
   sources: { issuer: string; contextLinkId: string; members: Member[] }[];
+  /**
+   * Which client to read AFCT's own state through.
+   *
+   * A preview reads through `prisma` and shows somebody what would happen. Applying reads
+   * through the transaction that writes, so the answer cannot go stale: the diff used to be
+   * computed outside it, and a roster edit made by hand in between was then overwritten by a
+   * decision taken before it existed.
+   */
+  client?: Prisma.TransactionClient;
 }): Promise<RosterDiff> {
   const { courseId, sources } = opts;
+  const db: Prisma.TransactionClient = opts.client ?? prisma;
 
-  const roster = await prisma.roster.findMany({
+  const roster = await db.roster.findMany({
     where: { courseId },
     select: {
       userId: true,
@@ -104,7 +136,7 @@ export async function diffRoster(opts: {
    * is not an identifier. This is the same pair the unique index on LinkedIdentity holds.
    */
   const issuers = [...new Set(sources.map((s) => s.issuer))];
-  const identities = await prisma.linkedIdentity.findMany({
+  const identities = await db.linkedIdentity.findMany({
     where: { kind: 'LTI', issuer: { in: issuers } },
     select: { userId: true, subject: true, issuer: true },
   });
@@ -112,7 +144,15 @@ export async function diffRoster(opts: {
   const userByLtiId = new Map(
     identities.map((i) => [identityKey(i.issuer, i.subject), i.userId] as const),
   );
-  const ltiIdByUser = new Map(identities.map((i) => [i.userId, i.subject]));
+  /**
+   * Which users already hold an identity **on which platform**.
+   *
+   * Keyed by issuer as well as user, for the same reason `userByLtiId` above is. A course can
+   * be connected to more than one LMS, and this used to be a bare `Map<userId, subject>`: a
+   * student who had launched from Canvas counted as already linked while syncing Moodle, so
+   * the Moodle identity was never created and grade passback to Moodle had nothing to send to.
+   */
+  const linkedUserIssuers = new Set(identities.map((i) => identityKey(i.issuer, i.userId)));
 
   const emails = sources
     .flatMap((source) => source.members)
@@ -120,7 +160,7 @@ export async function diffRoster(opts: {
     .filter((e): e is string => Boolean(e));
   const byEmail = new Map(
     (
-      await prisma.user.findMany({
+      await db.user.findMany({
         where: { email: { in: emails } },
         select: { id: true, email: true },
       })
@@ -158,6 +198,29 @@ export async function diffRoster(opts: {
   // one section and takes another is staff, and demoting them would take work away.
   const RANK: Record<CourseRole, number> = { FACULTY: 3, TA: 2, STUDENT: 1 };
 
+  /**
+   * Who each source listed, kept per source rather than folded into the candidates.
+   *
+   * The candidates collapse a person to one entry however many sections hold them, which is
+   * right for deciding an enrolment and wrong for deciding sections: somebody in two is in
+   * both, and each has to be recorded against its own LMS course.
+   */
+  const contexts: ContextRoster[] = sources.map((source) => ({
+    contextLinkId: source.contextLinkId,
+    members: [],
+  }));
+  const contextByLinkId = new Map(contexts.map((c) => [c.contextLinkId, c]));
+  const issuerByContextLinkId = new Map(sources.map((s) => [s.contextLinkId, s.issuer]));
+  /** A readable name per resolved user, for the link changes built after the loop. */
+  const nameByUserId = new Map<string, string>();
+  /**
+   * Who will get at least one identity link below.
+   *
+   * Only so the loop knows not to count them unchanged: a person still owed an identity in one
+   * of their LMS courses is not a person with nothing to do.
+   */
+  const missingIdentityUserIds = new Set<string>();
+
   for (const { issuer, contextLinkId, members } of sources) {
     const source = { issuer, contextLinkId };
     for (const member of members) {
@@ -168,6 +231,18 @@ export async function diffRoster(opts: {
         (member.email ? byEmail.get(member.email) : undefined) ??
         null;
       if (userId) seen.add(userId);
+
+      // Active only: listed but inactive in this section means they are not currently in it.
+      if (userId && member.active) {
+        contextByLinkId.get(contextLinkId)?.members.push({ userId, ltiUserId: member.ltiUserId });
+        nameByUserId.set(
+          userId,
+          displayName(member.firstName, member.lastName, member.email ?? member.ltiUserId),
+        );
+        if (!linkedUserIssuers.has(identityKey(issuer, userId))) {
+          missingIdentityUserIds.add(userId);
+        }
+      }
 
       /**
        * One entry per person, however many sources hold them. Keyed by the AFCT account when
@@ -229,20 +304,41 @@ export async function diffRoster(opts: {
       continue;
     }
 
-    // Enrolled and correct. The one thing that may still be missing is the LMS identity, which
-    // is what grade passback needs, and a student who has never launched will not have one.
-    if (!ltiIdByUser.has(existing.userId)) {
+    /**
+     * Enrolled and correct. What may still be missing is an LMS identity, which is what grade
+     * passback needs, and a student who has never launched will not have one.
+     *
+     * Emitted below rather than here, one per LMS course that lists them. A person is one
+     * candidate however many sections hold them, which is right for deciding an enrolment and
+     * wrong for deciding identities: somebody taught in two connected LMS courses needs one in
+     * each, and a single change per person could only ever create the first.
+     */
+    if (!missingIdentityUserIds.has(existing.userId)) unchanged++;
+  }
+
+  /**
+   * One link per LMS course that currently lists the person and has no identity for them there.
+   *
+   * Built from the per-source rosters rather than the candidates, because that is the only
+   * place a person still appears once per section. Limited to people AFCT already knows: a
+   * brand-new account has no id yet and its `add` links the identity for the source it came
+   * from, with any second one picked up by the next sync.
+   */
+  for (const context of contexts) {
+    const issuer = issuerByContextLinkId.get(context.contextLinkId);
+    if (!issuer) continue;
+    for (const member of context.members) {
+      const existing = rosterByUser.get(member.userId);
+      if (!existing) continue;
+      if (linkedUserIssuers.has(identityKey(issuer, member.userId))) continue;
       changes.push({
         kind: 'link-identity',
-        userId: existing.userId,
-        name,
+        userId: member.userId,
+        name: nameByUserId.get(member.userId) ?? member.userId,
         ltiUserId: member.ltiUserId,
-        source,
+        source: { issuer, contextLinkId: context.contextLinkId },
       });
-      continue;
     }
-
-    unchanged++;
   }
 
   /**
@@ -264,5 +360,5 @@ export async function diffRoster(opts: {
     }
   }
 
-  return { changes, keptStaff, unchanged };
+  return { changes, keptStaff, unchanged, contexts };
 }

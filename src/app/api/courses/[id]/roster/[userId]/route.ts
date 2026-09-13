@@ -11,15 +11,27 @@ import { CourseRoleChangeSchema } from '@/schemas/user';
 /** Thrown inside a roster transaction when the change would leave 0 faculty. */
 class LastFacultyError extends Error {}
 
-/** Thrown inside the removal transaction when the target has submissions in the course. */
-class RosterHasSubmissionsError extends Error {}
+/**
+ * Thrown inside the removal transaction when the target still has academic work in the course.
+ *
+ * Submissions were the whole rule for a while. Grades are work too, and they are the case that
+ * bites: `AssignmentProblemGrade` hangs off the User rather than the Roster, so removing the
+ * roster row leaves the marks in the database while the gradebook, which builds its student
+ * list from the roster, stops showing them. A mark somebody entered by hand for a student who
+ * never uploaded anything disappeared from the course with nothing to say it had.
+ */
+class RosterHasWorkError extends Error {
+  constructor(readonly what: 'submissions' | 'grades') {
+    super(`Roster entry still has ${what}`);
+  }
+}
 
 /**
  * Removes a user from a course roster. Permission is tiered: the shared wrapper
  * admits global admins and course faculty only (TAs and students are rejected up
  * front); the remaining rule (a faculty member may not remove another faculty
  * member) is enforced here (a global admin may). Two safety rules block the removal
- * outright: the user must have no submissions in the course, and a course can't lose
+ * outright: the user must have no submissions and no grades in the course, and a course can't lose
  * its last faculty member.
  * @openapi
  * summary: Remove a user from a course
@@ -32,7 +44,7 @@ class RosterHasSubmissionsError extends Error {}
  *     content:
  *       application/json:
  *         schema: { type: object, properties: { success: { type: boolean }, removed: { type: integer } } }
- *   400: { description: "User has submissions, or is the only faculty member." }
+ *   400: { description: "User has submissions or grades, or is the only faculty member." }
  *   401: { description: Not signed in. }
  *   403: { description: Caller's role may not remove this user. }
  *   500: { description: Server error. }
@@ -92,7 +104,19 @@ export const DELETE = withCourseAuth(
                 select: { id: true },
               });
               if (existingSubmission) {
-                throw new RosterHasSubmissionsError();
+                throw new RosterHasWorkError('submissions');
+              }
+
+              // Grades count as work even with nothing handed in: a manually entered mark is
+              // still a record of the student in this course, and removing the roster row
+              // would hide it rather than remove it. Use DROPPED, which is reversible and
+              // keeps them in the gradebook.
+              const existingGrade = await tx.assignmentProblemGrade.findFirst({
+                where: { studentId: userId, assignmentId: { in: assignmentIdList } },
+                select: { assignmentId: true },
+              });
+              if (existingGrade) {
+                throw new RosterHasWorkError('grades');
               }
 
               // Drop this user's per-assignment audience rows, due-date overrides and
@@ -126,9 +150,11 @@ export const DELETE = withCourseAuth(
             { status: 400 },
           );
         }
-        if (err instanceof RosterHasSubmissionsError) {
+        if (err instanceof RosterHasWorkError) {
           return NextResponse.json(
-            { error: 'User has submissions for this course and cannot be removed' },
+            {
+              error: `User has ${err.what} for this course and cannot be removed. Drop them instead, which keeps their work and can be undone.`,
+            },
             { status: 400 },
           );
         }
@@ -311,6 +337,42 @@ export const PATCH = withCourseAuth(
                 throw new LastFacultyError();
               }
             }
+
+            /**
+             * A student with work in the course cannot become staff.
+             *
+             * The gradebook builds its rows from roster entries with role STUDENT, so promoting
+             * somebody leaves their submissions and grades in the database and takes them out
+             * of the course's own view of its marks. Nothing is deleted and nothing says so:
+             * the person and their marks simply stop being there.
+             *
+             * Refused rather than cleaned up, because "this student is now a TA" and "this
+             * student's work no longer counts" are two different decisions and only one of them
+             * was made. A promotion for somebody who has not handed anything in still works,
+             * which is the ordinary case: a student joining the teaching team next term.
+             */
+            if (target.role === 'STUDENT' && newRole !== 'STUDENT') {
+              const assignments = await tx.assignment.findMany({
+                where: { courseId },
+                select: { id: true },
+              });
+              const assignmentIdList = assignments.map((a) => a.id);
+              if (assignmentIdList.length > 0) {
+                const [submission, grade] = await Promise.all([
+                  tx.submission.findFirst({
+                    where: { studentId: userId, assignmentId: { in: assignmentIdList } },
+                    select: { id: true },
+                  }),
+                  tx.assignmentProblemGrade.findFirst({
+                    where: { studentId: userId, assignmentId: { in: assignmentIdList } },
+                    select: { assignmentId: true },
+                  }),
+                ]);
+                if (submission) throw new RosterHasWorkError('submissions');
+                if (grade) throw new RosterHasWorkError('grades');
+              }
+            }
+
             return tx.roster.update({ where: { id: target.id }, data: { role: newRole } });
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -319,6 +381,14 @@ export const PATCH = withCourseAuth(
         if (err instanceof LastFacultyError) {
           return NextResponse.json(
             { error: 'Cannot demote the only course faculty member' },
+            { status: 400 },
+          );
+        }
+        if (err instanceof RosterHasWorkError) {
+          return NextResponse.json(
+            {
+              error: `This student has ${err.what} in the course and cannot be made staff. Their work would stay in the database but leave the gradebook.`,
+            },
             { status: 400 },
           );
         }

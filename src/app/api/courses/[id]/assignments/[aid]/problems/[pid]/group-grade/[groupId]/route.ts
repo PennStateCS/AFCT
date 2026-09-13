@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
+import { lockProblemForGrading } from '@/lib/grade-writes';
 import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { withCourseAuth } from '@/lib/api/with-auth';
@@ -18,6 +20,31 @@ const GroupGradeBody = z.object({
    */
   overwrite: z.boolean().optional(),
 });
+
+/** Thrown inside the grading transaction so the read's row locks are released by the rollback. */
+class GroupGradeConflictError extends Error {}
+
+/**
+ * The group, or the problem link, went away while this was being written.
+ *
+ * Only reachable by racing a deletion or a group being moved to another set. The right answer is
+ * the one a request arriving a moment later would get, not a grade written to whoever used to be
+ * in the group.
+ */
+class GroupVanishedError extends Error {}
+
+/**
+ * The points were lowered under this grade before it landed.
+ *
+ * The range was checked when the request arrived, against a value that has since moved. Carries
+ * the current ceiling so the grader is told what the problem is now worth rather than being sent
+ * back to a number that is no longer true.
+ */
+class GradeOutOfRangeError extends Error {
+  constructor(readonly maxPoints: number) {
+    super('grade out of range');
+  }
+}
 
 /**
  * Grades a whole group on one problem, writing one grade row per member.
@@ -94,8 +121,9 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Group not found in this assignment' }, { status: 404 });
       }
 
-      const memberIds = [...new Set(group.memberships.map((m) => m.roster.userId))];
-      if (memberIds.length === 0) {
+      // A quick answer for an empty group. The list the grades are actually written to is read
+      // again inside the transaction, under the set's lock; this one is only for the message.
+      if (group.memberships.length === 0) {
         return NextResponse.json({ error: 'This group has no members' }, { status: 404 });
       }
 
@@ -110,64 +138,142 @@ export const POST = withCourseAuth(
         return NextResponse.json({ error: 'Grade out of range for this problem' }, { status: 400 });
       }
 
-      // Anyone already carrying a different grade. Reported rather than overwritten, so a
-      // deliberate individual adjustment is not silently erased by a routine group grade.
-      const existing = await prisma.assignmentProblemGrade.findMany({
-        where: { assignmentId, problemId, studentId: { in: memberIds } },
-        select: {
-          studentId: true,
-          grade: true,
-          student: { select: { firstName: true, lastName: true } },
-        },
-      });
-      const conflicts = existing
-        .filter((row) => row.grade !== grade)
-        .map((row) => ({
-          studentId: row.studentId,
-          name:
-            `${row.student.firstName ?? ''} ${row.student.lastName ?? ''}`.trim() || 'this student',
-          grade: row.grade,
-        }));
+      /**
+       * The conflict check and the write, in one transaction, with the members' existing grade
+       * rows held.
+       *
+       * The check used to run outside the transaction that writes. Another member of staff
+       * could adjust one member's grade in between, and this request would overwrite that
+       * adjustment without the caller ever being shown the 409 that exists to stop exactly
+       * that. `FOR UPDATE` on the rows being read is both the read and the lock, so a
+       * concurrent individual update of any of them waits for this to finish, and this reads
+       * the value that will still be there when it writes.
+       *
+       * A member with *no* grade row yet cannot be locked, because there is no row. That half
+       * is covered by this transaction being Serializable: the read below sees no row for them,
+       * one appears before the write, and its own snapshot refuses rather than flattening a
+       * grade it never saw. The other grader's isolation level makes no difference, which
+       * `lib/grade-isolation.db.test.ts` establishes rather than assumes; dropping this one to
+       * READ COMMITTED is what brings the overwrite back. A serialization failure arrives as
+       * P2034 and is answered as a conflict to retry.
+       */
+      const conflicts: { studentId: string; name: string; grade: number | null }[] = [];
 
-      if (conflicts.length > 0 && !overwrite) {
-        return NextResponse.json(
-          {
-            error: 'Some members already have a different grade',
-            conflicts,
+      let memberIds: string[] = [];
+      const outcome = await prisma
+        .$transaction(
+          async (tx) => {
+            /**
+             * The set's row first, then the membership, then the points, then the grades.
+             *
+             * Membership was read before the transaction and the set was stamped locked at the
+             * end of it, which left the whole window open: an instructor could move somebody
+             * out and somebody else in, and this would write the grade to the people who used
+             * to be in the group and then freeze the set that way. Editing memberships takes
+             * this same row, so taking it first means one of the two waits.
+             *
+             * The order here is the shared one (see `lib/grade-writes`): GroupSet, then
+             * AssignmentProblem, then the grade rows.
+             */
+            await tx.$queryRaw`SELECT 1 FROM "GroupSet" WHERE "id" = ${groupSetId} FOR UPDATE`;
+
+            const freshGroup = await tx.studentGroup.findFirst({
+              where: { id: groupId, groupSetId },
+              select: {
+                id: true,
+                memberships: { select: { roster: { select: { userId: true } } } },
+              },
+            });
+            // Moved to another set, or emptied, since the read above.
+            if (!freshGroup || freshGroup.memberships.length === 0) throw new GroupVanishedError();
+
+            memberIds = [...new Set(freshGroup.memberships.map((m) => m.roster.userId))];
+
+            /**
+             * The points, from the row this just locked rather than the one read earlier.
+             *
+             * The range check above used the value as it was when the request arrived. Lowering
+             * the points is refused below a grade that already exists, but this grade does not
+             * exist yet, so nothing stopped the two from crossing.
+             */
+            const locked = await lockProblemForGrading(tx, { assignmentId, problemId });
+            if (!locked) throw new GroupVanishedError();
+            if (grade < 0 || grade > locked.maxPoints) {
+              throw new GradeOutOfRangeError(locked.maxPoints);
+            }
+
+            const existing = await tx.$queryRaw<
+              {
+                studentId: string;
+                grade: number | null;
+                firstName: string | null;
+                lastName: string | null;
+              }[]
+            >`
+          SELECT g."studentId", g."grade", u."firstName", u."lastName"
+          FROM "AssignmentProblemGrade" g
+          JOIN "User" u ON u."id" = g."studentId"
+          WHERE g."assignmentId" = ${assignmentId}
+            AND g."problemId" = ${problemId}
+            AND g."studentId" = ANY(${memberIds})
+          FOR UPDATE OF g
+        `;
+
+            for (const row of existing) {
+              if (row.grade === grade) continue;
+              conflicts.push({
+                studentId: row.studentId,
+                name: `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || 'this student',
+                grade: row.grade,
+              });
+            }
+
+            // Reported rather than overwritten, so a deliberate individual adjustment is not
+            // silently erased by a routine group grade. Thrown so the read's locks are released
+            // with the rollback rather than held while a response is built.
+            if (conflicts.length > 0 && !overwrite) throw new GroupGradeConflictError();
+
+            // Every member is graded together, or nobody is. A partial write here would leave a
+            // group half-graded with no sign of which half.
+            for (const studentId of memberIds) {
+              await tx.assignmentProblemGrade.upsert({
+                where: { assignmentId_problemId_studentId: { assignmentId, problemId, studentId } },
+                create: {
+                  assignmentId,
+                  problemId,
+                  studentId,
+                  grade,
+                  gradedManually: true,
+                  gradeSource: 'MANUAL',
+                  groupGradeGroupId: group.id,
+                  groupGradeValue: grade,
+                },
+                update: {
+                  grade,
+                  gradedManually: true,
+                  gradeSource: 'MANUAL',
+                  groupGradeGroupId: group.id,
+                  groupGradeValue: grade,
+                },
+              });
+            }
+            // Entering a grade for a group assignment locks its set, same as the single-student
+            // route: the membership a grade was based on must stop moving underneath it.
+            await lockGroupSetIfUsed(tx, groupSetId);
           },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        )
+        .catch((err) => {
+          if (err instanceof GroupGradeConflictError) return 'conflict' as const;
+          throw err;
+        });
+
+      if (outcome === 'conflict') {
+        return NextResponse.json(
+          { error: 'Some members already have a different grade', conflicts },
           { status: 409 },
         );
       }
-
-      // One transaction: every member is graded together, or nobody is. A partial write here
-      // would leave a group half-graded with no sign of which half.
-      await prisma.$transaction(async (tx) => {
-        for (const studentId of memberIds) {
-          await tx.assignmentProblemGrade.upsert({
-            where: { assignmentId_problemId_studentId: { assignmentId, problemId, studentId } },
-            create: {
-              assignmentId,
-              problemId,
-              studentId,
-              grade,
-              gradedManually: true,
-              gradeSource: 'MANUAL',
-              groupGradeGroupId: group.id,
-              groupGradeValue: grade,
-            },
-            update: {
-              grade,
-              gradedManually: true,
-              gradeSource: 'MANUAL',
-              groupGradeGroupId: group.id,
-              groupGradeValue: grade,
-            },
-          });
-        }
-        // Entering a grade for a group assignment locks its set, same as the single-student
-        // route: the membership a grade was based on must stop moving underneath it.
-        await lockGroupSetIfUsed(tx, groupSetId);
-      });
 
       await createEnhancedActivityLog(prisma, req, {
         userId: graderId,
@@ -191,6 +297,36 @@ export const POST = withCourseAuth(
 
       return NextResponse.json({ grade, memberIds, applied: memberIds.length });
     } catch (error) {
+      if (error instanceof GroupVanishedError) {
+        return NextResponse.json(
+          { error: 'This group is no longer part of this assignment.' },
+          { status: 404 },
+        );
+      }
+      if (error instanceof GradeOutOfRangeError) {
+        // The ceiling moved while this was in flight, so say what it is now rather than
+        // repeating the range the grader was working to.
+        return NextResponse.json(
+          {
+            error: `This problem is now worth ${error.maxPoints} points, so that grade is out of range. Check the grade and try again.`,
+          },
+          { status: 409 },
+        );
+      }
+      /**
+       * Two graders reached the same rows at the same moment and Postgres refused one of them.
+       *
+       * This is the pair of transactions doing their job, not a fault: the group route and the
+       * single-student route each read what the other writes, which is what lets Postgres see
+       * the conflict at all. Retrying is safe and is the only thing to do, so say so rather
+       * than reporting a server error.
+       */
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        return NextResponse.json(
+          { error: 'Another grade for this problem was saved at the same moment. Try again.' },
+          { status: 409 },
+        );
+      }
       console.error('POST group-grade error:', error);
       await logError(req, {
         userId: graderId,

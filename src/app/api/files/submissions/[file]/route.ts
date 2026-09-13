@@ -1,16 +1,17 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
-import { canManageCourse } from '@/lib/permissions';
+import { canAccessCourse, canManageCourse, canViewStudentData } from '@/lib/permissions';
+import { resolveStudentContentGate } from '@/lib/assignment-student-gate';
 import { apiError } from '@/lib/api/http';
 import { logDenial, logError } from '@/lib/api/activity';
 import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
 
 /**
- * Serves a submission's uploaded file. Restricted to the submitting student, course
- * staff (faculty or TAs), or a system admin. Every successful serve is audited, as a
- * view by default and as a download when `?download=1` is set. Traversal filenames are
- * rejected.
+ * Serves a submission's uploaded file. Restricted to the submitting student, anyone in the
+ * group that owns the work, course staff (faculty or TAs), or a system admin. Every successful
+ * serve is audited, as a view by default and as a download when `?download=1` is set.
+ * Traversal filenames are rejected.
  * @openapi
  * summary: Get a submission file
  * parameters:
@@ -28,7 +29,7 @@ import { isSafeUploadName, serveUploadedFile } from '@/lib/api/serve-file';
  *         schema: { type: string, format: binary }
  *   400: { description: Invalid filename. }
  *   401: { description: Not signed in. }
- *   403: { description: "Not the submitting student, course staff, or a system admin." }
+ *   403: { description: "Not the submitting student, a member of the group that owns the work, course staff, or a system admin." }
  *   404: { description: File not found. }
  *   500: { description: Server error. }
  */
@@ -54,6 +55,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
         id: true,
         originalFileName: true,
         studentId: true,
+        // Group work belongs to the group, not to whoever happened to upload it. Without this
+        // the rule below could only ever recognise the uploader, so a groupmate looking at the
+        // shared attempt AFCT had already shown them was refused the file itself.
+        studentGroupId: true,
         assignmentId: true,
         courseId: true,
       },
@@ -63,13 +68,43 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
       return apiError(404, 'File not found');
     }
 
-    // The owning student may fetch their own file; otherwise the caller must be
-    // staff (faculty/TA) of the submission's course, or a global admin.
+    /**
+     * Course access first, then whose work.
+     *
+     * `canViewStudentData` decides the second question only, and says so: it assumes course
+     * membership has already been gated, normally by `withCourseAuth`. This route cannot use
+     * that wrapper, because the path names a file rather than a course, so the gate has to be
+     * here. Without it a dropped student still reads their own work and their old group's,
+     * since dropping keeps the roster row and every group membership on purpose and denies
+     * access through this one function instead.
+     */
     const allowed =
-      submission.studentId === session.user.id ||
-      (await canManageCourse(session.user, submission.courseId));
+      (await canAccessCourse(session.user, submission.courseId)) &&
+      // The one rule for "whose work may this person read", shared with the desktop client's
+      // submission route so the two paths cannot answer differently: the student themselves,
+      // a member of the group that owns the work, course staff, or a system admin. The group
+      // check is scoped to the owning group, never "shares any group in this course".
+      (await canViewStudentData(session.user, submission.courseId, submission.studentId, {
+        studentGroupId: submission.studentGroupId,
+      }));
 
-    if (!allowed) {
+    /**
+     * For a student, the same audience and unlock gate the assignment's own reads run.
+     *
+     * Course access and ownership were as far as this went, so a student taken out of an
+     * assignment's audience, or one whose assignment was put back behind an unlock time, could
+     * still fetch the bytes directly while every other surface had stopped showing them. Staff
+     * skip it: they set the audience, and they read everybody's work by design.
+     */
+    const gated =
+      allowed &&
+      (await (async () => {
+        if (await canManageCourse(session.user, submission.courseId)) return true;
+        const gate = await resolveStudentContentGate(submission.assignmentId, session.user.id);
+        return gate.assigned && !gate.locked;
+      })());
+
+    if (!gated) {
       return logDenial(req, {
         userId: session.user.id,
         action: 'SUBMISSION_FILE_ACCESS_DENIED',
@@ -77,7 +112,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
         courseId: submission.courseId,
         // The subject here is whose file was reached for, which is not the actor.
         metadata: {
-          reason: 'not the owning student or course staff',
+          reason:
+            'no access to the course or the assignment, or not the owning student, a member of the owning group, or course staff',
           targetUserId: submission.studentId,
           submissionId: submission.id,
         },

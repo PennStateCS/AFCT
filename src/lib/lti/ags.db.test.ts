@@ -311,6 +311,49 @@ describe('sending a score', () => {
     });
   });
 
+  /**
+   * A running total over the assignment's full value reads lower than the student stands while
+   * some of it is unmarked. The number goes as it is and the label says it is not final, which
+   * is what AGS has `PendingManual` for.
+   */
+  it('says the marking is still to finish when told so', async () => {
+    const calls = acceptingPlatform();
+
+    await postScore({
+      platform: PLATFORM,
+      lineItemUrl: `${LINE_ITEMS_URL}/42`,
+      ltiUserId: 'lms-user-1',
+      scoreGiven: 50,
+      scoreMaximum: 100,
+      gradingComplete: false,
+    });
+
+    expect(calls[0]?.body).toMatchObject({
+      scoreGiven: 50,
+      gradingProgress: 'PendingManual',
+      // The work itself was handed in; it is the marking that is outstanding.
+      activityProgress: 'Completed',
+    });
+  });
+
+  it('still says NotReady when clearing, whatever the completeness', async () => {
+    const calls = acceptingPlatform();
+
+    await postScore({
+      platform: PLATFORM,
+      lineItemUrl: `${LINE_ITEMS_URL}/42`,
+      ltiUserId: 'lms-user-1',
+      scoreGiven: null,
+      scoreMaximum: 100,
+      gradingComplete: false,
+    });
+
+    expect(calls[0]?.body).toMatchObject({
+      gradingProgress: 'NotReady',
+      activityProgress: 'Initialized',
+    });
+  });
+
   it('reports a refusal with what the platform said', async () => {
     vi.stubGlobal(
       'fetch',

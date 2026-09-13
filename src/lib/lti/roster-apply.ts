@@ -14,7 +14,8 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import type { AuditContext } from '@/lib/linked-identity';
-import type { RosterChange } from '@/lib/lti/roster-diff';
+import { diffRoster, type ContextRoster, type RosterChange } from '@/lib/lti/roster-diff';
+import type { Member } from '@/lib/lti/nrps';
 import { rememberContextMember } from '@/lib/lti/course-link';
 
 export type ApplyResult = {
@@ -43,11 +44,31 @@ export type ApplyResult = {
  */
 export async function applyRosterChanges(opts: {
   courseId: string;
-  changes: RosterChange[];
+  /**
+   * What to apply, or the LMS rosters to work it out from inside the transaction.
+   *
+   * Prefer `sources`. A diff computed outside the transaction that applies it is a
+   * check-then-act over the whole roster: a student dropped or enrolled by hand in between is
+   * overwritten by a decision taken before that happened. Passing `changes` is the preview's
+   * shape, kept for callers that have already decided and for tests.
+   */
+  sources?: { issuer: string; contextLinkId: string; members: Member[] }[];
+  changes?: RosterChange[];
+  /**
+   * Who each LMS course currently lists, one entry per source read.
+   *
+   * Reconciled rather than appended to. Membership used to be recorded only while adding
+   * somebody, so a student already enrolled in AFCT never got a section against their name and
+   * grade passback had nothing to choose by; and nothing ever removed one, so a student moving
+   * from section A to section B ended up in both and passback refused as ambiguous.
+   *
+   * Omit it and nothing is touched, which is what a caller with an incomplete read should do.
+   */
+  contexts?: ContextRoster[];
   actorUserId: string;
   context: AuditContext;
 }): Promise<ApplyResult> {
-  const { courseId, changes, actorUserId } = opts;
+  const { courseId, actorUserId } = opts;
   const result: ApplyResult = {
     added: 0,
     dropped: 0,
@@ -65,9 +86,79 @@ export async function applyRosterChanges(opts: {
    * roster change made by hand, so a drop reads the same however it happened, with the source
    * in the metadata.
    */
-  const events: { action: string; targetUserId: string; extra?: Record<string, unknown> }[] = [];
+  const events: {
+    action: string;
+    targetUserId: string;
+    extra?: Record<string, unknown>;
+    /** WARNING rather than INFO: this one is a problem to fix, not a change that was made. */
+    severity?: 'INFO' | 'WARNING';
+  }[] = [];
+
+  /** What was actually applied, for the summary below. Filled inside the transaction. */
+  let changes: RosterChange[] = opts.changes ?? [];
 
   await prisma.$transaction(async (tx) => {
+    /**
+     * Worked out here when the caller handed over the LMS rosters, so AFCT's own state is read
+     * inside the transaction that acts on it and cannot move in between.
+     */
+    const resolved = opts.sources
+      ? await diffRoster({ courseId, sources: opts.sources, client: tx })
+      : null;
+    if (resolved) changes = resolved.changes;
+    const contexts = resolved?.contexts ?? opts.contexts;
+
+    /**
+     * Sections first, so the roster changes below land against memberships that already match
+     * what the LMS said. Each context is reconciled to exactly what its own roster listed:
+     * everyone present is recorded, and anyone no longer there is removed.
+     *
+     * Safe to delete only because a diff is built from a complete read of every source. A
+     * partial roster cannot tell absence from a failed fetch, which is why one failed source
+     * aborts the whole union rather than producing a diff to apply.
+     */
+    for (const context of contexts ?? []) {
+      const userIds = context.members.map((m) => m.userId);
+      await tx.ltiContextMember.deleteMany({
+        where: { contextLinkId: context.contextLinkId, userId: { notIn: userIds } },
+      });
+      for (const member of context.members) {
+        await rememberContextMember({
+          contextLinkId: context.contextLinkId,
+          userId: member.userId,
+          ltiUserId: member.ltiUserId,
+          tx,
+        });
+      }
+    }
+
+    /**
+     * A student in more than one of the connected LMS courses, noticed while the rosters are in
+     * hand rather than weeks later when their grade will not send.
+     *
+     * A student belongs to exactly one LMS course per AFCT course: their mark has one gradebook
+     * to go in, and with two AFCT cannot tell which, so passback refuses. That refusal is
+     * correct but it arrives at grading time, which is the worst moment to learn about a roster
+     * problem. The sync has the whole picture, so it says so here.
+     */
+    if (contexts && contexts.length > 1) {
+      const seenIn = new Map<string, number>();
+      for (const context of contexts) {
+        for (const member of context.members) {
+          seenIn.set(member.userId, (seenIn.get(member.userId) ?? 0) + 1);
+        }
+      }
+      const inSeveral = [...seenIn.entries()].filter(([, n]) => n > 1).map(([userId]) => userId);
+      for (const userId of inSeveral) {
+        events.push({
+          action: 'LTI_STUDENT_IN_SEVERAL_CONTEXTS',
+          targetUserId: userId,
+          severity: 'WARNING',
+          extra: { contexts: contexts.length },
+        });
+      }
+    }
+
     for (const change of changes) {
       switch (change.kind) {
         /**
@@ -85,8 +176,11 @@ export async function applyRosterChanges(opts: {
             change.existingUserId ??
             (await createAccount(tx, change, () => result.accountsCreated++));
 
-          // The LMS has just told us they are in this course, which is what decides where
-          // their grade goes when several LMS courses open this one.
+          /**
+           * Their section, for an account that did not exist when the reconciliation above ran.
+           * Everyone already in AFCT is handled there; this covers the one case it cannot,
+           * since the user id is only minted here.
+           */
           await rememberContextMember({
             contextLinkId,
             userId,
@@ -166,7 +260,7 @@ export async function applyRosterChanges(opts: {
       userId: actorUserId,
       courseId,
       action: event.action,
-      severity: 'INFO',
+      severity: event.severity ?? 'INFO',
       category: 'COURSE',
       // `via` marks it as a sync rather than somebody working through the roster by hand.
       metadata: { targetUserId: event.targetUserId, via: 'LTI_ROSTER_SYNC', ...event.extra },

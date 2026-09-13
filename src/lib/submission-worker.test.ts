@@ -21,6 +21,9 @@ const prismaMock = vi.hoisted(() => ({
     updateMany: vi.fn(),
     findUnique: vi.fn(),
   },
+  // The autograder locks the assignment-problem row and reads the current points from it, so a
+  // mark cannot land above a ceiling that moved while the worker was running.
+  $queryRaw: vi.fn(),
   // The grade fan-out runs in one transaction; the callback gets the same mock client so the
   // existing assertions on updateMany/createMany still see the calls.
   $transaction: vi.fn(),
@@ -53,7 +56,7 @@ vi.mock('fs', () => ({
 vi.mock('child_process', () => ({ execSync: execSyncMock }));
 vi.mock('os', () => ({ default: { platform: platformMock }, platform: platformMock }));
 
-import { __test__ } from '@/lib/submission-worker';
+import { __test__, yieldsAGrade } from '@/lib/submission-worker';
 
 const {
   evaluateSubmission,
@@ -65,6 +68,40 @@ const {
 } = __test__;
 
 const CONFIG = { timeoutMs: 5_000, maxMemoryMb: 256, analyzerLimit: 100 };
+
+/**
+ * Which evaluations a grade may be computed from.
+ *
+ * The rows below are every shape `runJavaEvaluator` and `evaluateWithJar` can return, read off
+ * those two functions. All of the FAILED ones used to be scored `correct ? maxPoints : 0`, which
+ * made each of them a standing zero for the student, so this table is the guard on that.
+ */
+describe('yieldsAGrade', () => {
+  const cases: [string, { status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'; correct?: boolean }, boolean][] = [
+    ['a correct answer', { status: 'COMPLETED', correct: true }, true],
+    ['a wrong answer', { status: 'COMPLETED', correct: false }, true],
+    // Not the student's doing, any of them.
+    ['no file submitted', { status: 'FAILED', correct: false }, false],
+    ['the uploaded file missing from storage', { status: 'FAILED', correct: false }, false],
+    ['no answer key configured', { status: 'FAILED' }, false],
+    ['the answer key missing from storage', { status: 'FAILED' }, false],
+    ['the evaluator crashing', { status: 'FAILED' }, false],
+    ['output that would not parse', { status: 'FAILED' }, false],
+    ['JSON of the wrong shape', { status: 'FAILED' }, false],
+    ['an unexpected error inside the runner', { status: 'FAILED', correct: false }, false],
+    // Completed, but with nothing to say. "No verdict" is not "incorrect", which is the
+    // difference between leaving work unmarked and scoring it zero.
+    ['the Windows development stand-in', { status: 'COMPLETED', correct: undefined }, false],
+    ['a row still waiting', { status: 'PENDING', correct: true }, false],
+    ['a row being worked on', { status: 'PROCESSING', correct: true }, false],
+  ];
+
+  it.each(cases)('%s', (_name, evaluation, expected) => {
+    expect(yieldsAGrade(evaluation)).toBe(expected);
+  });
+});
+
+
 
 const makeSubmission = (over: Record<string, any> = {}): any => ({
   id: 'sub-1',
@@ -99,6 +136,9 @@ beforeEach(() => {
   existsSyncMock.mockReturnValue(true);
   executeMock.mockResolvedValue({ stdout: '{"correct":true,"feedback":"ok"}', stderr: '' });
   activityLogMock.mockResolvedValue(undefined);
+  // What the problem is worth when the autograder locks its row. Ten unless a test says the
+  // points moved while the worker was running.
+  prismaMock.$queryRaw.mockResolvedValue([{ maxPoints: 10 }]);
   getEvaluatorConfigMock.mockResolvedValue(CONFIG);
   // No trial waiting, unless a test says otherwise.
   prismaMock.evaluatorTrial.findFirst.mockResolvedValue(null);
@@ -178,6 +218,36 @@ describe('runJavaEvaluator — evaluator execution', () => {
     });
     expect(result.evaluationRaw).toEqual({ correct: true, feedback: 'Nice work' });
     expect(loggedActions()).toContain('SUBMISSION_EVALUATION_SUCCESS');
+  });
+
+  /**
+   * Which answer key marked it, recorded on the attempt.
+   *
+   * A key can be replaced mid-term and a grade already given stands, which is only a coherent
+   * position while the key that produced it can still be named. The superseded file is kept for
+   * the same reason.
+   */
+  it('names the answer key it marked against', async () => {
+    executeMock.mockResolvedValue({
+      stdout: '{"correct":true,"feedback":"Nice work"}',
+      stderr: '',
+    });
+
+    const result = await runJavaEvaluator(makeSubmission(), CONFIG);
+
+    expect(result.answerFileName).toBe('answer.txt');
+  });
+
+  it('names none when it never opened one', async () => {
+    // No answer key configured: there was nothing to measure against, and saying otherwise
+    // would name a key that had no part in the result.
+    const submission = makeSubmission();
+    submission.assignmentProblem.problem.fileName = null;
+
+    const result = await runJavaEvaluator(submission, CONFIG);
+
+    expect(result).toMatchObject({ status: 'FAILED' });
+    expect(result.answerFileName ?? null).toBeNull();
   });
 
   it('passes FA-specific args (maxStates + determinism) to the evaluator', async () => {

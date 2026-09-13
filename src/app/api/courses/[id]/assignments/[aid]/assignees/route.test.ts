@@ -7,6 +7,9 @@ const prismaMock = vi.hoisted(() => {
     assignment: { findFirst: vi.fn(), update: vi.fn() },
     assignmentAssignee: { findMany: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
     assignmentOverride: { deleteMany: vi.fn() },
+    // Extra-attempt grants are cleared alongside the overrides when a target leaves the
+    // audience, or they come back with the student if the student comes back.
+    submissionGrant: { deleteMany: vi.fn() },
     studentGroup: { findMany: vi.fn() },
     roster: { findFirst: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
@@ -202,5 +205,42 @@ describe('what an audience change is allowed to reach', () => {
     expect(prismaMock.assignmentOverride.deleteMany).toHaveBeenCalledWith({
       where: { assignmentId: 'a1', userId: { notIn: ['u1'] } },
     });
+  });
+
+  /**
+   * Extra-attempt grants outlive an audience the same way overrides do, and nothing cleared
+   * them. A student given three extra attempts, taken off the assignment, and put back on it
+   * weeks later came back holding those attempts, granted by nobody.
+   */
+  it('drops extra-attempt grants for students dropped from this assignment', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', groupSetId: null });
+    prismaMock.roster.findMany.mockResolvedValue([{ userId: 'u1' }]);
+
+    await put({ assignedToEveryone: false, assignees: [{ userId: 'u1' }] });
+
+    expect(prismaMock.submissionGrant.deleteMany).toHaveBeenCalledWith({
+      where: { assignmentId: 'a1', userId: { notIn: ['u1'] } },
+    });
+  });
+
+  it('drops extra-attempt grants for groups dropped from this assignment', async () => {
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', groupSetId: 'gs1' });
+    prismaMock.studentGroup.findMany.mockResolvedValue([{ id: 'g1' }]);
+
+    await put({ assignedToEveryone: false, assignees: [{ groupId: 'g1' }] });
+
+    expect(prismaMock.submissionGrant.deleteMany).toHaveBeenCalledWith({
+      where: { assignmentId: 'a1', groupId: { notIn: ['g1'] } },
+    });
+  });
+
+  it('keeps every grant when the audience becomes everyone', async () => {
+    // Nobody left the audience: the exception was about those students, not about how the
+    // audience happened to be expressed.
+    prismaMock.assignment.findFirst.mockResolvedValue({ id: 'a1', groupSetId: null });
+
+    await put({ assignedToEveryone: true });
+
+    expect(prismaMock.submissionGrant.deleteMany).not.toHaveBeenCalled();
   });
 });

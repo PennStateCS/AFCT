@@ -73,6 +73,8 @@ If several LMS courses open the same AFCT course, the roster is all of them toge
 
 A member your LMS gives no email address for cannot be given an AFCT account, so the sync lists them as skipped and carries on with everyone else. Ask your administrator to let AFCT see email addresses in the LMS if you see people skipped.
 
+One thing cross-listing does not allow: **a student may belong to only one of the connected LMS courses.** Their grade has one gradebook to go in, and if two of the connected courses list the same person AFCT cannot tell which, so it holds the grade rather than putting it somewhere that might be wrong. You will see that on the assignment's LMS panel, saying the student is in more than one connected course. Take them out of all but one in your LMS, then sync the roster again.
+
 ## Link straight to one assignment
 
 Some LMSs let you pick the AFCT assignment while adding the link, so students land on that assignment rather than on the AFCT course. If yours supports it, choosing AFCT while adding an assignment or module item offers two ways to go:

@@ -13,6 +13,7 @@ import { claimAndRunTrial, reapStuckTrials } from './trial-runner';
 import { getEvaluatorConfig, getQueueSettings, type EvaluatorConfig } from './eval-config';
 import { createEnhancedActivityLog, type LogSeverity } from './activity-log-utils';
 import { errMessage } from './errors';
+import { lockProblemForGrading } from './grade-writes';
 import {
   DEFAULT_SUBMISSION_MAX_CONCURRENT,
   DEFAULT_SUBMISSION_MAX_ATTEMPTS,
@@ -109,6 +110,14 @@ interface SubmissionEvaluationResult {
   correct?: boolean;
   evaluationRaw: unknown | null;
   status: SubmissionEvaluationStatus;
+  /**
+   * The answer key this run was measured against, as the stored filename.
+   *
+   * Only set once a key was actually opened, so every failure path leaves it undefined: there
+   * was nothing to measure against, and saying otherwise would name a key that had no part in
+   * the result.
+   */
+  answerFileName?: string | null;
 }
 
 async function logSubmissionActivity(
@@ -475,7 +484,35 @@ export async function holdsTheStandingGrade(
  *
  * `stale` is the only one that changed nothing: the row belongs to somebody else now.
  */
-export type PersistOutcome = 'graded' | 'grade-skipped' | 'no-autograde' | 'stale';
+export type PersistOutcome =
+  | 'graded'
+  | 'grade-skipped'
+  | 'grade-withheld'
+  | 'no-autograde'
+  | 'stale';
+
+/**
+ * Whether an evaluation is something a grade may be computed from.
+ *
+ * The evaluator reports a failure by returning, not by throwing: a missing submission file, a
+ * missing or unconfigured answer key, a crashed jar, output that would not parse, JSON that was
+ * not the shape agreed, all come back as FAILED with no verdict. Those used to be fed to
+ * `correct ? maxPoints : 0` like any other answer, so a server-side fault became a standing zero
+ * for the student, and on a group problem for everybody in the group. A rerun of work that had
+ * been marked correct overwrote the mark with that zero.
+ *
+ * `correct` has to be a definite boolean as well as the status being COMPLETED. The Windows
+ * development stand-in completes without a verdict, and "no verdict" is not "incorrect".
+ *
+ * Pure and exported, so the rule can be tested exhaustively without a database standing behind
+ * it: every failure the evaluator can report is a case here.
+ */
+export function yieldsAGrade(evaluation: {
+  status: SubmissionEvaluationStatus;
+  correct?: boolean;
+}): boolean {
+  return evaluation.status === 'COMPLETED' && typeof evaluation.correct === 'boolean';
+}
 
 /**
  * Everything the evaluation changes in the database, in one transaction.
@@ -540,6 +577,8 @@ export async function persistEvaluation(opts: {
               ? Prisma.JsonNull
               : (opts.evaluation.evaluationRaw as Prisma.InputJsonValue),
           status: opts.evaluation.status,
+          // Recorded only when a key was opened; a failed run names none.
+          answerFileName: opts.evaluation.answerFileName ?? null,
           // The condition this attempt was graded under, recorded rather than looked up later.
           // The problem's setting can be changed mid-term, and a study that compares showing the
           // witness string against withholding it needs to know which one a given attempt got.
@@ -555,8 +594,33 @@ export async function persistEvaluation(opts: {
 
       let outcome: PersistOutcome = 'no-autograde';
 
-      if (opts.autograderEnabled) {
-        const earnedPoints = opts.evaluation.correct ? opts.maxPoints : 0;
+      /**
+       * An evaluation that failed says nothing about the work, so it must not move the grade.
+       *
+       * Leaving the row untouched puts the student where `missing-work.ts` already expects
+       * somebody in this position to be: they handed something in, so no derived zero follows
+       * either, and the problem simply reads as not marked yet. The gap belongs to us, and staff
+       * can see the FAILED attempt in the queue and mark it by hand.
+       */
+      if (opts.autograderEnabled && !yieldsAGrade(opts.evaluation)) {
+        outcome = 'grade-withheld';
+      } else if (opts.autograderEnabled) {
+        /**
+         * What the problem is worth now, from its own row, held.
+         *
+         * A correct answer scores full marks, so this number *is* the points. They were read
+         * when the worker picked the submission up, which can be a while before this commits,
+         * and an instructor lowering them in between would leave a mark above the ceiling the
+         * gradebook and the LMS both measure against. Same row and same order every grade
+         * writer uses (see `lib/grade-writes`).
+         */
+        const locked = await lockProblemForGrading(tx, {
+          assignmentId: opts.assignmentId,
+          problemId: opts.problemId,
+        });
+        // Detached from the assignment while this was in flight: the result is still recorded
+        // above, but there is no longer a problem for it to be worth anything on.
+        const earnedPoints = locked && opts.evaluation.correct ? locked.maxPoints : 0;
 
         if (
           await holdsTheStandingGrade(tx, {
@@ -720,6 +784,20 @@ async function evaluateSubmission(id: string, token: string | null = null) {
       console.log(
         `[SubmissionWorker] Submission ${id} is not the latest; left the standing grade alone.`,
       );
+    } else if (outcome === 'grade-withheld') {
+      /**
+       * The evaluator could not reach a verdict, so there is no grade to give. WARNING rather
+       * than INFO: every route to here is something broken (a missing answer key, a crashed
+       * jar, output nobody could read), and the work is now sitting unmarked because of it.
+       */
+      await logSubmissionActivity(submission, 'SUBMISSION_AUTOGRADE_WITHHELD', 'WARNING', {
+        studentId: submission.studentId,
+        reason: 'the evaluation did not reach a verdict',
+        status: evaluation.status,
+      });
+      console.warn(
+        `[SubmissionWorker] Submission ${id} evaluated ${evaluation.status} with no verdict; left the grade alone.`,
+      );
     }
 
     console.log(`[SubmissionWorker] Successfully evaluated submission ${id}`);
@@ -865,7 +943,12 @@ async function runJavaEvaluator(
       return fail('ERROR: Answer file not found on server.');
     }
 
-    return await evaluateWithJar(submission, config, answerFilePath, uploadedFilePath);
+    return {
+      ...(await evaluateWithJar(submission, config, answerFilePath, uploadedFilePath)),
+      // Which key marked it. A key replaced later does not change what this attempt was
+      // measured against, and the grade it produced stands.
+      answerFileName,
+    };
   } catch (cmdErr) {
     const feedback = `ERROR: Evaluation failed - ${cmdErr instanceof Error ? cmdErr.message : 'Unknown error'}`;
     await logSubmissionActivity(submission, 'SUBMISSION_EVALUATION_ERROR', 'ERROR', {

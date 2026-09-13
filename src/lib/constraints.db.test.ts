@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -513,5 +513,68 @@ describe('deleting a group keeps its grades', () => {
     expect(after?.groupGradeGroupId).toBeNull();
     // The value stays, so an adjusted member still reads as adjusted afterwards.
     expect(after?.groupGradeValue).toBe(8);
+  });
+});
+
+/**
+ * A group set's name is unique within its course whatever the casing.
+ *
+ * The routes always checked it that way; the constraint behind them was exact, so two people
+ * creating "Project Teams" and "project teams" at the same moment both passed the check and
+ * both rows landed. The pre-check cannot be the rule when concurrency is the problem it is
+ * meant to solve, so the rule lives in the database now, as a unique index over
+ * `(courseId, lower(name))`.
+ */
+describe('group set names are case-insensitively unique in a course', () => {
+  const named = (name: string) =>
+    prisma.groupSet.create({ data: { name, courseId: ids.course } });
+
+  // The shared teardown removes only the fixture's own set by id, so anything made here has to
+  // clear itself or it collides with the next case and outlives its course.
+  afterEach(async () => {
+    await prisma.groupSet.deleteMany({
+      where: { courseId: ids.course, id: { not: ids.groupSet } },
+    });
+  });
+
+  it('refuses a second set whose name differs only by case', async () => {
+    await named('Project Teams');
+
+    await expect(named('project teams')).rejects.toThrow();
+  });
+
+  it('refuses it however the casing is mixed', async () => {
+    await named('Lab Partners');
+
+    await expect(named('LAB PARTNERS')).rejects.toThrow();
+  });
+
+  it('still allows a genuinely different name', async () => {
+    await named('Project Teams');
+
+    await expect(named('Project Groups')).resolves.toMatchObject({ name: 'Project Groups' });
+  });
+
+  it('does not reach across courses', async () => {
+    // The rule is per course: another course may use the same name, which is ordinary when a
+    // department runs the same course twice.
+    const other = await prisma.course.create({
+      data: {
+        name: 'Another course',
+        code: `OTH ${Math.floor(Math.random() * 900 + 100)}`,
+        semester: 'Fall 2026',
+        credits: 3,
+        startDate: new Date('2026-08-24T00:00:00Z'),
+        endDate: new Date('2026-12-18T00:00:00Z'),
+      },
+    });
+    await named('Project Teams');
+
+    await expect(
+      prisma.groupSet.create({ data: { name: 'project teams', courseId: other.id } }),
+    ).resolves.toBeTruthy();
+
+    await prisma.groupSet.deleteMany({ where: { courseId: other.id } });
+    await prisma.course.delete({ where: { id: other.id } });
   });
 });

@@ -367,6 +367,41 @@ const DETAIL: Array<[string, Meta, string | null]> = [
     { reason: 'grade held for manual review' },
     'grade held for manual review',
   ],
+  [
+    'SUBMISSION_AUTOGRADE_WITHHELD',
+    { reason: 'the evaluation did not reach a verdict', status: 'FAILED' },
+    'the evaluation did not reach a verdict (FAILED)',
+  ],
+  [
+    'SUBMISSION_AUTOGRADE_WITHHELD',
+    { reason: 'the evaluation did not reach a verdict' },
+    'the evaluation did not reach a verdict',
+  ],
+  ['SUBMISSION_AUTOGRADE_WITHHELD', {}, null],
+  [
+    'REMOVE_ASSIGNMENT_PROBLEM_REFUSED',
+    { submissions: 3, grades: 1 },
+    'would have deleted 3 submissions and 1 grade',
+  ],
+  [
+    'REMOVE_ASSIGNMENT_PROBLEM_REFUSED',
+    { submissions: 0, grades: 2 },
+    'would have deleted 2 grades',
+  ],
+  ['REMOVE_ASSIGNMENT_PROBLEM_REFUSED', {}, null],
+  [
+    'PROBLEM_TYPE_CHANGE_REFUSED',
+    { fromType: 'FA', toType: 'PDA', reason: 'answer file is not valid for the new type' },
+    'FA to PDA, answer file is not valid for the new type',
+  ],
+  ['PROBLEM_TYPE_CHANGE_REFUSED', { fromType: 'FA', toType: 'PDA' }, 'FA to PDA'],
+  ['PROBLEM_TYPE_CHANGE_REFUSED', {}, null],
+  [
+    'LTI_STUDENT_IN_SEVERAL_CONTEXTS',
+    { contexts: 2 },
+    "in more than one of this course's 2 connected LMS courses",
+  ],
+  ['LTI_STUDENT_IN_SEVERAL_CONTEXTS', {}, 'in more than one connected LMS course'],
   ['SUBMISSION_STALE_DISCARDED', {}, 'the submission was reclaimed while it was being graded'],
 
   // Submissions the system turned down. Each says why, since that is the whole entry.

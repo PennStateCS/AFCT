@@ -106,7 +106,13 @@ async function seed(opts: { withIdentity?: boolean; lineItemsUrl?: string | null
       },
     });
   }
-  await queueScore({ assignmentId: ASSIGNMENT, userId: USER, scoreGiven: 88, scoreMaximum: 100 });
+  await queueScore({
+    assignmentId: ASSIGNMENT,
+    userId: USER,
+    scoreGiven: 88,
+    scoreMaximum: 100,
+    gradingComplete: true,
+  });
 }
 
 beforeEach(destroyFixtures);
@@ -156,6 +162,23 @@ describe('a grade that cannot be sent', () => {
 
     expect(await sendOneScore()).toMatchObject({ status: 'failed', reason: 'no-lms-identity' });
     expect((await row()).lastError).toContain('does not list this student');
+  });
+
+  /**
+   * A soft delete leaves the course, its assignments and its LTI links in place so they can be
+   * recovered, and nothing further up the queue stops a claimed score from going out. Once a
+   * course is deleted in AFCT it must stop writing into somebody's LMS gradebook.
+   */
+  it('refuses to send for a course deleted after the grade was queued', async () => {
+    await seed();
+    workingPlatform();
+    await prisma.course.update({ where: { id: COURSE }, data: { deletedAt: new Date() } });
+
+    const result = await sendOneScore();
+
+    expect(result).toMatchObject({ status: 'failed', reason: 'course-deleted' });
+    // Terminal, not retried for ever against a course nobody is going to restore.
+    expect((await row()).state).toBe('FAILED');
   });
 
   it('says so when the LMS granted no grade scopes', async () => {

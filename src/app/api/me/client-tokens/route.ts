@@ -36,7 +36,10 @@ import { IssueClientTokenSchema } from '@/schemas/client';
  */
 export async function GET() {
   const session = await auth();
-  if (!session?.user?.id) {
+  // `inactive` as well as the id, matching the auth wrappers. A revoked session keeps its user
+  // id on purpose so the rest of the app can tell who it was, and an id alone is not permission:
+  // a disabled or deleted account, or one whose password was just reset, still presents one.
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   }
 
@@ -73,7 +76,10 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   const session = await auth();
-  if (!session?.user?.id) {
+  // Same rule as the list above, and it matters most here: this mints a bearer token with a
+  // 30-day sliding life that deliberately does not follow browser session rules, so a session
+  // the app has revoked must not be able to turn itself into one.
+  if (!session?.user?.id || session.user.inactive) {
     return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
   }
 

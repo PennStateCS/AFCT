@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { createEnhancedActivityLog } from '@/lib/activity-log-utils';
 import { logError } from '@/lib/api/activity';
 import { z } from 'zod';
-import { canUnpublishCourse } from '@/lib/course-status-checks';
+import { canUnpublishCourse, lockCourseWork } from '@/lib/course-status-checks';
 import { COURSE_STAFF_ROLES } from '@/lib/permissions';
 import { withCourseAuth } from '@/lib/api/with-auth';
 import { readJson } from '@/lib/api/request';
@@ -43,32 +43,50 @@ export const PATCH = withCourseAuth(
       if (!parsed.ok) return parsed.response;
       const { isPublished } = parsed.data;
 
-      if (!isPublished) {
-        const { canUnpublish, reason } = await canUnpublishCourse(prisma, courseId);
-        if (!canUnpublish) {
-          await createEnhancedActivityLog(prisma, req, {
-            userId: user.id,
-            action: 'COURSE_UNPUBLISH_REJECTED',
-            category: 'COURSE',
-            severity: 'WARNING',
-            courseId,
-            metadata: { reason },
-          });
-          return NextResponse.json({ error: reason }, { status: 403 });
+      /**
+       * The safety check and the state change, in one transaction, holding the rows a
+       * submission would attach to.
+       *
+       * Unpublishing is refused once students have handed work in, because it would take
+       * their access to it away. Checking and then updating separately meant a submission
+       * arriving in between was disallowed by a decision made before it existed. Publishing
+       * needs none of this: it only ever grants access.
+       */
+      let rejection: string | undefined;
+      const updated = await prisma.$transaction(async (tx) => {
+        if (!isPublished) {
+          await lockCourseWork(tx, courseId);
+          const { canUnpublish, reason } = await canUnpublishCourse(tx, courseId);
+          if (!canUnpublish) {
+            rejection = reason;
+            return null;
+          }
         }
-      }
 
-      const updated = await prisma.course.update({
-        where: { id: courseId },
-        data: { isPublished },
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          isPublished: true,
-          updatedAt: true,
-        },
+        return tx.course.update({
+          where: { id: courseId },
+          data: { isPublished },
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            isPublished: true,
+            updatedAt: true,
+          },
+        });
       });
+
+      if (!updated) {
+        await createEnhancedActivityLog(prisma, req, {
+          userId: user.id,
+          action: 'COURSE_UNPUBLISH_REJECTED',
+          category: 'COURSE',
+          severity: 'WARNING',
+          courseId,
+          metadata: { reason: rejection },
+        });
+        return NextResponse.json({ error: rejection }, { status: 403 });
+      }
 
       await createEnhancedActivityLog(prisma, req, {
         userId: user.id,

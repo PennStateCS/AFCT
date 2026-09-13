@@ -55,6 +55,10 @@ const ACTION_VERB: Record<string, string> = {
   SUBMISSION_CREATED: 'Submitted',
   SUBMISSION_AUTOGRADED: 'Graded',
   SUBMISSION_AUTOGRADE_SKIPPED: 'Skipped',
+  SUBMISSION_AUTOGRADE_WITHHELD: 'Withheld',
+  REMOVE_ASSIGNMENT_PROBLEM_REFUSED: 'Refused',
+  PROBLEM_TYPE_CHANGE_REFUSED: 'Refused',
+  LTI_STUDENT_IN_SEVERAL_CONTEXTS: 'Found',
   SUBMISSION_RERUN: 'Re-ran',
   COURSE_SUBMISSIONS_RERUN: 'Re-ran',
   SUBMISSION_QUEUE_REAPED: 'Reclaimed',
@@ -761,6 +765,45 @@ export function activityDetail(action: string, metadata: Metadata): string | nul
     case 'SUBMISSION_AUTOGRADE_SKIPPED':
       // Why the grade did not move, which is the whole content of the entry.
       return str(metadata, 'reason');
+
+    // Kept apart from SKIPPED on purpose. That one is routine (newer work holds the grade);
+    // this one means the evaluator broke and somebody's work is unmarked as a result, so a
+    // study or an investigation must be able to tell the two apart years later.
+    // Said at sync time rather than left for grading time, which is when it would otherwise
+    // surface as a grade that will not send.
+    case 'LTI_STUDENT_IN_SEVERAL_CONTEXTS': {
+      const n = firstNum(metadata, 'contexts');
+      return n > 0
+        ? `in more than one of this course's ${n} connected LMS courses`
+        : 'in more than one connected LMS course';
+    }
+
+    // Which way the type was going and what stopped it, since a refused change leaves the
+    // problem as it was and the entry is the only record that anybody tried.
+    case 'PROBLEM_TYPE_CHANGE_REFUSED': {
+      const from = str(metadata, 'fromType');
+      const to = str(metadata, 'toType');
+      const reason = str(metadata, 'reason');
+      if (!from || !to) return reason;
+      return `${from} to ${to}${reason ? `, ${reason}` : ''}`;
+    }
+
+    // What stood in the way, since the whole entry is "this removal would have deleted work".
+    case 'REMOVE_ASSIGNMENT_PROBLEM_REFUSED': {
+      const submissions = firstNum(metadata, 'submissions');
+      const grades = firstNum(metadata, 'grades');
+      const parts = [
+        submissions > 0 ? `${submissions} submission${submissions === 1 ? '' : 's'}` : null,
+        grades > 0 ? `${grades} grade${grades === 1 ? '' : 's'}` : null,
+      ].filter(Boolean);
+      return parts.length > 0 ? `would have deleted ${parts.join(' and ')}` : null;
+    }
+
+    case 'SUBMISSION_AUTOGRADE_WITHHELD': {
+      const reason = str(metadata, 'reason');
+      const status = str(metadata, 'status');
+      return reason ? `${reason}${status ? ` (${status})` : ''}` : null;
+    }
 
     case 'SUBMISSION_STALE_DISCARDED':
       return 'the submission was reclaimed while it was being graded';
