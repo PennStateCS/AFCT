@@ -16,8 +16,13 @@ const prismaMock = vi.hoisted(() => ({
   submission: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn() },
   submissionGrant: { findMany: vi.fn() },
   roster: { findFirst: vi.fn() },
-  // The submit route wraps its cap re-check + create in a serializable transaction;
-  // run the callback against the same mock so tx.submission.* hits these mocks.
+  // The submit transaction re-reads everything that decides whether the work may be accepted,
+  // with the rows held, so it needs the lock statement and the group-set stamp as well.
+  groupSet: { updateMany: vi.fn() },
+  $queryRaw: vi.fn(),
+  // The submit route wraps its authoritative re-check + create in a serializable transaction;
+  // run the callback against the same mock so tx.* hits these mocks, which is also what makes
+  // the re-reads see the same world the pre-reads did.
   $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(prismaMock)),
 }));
 
@@ -83,6 +88,9 @@ const logActions = () => activityLogMock.mock.calls.map((call) => call[2]?.actio
 beforeEach(() => {
   vi.clearAllMocks();
   fsMock.existsSync.mockReturnValue(true);
+  // The row locks the authoritative re-check takes; nothing to return, but it has to answer.
+  prismaMock.$queryRaw.mockResolvedValue([]);
+  prismaMock.groupSet.updateMany.mockResolvedValue({ count: 0 });
   authMock.mockResolvedValue({ user: { id: 'user-1' } });
   prismaMock.submissionGrant.findMany.mockResolvedValue([]);
   uploadLimitMock.mockResolvedValue({ maxBytes: 5 * 1024 * 1024, maxMb: 5 });

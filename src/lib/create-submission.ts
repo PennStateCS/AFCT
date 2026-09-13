@@ -22,6 +22,13 @@ import { effectiveMaxSubmissions } from '@/lib/submission-limits';
 import { isStudentAssigned } from '@/lib/assignment-visibility';
 import { lockGroupSetIfUsed } from '@/lib/group-set-service';
 import {
+  checkAssignmentEligibility,
+  lockSubmissionRows,
+  resolveLimit,
+  resolveSubmitterContext,
+  type EligibilityRefusal,
+} from '@/lib/submission-eligibility';
+import {
   submissionByteHash,
   submissionContentHash,
   submissionShapeHash,
@@ -37,6 +44,69 @@ import { extractProvenanceFeatures, type ProvenanceFeatures } from '@/lib/simila
  * stopped someone" has to look the same in `ActivityLog` whichever check caught them; a row
  * missing `priorCount` would read as a different kind of event to anyone analysing it.
  */
+/**
+ * The assignment or its problem link went away while this submission was being written.
+ *
+ * Only reachable by racing a deletion, and the right answer is the same one a request arriving
+ * a moment later would get rather than a half-written attempt.
+ */
+class AssignmentVanishedError extends Error {}
+
+/**
+ * What each refusal means to the caller, so the answer does not depend on which pass caught it.
+ *
+ * Masking matters here: an assignment somebody is not assigned, or that is not published, is
+ * answered as if it does not exist, which is what the checks before the transaction do too.
+ */
+const REFUSALS: Record<
+  EligibilityRefusal['kind'],
+  { status: number; error: string; action: string }
+> = {
+  archived: {
+    status: 409,
+    error: 'This course is archived and no longer accepts submissions.',
+    action: 'SUBMISSION_REJECTED_ARCHIVED',
+  },
+  unpublished: {
+    status: 404,
+    error: 'Assignment not found.',
+    action: 'SUBMISSION_UNPUBLISHED_ASSIGNMENT',
+  },
+  'not-assigned': {
+    status: 404,
+    error: 'Assignment not found.',
+    action: 'SUBMISSION_NOT_ASSIGNED',
+  },
+  'not-open': {
+    status: 403,
+    error: 'This assignment is not open for submissions yet.',
+    action: 'SUBMISSION_REJECTED_NOT_OPEN',
+  },
+  'late-not-allowed': {
+    status: 403,
+    error: 'This assignment is past due and late submissions are not allowed.',
+    action: 'SUBMISSION_REJECTED_LATE',
+  },
+  'cutoff-passed': {
+    status: 403,
+    error: 'Late submission cutoff has passed for this assignment.',
+    action: 'SUBMISSION_REJECTED_LATE_CUTOFF',
+  },
+};
+
+/**
+ * Something that decides whether this submission is allowed changed under it.
+ *
+ * Carries the rule that refused, so the caller can answer with the same message and status the
+ * fast path would have given. Everything here was checked before the transaction as well; this
+ * is the reading that counts, taken with the rows held.
+ */
+class NoLongerEligibleError extends Error {
+  constructor(readonly refusal: EligibilityRefusal) {
+    super(`no longer eligible: ${refusal.kind}`);
+  }
+}
+
 class SubmissionCapReachedError extends Error {
   constructor(readonly priorCount: number) {
     super('submission cap reached');
@@ -105,6 +175,71 @@ function storeSubmissionFile(filePath: string, buffer: Buffer): void {
   }
   fs.writeFileSync(filePath, buffer, { mode: 0o644 });
 }
+
+/**
+ * Everything about an assignment that decides whether a submitter may hand work in.
+ *
+ * A function of the user because half of it is scoped to them: their group in the set, the
+ * assignee rows that cover them, the overrides that move their dates.
+ *
+ * Shared by the read before the transaction and the authoritative re-read inside it. Two
+ * selects asking for different shapes is how the two passes would reach different answers
+ * about the same student.
+ */
+const assignmentSelectFor = (userId: string) =>
+  ({
+      id: true,
+      courseId: true,
+      unlockAt: true,
+      dueDate: true,
+      allowLateSubmissions: true,
+      lateCutoff: true,
+      isPublished: true,
+      assignedToEveryone: true,
+      groupSetId: true,
+      // The submitter's group within this assignment's set, if any. Unique on
+      // (groupSetId, userId), so this is at most one row.
+      groupSet: {
+        select: {
+          groups: {
+            where: { memberships: { some: { userId } } },
+            select: { id: true },
+          },
+        },
+      },
+      // The assignee rows that cover this submitter: their own STUDENT row and/or the
+      // GROUP row for a group they belong to. Drives "is this student assigned" and, for a
+      // group target, the group submission set.
+      assignees: {
+        where: {
+          OR: [
+            { userId },
+            { studentGroup: { memberships: { some: { userId } } } },
+          ],
+        },
+        select: { targetType: true, userId: true, groupId: true },
+      },
+      // The date/late overrides that apply to this submitter: their own STUDENT override
+      // and/or the GROUP override for a group they belong to (at most one of each).
+      // Drives only the effective window.
+      overrides: {
+        where: {
+          OR: [
+            { userId },
+            { studentGroup: { memberships: { some: { userId } } } },
+          ],
+        },
+        select: {
+          targetType: true,
+          userId: true,
+          groupId: true,
+          unlockAt: true,
+          dueDate: true,
+          lateCutoff: true,
+          allowLateSubmissions: true,
+        },
+      },
+  }) satisfies Prisma.AssignmentSelect;
 
 /**
  * Validate + persist a submission. Returns a discriminated result (never a Response),
@@ -179,59 +314,7 @@ export async function createSubmission(
 
   const assignment = await prisma.assignment.findUnique({
     where: { id: assignmentId },
-    select: {
-      id: true,
-      courseId: true,
-      unlockAt: true,
-      dueDate: true,
-      allowLateSubmissions: true,
-      lateCutoff: true,
-      isPublished: true,
-      assignedToEveryone: true,
-      groupSetId: true,
-      // The submitter's group within this assignment's set, if any. Unique on
-      // (groupSetId, userId), so this is at most one row.
-      groupSet: {
-        select: {
-          groups: {
-            where: { memberships: { some: { userId: user.id } } },
-            select: { id: true },
-          },
-        },
-      },
-      // The assignee rows that cover this submitter: their own STUDENT row and/or the
-      // GROUP row for a group they belong to. Drives "is this student assigned" and, for a
-      // group target, the group submission set.
-      assignees: {
-        where: {
-          OR: [
-            { userId: user.id },
-            { studentGroup: { memberships: { some: { userId: user.id } } } },
-          ],
-        },
-        select: { targetType: true, userId: true, groupId: true },
-      },
-      // The date/late overrides that apply to this submitter: their own STUDENT override
-      // and/or the GROUP override for a group they belong to (at most one of each).
-      // Drives only the effective window.
-      overrides: {
-        where: {
-          OR: [
-            { userId: user.id },
-            { studentGroup: { memberships: { some: { userId: user.id } } } },
-          ],
-        },
-        select: {
-          targetType: true,
-          userId: true,
-          groupId: true,
-          unlockAt: true,
-          dueDate: true,
-          lateCutoff: true,
-          allowLateSubmissions: true,
-        },
-      },
-    },
+    select: assignmentSelectFor(user.id),
   });
 
   if (!assignment) {
@@ -519,9 +602,87 @@ export async function createSubmission(
     try {
       submission = await prisma.$transaction(
         async (tx) => {
-          if (!isCourseStaff && limit.max != null) {
-            const priorCount = await tx.submission.count({ where: countScope });
-            if (priorCount >= limit.max) {
+          /**
+           * Everything that decides whether this is allowed, re-read with the rows held.
+           *
+           * Only the count and the cooldown used to be checked here; everything else was read
+           * and decided on before the transaction. An administrator archiving the course, an
+           * instructor unpublishing the assignment or taking the student out of its audience,
+           * a deadline moved, a group membership changed, an extra attempt revoked: all of
+           * them could commit in the gap and the submission still landed, judged against a
+           * world that had already gone.
+           *
+           * The locks come first and the reads follow them, so nothing read here can move
+           * before the insert. The same rules run on both passes (`lib/submission-eligibility`)
+           * rather than being written out twice, which is how the two would drift.
+           */
+          await lockSubmissionRows(tx, {
+            assignmentId,
+            problemId,
+            groupSetId: assignment.groupSetId,
+          });
+
+          const freshAssignment = await tx.assignment.findUnique({
+            where: { id: assignmentId },
+            select: assignmentSelectFor(user.id),
+          });
+          const freshCourse = await tx.course.findUnique({
+            where: { id: courseId },
+            select: { isArchived: true },
+          });
+          // Gone entirely while this was in flight. Nothing to attach the work to.
+          if (!freshAssignment) throw new AssignmentVanishedError();
+
+          const fresh = resolveSubmitterContext({
+            assignment: freshAssignment,
+            assignmentId,
+            problemId,
+            userId: user.id,
+          });
+
+          const refusal = checkAssignmentEligibility({
+            assignment: freshAssignment,
+            courseIsArchived: freshCourse?.isArchived === true,
+            isCourseStaff,
+            studentGroupIds: fresh.studentGroupIds,
+            userId: user.id,
+            now: new Date(),
+          });
+          if (refusal) throw new NoLongerEligibleError(refusal);
+
+          /**
+           * The cap, from the grants and the base as they stand now.
+           *
+           * Worked out before the transaction and then trusted by it, so a grant revoked in
+           * between was not seen and the extra attempt went through anyway. The count below
+           * uses this pass's own scope too: on a group assignment the scope is the group, and
+           * the student may have been moved into a different one.
+           */
+          const freshLink = await tx.assignmentProblem.findUnique({
+            where: { assignmentId_problemId: { assignmentId, problemId } },
+            select: { maxSubmissions: true },
+          });
+          if (!freshLink) throw new AssignmentVanishedError();
+
+          const freshGrants = await tx.submissionGrant.findMany({
+            where: {
+              assignmentId,
+              problemId,
+              OR: [{ userId: user.id }, { groupId: { in: fresh.studentGroupIds } }],
+            },
+            select: { targetType: true, userId: true, groupId: true, extraSubmissions: true },
+          });
+          const freshLimit = resolveLimit({
+            baseMaxSubmissions: freshLink.maxSubmissions,
+            grants: freshGrants,
+            userId: user.id,
+            studentGroupIds: fresh.studentGroupIds,
+          });
+
+          const scope = fresh.countScope;
+          if (!isCourseStaff && freshLimit.max != null) {
+            const priorCount = await tx.submission.count({ where: scope });
+            if (priorCount >= freshLimit.max) {
               throw new SubmissionCapReachedError(priorCount);
             }
           }
@@ -541,7 +702,7 @@ export async function createSubmission(
            */
           if (!isCourseStaff && resubmitCooldownMs > 0) {
             const last = await tx.submission.findFirst({
-              where: countScope,
+              where: scope,
               orderBy: { submittedAt: 'desc' },
               select: { submittedAt: true },
             });
@@ -561,7 +722,10 @@ export async function createSubmission(
               problemId,
               studentId: user.id,
               // The group that owns this submission set (null for individual submissions).
-              studentGroupId: submissionGroupId,
+              // This pass's own answer, not the one read before the transaction: a membership
+              // moved in between would otherwise file the work against the group they left,
+              // and the set is locked against further edits the moment this commits.
+              studentGroupId: fresh.submissionGroupId,
               fileName,
               originalFileName,
               contentHash,
@@ -574,14 +738,35 @@ export async function createSubmission(
             },
           });
           // A submission for a group assignment locks its set (sticky, atomic with the
-          // submission write). No-op for individual assignments.
-          await lockGroupSetIfUsed(tx, assignment.groupSetId);
+          // submission write). No-op for individual assignments. The set's row is already held
+          // from the top of this transaction, so nothing can have moved between the membership
+          // read above and this stamp.
+          await lockGroupSetIfUsed(tx, freshAssignment.groupSetId);
           return created;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (err) {
       cleanupFile(uploadedFilePath);
+      if (err instanceof AssignmentVanishedError) {
+        await audit('SUBMISSION_INVALID_REQUEST', 'WARNING', {
+          error: 'Assignment removed while the submission was being written.',
+          concurrent: true,
+        });
+        return { ok: false, status: 404, error: 'Assignment not found.' };
+      }
+      if (err instanceof NoLongerEligibleError) {
+        /**
+         * Something moved under the submission after the first pass said yes.
+         *
+         * Answered exactly as the fast path would have, so a student cannot tell which check
+         * caught them and does not need to. `concurrent` is what tells the two apart when the
+         * record is read back, the same marker the cap and the cooldown use.
+         */
+        const refused = REFUSALS[err.refusal.kind];
+        await audit(refused.action, 'WARNING', { reason: refused.error, concurrent: true });
+        return { ok: false, status: refused.status, error: refused.error };
+      }
       if (err instanceof SubmissionCapReachedError) {
         // Logged, like the pre-transaction check and like the cooldown's own concurrent case
         // beside it. This path wrote nothing at all, so a student stopped by the cap under a

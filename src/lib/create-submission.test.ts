@@ -67,15 +67,64 @@ const past = (ms = 24 * HOUR) => new Date(Date.now() - ms);
  * `findFirst` is here because the cooldown is re-read inside the transaction: the check before
  * it is a courtesy, and two requests can both pass that one.
  */
-function txClient(created: unknown, countInTx = 0, lastInTx: { submittedAt: Date } | null = null) {
+/**
+ * The transaction client.
+ *
+ * It answers more than the count and the cooldown now: everything that decides whether a
+ * submission is allowed is re-read inside the transaction, with the rows held, because that is
+ * the only reading that counts. The defaults here mirror what the pre-transaction reads found,
+ * which is the ordinary case; a test about a race overrides one of them to say what changed.
+ */
+function txClient(
+  created: unknown,
+  countInTx = 0,
+  lastInTx: { submittedAt: Date } | null = null,
+  fresh: {
+    assignment?: Record<string, unknown> | null;
+    course?: { isArchived: boolean } | null;
+    link?: { maxSubmissions: number } | null;
+    grants?: unknown[];
+  } = {},
+) {
   return {
     submission: {
       count: vi.fn().mockResolvedValue(countInTx),
       create: vi.fn().mockResolvedValue(created),
       findFirst: vi.fn().mockResolvedValue(lastInTx),
     },
+    // `in` rather than `??`, so a test can say the assignment has gone: nullish coalescing
+    // would helpfully put it back.
+    assignment: {
+      findUnique: vi
+        .fn()
+        .mockResolvedValue('assignment' in fresh ? fresh.assignment : freshAssignment()),
+    },
+    course: { findUnique: vi.fn().mockResolvedValue(fresh.course ?? { isArchived: false }) },
+    assignmentProblem: {
+      findUnique: vi.fn().mockResolvedValue('link' in fresh ? fresh.link : { maxSubmissions: 3 }),
+    },
+    submissionGrant: { findMany: vi.fn().mockResolvedValue(fresh.grants ?? []) },
+    groupSet: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    $queryRaw: vi.fn().mockResolvedValue([]),
   };
 }
+
+/** The assignment as the re-read inside the transaction finds it. */
+const freshAssignment = (over: Record<string, unknown> = {}) => ({
+  id: 'a-1',
+  courseId: 'course-1',
+  unlockAt: null,
+  dueDate: future(),
+  allowLateSubmissions: false,
+  lateCutoff: null,
+  isPublished: true,
+  assignedToEveryone: true,
+  groupSetId: null,
+  groupSet: null,
+  assignees: [],
+  overrides: [],
+  ...over,
+});
 
 type Overrides = {
   /** What the cooldown re-read inside the transaction finds, when it differs from before. */
@@ -90,6 +139,17 @@ type Overrides = {
   cooldownMs?: number;
   countInTx?: number;
   grants?: Array<Record<string, unknown>>;
+  /**
+   * What the authoritative re-read inside the transaction sees, when it differs from what the
+   * reads before it saw. This is how a race is written: the world as it was, then the world as
+   * it became while the submission was in flight.
+   */
+  fresh?: {
+    assignment?: Record<string, unknown> | null;
+    course?: { isArchived: boolean } | null;
+    link?: { maxSubmissions: number } | null;
+    grants?: Array<Record<string, unknown>>;
+  };
 };
 
 /** Happy path by default; each test overrides only the thing it is about. */
@@ -135,7 +195,15 @@ function setup(o: Overrides = {}) {
   );
   prismaMock.submissionGrant.findMany.mockResolvedValue(o.grants ?? []);
 
-  const tx = txClient(created, o.countInTx ?? 0, o.lastInTx ?? null);
+  const tx = txClient(created, o.countInTx ?? 0, o.lastInTx ?? null, {
+    // By default the transaction sees exactly what the reads before it saw.
+    assignment:
+      o.assignment === undefined ? freshAssignment() : o.assignment === null ? null : o.assignment,
+    course: { isArchived: o.archived ?? false },
+    link: o.link === undefined ? { maxSubmissions: 3 } : (o.link as { maxSubmissions: number }),
+    grants: o.grants ?? [],
+    ...(o.fresh ?? {}),
+  });
   prismaMock.$transaction.mockImplementation(async (cb: (c: typeof tx) => unknown) => cb(tx));
   fsMock.existsSync.mockReturnValue(true);
 
@@ -931,5 +999,147 @@ describe('what the grant read is scoped to', () => {
       problemId: 'p-1',
       OR: [{ userId: 'student-1' }, { groupId: { in: ['group-9'] } }],
     });
+  });
+});
+
+/**
+ * What happens when the world changes while a submission is in flight.
+ *
+ * Everything that decides whether a submission is allowed used to be read and decided on before
+ * the transaction, which then re-checked only the count and the cooldown. An administrator
+ * archiving the course, an instructor unpublishing the assignment or taking the student out of
+ * its audience, a group membership moved, an extra attempt revoked: each could commit in that
+ * gap and the submission landed anyway, judged against a world that had already gone.
+ *
+ * `fresh` is what the authoritative re-read finds. The reads before it still see the old world,
+ * which is what makes each of these a race rather than a plain refusal.
+ */
+describe('a change that lands mid-submission', () => {
+  it('refuses once the course has been archived', async () => {
+    const { tx } = setup({ fresh: { course: { isArchived: true } } });
+
+    const res = await call();
+
+    expect(res).toMatchObject({ ok: false, status: 409 });
+    expect(tx.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses once the assignment has been unpublished', async () => {
+    const { tx } = setup({ fresh: { assignment: freshAssignment({ isPublished: false }) } });
+
+    // Masked as a 404, the same answer the check before the transaction gives.
+    expect(await call()).toMatchObject({ ok: false, status: 404 });
+    expect(tx.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses once the student is no longer in the audience', async () => {
+    const { tx } = setup({
+      fresh: {
+        assignment: freshAssignment({ assignedToEveryone: false, assignees: [] }),
+      },
+    });
+
+    expect(await call()).toMatchObject({ ok: false, status: 404 });
+    expect(tx.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses once the deadline has moved behind them', async () => {
+    const { tx } = setup({
+      fresh: {
+        assignment: freshAssignment({
+          dueDate: new Date('2020-01-01T00:00:00.000Z'),
+          allowLateSubmissions: false,
+        }),
+      },
+    });
+
+    expect(await call()).toMatchObject({ ok: false, status: 403 });
+    expect(tx.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses once the assignment itself has gone', async () => {
+    const { tx } = setup({ fresh: { assignment: null } });
+
+    expect(await call()).toMatchObject({ ok: false, status: 404 });
+    expect(tx.submission.create).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The cap was worked out once, before the transaction, and then trusted by it. A grant
+   * revoked in between was simply not seen and the extra attempt went through against a limit
+   * nobody still meant.
+   */
+  it('refuses once the extra-attempt grant has been revoked', async () => {
+    const { tx } = setup({
+      // Three used, base of three, raised to five by a grant: allowed when the request started.
+      grants: [
+        { targetType: 'STUDENT', userId: STUDENT.id, groupId: null, extraSubmissions: 2 },
+      ],
+      countInTx: 3,
+      // Revoked by the time it counted.
+      fresh: { grants: [] },
+    });
+
+    expect(await call()).toMatchObject({ ok: false, status: 409 });
+    expect(tx.submission.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses once the base cap has been lowered under them', async () => {
+    const { tx } = setup({ countInTx: 2, fresh: { link: { maxSubmissions: 2 } } });
+
+    expect(await call()).toMatchObject({ ok: false, status: 409 });
+    expect(tx.submission.create).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The group decides whose shared submission set the work joins, and the set is locked against
+   * further edits the moment it commits. Reading membership before the transaction meant a
+   * student moved between groups had their first submission filed against the group they had
+   * just left, and the set frozen that way for good.
+   */
+  it('files the work against the group the student is in now', async () => {
+    const { tx } = setup({
+      assignment: {
+        ...freshAssignment({ groupSetId: 'gs-1' }),
+        groupSet: { groups: [{ id: 'g-old' }] },
+      },
+      fresh: {
+        assignment: {
+          ...freshAssignment({ groupSetId: 'gs-1' }),
+          groupSet: { groups: [{ id: 'g-new' }] },
+        },
+      },
+    });
+
+    expect(await call()).toMatchObject({ ok: true });
+    expect(tx.submission.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ studentGroupId: 'g-new' }) }),
+    );
+  });
+
+  it('holds the rows it judged on', async () => {
+    // Without the locks the re-reads are only a narrower window, not a closed one.
+    const { tx } = setup({
+      assignment: {
+        ...freshAssignment({ groupSetId: 'gs-1' }),
+        groupSet: { groups: [{ id: 'g-1' }] },
+      },
+      fresh: {
+        assignment: {
+          ...freshAssignment({ groupSetId: 'gs-1' }),
+          groupSet: { groups: [{ id: 'g-1' }] },
+        },
+      },
+    });
+
+    await call();
+
+    const locked = tx.$queryRaw.mock.calls.map((c) => String(c[0]));
+    expect(locked.some((sql) => sql.includes('"GroupSet"') && sql.includes('FOR UPDATE'))).toBe(
+      true,
+    );
+    expect(
+      locked.some((sql) => sql.includes('"AssignmentProblem"') && sql.includes('FOR UPDATE')),
+    ).toBe(true);
   });
 });
