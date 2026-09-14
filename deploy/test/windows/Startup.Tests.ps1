@@ -735,6 +735,61 @@ Describe 'The optional updater and the recovery grace period' {
     }
 }
 
+<#
+  The core health wait must not inspect the optional updater either.
+
+  Same shape as the recovery bug: one shared deadline covering every service inspection and
+  then the HTTP probe, with the updater inside the loop. A slow updater inspection eats the
+  core health budget and the probe never runs.
+
+  It is also pointless work. The updater is not started until after this wait succeeds
+  (`Wait-AfctHealth` then `Start-AfctOptionalServices`), so during the core loop there is
+  nothing there to find: the inspection can only cost time and never inform the verdict.
+#>
+Describe 'The optional updater and the core health budget' {
+    AfterEach {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @('AFCT_APP_TAG=v1.2.3')
+    }
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Start-Sleep -MockWith { }
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+
+        # Required services answer at once; the updater's inspection outlasts the budget.
+        Mock -CommandName Get-AfctServiceState -MockWith {
+            # Thread::Sleep, not Start-Sleep: the loop's own poll sleep is mocked away to
+            # keep the test quick, and a mocked delay here would not consume the budget this
+            # test exists to protect.
+            if ($Service -eq 'updater') { [System.Threading.Thread]::Sleep(6000); return 'missing|none|' }
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:abc' }
+            if ($Service -eq 'worker') { return 'running|none|img:v1.2.3' }
+            return 'running|healthy|img:v1.2.3'
+        }
+        # Honours the deadline exactly as the real probe does, so this cannot pass by
+        # mocking away the mechanism under test.
+        Mock -CommandName Test-AfctHttpHealth -MockWith {
+            if ($null -ne $Deadline -and (Get-AfctRemainingSeconds $Deadline) -le 0) { return $false }
+            return $true
+        }
+    }
+
+    It 'reaches the web service check on a healthy core stack' {
+        { Wait-AfctHealth -TimeoutSeconds 4 } | Should -Not -Throw
+    }
+
+    It 'never inspects the updater during the core health loop' {
+        Wait-AfctHealth -TimeoutSeconds 4
+        Should -Invoke Get-AfctServiceState -Exactly 0 -ParameterFilter { $Service -eq 'updater' }
+        # And it did look at the required ones, so the absence above is a decision rather
+        # than the loop never having run.
+        Should -Invoke Get-AfctServiceState -ParameterFilter { $Service -eq 'postgres' }
+    }
+}
+
 Describe 'Test-AfctServiceReady' {
     <#
       The worker defines no Docker health check, so Docker reports its health as "none".

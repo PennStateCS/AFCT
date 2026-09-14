@@ -474,7 +474,11 @@ function Wait-AfctHealth {
     while ($true) {
         $deadline = $start.AddSeconds($TimeoutSeconds)
         $elapsed = [int]$clock.Elapsed.TotalSeconds
-        $state = Get-AfctStackState -SkipHttp -Deadline $deadline
+        # Required services only, for the same two reasons the recovery check uses it. The
+        # verdict is computed over required services anyway, so an optional inspection can
+        # only take budget from the HTTP probe that runs after this loop. And there is
+        # nothing to find: the updater is not started until after this wait succeeds.
+        $state = Get-AfctStackState -RequiredOnly -SkipHttp -Deadline $deadline
 
         foreach ($svc in $state.Services) {
             if ($svc.Status -eq 'missing') { continue }
