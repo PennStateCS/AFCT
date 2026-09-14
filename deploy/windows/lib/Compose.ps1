@@ -247,16 +247,27 @@ function Get-AfctStartupRecoveryTimeout {
 
 # A single reading of the whole deployment: every expected service, whether each is ready,
 # and whether the application answers over HTTP at the tag this install is pinned to.
+# -RequiredOnly inspects the core services and nothing else.
+#
+# For a caller working to a short deadline where an optional service can only cost budget:
+# the verdict this returns (AllReady, ImageMatches) is already computed over required
+# services alone, so inspecting an optional one contributes nothing to the answer and can
+# take time away from what does. The HTTP probe runs after the service loop, so a slow
+# optional inspection was able to leave nothing for it, and a healthy, serving core stack
+# then read as unverifiable purely because of a sidecar nobody had to enable.
 function Get-AfctStackState {
-    param([switch]$SkipHttp, [AllowNull()][Nullable[DateTime]]$Deadline)
+    param([switch]$SkipHttp, [switch]$RequiredOnly, [AllowNull()][Nullable[DateTime]]$Deadline)
 
     $wantTag = Get-AfctEffectiveAppTag
+
+    $expected = @(Get-AfctExpectedServices)
+    if ($RequiredOnly) { $expected = @($expected | Where-Object { $_.Required }) }
 
     $services = @()
     $allReady = $true
     $allMatch = $true
     $optionalWarnings = @()
-    foreach ($svc in Get-AfctExpectedServices) {
+    foreach ($svc in $expected) {
         $state = Get-AfctServiceState -Service $svc.Name -Deadline $Deadline
         $parts = $state -split '\|', 3
         $ready = Test-AfctServiceReady -State $state -RequiresHealth $svc.RequiresHealth
@@ -362,7 +373,12 @@ function Start-AfctStack {
         # whether the daemon reached the desired state before the CLI was killed.
         $recoverySeconds = Get-AfctStartupRecoveryTimeout
         $recoveryDeadline = (Get-Date).AddSeconds($recoverySeconds)
-        $state = Get-AfctStackState -Deadline $recoveryDeadline
+        # Required services only. The grace period is short and shared, and the HTTP probe
+        # comes last, so an optional service that inspects slowly could spend the whole
+        # budget and leave the probe nothing: a core stack that was healthy and serving would
+        # then fail its own installation because the in-app updater was enabled. The updater
+        # gets its own attempt later, after the core is verified.
+        $state = Get-AfctStackState -RequiredOnly -Deadline $recoveryDeadline
         Write-AfctTrace "post-timeout recovery state: $(Format-AfctStackState $state)"
 
         if ($state.AllReady -and $state.ImageMatches -and $state.HttpOk) {

@@ -138,11 +138,16 @@ Describe 'Start-AfctStack' {
         Mock -CommandName Write-Host -MockWith { }
     }
 
-    It 'returns the elapsed seconds on success' {
+    It 'reports the elapsed seconds and that the health phase still has to run' {
         Mock -CommandName Invoke-AfctComposeBounded -MockWith {
             @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 12 }
         }
-        Start-AfctStack -TimeoutSeconds 30 | Should -Be 12
+        $r = Start-AfctStack -TimeoutSeconds 30
+        $r.Seconds | Should -Be 12
+        # A clean `up` proves the CLI finished, not that the stack is serving, so the normal
+        # verification still owes its work.
+        $r.Ready | Should -BeFalse
+        $r.RecoveredAfterComposeTimeout | Should -BeFalse
     }
 
     It 'fails with the docker error when compose exits nonzero' {
@@ -158,6 +163,11 @@ Describe 'Start-AfctStack' {
       installation is finished rather than failed. This is the exact situation the tester
       was in for hours.
     #>
+    <#
+      The original Windows failure: the CLI never returned while every container was up and
+      running. A short recovery check asks the daemon what is actually true, and a stack
+      that is ready end to end finishes the installation instead of failing it.
+    #>
     It 'continues when the CLI was stopped but the stack actually came up' {
         Mock -CommandName Invoke-AfctComposeBounded -MockWith {
             @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 30 }
@@ -166,7 +176,36 @@ Describe 'Start-AfctStack' {
             [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $true
                                ExpectedTag = 'v1.0.0'; ImageMatches = $true; OptionalWarnings = @() }
         }
-        { Start-AfctStack -TimeoutSeconds 30 } | Should -Not -Throw
+        $r = Start-AfctStack -TimeoutSeconds 30
+        $r.Ready | Should -BeTrue
+        $r.RecoveredAfterComposeTimeout | Should -BeTrue
+    }
+
+    It 'refuses to recover on containers alone when the web service is silent' {
+        # Recovery is the one place a half-answer is most tempting. It requires services,
+        # versions and HTTP together, or it is not a finished deployment.
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 30 }
+        }
+        Mock -CommandName Get-AfctStackState -MockWith {
+            [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $false
+                               ExpectedTag = 'v1.0.0'; ImageMatches = $true; OptionalWarnings = @() }
+        }
+        { Start-AfctStack -TimeoutSeconds 30 } | Should -Throw '*recovery check could not verify*'
+    }
+
+    It 'skips the normal health wait once recovery has proved the stack ready' {
+        Mock -CommandName Start-AfctStack -MockWith {
+            [pscustomobject]@{ Seconds = 300; Ready = $true; RecoveredAfterComposeTimeout = $true }
+        }
+        Mock -CommandName Wait-AfctHealth -MockWith { }
+        Mock -CommandName Start-AfctOptionalServices -MockWith { }
+
+        Invoke-AfctStartAndWait
+
+        # The budget is gone, and the thing it would have paid for has already been proved.
+        Should -Invoke Wait-AfctHealth -Exactly 0
+        Should -Invoke Start-AfctOptionalServices -Exactly 1
     }
 
     It 'fails when the CLI was stopped and the stack did not come up' {
@@ -543,7 +582,10 @@ Describe 'Starting an enabled updater separately from the core' {
     #>
     It 'starts the updater only after the core is verified, and not before' {
         $script:order = New-Object System.Collections.ArrayList
-        Mock -CommandName Start-AfctStack -MockWith { $null = $script:order.Add('core-up'); 5 }
+        Mock -CommandName Start-AfctStack -MockWith {
+            $null = $script:order.Add('core-up')
+            [pscustomobject]@{ Seconds = 5; Ready = $false; RecoveredAfterComposeTimeout = $false }
+        }
         Mock -CommandName Wait-AfctHealth -MockWith { $null = $script:order.Add('verify') }
         Mock -CommandName Start-AfctOptionalServices -MockWith { $null = $script:order.Add('optional') }
 
@@ -554,7 +596,9 @@ Describe 'Starting an enabled updater separately from the core' {
 
     It 'does not charge the optional start against the health budget' {
         $script:HealthTimeout = 300
-        Mock -CommandName Start-AfctStack -MockWith { 250 }
+        Mock -CommandName Start-AfctStack -MockWith {
+            [pscustomobject]@{ Seconds = 250; Ready = $false; RecoveredAfterComposeTimeout = $false }
+        }
         Mock -CommandName Wait-AfctHealth -MockWith { }
         Mock -CommandName Start-AfctOptionalServices -MockWith { }
 
@@ -591,6 +635,103 @@ Describe 'Starting an enabled updater separately from the core' {
         }
         Start-AfctOptionalServices
         @($script:calls).Count | Should -Be 0
+    }
+}
+
+<#
+  An optional updater must not be able to spend the recovery grace period.
+
+  The recovery check is a short shared deadline covering every service inspection and then
+  the HTTP probe. `Get-AfctStackState` probes HTTP *after* the service loop, and the updater
+  is in that loop when it is enabled, so a slow or wedged updater inspection can consume the
+  grace period and leave nothing for the probe. The probe then declines to start, HttpOk is
+  false, and recovery fails: a healthy, serving core stack reported as a failed installation
+  because of a feature nobody had to turn on.
+#>
+Describe 'The optional updater and the recovery grace period' {
+    AfterEach {
+        $env:PATH = $script:OriginalPath
+        Remove-Item Env:\AFCT_STARTUP_RECOVERY_TIMEOUT -ErrorAction SilentlyContinue
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @('AFCT_APP_TAG=v1.2.3')
+    }
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Write-Host -MockWith { }
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+    }
+
+    It 'still recognises a ready core stack when the updater inspection is slow' {
+        $env:AFCT_STARTUP_RECOVERY_TIMEOUT = '4'
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            $line = (@($ComposeArgs) -join ' ')
+            if ($line -match 'up --detach') {
+                return @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 30 }
+            }
+            # The updater's own inspection eats the whole grace period; every required
+            # service answers at once.
+            if ($line -match 'updater') { Start-Sleep -Seconds 5 }
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('cid'); StdErr = @(); Seconds = 0 }
+        }
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1.2.3'); StdErr = @(); Seconds = 0 }
+        }
+        # The web service is answering the whole time, which is the point: the only reason
+        # recovery could fail here is that nothing was left to ask it with. The stand-in
+        # honours the deadline exactly as the real probe does, or this test would pass by
+        # mocking away the mechanism it exists to check.
+        Mock -CommandName Test-AfctHttpHealth -MockWith {
+            if ($null -ne $Deadline -and (Get-AfctRemainingSeconds $Deadline) -le 0) { return $false }
+            return $true
+        }
+
+        $r = Start-AfctStack -TimeoutSeconds 30
+        $r.Ready | Should -BeTrue
+        $r.RecoveredAfterComposeTimeout | Should -BeTrue
+    }
+
+    It 'still recognises a ready core stack when the updater is missing entirely' {
+        $env:AFCT_STARTUP_RECOVERY_TIMEOUT = '4'
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            $line = (@($ComposeArgs) -join ' ')
+            if ($line -match 'up --detach') {
+                return @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 30 }
+            }
+            if ($line -match 'updater') {
+                return @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 0 }
+            }
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('cid'); StdErr = @(); Seconds = 0 }
+        }
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1.2.3'); StdErr = @(); Seconds = 0 }
+        }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+
+        (Start-AfctStack -TimeoutSeconds 30).Ready | Should -BeTrue
+    }
+
+    It 'still fails recovery when a required service is not ready' {
+        # The optional path must not become cover for a real failure.
+        $env:AFCT_STARTUP_RECOVERY_TIMEOUT = '4'
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            $line = (@($ComposeArgs) -join ' ')
+            if ($line -match 'up --detach') {
+                return @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 30 }
+            }
+            if ($line -match 'nginx') {
+                return @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 0 }
+            }
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('cid'); StdErr = @(); Seconds = 0 }
+        }
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1.2.3'); StdErr = @(); Seconds = 0 }
+        }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+
+        { Start-AfctStack -TimeoutSeconds 30 } | Should -Throw '*recovery check could not verify*'
     }
 }
 
