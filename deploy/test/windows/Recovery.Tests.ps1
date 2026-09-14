@@ -377,16 +377,28 @@ Describe 'Existing data volumes without configuration' {
     }
 
     <#
-      A daemon that cannot answer must not be read as "there is no data". False here is
-      permission to generate new credentials, so that is the one direction this may not
-      guess in; the caller still has Test-AfctDockerReady in front of it.
+      Fails closed. A false answer here is permission to generate fresh database credentials,
+      and against an existing volume that orphans every record in it, so "I could not find
+      out" must not take the same branch as "I looked and there is nothing". It stops with
+      something the operator can act on instead.
     #>
-    It 'does not claim there is data when the volume listing times out' {
+    It 'refuses to continue when the volume listing times out' {
         Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
         Mock -CommandName Invoke-AfctDockerBounded -MockWith {
             @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 20 }
         }
-        Test-AfctDataWithoutConfig | Should -BeFalse
+        { Test-AfctDataWithoutConfig } | Should -Throw '*could not verify whether existing data volumes*'
+        # And says so: nothing was written, which is the reassurance somebody needs before
+        # they run it again.
+        { Test-AfctDataWithoutConfig } | Should -Throw '*No new credentials were generated*'
+    }
+
+    It 'refuses to continue when the volume listing fails outright' {
+        Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 1; TimedOut = $false; StdOut = @(); StdErr = @('cannot connect'); Seconds = 0 }
+        }
+        { Test-AfctDataWithoutConfig } | Should -Throw '*could not verify whether existing data volumes*'
     }
 
     It 'does not claim there is data when Docker is unavailable' {
@@ -483,18 +495,14 @@ Describe 'The in-app updater when it is enabled' {
         Mock -CommandName Write-AfctSuccess -MockWith { }
         Mock -CommandName Write-AfctWarn -MockWith { }
         $script:pulls = New-Object System.Collections.ArrayList
-        # Console and captured both, because Get-AfctImages picks one by whether output is
-        # redirected and a test must not depend on which.
-        Mock -CommandName Invoke-AfctComposeConsole -MockWith {
-            $null = $script:pulls.Add((@($ComposeArgs) -join ' '))
-            return 0
-        }
-        Mock -CommandName Invoke-AfctCompose -MockWith {
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
             $line = (@($ComposeArgs) -join ' ')
             $null = $script:pulls.Add($line)
             # The optional pull fails; the required one does not.
-            if ($line -match 'updater') { $global:LASTEXITCODE = 1 } else { $global:LASTEXITCODE = 0 }
-            @()
+            if ($line -match 'updater') {
+                return @{ ExitCode = 1; TimedOut = $false; StdOut = @(); StdErr = @('manifest unknown'); Seconds = 1 }
+            }
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 1 }
         }
 
         { Get-AfctImages } | Should -Not -Throw

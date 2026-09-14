@@ -60,12 +60,18 @@ function Test-AfctDataWithoutConfig {
     $project = Get-AfctComposeProject
     if (-not $project) { return $false }
 
-    # Bounded, and a non-answering daemon reads as "cannot tell", not as "no data": the
-    # caller treats false as permission to generate new credentials, so guessing in that
-    # direction is the one guess this must never make. Test-AfctDockerReady above has
-    # already established the daemon answers.
+    # Bounded, and a non-answer stops the install rather than being read as "no data".
+    #
+    # $false here is permission to generate fresh database credentials. Against an existing
+    # PostgreSQL volume that orphans every record in it, which is the single worst thing this
+    # installer can do, so "I could not find out" must never take the same branch as "I
+    # looked and there is nothing". Test-AfctDockerReady above has already established the
+    # daemon answers, so reaching this is a daemon that has stopped answering mid-check:
+    # rare, recoverable, and worth stopping for.
     $listed = Invoke-AfctDockerBounded volume ls --format '{{.Name}}'
-    if ($listed.TimedOut -or $listed.ExitCode -ne 0) { return $false }
+    if ($listed.TimedOut -or $listed.ExitCode -ne 0) {
+        throw 'afct-fatal: AFCT could not verify whether existing data volumes are present, so it stopped rather than risk generating new database credentials for an existing database. Restart Docker Desktop and run the installer again. No new credentials were generated.'
+    }
     $existing = @($listed.StdOut | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
 
     foreach ($volume in $volumes) {

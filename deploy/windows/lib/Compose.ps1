@@ -64,31 +64,70 @@ function Test-AfctComposeConfig {
 # because an optional, experimental sidecar's image was missing or private. That is the
 # wrong failure, and it happened before anything had started.
 #
-# Nothing is weakened for a required service: a core image that will not download is still
-# fatal, with the same message.
+# Bounded, like every other long Docker call here. This is the step that takes longest by
+# far (the application image alone is about 4.7 GB), which is exactly why an unbounded one
+# would have moved the original hang rather than fixed it: the window would have sat on
+# "downloading AFCT container images..." instead of "starting the AFCT stack...". The
+# allowance is correspondingly generous, thirty minutes by default.
+#
+# It costs Docker's own progress bars, so the heartbeat reads the last line out of the
+# capture and prints it: not a bar, but a real answer to "is it still doing something", and
+# a number the operator can watch move.
 function Get-AfctImages {
     Write-AfctInfo 'downloading AFCT container images...'
     $required = @(Get-AfctExpectedServices | Where-Object { $_.Required } | ForEach-Object { $_.Name })
 
-    if (-not [Console]::IsOutputRedirected) {
-        $code = Invoke-AfctComposeConsole pull @required
-    } else {
-        Invoke-AfctCompose pull @required | Out-Null
-        $code = $LASTEXITCODE
+    $heartbeat = {
+        param($elapsed, $outPath, $errPath)
+        $line = Get-AfctLastProgressLine $outPath $errPath
+        $minutes = [int]($elapsed / 60)
+        $for = "${elapsed}s"
+        if ($minutes -ge 1) { $for = "${minutes}m" }
+        if ($line) { Write-AfctInfo "still downloading after ${for}: $line" }
+        else { Write-AfctInfo "still downloading after ${for}..." }
     }
-    if ($code -ne 0) {
+
+    $result = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerPullTimeout) `
+        -OnHeartbeat $heartbeat -ComposeArgs (@('pull') + $required)
+
+    if ($result.TimedOut) {
+        throw "afct-fatal: the container images were still downloading after $([int]((Get-AfctDockerPullTimeout) / 60)) minutes and the download was stopped. Check the network connection, then run the installer again; anything already downloaded is kept."
+    }
+    if ($result.ExitCode -ne 0) {
+        Show-AfctComposeFailure $result
         throw "afct-fatal: container images could not be downloaded. Check the network and registry authentication. If the images are private, run 'docker login ghcr.io' and re-run."
     }
     Write-AfctSuccess 'Container images downloaded.'
 
     # Optional, and reported rather than fatal: AFCT is fully installable without it.
-    $optional = @(Get-AfctExpectedServices | Where-Object { -not $_.Required } | ForEach-Object { $_.Name })
-    foreach ($name in $optional) {
-        Invoke-AfctCompose pull $name | Out-Null
-        if ($LASTEXITCODE -ne 0) {
+    foreach ($name in @(Get-AfctExpectedServices | Where-Object { -not $_.Required } | ForEach-Object { $_.Name })) {
+        $opt = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerPullTimeout) `
+            -OnHeartbeat $heartbeat -ComposeArgs @('pull', $name)
+        if ($opt.TimedOut -or $opt.ExitCode -ne 0) {
             Write-AfctWarn "the optional $name image could not be downloaded. AFCT itself is unaffected; the sidecar will not start until the image is available."
         }
     }
+}
+
+# The most recent line of real content from a captured pull, trimmed to fit a terminal.
+# Compose writes plain per-layer progress here (COMPOSE_PROGRESS=plain is set around the
+# call), so the last line is genuinely the current state. Never throws: this only ever runs
+# to decorate a progress message.
+function Get-AfctLastProgressLine {
+    param([string]$OutPath, [string]$ErrPath)
+    foreach ($path in @($ErrPath, $OutPath)) {
+        try {
+            if (-not $path -or -not (Test-Path -LiteralPath $path)) { continue }
+            $line = (Get-Content -LiteralPath $path -Tail 1 -ErrorAction Stop |
+                     Where-Object { $_ -and $_.Trim() } | Select-Object -Last 1)
+            if ($line) {
+                $text = $line.Trim()
+                if ($text.Length -gt 90) { $text = $text.Substring(0, 90) + '...' }
+                return $text
+            }
+        } catch { }
+    }
+    return ''
 }
 
 # --------------------------------------------------------------------------- #
@@ -159,26 +198,48 @@ function Get-AfctImageTag {
 # Captures output and reads $LASTEXITCODE BEFORE narrowing with Select-Object: piping a
 # native command straight into `Select-Object -First 1` stops the pipeline early and corrupts
 # $LASTEXITCODE to -1 even on success, which would report a healthy stack as missing.
+# -TimeoutSeconds caps each of the two Docker calls. A caller working to a deadline passes
+# what it has left, so a wedged daemon cannot spend the full inspection allowance per call
+# per service after the budget is already gone.
 function Get-AfctServiceState {
-    param([string]$Service)
+    param([string]$Service, [int]$TimeoutSeconds = 0)
+    $bound = Get-AfctInspectionTimeout $TimeoutSeconds
+
     # Both calls are bounded. This runs inside the startup poll and inside doctor, so a
     # daemon that stops answering has to end the wait rather than become it.
-    $ps = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerCommandTimeout) ps -q $Service
+    $ps = Invoke-AfctComposeBounded -TimeoutSeconds $bound ps -q $Service
     if ($ps.TimedOut -or $ps.ExitCode -ne 0) { return 'missing|none|' }
     $id = (@($ps.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
     if (-not $id) { return 'missing|none|' }
 
-    $inspect = Invoke-AfctDockerBounded inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}' $id.Trim()
+    $inspect = Invoke-AfctDockerBounded -TimeoutSeconds $bound inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}' $id.Trim()
     if ($inspect.TimedOut -or $inspect.ExitCode -ne 0) { return 'missing|none|' }
     $state = (@($inspect.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
     if (-not $state) { return 'missing|none|' }
     return $state.Trim()
 }
 
+# The shorter of the normal inspection allowance and whatever the caller has left.
+#
+# Without this the deadline had a long tail: a pass that begins one second inside the budget
+# still runs two bounded calls for each of five or six services, each allowed the full
+# twenty seconds against a daemon that has just wedged, which is minutes of overrun on a
+# timeout somebody was told was five. A floor of one second keeps a nearly-spent budget from
+# turning into an instant zero-timeout kill of a call that would have answered.
+function Get-AfctInspectionTimeout {
+    param([int]$Remaining)
+    $normal = Get-AfctDockerCommandTimeout
+    if ($Remaining -le 0) { return $normal }
+    if ($Remaining -ge $normal) { return $normal }
+    if ($Remaining -lt 1) { return 1 }
+    return $Remaining
+}
+
 # The app's "<status>|<health>" pair, which is what the existing status and health callers
 # want. Kept as its own name because several commands ask only about the application.
 function Get-AfctAppContainerState {
-    $parts = (Get-AfctServiceState $AppService) -split '\|', 3
+    param([int]$TimeoutSeconds = 0)
+    $parts = (Get-AfctServiceState -Service $AppService -TimeoutSeconds $TimeoutSeconds) -split '\|', 3
     if ($parts[0] -eq 'missing') { return $null }
     return "$($parts[0])|$($parts[1])"
 }
@@ -202,7 +263,7 @@ function Test-AfctServiceReady {
 # -SkipHttp keeps it cheap for the progress loop, which calls it every few seconds; the HTTP
 # probe has its own ten-second timeout and belongs at the end, not in a poll.
 function Get-AfctStackState {
-    param([switch]$SkipHttp)
+    param([switch]$SkipHttp, [int]$TimeoutSeconds = 0)
 
     # One expected release for the whole reading, resolved the way Compose resolves it. Asked
     # once so every service in a single reading is judged against the same answer.
@@ -213,7 +274,7 @@ function Get-AfctStackState {
     $allMatch = $true
     $optionalWarnings = @()
     foreach ($svc in Get-AfctExpectedServices) {
-        $state = Get-AfctServiceState $svc.Name
+        $state = Get-AfctServiceState -Service $svc.Name -TimeoutSeconds $TimeoutSeconds
         $parts = $state -split '\|', 3
         $ready = Test-AfctServiceReady -State $state -RequiresHealth $svc.RequiresHealth
 
@@ -332,7 +393,17 @@ function Start-AfctStack {
         param($elapsed)
         Write-AfctInfo "Docker Compose is still starting containers after ${elapsed}s..."
     }
-    $result = Invoke-AfctComposeBounded -TimeoutSeconds $TimeoutSeconds -OnHeartbeat $heartbeat up --detach
+    # The required services by name, not a bare `up`.
+    #
+    # Every compose call carries `--profile updater` while the updater is enabled, so a bare
+    # `up` includes it, and an updater image that is missing or private fails the whole
+    # operation: the base installation stopped because an optional, experimental sidecar
+    # could not start. Naming the required services makes the startup match the Required
+    # model rather than only the health verdict afterwards. Compose still brings up each
+    # named service's dependencies, and leaves anything not named exactly as it found it.
+    $required = @(Get-AfctExpectedServices | Where-Object { $_.Required } | ForEach-Object { $_.Name })
+    $result = Invoke-AfctComposeBounded -TimeoutSeconds $TimeoutSeconds -OnHeartbeat $heartbeat `
+        -ComposeArgs (@('up', '--detach') + $required)
 
     if ($result.TimedOut) {
         # The CLI stopped making progress. That is not the same as the stack failing to
@@ -362,7 +433,25 @@ function Start-AfctStack {
     }
 
     Write-AfctTrace "compose up --detach completed in $($result.Seconds)s"
+    Start-AfctOptionalServices
     return $result.Seconds
+}
+
+# Bring up anything expected but not required, reporting rather than failing.
+#
+# Separated from the core startup for the same reason the pull is: AFCT is installable and
+# usable without any of it, so a sidecar that will not start is worth saying out loud and
+# nothing more. Kept to a short deadline, because nothing is waiting on it.
+function Start-AfctOptionalServices {
+    $optional = @(Get-AfctExpectedServices | Where-Object { -not $_.Required } | ForEach-Object { $_.Name })
+    foreach ($name in $optional) {
+        $r = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerCommandTimeout) `
+            -ComposeArgs @('up', '--detach', $name)
+        if ($r.TimedOut -or $r.ExitCode -ne 0) {
+            Write-AfctWarn "the optional $name service could not be started. AFCT itself is unaffected."
+            Write-AfctTrace "optional service $name failed to start"
+        }
+    }
 }
 
 # Print what Docker actually said. Replacing a real Docker error with "the AFCT stack could
@@ -438,7 +527,10 @@ function Wait-AfctHealth {
 
     while ($true) {
         $elapsed = [int]$clock.Elapsed.TotalSeconds
-        $state = Get-AfctStackState -SkipHttp
+        # What is left, handed down so the inspection cannot outlive the budget it is being
+        # measured against.
+        $remaining = [int]($TimeoutSeconds - $clock.Elapsed.TotalSeconds)
+        $state = Get-AfctStackState -SkipHttp -TimeoutSeconds $remaining
 
         # Stage lines, once each. A service that goes straight to ready between two polls
         # gets only its "healthy" line, which is the honest thing to print: the starting
@@ -459,7 +551,7 @@ function Wait-AfctHealth {
             }
         }
 
-        $appState = Get-AfctAppContainerState
+        $appState = Get-AfctAppContainerState -TimeoutSeconds ([int]($TimeoutSeconds - $clock.Elapsed.TotalSeconds))
         if ($appState) {
             $containerState, $healthState = $appState -split '\|', 2
             if ($containerState -eq 'running' -and $healthState -eq 'unhealthy') {
@@ -531,13 +623,16 @@ function Wait-AfctHealth {
         Start-Sleep -Seconds $HealthInterval
     }
 
+    # The reading from the last pass, not a fresh one. Collecting the whole stack again
+    # after the budget is gone is another two Docker calls per service against a daemon that
+    # has just proved slow, purely to phrase an error; the state from moments ago says the
+    # same thing and costs nothing.
     $spent = [int]$clock.Elapsed.TotalSeconds
-    $final = Get-AfctStackState -SkipHttp
-    Write-AfctTrace "health wait timed out after ${spent}s: $(Format-AfctStackState $final)"
+    Write-AfctTrace "health wait timed out after ${spent}s: $(Format-AfctStackState $state)"
     if ($containersReady) {
         throw "afct-fatal: the AFCT containers all started, but the web service never answered at $HealthPath within $TimeoutSeconds seconds. Check the logs: afctctl logs"
     }
-    throw "afct-fatal: AFCT did not finish starting within $TimeoutSeconds seconds. Current state: $(Format-AfctStackState $final)"
+    throw "afct-fatal: AFCT did not finish starting within $TimeoutSeconds seconds. Current state: $(Format-AfctStackState $state)"
 }
 
 # Optional services are reported, never fatal. The base application is already up and

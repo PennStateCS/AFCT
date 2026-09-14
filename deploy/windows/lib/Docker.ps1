@@ -133,9 +133,10 @@ function Get-AfctDockerCommandTimeout {
 # what a nonzero code or a timeout means. On a timeout the whole process tree is killed and
 # ExitCode is $null.
 #
-# -OnHeartbeat is called with the elapsed seconds roughly every -HeartbeatSeconds while the
-# wait runs long, so a caller can keep the terminal alive without this function knowing
-# anything about what it is running.
+# -OnHeartbeat is called roughly every -HeartbeatSeconds while the wait runs long, with the
+# elapsed seconds and the paths of the captured streams, so a caller can keep the terminal
+# alive (and show real progress from the capture) without this function knowing anything
+# about what it is running.
 function Invoke-AfctNativeBounded {
     param(
         [string]$FilePath,
@@ -172,7 +173,7 @@ function Invoke-AfctNativeBounded {
             $chunk = [Math]::Min($slice, $TimeoutSeconds - $waited)
             if ($proc.WaitForExit($chunk * 1000)) { $exited = $true; break }
             $waited += $chunk
-            if ($OnHeartbeat -and $waited -lt $TimeoutSeconds) { & $OnHeartbeat $waited }
+            if ($OnHeartbeat -and $waited -lt $TimeoutSeconds) { & $OnHeartbeat $waited $outFile $errFile }
         }
 
         if (-not $exited) {
