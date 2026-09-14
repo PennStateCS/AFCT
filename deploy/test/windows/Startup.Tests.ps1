@@ -104,11 +104,11 @@ Describe 'Invoke-AfctComposeBounded' {
     It 'leaves nothing of the killed process behind' {
         # The tree, not the pid: `docker compose` runs its own child, and killing only the
         # parent leaves that child running.
-        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        Use-DockerShim "@echo off`r`nping -n 118 127.0.0.1 >nul`r`nexit /b 0"
         Invoke-AfctComposeBounded -TimeoutSeconds 3 up -d | Out-Null
         Start-Sleep -Seconds 1
         $stragglers = @(Get-CimInstance Win32_Process -Filter "Name='PING.EXE'" -ErrorAction SilentlyContinue |
-            Where-Object { $_.CommandLine -and $_.CommandLine -match '-n 120' })
+            Where-Object { $_.CommandLine -and $_.CommandLine -match '-n 118' })
         $stragglers.Count | Should -Be 0
     }
 
@@ -528,21 +528,49 @@ Describe 'Starting an enabled updater separately from the core' {
             @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 1 }
         }
         Start-AfctStack -TimeoutSeconds 30 | Out-Null
+        # Exactly one call, and the updater is not in it: starting the optional sidecar is
+        # not part of the core startup at all any more.
+        @($script:calls).Count | Should -Be 1
         @($script:calls)[0] | Should -Not -Match 'updater'
         @($script:calls)[0] | Should -Match 'postgres'
-        # And the updater gets its own call afterwards.
-        @($script:calls)[1] | Should -Be 'up --detach updater'
+    }
+
+    <#
+      The optional sidecar is started after the core has passed health, version and HTTP
+      verification, and outside the health budget. It must not delay the moment AFCT is
+      declared ready, spend the timeout that moment is measured against, or be able to fail
+      an installation.
+    #>
+    It 'starts the updater only after the core is verified, and not before' {
+        $script:order = New-Object System.Collections.ArrayList
+        Mock -CommandName Start-AfctStack -MockWith { $null = $script:order.Add('core-up'); 5 }
+        Mock -CommandName Wait-AfctHealth -MockWith { $null = $script:order.Add('verify') }
+        Mock -CommandName Start-AfctOptionalServices -MockWith { $null = $script:order.Add('optional') }
+
+        Invoke-AfctStartAndWait
+
+        @($script:order) | Should -Be @('core-up', 'verify', 'optional')
+    }
+
+    It 'does not charge the optional start against the health budget' {
+        $script:HealthTimeout = 300
+        Mock -CommandName Start-AfctStack -MockWith { 250 }
+        Mock -CommandName Wait-AfctHealth -MockWith { }
+        Mock -CommandName Start-AfctOptionalServices -MockWith { }
+
+        Invoke-AfctStartAndWait
+
+        # The verification gets what startup left, and the optional work happens after that
+        # accounting rather than inside it.
+        Should -Invoke Wait-AfctHealth -Exactly 1 -ParameterFilter { $TimeoutSeconds -eq 50 }
+        Should -Invoke Start-AfctOptionalServices -Exactly 1
     }
 
     It 'still succeeds when the optional updater will not start' {
         Mock -CommandName Invoke-AfctComposeBounded -MockWith {
-            if ((@($ComposeArgs) -join ' ') -match 'updater') {
-                return @{ ExitCode = 1; TimedOut = $false; StdOut = @()
-                          StdErr = @('manifest unknown'); Seconds = 1 }
-            }
-            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 1 }
+            @{ ExitCode = 1; TimedOut = $false; StdOut = @(); StdErr = @('manifest unknown'); Seconds = 1 }
         }
-        { Start-AfctStack -TimeoutSeconds 30 } | Should -Not -Throw
+        { Start-AfctOptionalServices } | Should -Not -Throw
         Should -Invoke Write-AfctWarn -ParameterFilter { $Message -match 'optional updater service could not be started' }
     }
 
@@ -561,8 +589,8 @@ Describe 'Starting an enabled updater separately from the core' {
             $null = $script:calls.Add((@($ComposeArgs) -join ' '))
             @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 1 }
         }
-        Start-AfctStack -TimeoutSeconds 30 | Out-Null
-        @($script:calls).Count | Should -Be 1
+        Start-AfctOptionalServices
+        @($script:calls).Count | Should -Be 0
     }
 }
 
@@ -747,6 +775,24 @@ Describe 'Get-AfctEffectiveAppTag' {
 }
 
 Describe 'Wait-AfctHealth' {
+    BeforeAll {
+        # The loop reads the app out of the whole-stack reading rather than inspecting it
+        # again, so a fail-fast case is driven by the app's row, not by a separate seam.
+        function New-AppState {
+            param([string]$Status, [string]$Health = 'healthy')
+            $app = [pscustomobject]@{
+                Name = 'app'; Label = 'AFCT application'; Status = $Status; Health = $Health
+                Image = 'img:v1'; Ready = ($Status -eq 'running' -and $Health -eq 'healthy')
+                Required = $true; Versioned = $true; ExpectedImageTag = 'v1'
+                ActualImageTag = 'v1'; ImageMatches = $true
+            }
+            [pscustomobject]@{
+                Services = @($app); AllReady = $app.Ready; AppReady = $app.Ready; HttpOk = $false
+                ExpectedTag = 'v1'; ImageMatches = $true; OptionalWarnings = @()
+            }
+        }
+    }
+
     BeforeEach {
         Mock -CommandName Write-AfctInfo -MockWith { }
         Mock -CommandName Write-AfctSuccess -MockWith { }
@@ -766,31 +812,36 @@ Describe 'Wait-AfctHealth' {
     }
 
     It 'names an unhealthy application as the reason' {
-        Mock -CommandName Get-AfctStackState -MockWith {
-            [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
-                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
-        }
-        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|unhealthy' }
+        Mock -CommandName Get-AfctStackState -MockWith { New-AppState -Status 'running' -Health 'unhealthy' }
         { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Throw '*unhealthy state*'
     }
 
+    <#
+      Fail-fast reads the app's row from the reading already taken. Three polls of a
+      restarting container is a crash loop, and the count is what proves it did not simply
+      wait the clock out.
+    #>
     It 'fails fast on a crash loop instead of waiting out the timeout' {
-        Mock -CommandName Get-AfctStackState -MockWith {
-            [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
-                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
-        }
-        Mock -CommandName Get-AfctAppContainerState -MockWith { 'restarting|none' }
+        Mock -CommandName Get-AfctStackState -MockWith { New-AppState -Status 'restarting' -Health 'none' }
         { Wait-AfctHealth -TimeoutSeconds 300 } | Should -Throw '*crash loop*'
-        Should -Invoke Get-AfctAppContainerState -Exactly 3
+        Should -Invoke Get-AfctStackState -Exactly 3
     }
 
     It 'reports an application that stopped before becoming healthy' {
-        Mock -CommandName Get-AfctStackState -MockWith {
-            [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
-                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
-        }
-        Mock -CommandName Get-AfctAppContainerState -MockWith { 'exited|none' }
+        Mock -CommandName Get-AfctStackState -MockWith { New-AppState -Status 'exited' -Health 'none' }
         { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Throw '*stopped before becoming healthy*'
+    }
+
+    <#
+      And it inspects the application once per poll, not twice. The row is already in the
+      whole-stack reading; asking Docker again for the same answer was two more calls per
+      poll charged against the same deadline.
+    #>
+    It 'does not inspect the application a second time in the same poll' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-AppState -Status 'running' -Health 'unhealthy' }
+        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|unhealthy' }
+        { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Throw
+        Should -Invoke Get-AfctAppContainerState -Exactly 0
     }
 
     It 'times out with the state it last saw, rather than silently' {
@@ -858,7 +909,6 @@ Describe 'HTTP health is part of being ready' {
         Mock -CommandName Write-AfctWarn -MockWith { }
         Mock -CommandName Write-AfctTrace -MockWith { }
         Mock -CommandName Start-Sleep -MockWith { }
-        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $true
                                ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
@@ -1045,37 +1095,109 @@ Describe 'The startup deadline is wall-clock' {
   has just wedged, that is minutes of overrun on a timeout somebody was told was five. The
   remaining budget is handed down so each call is capped by what is actually left.
 #>
-Describe 'The deadline caps the inspection, not just the loop' {
+Describe 'The deadline caps the whole inspection, not each call' {
     AfterEach { $env:PATH = $script:OriginalPath }
 
-    It 'shortens each Docker call to whatever is left' {
-        Get-AfctInspectionTimeout 3 | Should -Be 3
-        # Never longer than the normal allowance...
-        Get-AfctInspectionTimeout 9999 | Should -Be (Get-AfctDockerCommandTimeout)
-        # ...and no caller-supplied budget means the normal allowance, not zero.
-        Get-AfctInspectionTimeout 0 | Should -Be (Get-AfctDockerCommandTimeout)
-        # A nearly-spent budget still gets a second, rather than an instant kill of a call
-        # that would have answered.
-        Get-AfctInspectionTimeout -5 | Should -Be (Get-AfctDockerCommandTimeout)
+    It 'gives a call the smaller of the normal allowance and what is left' {
+        $normal = Get-AfctDockerCommandTimeout
+        # No deadline at all is not the same as a deadline that has run out.
+        Get-AfctCallTimeout $null | Should -Be $normal
+        # Floored, deliberately: a cap that rounded up could outlive the deadline it exists
+        # to enforce, so three-and-a-bit seconds left grants three, or two if the clock has
+        # already moved on a little.
+        Get-AfctCallTimeout ((Get-Date).AddSeconds(3)) | Should -BeIn @(2, 3)
+        Get-AfctCallTimeout ((Get-Date).AddSeconds(9999)) | Should -Be $normal
     }
 
     <#
-      The real thing, against a daemon that answers nothing. Five services at two bounded
-      calls each would be ten full inspection allowances without the cap; with it the whole
-      collection is bounded by what was handed in.
+      The distinction the old helper could not express. An expired budget used to return the
+      normal allowance, because "0 left" and "no deadline given" were the same value, so a
+      spent deadline bought another twenty seconds per call.
+    #>
+    It 'returns 0 for an expired deadline, so no further call starts' {
+        Get-AfctCallTimeout ((Get-Date).AddSeconds(-1)) | Should -Be 0
+        Get-AfctCallTimeout ((Get-Date).AddSeconds(-600)) | Should -Be 0
+    }
+
+    It 'starts no Docker call at all once the deadline has passed' {
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('abc123'); StdErr = @(); Seconds = 0 }
+        }
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1'); StdErr = @(); Seconds = 0 }
+        }
+        Get-AfctServiceState -Service 'app' -Deadline ((Get-Date).AddSeconds(-1)) | Should -Be 'missing|none|'
+        Should -Invoke Invoke-AfctComposeBounded -Exactly 0
+        Should -Invoke Invoke-AfctDockerBounded -Exactly 0
+    }
+
+    <#
+      Recalculated between the two calls, not worked out once for the pair. If `compose ps`
+      consumes the whole remainder, `docker inspect` must not then be granted it again.
+    #>
+    It 'recomputes the budget between compose ps and docker inspect' {
+        $script:deadline = (Get-Date).AddSeconds(3)
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            # Burn the rest of the budget inside the first call.
+            Start-Sleep -Seconds 4
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('abc123'); StdErr = @(); Seconds = 4 }
+        }
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1'); StdErr = @(); Seconds = 0 }
+        }
+        Get-AfctServiceState -Service 'app' -Deadline $script:deadline | Should -Be 'missing|none|'
+        # The second call never ran, because by then there was nothing left to give it.
+        Should -Invoke Invoke-AfctDockerBounded -Exactly 0
+    }
+
+    It 'hands each successive service less, never the same remainder again' {
+        $script:granted = New-Object System.Collections.ArrayList
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            $null = $script:granted.Add($TimeoutSeconds)
+            Start-Sleep -Milliseconds 1100
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 1 }
+        }
+        Get-AfctStackState -SkipHttp -Deadline ((Get-Date).AddSeconds(4)) | Out-Null
+        # Each service asked the clock for itself, so the allowances shrink rather than
+        # repeating. A single reused remainder would show the same number five times.
+        @($script:granted).Count | Should -BeGreaterThan 1
+        @($script:granted)[0] | Should -BeGreaterThan (@($script:granted)[-1])
+    }
+
+    <#
+      The real thing, against a daemon that answers nothing, and the test that actually
+      catches the bug: five services at two bounded calls each is ten full allowances
+      without a whole-inspection cap. Measured with the same shim and the same 20-second
+      per-call allowance, an uncapped collection takes around a hundred seconds.
     #>
     It 'collects a whole-stack reading inside the remaining budget' {
         Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
         $env:AFCT_DOCKER_COMMAND_TIMEOUT = '20'
         try {
             $started = Get-Date
-            $state = Get-AfctStackState -SkipHttp -TimeoutSeconds 2
+            $state = Get-AfctStackState -SkipHttp -Deadline ((Get-Date).AddSeconds(2))
             $spent = ((Get-Date) - $started).TotalSeconds
-            # Five services, so ten calls. Uncapped that is 200 seconds; capped at two each
-            # it is about twenty, and generously under a minute either way.
-            $spent | Should -BeLessThan 60
+            # Tight enough that per-service multiplication cannot pass, loose enough for CI.
+            $spent | Should -BeLessThan 10
             $state.AllReady | Should -BeFalse
         } finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
+    }
+
+    <#
+      Two schemes at ten seconds each is twenty seconds, which a startup with two seconds
+      left cannot afford.
+    #>
+    It 'keeps both HTTP probes inside the remaining budget' {
+        $started = Get-Date
+        # Nothing is listening, so both schemes fail; the question is how long that takes.
+        Test-AfctHttpHealth -Deadline ((Get-Date).AddSeconds(2)) | Should -BeFalse
+        ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 10
+    }
+
+    It 'starts no HTTP request at all when the deadline has passed' {
+        Mock -CommandName Invoke-WebRequest -MockWith { throw 'should not be called' }
+        Test-AfctHttpHealth -Deadline ((Get-Date).AddSeconds(-1)) | Should -BeFalse
+        Should -Invoke Invoke-WebRequest -Exactly 0
     }
 
     <#
@@ -1088,7 +1210,6 @@ Describe 'The deadline caps the inspection, not just the loop' {
         Mock -CommandName Write-AfctWarn -MockWith { }
         Mock -CommandName Write-AfctTrace -MockWith { }
         Mock -CommandName Start-Sleep -MockWith { }
-        Mock -CommandName Get-AfctAppContainerState -MockWith { $null }
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
                                ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }

@@ -202,8 +202,13 @@ function Get-AfctImageTag {
 # what it has left, so a wedged daemon cannot spend the full inspection allowance per call
 # per service after the budget is already gone.
 function Get-AfctServiceState {
-    param([string]$Service, [int]$TimeoutSeconds = 0)
-    $bound = Get-AfctInspectionTimeout $TimeoutSeconds
+    param([string]$Service, [AllowNull()][Nullable[DateTime]]$Deadline)
+
+    # Asked again before each call, not once for the pair. Working it out once and reusing it
+    # is how a shared budget silently became a per-call allowance: the first call can consume
+    # everything that was left, and the second must then not start at all.
+    $bound = Get-AfctCallTimeout $Deadline
+    if ($bound -le 0) { return 'missing|none|' }
 
     # Both calls are bounded. This runs inside the startup poll and inside doctor, so a
     # daemon that stops answering has to end the wait rather than become it.
@@ -212,6 +217,8 @@ function Get-AfctServiceState {
     $id = (@($ps.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
     if (-not $id) { return 'missing|none|' }
 
+    $bound = Get-AfctCallTimeout $Deadline
+    if ($bound -le 0) { return 'missing|none|' }
     $inspect = Invoke-AfctDockerBounded -TimeoutSeconds $bound inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}' $id.Trim()
     if ($inspect.TimedOut -or $inspect.ExitCode -ne 0) { return 'missing|none|' }
     $state = (@($inspect.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
@@ -219,27 +226,14 @@ function Get-AfctServiceState {
     return $state.Trim()
 }
 
-# The shorter of the normal inspection allowance and whatever the caller has left.
+# The app's "<status>|<health>" pair, which is what the status command and doctor want.
 #
-# Without this the deadline had a long tail: a pass that begins one second inside the budget
-# still runs two bounded calls for each of five or six services, each allowed the full
-# twenty seconds against a daemon that has just wedged, which is minutes of overrun on a
-# timeout somebody was told was five. A floor of one second keeps a nearly-spent budget from
-# turning into an instant zero-timeout kill of a call that would have answered.
-function Get-AfctInspectionTimeout {
-    param([int]$Remaining)
-    $normal = Get-AfctDockerCommandTimeout
-    if ($Remaining -le 0) { return $normal }
-    if ($Remaining -ge $normal) { return $normal }
-    if ($Remaining -lt 1) { return 1 }
-    return $Remaining
-}
-
-# The app's "<status>|<health>" pair, which is what the existing status and health callers
-# want. Kept as its own name because several commands ask only about the application.
+# The startup loop no longer calls this: it reads the app's row out of the whole-stack
+# reading it has already taken, rather than inspecting the same container twice in one poll.
+# This remains for the callers that ask about the application and nothing else.
 function Get-AfctAppContainerState {
-    param([int]$TimeoutSeconds = 0)
-    $parts = (Get-AfctServiceState -Service $AppService -TimeoutSeconds $TimeoutSeconds) -split '\|', 3
+    param([AllowNull()][Nullable[DateTime]]$Deadline)
+    $parts = (Get-AfctServiceState -Service $AppService -Deadline $Deadline) -split '\|', 3
     if ($parts[0] -eq 'missing') { return $null }
     return "$($parts[0])|$($parts[1])"
 }
@@ -253,6 +247,50 @@ function Test-AfctServiceReady {
     return ($parts[1] -eq 'healthy')
 }
 
+# --------------------------------------------------------------------------- #
+# Deadlines
+# --------------------------------------------------------------------------- #
+# An absolute instant, not a number of seconds left.
+#
+# A remainder goes stale the moment it is computed, and that staleness was the bug: the
+# observer worked out "two seconds left" once and then handed two seconds to each of ten
+# Docker calls, so a two-second budget bought twenty seconds of waiting. An instant cannot go
+# stale, so every call site can ask again immediately before it does anything.
+#
+# $null means no deadline at all, which is a different thing from a deadline that has passed.
+# Conflating them is what let an expired budget turn back into a fresh twenty-second
+# inspection.
+
+# Seconds left before $Deadline. Negative when it has passed; $null deadline means no limit,
+# reported as [int]::MaxValue so callers can compare without special-casing.
+function Get-AfctRemainingSeconds {
+    param([AllowNull()][Nullable[DateTime]]$Deadline)
+    if ($null -eq $Deadline) { return [int]::MaxValue }
+    $left = ($Deadline - (Get-Date)).TotalSeconds
+    if ($left -gt [int]::MaxValue) { return [int]::MaxValue }
+    return [int][Math]::Floor($left)
+}
+
+# What to allow the next Docker call, given a deadline.
+#
+# Returns 0 to mean STOP: the deadline was supplied and has run out, so no further Docker
+# operation may start. Callers must check for it rather than passing it through, because a
+# zero timeout would otherwise become a call that is killed the instant it starts.
+#
+# No deadline gives the normal inspection allowance. A deadline with time on it gives the
+# smaller of that allowance and what is left, with a one-second floor so a nearly-spent
+# budget still gets a call that can plausibly answer rather than an instant kill.
+function Get-AfctCallTimeout {
+    param([AllowNull()][Nullable[DateTime]]$Deadline)
+    $normal = Get-AfctDockerCommandTimeout
+    if ($null -eq $Deadline) { return $normal }
+    $left = Get-AfctRemainingSeconds $Deadline
+    if ($left -le 0) { return 0 }
+    if ($left -ge $normal) { return $normal }
+    if ($left -lt 1) { return 1 }
+    return $left
+}
+
 # A single reading of the whole deployment: every expected service, whether each is ready,
 # and whether the application answers over HTTP at the tag this install is pinned to.
 #
@@ -263,7 +301,7 @@ function Test-AfctServiceReady {
 # -SkipHttp keeps it cheap for the progress loop, which calls it every few seconds; the HTTP
 # probe has its own ten-second timeout and belongs at the end, not in a poll.
 function Get-AfctStackState {
-    param([switch]$SkipHttp, [int]$TimeoutSeconds = 0)
+    param([switch]$SkipHttp, [AllowNull()][Nullable[DateTime]]$Deadline)
 
     # One expected release for the whole reading, resolved the way Compose resolves it. Asked
     # once so every service in a single reading is judged against the same answer.
@@ -274,7 +312,10 @@ function Get-AfctStackState {
     $allMatch = $true
     $optionalWarnings = @()
     foreach ($svc in Get-AfctExpectedServices) {
-        $state = Get-AfctServiceState -Service $svc.Name -TimeoutSeconds $TimeoutSeconds
+        # The deadline travels, so each service asks the clock for itself. A stack whose
+        # first service eats the whole budget leaves nothing for the rest, which is correct:
+        # the alternative is five services each granted the full remainder.
+        $state = Get-AfctServiceState -Service $svc.Name -Deadline $Deadline
         $parts = $state -split '\|', 3
         $ready = Test-AfctServiceReady -State $state -RequiresHealth $svc.RequiresHealth
 
@@ -314,7 +355,7 @@ function Get-AfctStackState {
     }
     $app = $services | Where-Object { $_.Name -eq $AppService } | Select-Object -First 1
     $httpOk = $false
-    if (-not $SkipHttp) { $httpOk = (Test-AfctHttpHealth) }
+    if (-not $SkipHttp) { $httpOk = (Test-AfctHttpHealth -Deadline $Deadline) }
 
     return [pscustomobject]@{
         Services         = $services
@@ -433,15 +474,16 @@ function Start-AfctStack {
     }
 
     Write-AfctTrace "compose up --detach completed in $($result.Seconds)s"
-    Start-AfctOptionalServices
     return $result.Seconds
 }
 
 # Bring up anything expected but not required, reporting rather than failing.
 #
-# Separated from the core startup for the same reason the pull is: AFCT is installable and
-# usable without any of it, so a sidecar that will not start is worth saying out loud and
-# nothing more. Kept to a short deadline, because nothing is waiting on it.
+# Called after the core stack has passed health, version and HTTP verification, and outside
+# the health budget entirely. AFCT is installable and usable without any of it, so an
+# optional sidecar must neither delay the moment the core is declared ready nor spend the
+# timeout that moment is measured against. It gets a short bound of its own instead, because
+# nothing is waiting on it.
 function Start-AfctOptionalServices {
     $optional = @(Get-AfctExpectedServices | Where-Object { -not $_.Required } | ForEach-Object { $_.Name })
     foreach ($name in $optional) {
@@ -472,12 +514,25 @@ function Show-AfctComposeFailure {
 # Best-effort end-to-end check that nginx serves the app. Self-signed cert on first boot, so
 # bypass cert validation for this one localhost call (restored afterward).
 function Test-AfctHttpHealth {
+    param([AllowNull()][Nullable[DateTime]]$Deadline)
+
+    # Ten seconds per scheme and two schemes is twenty seconds, which a startup with two
+    # seconds left cannot afford. The deadline is asked before each request, so a probe can
+    # decline to start at all, and -TimeoutSec never outlives what is left.
     $prev = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
     [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
     try {
         foreach ($scheme in 'https', 'http') {
+            $budget = 10
+            if ($null -ne $Deadline) {
+                $left = Get-AfctRemainingSeconds $Deadline
+                # Out of time: do not start another request just to fail it.
+                if ($left -le 0) { return $false }
+                # TimeoutSec is whole seconds, so a fraction of a second left becomes one.
+                $budget = [Math]::Min(10, [Math]::Max(1, $left))
+            }
             try {
-                Invoke-WebRequest -Uri "${scheme}://localhost$HealthPath" -TimeoutSec 10 -UseBasicParsing | Out-Null
+                Invoke-WebRequest -Uri "${scheme}://localhost$HealthPath" -TimeoutSec $budget -UseBasicParsing | Out-Null
                 return $true
             } catch { }
         }
@@ -514,6 +569,7 @@ function Wait-AfctHealth {
     # timeout could run for a quarter of an hour against a slow Docker Desktop, which is the
     # same "it just sits there" the whole exercise is about.
     $clock = [System.Diagnostics.Stopwatch]::StartNew()
+    $start = Get-Date
 
     # A single restart can happen during a normal recreate, but repeated restarts mean a
     # crash loop that will never become healthy, so fail fast instead of waiting out the
@@ -526,11 +582,11 @@ function Wait-AfctHealth {
     $containersReady = $false
 
     while ($true) {
+        # One instant that everything in this pass measures against, so the Docker calls and
+        # the HTTP probe cannot each be granted the whole remainder.
+        $deadline = $start.AddSeconds($TimeoutSeconds)
         $elapsed = [int]$clock.Elapsed.TotalSeconds
-        # What is left, handed down so the inspection cannot outlive the budget it is being
-        # measured against.
-        $remaining = [int]($TimeoutSeconds - $clock.Elapsed.TotalSeconds)
-        $state = Get-AfctStackState -SkipHttp -TimeoutSeconds $remaining
+        $state = Get-AfctStackState -SkipHttp -Deadline $deadline
 
         # Stage lines, once each. A service that goes straight to ready between two polls
         # gets only its "healthy" line, which is the honest thing to print: the starting
@@ -551,22 +607,25 @@ function Wait-AfctHealth {
             }
         }
 
-        $appState = Get-AfctAppContainerState -TimeoutSeconds ([int]($TimeoutSeconds - $clock.Elapsed.TotalSeconds))
-        if ($appState) {
-            $containerState, $healthState = $appState -split '\|', 2
-            if ($containerState -eq 'running' -and $healthState -eq 'unhealthy') {
+        # The app's row out of the reading just taken, rather than inspecting it again. The
+        # row already carries status and health, which is everything these branches ask
+        # about, and a second inspection was two more Docker calls per poll charged to the
+        # same budget for an answer already in hand.
+        $app = $state.Services | Where-Object { $_.Name -eq $AppService } | Select-Object -First 1
+        if ($null -ne $app -and $app.Status -ne 'missing') {
+            if ($app.Status -eq 'running' -and $app.Health -eq 'unhealthy') {
                 throw 'afct-fatal: the application container reported an unhealthy state.'
             }
-            if ($containerState -in 'exited', 'dead') {
+            if ($app.Status -in 'exited', 'dead') {
                 throw 'afct-fatal: the application container stopped before becoming healthy.'
             }
-            if ($containerState -eq 'restarting') {
+            if ($app.Status -eq 'restarting') {
                 $restarting++
                 if ($restarting -ge 3) {
                     throw "afct-fatal: the $AppService container keeps restarting (crash loop) instead of becoming healthy. Check the logs: afctctl logs"
                 }
             }
-            if ($containerState -eq 'running' -and $healthState -eq 'none') {
+            if ($app.Status -eq 'running' -and $app.Health -eq 'none') {
                 throw "afct-fatal: the $AppService service has no Docker health check configured."
             }
         }
@@ -596,10 +655,9 @@ function Wait-AfctHealth {
                 $announced['http:waiting'] = $true
                 Write-AfctInfo 'Containers are healthy; waiting for the web service...'
             }
-            if (Test-AfctHttpHealth) {
+            if (Test-AfctHttpHealth -Deadline $deadline) {
                 Write-AfctSuccess "The web service is responding at $HealthPath."
                 Write-AfctTrace "stack ready after $([int]$clock.Elapsed.TotalSeconds)s: $(Format-AfctStackState $state)"
-                Show-AfctOptionalWarnings $state
                 return
             }
             $containersReady = $true
@@ -650,8 +708,17 @@ function Show-AfctOptionalWarnings {
 # Startup and the health wait share one budget, spent in order. Whatever `up` used is taken
 # off what the health wait gets, so the total stays inside the documented timeout.
 function Invoke-AfctStartAndWait {
+    # One wall-clock deadline covering the core sequence and nothing else: bringing the
+    # required services up, verifying their health, verifying their release, and verifying
+    # that AFCT answers. The image download, the diagnostics collection and the optional
+    # sidecar all have bounds of their own and none of them are charged here.
     $spent = Start-AfctStack
     Wait-AfctHealth -TimeoutSeconds ($HealthTimeout - $spent)
+
+    # Core AFCT is up and serving by the time this runs, which is the point: an optional
+    # service can now fail without delaying or endangering anything that matters.
+    Write-AfctSuccess 'AFCT core startup completed.'
+    Start-AfctOptionalServices
 }
 
 function Invoke-AfctDeployStack {
