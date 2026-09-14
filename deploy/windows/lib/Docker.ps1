@@ -82,22 +82,25 @@ function Set-AfctRuntimeComposeEnv {
 # Invoke `docker compose` and return its combined output as strings. $LASTEXITCODE holds the
 # child exit code afterward. Never throws on a nonzero compose exit.
 function Invoke-AfctCompose {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    # ComposeArgs, not Args: $Args is an automatic variable, and a parameter that shadows it
+    # reads back unreliably, which among other things makes this seam untestable. Position 0
+    # keeps every existing positional call site working unchanged.
+    param([Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$ComposeArgs)
     Set-AfctRuntimeComposeEnv
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { & docker @(Get-AfctComposeBaseArgs) @Args 2>&1 | ForEach-Object { "$_" } }
+    try { & docker @(Get-AfctComposeBaseArgs) @ComposeArgs 2>&1 | ForEach-Object { "$_" } }
     finally { $ErrorActionPreference = $eap }
 }
 
 # Same, but let output flow to the console so docker can draw its own progress bars. Returns
 # the child exit code.
 function Invoke-AfctComposeConsole {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    param([Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$ComposeArgs)
     Set-AfctRuntimeComposeEnv
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { & docker @(Get-AfctComposeBaseArgs) @Args | Out-Host } finally { $ErrorActionPreference = $eap }
+    try { & docker @(Get-AfctComposeBaseArgs) @ComposeArgs | Out-Host } finally { $ErrorActionPreference = $eap }
     return $LASTEXITCODE
 }
 
@@ -198,6 +201,15 @@ function Invoke-AfctNativeBounded {
     } finally {
         Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
     }
+}
+
+# A pull can legitimately take a long time: the AFCT application image alone is about 4.7 GB.
+# Bounded all the same, because "downloading" and "wedged" look identical from outside and
+# an installer that can never return is the thing this whole file exists to prevent.
+function Get-AfctDockerPullTimeout {
+    $v = [int]([Environment]::GetEnvironmentVariable('AFCT_DOCKER_PULL_TIMEOUT'))
+    if ($v -le 0) { $v = 1800 }
+    return $v
 }
 
 # A plain `docker ...` call with a short deadline. For inspection: reading state, versions,
@@ -420,10 +432,10 @@ function Test-AfctDockerImagePresent {
     # terminating NativeCommandError, which would crash the check instead of returning
     # false. Soften it locally, exactly as the compose wrappers above do, and read the
     # child exit code afterward.
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try { & docker image inspect $Image *> $null } finally { $ErrorActionPreference = $eap }
-    return ($LASTEXITCODE -eq 0)
+    # Bounded: this runs in the install preflight, before anything has started, so a
+    # non-answering daemon here stops the install before it begins rather than during it.
+    $r = Invoke-AfctDockerBounded image inspect $Image
+    return ((-not $r.TimedOut) -and $r.ExitCode -eq 0)
 }
 
 # Pull the bind-check image. Docker's (noisy, non-secret) output goes to the install log when
@@ -433,16 +445,12 @@ function Invoke-AfctDockerPull {
     param([string]$Image)
     # A failed pull writes to stderr and exits non-zero; soften ErrorActionPreference so
     # that surfaces as a return code the caller can report, not a terminating error.
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        if (-not [string]::IsNullOrEmpty($LogFile)) {
-            & docker pull $Image *>> $LogFile
-        } else {
-            & docker pull $Image *> $null
-        }
-    } finally { $ErrorActionPreference = $eap }
-    return $LASTEXITCODE
+    $r = Invoke-AfctDockerBounded -TimeoutSeconds (Get-AfctDockerPullTimeout) pull $Image
+    if (-not [string]::IsNullOrEmpty($LogFile)) {
+        Add-AfctLogLine ("docker pull $Image => " + $(if ($r.TimedOut) { 'timed out' } else { "exit $($r.ExitCode)" })) $LogFile
+    }
+    if ($r.TimedOut) { return 1 }
+    return $r.ExitCode
 }
 
 # True when Docker Desktop can bind-mount $Dir read-only. Mounts the directory and checks it
@@ -451,11 +459,20 @@ function Test-AfctDockerBindMount {
     param([string]$Image, [string]$Dir)
     # A blocked mount makes `docker run` exit non-zero with stderr; soften
     # ErrorActionPreference so the check returns false instead of throwing.
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try { & docker run --rm -v "${Dir}:/afct-bind-check:ro" $Image test -d /afct-bind-check *> $null }
-    finally { $ErrorActionPreference = $eap }
-    return ($LASTEXITCODE -eq 0)
+    # Bounded: a blocked mount can leave `docker run` waiting rather than failing, and this
+    # is a preflight whose entire purpose is to fail fast with a clear message.
+    #
+    # The argument list is passed as an explicit array, not as loose tokens, and that is not
+    # style. This command carries both a `-v` and a `-d`, and written loosely PowerShell
+    # would bind them to the common -Verbose and -Debug parameters and hand docker a command
+    # with no volume and no test flag: the same silent misbinding that made the installer
+    # hang in the first place. Inside an array literal they are values, and nothing can eat
+    # them.
+    $r = Invoke-AfctDockerBounded -DockerArgs @(
+        'run', '--rm', '--volume', "${Dir}:/afct-bind-check:ro", $Image,
+        'test', '-d', '/afct-bind-check'
+    )
+    return ((-not $r.TimedOut) -and $r.ExitCode -eq 0)
 }
 
 # Heuristic: a UNC path or a non-fixed (network/removable) drive is a soft warning, because

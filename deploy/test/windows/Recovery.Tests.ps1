@@ -44,6 +44,7 @@ BeforeAll {
     # thrown error rather than a null.
     function New-ServiceRow {
         param([string]$Name, [string]$Label, [bool]$RequiresHealth, [bool]$Versioned,
+              [bool]$Required = $true,
               [string]$Status = 'running', [string]$Tag = 'v1.2.3', [string]$Want = 'v1.2.3')
         $health = 'healthy'
         if (-not $RequiresHealth) { $health = 'none' }
@@ -54,7 +55,7 @@ BeforeAll {
         if ($Versioned) { $expected = $Want }
         [pscustomobject]@{
             Name = $Name; Label = $Label; Status = $Status; Health = $health
-            Image = "img:$Tag"; Ready = $ready; Versioned = $Versioned
+            Image = "img:$Tag"; Ready = $ready; Versioned = $Versioned; Required = $Required
             ExpectedImageTag = $expected; ActualImageTag = $Tag; ImageMatches = $matches
         }
     }
@@ -70,14 +71,14 @@ BeforeAll {
         )
         $want = 'v1.2.3'
         $spec = @(
-            @{ Name = 'postgres';  Label = 'PostgreSQL';       Health = $true;  Ver = $false },
-            @{ Name = 'app';       Label = 'AFCT application'; Health = $true;  Ver = $true },
-            @{ Name = 'worker';    Label = 'Worker';           Health = $false; Ver = $true },
-            @{ Name = 'nginx';     Label = 'nginx';            Health = $true;  Ver = $true },
-            @{ Name = 'db-backup'; Label = 'Backup service';   Health = $true;  Ver = $true }
+            @{ Name = 'postgres';  Label = 'PostgreSQL';       Health = $true;  Ver = $false; Req = $true },
+            @{ Name = 'app';       Label = 'AFCT application'; Health = $true;  Ver = $true;  Req = $true },
+            @{ Name = 'worker';    Label = 'Worker';           Health = $false; Ver = $true;  Req = $true },
+            @{ Name = 'nginx';     Label = 'nginx';            Health = $true;  Ver = $true;  Req = $true },
+            @{ Name = 'db-backup'; Label = 'Backup service';   Health = $true;  Ver = $true;  Req = $true }
         )
         if ($WithUpdater) {
-            $spec += @{ Name = 'updater'; Label = 'In-app updater'; Health = $true; Ver = $true }
+            $spec += @{ Name = 'updater'; Label = 'In-app updater'; Health = $true; Ver = $true; Req = $false }
         }
         $rows = @()
         foreach ($item in $spec) {
@@ -86,17 +87,19 @@ BeforeAll {
             $tag = $want
             if ($item.Name -eq $StaleService) { $tag = $StaleTag }
             $rows += New-ServiceRow -Name $item.Name -Label $item.Label `
-                -RequiresHealth $item.Health -Versioned $item.Ver `
+                -RequiresHealth $item.Health -Versioned $item.Ver -Required $item.Req `
                 -Status $status -Tag $tag -Want $want
         }
         $app = $rows | Where-Object { $_.Name -eq 'app' } | Select-Object -First 1
         [pscustomobject]@{
             Services     = $rows
-            AllReady     = (@($rows | Where-Object { -not $_.Ready }).Count -eq 0)
+            AllReady     = (@($rows | Where-Object { $_.Required -and -not $_.Ready }).Count -eq 0)
             AppReady     = $app.Ready
             HttpOk       = $HttpOk
             ExpectedTag  = $want
-            ImageMatches = (@($rows | Where-Object { $_.Versioned -and -not $_.ImageMatches }).Count -eq 0)
+            ImageMatches = (@($rows | Where-Object { $_.Required -and $_.Versioned -and -not $_.ImageMatches }).Count -eq 0)
+            OptionalWarnings = @($rows | Where-Object { -not $_.Required -and -not $_.Ready } |
+                                 ForEach-Object { "$($_.Label) is not running" })
         }
     }
 }
@@ -243,6 +246,155 @@ Describe 'Reconciling after the Compose definition changes' {
   complete: the enable path declined because the flag already said true, and nothing else
   looked.
 #>
+<#
+  Configuration can change without the Compose YAML changing.
+
+  Reconciling only on a changed Compose file left two holes. `afctctl install -Reconfigure`
+  writes a new .env.production and, if the Compose file happened not to change and the
+  containers looked healthy, skipped `up` entirely: the operator's new settings sat on disk
+  while the containers kept running the old ones, with nothing on screen to say so. And the
+  key-repair helpers can add AFCT_SECRET_KEY or BACKUP_ENCRYPTION_KEY to a file the running
+  containers were started without.
+#>
+Describe 'Configuration changes force reconciliation' {
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @('AFCT_APP_TAG=v1.2.3')
+    }
+
+    It 'reports that it added a missing secret key, and stays quiet when one exists' {
+        Confirm-AfctSecretKey $EnvFile | Should -BeTrue
+        # Called twice is not changed twice: the existing key is left exactly as it was.
+        $after = Read-AfctEnvValue 'AFCT_SECRET_KEY' $EnvFile
+        Confirm-AfctSecretKey $EnvFile | Should -BeFalse
+        Read-AfctEnvValue 'AFCT_SECRET_KEY' $EnvFile | Should -Be $after
+    }
+
+    It 'reports that it added a missing backup key, and stays quiet when one exists' {
+        Confirm-AfctBackupKey $EnvFile | Should -BeTrue
+        $after = Read-AfctEnvValue 'BACKUP_ENCRYPTION_KEY' $EnvFile
+        Confirm-AfctBackupKey $EnvFile | Should -BeFalse
+        Read-AfctEnvValue 'BACKUP_ENCRYPTION_KEY' $EnvFile | Should -Be $after
+    }
+
+    It 'never regenerates a key that is already there' {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3',
+            'AFCT_SECRET_KEY=existing-secret-value-0001',
+            'BACKUP_ENCRYPTION_KEY=existing-backup-value-0002')
+        Confirm-AfctSecretKey $EnvFile | Should -BeFalse
+        Confirm-AfctBackupKey $EnvFile | Should -BeFalse
+        Read-AfctEnvValue 'AFCT_SECRET_KEY' $EnvFile | Should -Be 'existing-secret-value-0001'
+        Read-AfctEnvValue 'BACKUP_ENCRYPTION_KEY' $EnvFile | Should -Be 'existing-backup-value-0002'
+    }
+
+    It 'does not reconcile when nothing about the configuration changed' {
+        # The whole point of the rerun optimisation, and it has to survive the new triggers.
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3',
+            'AFCT_SECRET_KEY=existing-secret-value-0001',
+            'BACKUP_ENCRYPTION_KEY=existing-backup-value-0002')
+        $secret = [bool](Confirm-AfctSecretKey $EnvFile)
+        $backup = [bool](Confirm-AfctBackupKey $EnvFile)
+        ($false -or $secret -or $backup) | Should -BeFalse
+    }
+}
+
+<#
+  Existing data plus missing configuration means recovery, not a fresh install.
+
+  Generating new database credentials against an existing PostgreSQL volume orphans every
+  record in it. The check exists to stop that, and it used to ask `docker compose config
+  --volumes` for the volume names, which needs a valid environment file: with the file
+  missing, the call failed, the function returned false, and the guard went quiet in exactly
+  the situation it was written for.
+#>
+Describe 'Existing data volumes without configuration' {
+    BeforeEach {
+        Mock -CommandName Test-AfctDockerReady -MockWith { $true }
+        Mock -CommandName Test-AfctEnvFileComplete -MockWith { $false }
+        Set-Content -LiteralPath $RuntimeCompose -Encoding UTF8 -Value @(
+            'services:',
+            '  app:',
+            '    image: x',
+            'volumes:',
+            '  postgres_data:',
+            '  uploads_data:')
+    }
+    AfterEach {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @('AFCT_APP_TAG=v1.2.3')
+        Set-Content -LiteralPath $RuntimeCompose -Value 'services: {}' -Encoding UTF8
+    }
+
+    It 'reads the volume names without needing a valid environment file' {
+        Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
+        @(Get-AfctDeclaredVolumes) | Should -Be @('postgres_data', 'uploads_data')
+    }
+
+    It 'requires recovery when the env file is gone and the database volume exists' {
+        Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('afct_postgres_data', 'other'); StdErr = @(); Seconds = 0 }
+        }
+        Test-AfctDataWithoutConfig | Should -BeTrue
+    }
+
+    It 'requires recovery when the env file is incomplete and the volumes exist' {
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('afct_uploads_data'); StdErr = @(); Seconds = 0 }
+        }
+        Test-AfctDataWithoutConfig | Should -BeTrue
+    }
+
+    It 'allows a fresh install when no AFCT volumes exist' {
+        Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 0 }
+        }
+        Test-AfctDataWithoutConfig | Should -BeFalse
+    }
+
+    It 'ignores volumes belonging to another Compose project' {
+        # Compose names volumes "<project>_<volume>". An AFCT install left behind under a
+        # different project name is a harmless leftover and must not block this one.
+        Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('afct-old_postgres_data', 'someproj_postgres_data')
+               StdErr = @(); Seconds = 0 }
+        }
+        Test-AfctDataWithoutConfig | Should -BeFalse
+    }
+
+    It 'ignores unrelated Docker volumes entirely' {
+        Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('postgres_data', 'my_project_data', 'jenkins_home')
+               StdErr = @(); Seconds = 0 }
+        }
+        Test-AfctDataWithoutConfig | Should -BeFalse
+    }
+
+    <#
+      A daemon that cannot answer must not be read as "there is no data". False here is
+      permission to generate new credentials, so that is the one direction this may not
+      guess in; the caller still has Test-AfctDockerReady in front of it.
+    #>
+    It 'does not claim there is data when the volume listing times out' {
+        Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 20 }
+        }
+        Test-AfctDataWithoutConfig | Should -BeFalse
+    }
+
+    It 'does not claim there is data when Docker is unavailable' {
+        Mock -CommandName Test-AfctDockerReady -MockWith { $false }
+        Test-AfctDataWithoutConfig | Should -BeFalse
+    }
+}
+
 Describe 'The in-app updater when it is enabled' {
     AfterEach {
         Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v1.2.3') -Encoding UTF8
@@ -253,20 +405,129 @@ Describe 'The in-app updater when it is enabled' {
         @(Get-AfctExpectedServices).Name | Should -Not -Contain 'updater'
     }
 
-    It 'joins the expected services once it is enabled' {
+    It 'joins the expected services once it is enabled, but never as a required one' {
         Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
             'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
         $svc = @(Get-AfctExpectedServices) | Where-Object { $_.Name -eq 'updater' }
         $svc | Should -Not -BeNullOrEmpty
-        # Published under the same release tag as everything else.
+        # Published under the same release tag as everything else...
         $svc.Versioned | Should -BeTrue
+        # ...and optional, which is what keeps it out of the readiness verdict.
+        $svc.Required | Should -BeFalse
+        # Everything else is required, or an install could pass with no database.
+        foreach ($core in @(Get-AfctExpectedServices | Where-Object { $_.Name -ne 'updater' })) {
+            $core.Required | Should -BeTrue
+        }
     }
 
-    It 'reports a deployment as incomplete when the enabled updater is missing' {
+    <#
+      Driven through the real observer rather than a fixture, because the fixture has its own
+      idea of which services are required and would happily agree with a wrong table.
+    #>
+    It 'leaves the real stack state ready when only the updater is missing' {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+        Mock -CommandName Get-AfctServiceState -MockWith {
+            if ($Service -eq 'updater') { return 'missing|none|' }
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:abc' }
+            if ($Service -eq 'worker') { return 'running|none|img:v1.2.3' }
+            return 'running|healthy|img:v1.2.3'
+        }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+
+        $state = Get-AfctStackState
+        $state.AllReady | Should -BeTrue
+        @($state.OptionalWarnings).Count | Should -Be 1
+        @($state.OptionalWarnings)[0] | Should -Match 'In-app updater is not running'
+    }
+
+    It 'leaves the real stack state ready when the updater is merely stale' {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+        Mock -CommandName Get-AfctServiceState -MockWith {
+            if ($Service -eq 'updater') { return 'running|healthy|img:v0.9.9' }
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:abc' }
+            if ($Service -eq 'worker') { return 'running|none|img:v1.2.3' }
+            return 'running|healthy|img:v1.2.3'
+        }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+
+        $state = Get-AfctStackState
+        $state.AllReady | Should -BeTrue
+        # The required services all agree, so the deployment is on the expected release even
+        # though the optional sidecar is behind.
+        $state.ImageMatches | Should -BeTrue
+        @($state.OptionalWarnings)[0] | Should -Match 'In-app updater is on v0.9.9'
+    }
+
+    It 'still fails the real stack state when a required service is missing too' {
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+        Mock -CommandName Get-AfctServiceState -MockWith {
+            if ($Service -in 'updater', 'nginx') { return 'missing|none|' }
+            if ($Service -eq 'postgres') { return 'running|healthy|postgres:15-alpine@sha256:abc' }
+            if ($Service -eq 'worker') { return 'running|none|img:v1.2.3' }
+            return 'running|healthy|img:v1.2.3'
+        }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+        (Get-AfctStackState).AllReady | Should -BeFalse
+    }
+
+    It 'pulls the optional updater image separately from the required ones' {
+        # With the updater enabled, every compose call carries --profile updater, so a plain
+        # `pull` included the updater image and an unavailable one failed the whole download
+        # before the base installation could start.
+        Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
+            'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        $script:pulls = New-Object System.Collections.ArrayList
+        # Console and captured both, because Get-AfctImages picks one by whether output is
+        # redirected and a test must not depend on which.
+        Mock -CommandName Invoke-AfctComposeConsole -MockWith {
+            $null = $script:pulls.Add((@($ComposeArgs) -join ' '))
+            return 0
+        }
+        Mock -CommandName Invoke-AfctCompose -MockWith {
+            $line = (@($ComposeArgs) -join ' ')
+            $null = $script:pulls.Add($line)
+            # The optional pull fails; the required one does not.
+            if ($line -match 'updater') { $global:LASTEXITCODE = 1 } else { $global:LASTEXITCODE = 0 }
+            @()
+        }
+
+        { Get-AfctImages } | Should -Not -Throw
+        Should -Invoke Write-AfctWarn -ParameterFilter { $Message -match 'optional updater image' }
+        # The required services were pulled by name, without the updater among them.
+        @($script:pulls)[0] | Should -Not -Match 'updater'
+        @($script:pulls)[0] | Should -Match 'postgres'
+    }
+
+    <#
+      Optional means the base deployment still counts as ready. The updater is experimental
+      on Windows and nonfatal everywhere else in the code; letting it into the readiness
+      verdict would fail the install of a working AFCT site over a feature nobody had to
+      turn on. It is reported instead, and repaired below.
+    #>
+    It 'still reports the deployment ready when only the optional updater is missing' {
         Mock -CommandName Get-AfctStackState -MockWith { New-StackState -WithUpdater $true -Missing 'updater' }
         Mock -CommandName Write-AfctInfo -MockWith { }
         Mock -CommandName Write-AfctTrace -MockWith { }
-        Test-AfctDeploymentReady | Should -BeFalse
+        Test-AfctDeploymentReady | Should -BeTrue
+    }
+
+    It 'carries the missing updater as a warning rather than a failure' {
+        $s = New-StackState -WithUpdater $true -Missing 'updater'
+        $s.AllReady | Should -BeTrue
+        @($s.OptionalWarnings).Count | Should -Be 1
+        @($s.OptionalWarnings)[0] | Should -Match 'In-app updater'
+    }
+
+    It 'still fails the deployment when a required service is missing alongside it' {
+        # An optional problem must not become cover for a real one.
+        $s = New-StackState -WithUpdater $true -Missing 'nginx'
+        $s.AllReady | Should -BeFalse
     }
 
     It 'reports a deployment as complete when the enabled updater is running' {
@@ -428,16 +689,66 @@ Describe 'Doctor' {
 
         Invoke-AfctDoctor | Out-Null
 
-        # Nothing that could start, stop or recreate a container was called. The only
-        # compose calls doctor makes are `config` and `ps`, which are reads.
+        # Nothing that could start, stop or recreate a container was called. Doctor does
+        # run bounded compose calls, but only `config` and `ps`, which are reads.
         Should -Invoke Start-AfctStack -Exactly 0
-        Should -Invoke Invoke-AfctComposeBounded -Exactly 0
+        Should -Not -Invoke Invoke-AfctComposeBounded -ParameterFilter {
+            (@($ComposeArgs) -join ' ') -match '^(up|down|stop|restart|rm|pull)'
+        }
     }
 
     It 'reports Docker being unreachable instead of failing' {
         Mock -CommandName Test-AfctDockerReady -MockWith { $false }
         Invoke-AfctDoctor | Should -BeFalse
         Should -Invoke Write-AfctWarn -ParameterFilter { $Message -match 'Docker Desktop is unavailable' }
+    }
+}
+
+<#
+  An update that leaves the stack half-upgraded must not be recorded as a success.
+
+  Save-AfctDeployedAppTag writes the deployed release back into .env.production, and that
+  pin is what a later plain `afctctl update` redeploys. Recording it for a stack whose worker
+  is still a release behind would make the wrong version the one AFCT considers current, and
+  the operator would have been told the update completed.
+#>
+Describe 'An update with a stale service' {
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctError -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Assert-AfctStack -MockWith { }
+        Mock -CommandName Confirm-AfctSecretKey -MockWith { $false }
+        Mock -CommandName Confirm-AfctBackupKey -MockWith { $false }
+        Mock -CommandName Test-AfctComposeConfig -MockWith { }
+        Mock -CommandName Assert-AfctUpdateDiskSpace -MockWith { }
+        Mock -CommandName Save-AfctRunningImages -MockWith { }
+        Mock -CommandName Get-AfctImages -MockWith { }
+        Mock -CommandName Save-AfctDeployedAppTag -MockWith { }
+        Mock -CommandName Remove-AfctSupersededImages -MockWith { }
+        # Rollback declines, so the failure path ends at the final throw rather than at the
+        # `exit 1` a successful rollback takes, which would end the Pester run itself.
+        Mock -CommandName Restore-AfctPreviousImages -MockWith { $false }
+        Mock -CommandName Restore-AfctPreviousRelease -MockWith { $false }
+        Mock -CommandName Invoke-AfctDiagnostics -MockWith { 'C:\afct\bundle.zip' }
+    }
+
+    It 'records the pin and reports success when the upgrade is complete' {
+        Mock -CommandName Invoke-AfctStartAndWait -MockWith { }
+        Invoke-AfctUpdate | Out-Null
+        Should -Invoke Save-AfctDeployedAppTag -Exactly 1
+        Should -Invoke Write-AfctSuccess -ParameterFilter { $Message -eq 'AFCT update completed.' }
+    }
+
+    It 'records nothing and claims nothing when a service is left behind' {
+        Mock -CommandName Invoke-AfctStartAndWait -MockWith {
+            throw 'afct-fatal: the running containers are not all on the expected release. Worker is running on v0.9.9; expected v1.0.0.'
+        }
+        try { Invoke-AfctUpdate | Out-Null } catch { }
+        Should -Invoke Save-AfctDeployedAppTag -Exactly 0
+        Should -Invoke Write-AfctSuccess -Exactly 0 -ParameterFilter { $Message -eq 'AFCT update completed.' }
     }
 }
 

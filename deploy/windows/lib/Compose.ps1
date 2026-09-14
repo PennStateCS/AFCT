@@ -41,27 +41,54 @@ function Sync-AfctRuntimeCompose {
 
 function Test-AfctComposeConfig {
     # Capture the output so a failure reports the actual reason (e.g. a missing env file)
-    # instead of a bare "invalid configuration" the operator cannot act on.
-    $out = Invoke-AfctCompose config
-    if ($LASTEXITCODE -ne 0) {
-        $detail = (@($out) | Where-Object { $_ } | Select-Object -Last 3) -join ' '
+    # instead of a bare "invalid configuration" the operator cannot act on. Bounded because
+    # this is the first Docker call of a deployment: a hang here is a hang before anything
+    # has even been attempted.
+    $r = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerCommandTimeout) config
+    if ($r.TimedOut) {
+        throw 'afct-fatal: Docker did not respond while validating the configuration. Make sure Docker Desktop has finished starting, then try again.'
+    }
+    if ($r.ExitCode -ne 0) {
+        $detail = (@($r.StdErr) + @($r.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -Last 3) -join ' '
         if ($detail) { throw "afct-fatal: the Docker Compose configuration is invalid: $detail" }
         throw 'afct-fatal: the Docker Compose configuration is invalid.'
     }
 }
 
+# Download the images the deployment needs.
+#
+# The required services are pulled by name rather than as "everything in the project", and
+# the optional updater is pulled separately afterwards. With the updater enabled, every
+# compose call carries `--profile updater`, so a plain `pull` included the updater image and
+# an unavailable one failed the whole download: the base installation could not proceed
+# because an optional, experimental sidecar's image was missing or private. That is the
+# wrong failure, and it happened before anything had started.
+#
+# Nothing is weakened for a required service: a core image that will not download is still
+# fatal, with the same message.
 function Get-AfctImages {
     Write-AfctInfo 'downloading AFCT container images...'
+    $required = @(Get-AfctExpectedServices | Where-Object { $_.Required } | ForEach-Object { $_.Name })
+
     if (-not [Console]::IsOutputRedirected) {
-        $code = Invoke-AfctComposeConsole pull
+        $code = Invoke-AfctComposeConsole pull @required
     } else {
-        Invoke-AfctCompose pull | Out-Null
+        Invoke-AfctCompose pull @required | Out-Null
         $code = $LASTEXITCODE
     }
     if ($code -ne 0) {
         throw "afct-fatal: container images could not be downloaded. Check the network and registry authentication. If the images are private, run 'docker login ghcr.io' and re-run."
     }
     Write-AfctSuccess 'Container images downloaded.'
+
+    # Optional, and reported rather than fatal: AFCT is fully installable without it.
+    $optional = @(Get-AfctExpectedServices | Where-Object { -not $_.Required } | ForEach-Object { $_.Name })
+    foreach ($name in $optional) {
+        Invoke-AfctCompose pull $name | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-AfctWarn "the optional $name image could not be downloaded. AFCT itself is unaffected; the sidecar will not start until the image is available."
+        }
+    }
 }
 
 # --------------------------------------------------------------------------- #
@@ -77,11 +104,11 @@ function Get-AfctImages {
 # either direction is how a stack gets reported ready when it is not.
 function Get-AfctExpectedServices {
     $services = @(
-        [pscustomobject]@{ Name = 'postgres';  Label = 'PostgreSQL';       RequiresHealth = $true;  Versioned = $false },
-        [pscustomobject]@{ Name = $AppService; Label = 'AFCT application'; RequiresHealth = $true;  Versioned = $true },
-        [pscustomobject]@{ Name = 'worker';    Label = 'Worker';           RequiresHealth = $false; Versioned = $true },
-        [pscustomobject]@{ Name = 'nginx';     Label = 'nginx';            RequiresHealth = $true;  Versioned = $true },
-        [pscustomobject]@{ Name = 'db-backup'; Label = 'Backup service';   RequiresHealth = $true;  Versioned = $true }
+        [pscustomobject]@{ Name = 'postgres';  Label = 'PostgreSQL';       RequiresHealth = $true;  Versioned = $false; Required = $true },
+        [pscustomobject]@{ Name = $AppService; Label = 'AFCT application'; RequiresHealth = $true;  Versioned = $true;  Required = $true },
+        [pscustomobject]@{ Name = 'worker';    Label = 'Worker';           RequiresHealth = $false; Versioned = $true;  Required = $true },
+        [pscustomobject]@{ Name = 'nginx';     Label = 'nginx';            RequiresHealth = $true;  Versioned = $true;  Required = $true },
+        [pscustomobject]@{ Name = 'db-backup'; Label = 'Backup service';   RequiresHealth = $true;  Versioned = $true;  Required = $true }
     )
     # The updater is optional and off by default, so it is expected only when the operator
     # has turned it on. Without this row, a deployment whose env file says the updater is
@@ -91,9 +118,14 @@ function Get-AfctExpectedServices {
     # No circularity: `--profile updater` is already on every compose invocation when the
     # flag is set (Get-AfctUpdaterProfileArgs), so a normal `up --detach` starts it along
     # with everything else. Nothing has to start the updater to decide whether to expect it.
+    # Expected, but NOT required. The updater is optional and experimental on Windows, and
+    # the policy everywhere else already treats it that way: a sidecar that will not start
+    # earns a warning, never a failed installation. Letting it into the readiness verdict
+    # would have made an otherwise working AFCT site fail its own install over a feature
+    # nobody had to turn on.
     if ((Read-AfctEnvValue 'AFCT_UPDATER_ENABLED' $EnvFile) -eq 'true') {
         $services += [pscustomobject]@{ Name = $UpdaterService; Label = 'In-app updater'
-                                        RequiresHealth = $true; Versioned = $true }
+                                        RequiresHealth = $true; Versioned = $true; Required = $false }
     }
     return $services
 }
@@ -179,11 +211,11 @@ function Get-AfctStackState {
     $services = @()
     $allReady = $true
     $allMatch = $true
+    $optionalWarnings = @()
     foreach ($svc in Get-AfctExpectedServices) {
         $state = Get-AfctServiceState $svc.Name
         $parts = $state -split '\|', 3
         $ready = Test-AfctServiceReady -State $state -RequiresHealth $svc.RequiresHealth
-        if (-not $ready) { $allReady = $false }
 
         # Every AFCT service is built and published together under one release tag, so a
         # stack whose app is new and whose worker is a release behind is not a deployment
@@ -195,7 +227,15 @@ function Get-AfctStackState {
         if ($svc.Versioned -and $parts[0] -ne 'missing' -and $actualTag) {
             $matches = ($actualTag -ceq $wantTag)
         }
-        if (-not $matches) { $allMatch = $false }
+        # Readiness and version agreement are judged over the REQUIRED services. An optional
+        # service's problems are collected and reported, not folded into the verdict.
+        if ($svc.Required) {
+            if (-not $ready) { $allReady = $false }
+            if (-not $matches) { $allMatch = $false }
+        } else {
+            if (-not $ready) { $optionalWarnings += "$($svc.Label) is not running" }
+            elseif (-not $matches) { $optionalWarnings += "$($svc.Label) is on $actualTag; expected $wantTag" }
+        }
 
         $services += [pscustomobject]@{
             Name             = $svc.Name
@@ -204,6 +244,7 @@ function Get-AfctStackState {
             Health           = $parts[1]
             Image            = $parts[2]
             Ready            = $ready
+            Required         = $svc.Required
             Versioned        = $svc.Versioned
             ExpectedImageTag = $(if ($svc.Versioned) { $wantTag } else { '' })
             ActualImageTag   = $actualTag
@@ -215,19 +256,33 @@ function Get-AfctStackState {
     if (-not $SkipHttp) { $httpOk = (Test-AfctHttpHealth) }
 
     return [pscustomobject]@{
-        Services     = $services
-        AllReady     = $allReady
-        AppReady     = ($null -ne $app -and $app.Ready)
-        HttpOk       = $httpOk
-        ExpectedTag  = $wantTag
-        ImageMatches = $allMatch
+        Services         = $services
+        # Required services only, both of them. The names are kept for every existing caller.
+        AllReady         = $allReady
+        AppReady         = ($null -ne $app -and $app.Ready)
+        HttpOk           = $httpOk
+        ExpectedTag      = $wantTag
+        ImageMatches     = $allMatch
+        OptionalWarnings = $optionalWarnings
     }
 }
 
 # The versioned services that are running something other than the expected release.
 function Get-AfctStaleServices {
+    param($State, [switch]$RequiredOnly)
+    $rows = @($State.Services | Where-Object { $_.Versioned -and -not $_.ImageMatches })
+    if ($RequiredOnly) { $rows = @($rows | Where-Object { $_.Required }) }
+    return $rows
+}
+
+# "Worker is running on v0.9.9; expected v1.0.0" for each stale service, one per line.
+function Format-AfctStaleServices {
     param($State)
-    return @($State.Services | Where-Object { $_.Versioned -and -not $_.ImageMatches })
+    $parts = @()
+    foreach ($svc in (Get-AfctStaleServices -State $State -RequiredOnly)) {
+        $parts += "$($svc.Label) is running on $($svc.ActualImageTag); expected $($svc.ExpectedImageTag)"
+    }
+    return ($parts -join '; ')
 }
 
 # One line per service, for a heartbeat or a failure report. "nginx: running (healthy)".
@@ -358,10 +413,19 @@ function Test-AfctHttpHealth {
 # operator was told about rather than twice it.
 function Wait-AfctHealth {
     param([int]$TimeoutSeconds = 0)
-    if ($TimeoutSeconds -le 0) { $TimeoutSeconds = $HealthTimeout }
-    if ($TimeoutSeconds -lt $HealthInterval) { $TimeoutSeconds = $HealthInterval }
+    # A negative or zero remainder means the budget is already spent. It used to be read as
+    # "no value supplied" and replaced with a fresh full timeout, which handed a startup that
+    # had already used all 300 seconds another 300. The caller's number is now taken at face
+    # value; only an omitted parameter falls back to the configured total.
+    if (-not $PSBoundParameters.ContainsKey('TimeoutSeconds')) { $TimeoutSeconds = $HealthTimeout }
 
-    $elapsed = 0
+    # Wall clock, not a count of sleeps. The loop's other work is not free: two bounded Docker
+    # calls per service per pass, plus an HTTP probe that is allowed ten seconds of its own.
+    # Adding $HealthInterval per iteration counted none of it, so a nominal five-minute
+    # timeout could run for a quarter of an hour against a slow Docker Desktop, which is the
+    # same "it just sits there" the whole exercise is about.
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
+
     # A single restart can happen during a normal recreate, but repeated restarts mean a
     # crash loop that will never become healthy, so fail fast instead of waiting out the
     # whole timeout (mirrors the Unix controller).
@@ -372,7 +436,8 @@ function Wait-AfctHealth {
     # never came up, or containers that did and a web service that never answered.
     $containersReady = $false
 
-    while ($elapsed -lt $TimeoutSeconds) {
+    while ($true) {
+        $elapsed = [int]$clock.Elapsed.TotalSeconds
         $state = Get-AfctStackState -SkipHttp
 
         # Stage lines, once each. A service that goes straight to ready between two polls
@@ -415,47 +480,76 @@ function Wait-AfctHealth {
         }
 
         if ($state.AllReady) {
-            # Containers being healthy is not the same as AFCT answering, and this used to
-            # treat it as if it were: a failed HTTP probe printed a warning and returned
-            # success, so the installer could announce "AFCT Dashboard is ready" for a
-            # deployment that served nothing. Worse, the rerun check called that same state
-            # not-ready, so the installer and the thing that verifies the installer
-            # disagreed about what finished meant.
+            # Every required service is up. Two things still have to be true before this is
+            # a finished deployment.
             #
-            # The endpoint is now part of being ready, and a miss is not fatal on its own:
-            # nginx accepts connections a moment before the app is answering through it, so
-            # this keeps polling inside the same remaining budget rather than failing on the
-            # first attempt.
+            # First, they all have to be the same release. AFCT's services are built and
+            # published together, so a healthy stack running a new app against a
+            # release-old worker is two releases sharing a database, and this used to call
+            # that success as long as HTTP answered. It is also not something waiting will
+            # fix: containers do not change image on their own, so it fails now with the
+            # service named rather than after the clock runs out.
+            $stale = Format-AfctStaleServices $state
+            if ($stale) {
+                throw "afct-fatal: the running containers are not all on the expected release. $stale. Re-run the installer or 'afctctl update' to bring them into line."
+            }
+
+            # Second, AFCT has to actually answer. Containers being healthy is not the same
+            # thing, and this used to warn and return success anyway, so the installer could
+            # announce "AFCT Dashboard is ready" for a deployment that served nothing while
+            # the rerun check called the same state not-ready. A miss is not fatal on its
+            # own: nginx accepts connections a moment before the app answers through it, so
+            # this keeps polling inside the same remaining budget.
             if (-not $announced.ContainsKey('http:waiting')) {
                 $announced['http:waiting'] = $true
                 Write-AfctInfo 'Containers are healthy; waiting for the web service...'
             }
             if (Test-AfctHttpHealth) {
                 Write-AfctSuccess "The web service is responding at $HealthPath."
-                Write-AfctTrace "stack ready after ${elapsed}s: $(Format-AfctStackState $state)"
+                Write-AfctTrace "stack ready after $([int]$clock.Elapsed.TotalSeconds)s: $(Format-AfctStackState $state)"
+                Show-AfctOptionalWarnings $state
                 return
             }
             $containersReady = $true
         }
 
+        # Checked after the work, not before it, so a pass that begins inside the budget is
+        # always allowed to finish and report. This is also what lets a zero remainder get
+        # one honest look at the stack rather than failing a deployment that is demonstrably
+        # up: one pass of reporting overhead past the deadline, and no more.
+        if ($clock.Elapsed.TotalSeconds -ge $TimeoutSeconds) { break }
+
         # A periodic line while the wait runs long, so a slow first start still looks alive
-        # without turning into a per-poll scroll. Every 30 seconds, and only once anything
-        # takes longer than that.
+        # without turning into a per-poll scroll. Printing costs nothing against the clock:
+        # the deadline is measured, not counted.
+        $elapsed = [int]$clock.Elapsed.TotalSeconds
         if (($elapsed - $lastHeartbeat) -ge 30) {
             $lastHeartbeat = $elapsed
             Write-AfctInfo "still starting after ${elapsed}s: $(Format-AfctStackState $state)"
         }
 
         Start-Sleep -Seconds $HealthInterval
-        $elapsed += $HealthInterval
     }
 
+    $spent = [int]$clock.Elapsed.TotalSeconds
     $final = Get-AfctStackState -SkipHttp
-    Write-AfctTrace "health wait timed out after ${elapsed}s: $(Format-AfctStackState $final)"
+    Write-AfctTrace "health wait timed out after ${spent}s: $(Format-AfctStackState $final)"
     if ($containersReady) {
         throw "afct-fatal: the AFCT containers all started, but the web service never answered at $HealthPath within $TimeoutSeconds seconds. Check the logs: afctctl logs"
     }
     throw "afct-fatal: AFCT did not finish starting within $TimeoutSeconds seconds. Current state: $(Format-AfctStackState $final)"
+}
+
+# Optional services are reported, never fatal. The base application is already up and
+# serving by the time this runs.
+function Show-AfctOptionalWarnings {
+    param($State)
+    # Guarded: Set-StrictMode turns a missing property into a thrown error, and this must
+    # never be the thing that fails an otherwise finished installation.
+    if (-not ($State.PSObject.Properties.Name -contains 'OptionalWarnings')) { return }
+    foreach ($warning in @($State.OptionalWarnings)) {
+        if ($warning) { Write-AfctWarn "$warning. AFCT itself is unaffected." }
+    }
 }
 
 # Startup and the health wait share one budget, spent in order. Whatever `up` used is taken

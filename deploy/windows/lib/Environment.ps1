@@ -84,13 +84,19 @@ function Test-AfctEnvFileComplete {
 #
 # Never replaces an existing key: that would make every already-encrypted secret unreadable,
 # which is the one unrecoverable mistake available here.
+#
+# Returns $true only when it actually wrote a key. The caller needs that: a key added to
+# .env.production is a change to the environment the containers were started with, and a
+# deployment that skipped `up` because everything looked healthy would keep running without
+# it until something else happened to recreate the containers.
 function Confirm-AfctSecretKey {
     param([string]$File)
-    if (-not (Test-Path -LiteralPath $File)) { return }
-    if (Read-AfctEnvValue 'AFCT_SECRET_KEY' $File) { return }
+    if (-not (Test-Path -LiteralPath $File)) { return $false }
+    if (Read-AfctEnvValue 'AFCT_SECRET_KEY' $File) { return $false }
 
     Set-AfctEnvFlag 'AFCT_SECRET_KEY' (New-AfctSecret) $File
     Write-AfctInfo "generated a secret-encryption key; it protects stored settings such as mail and sign-in credentials. Keep $File with your backups."
+    return $true
 }
 
 # Guarantee the backup-encryption key exists, generating one if it does not. Mirrors
@@ -102,18 +108,22 @@ function Confirm-AfctSecretKey {
 #
 # Never replaces an existing key, and for a sharper reason than the secret key above: replacing
 # it strands every encrypted archive already written, not just future ones.
+#
+# Returns $true only when it actually wrote a key, for the same reason as the secret key
+# above: the containers need to be handed the new environment.
 function Confirm-AfctBackupKey {
     param([string]$File)
-    if (-not (Test-Path -LiteralPath $File)) { return }
-    if (Read-AfctEnvValue 'BACKUP_ENCRYPTION_KEY' $File) { return }
+    if (-not (Test-Path -LiteralPath $File)) { return $false }
+    if (Read-AfctEnvValue 'BACKUP_ENCRYPTION_KEY' $File) { return $false }
 
     # An explicit opt-out is respected, so somebody who has decided on plaintext archives does
     # not get a key generated behind them on every update.
     $optOut = Read-AfctEnvValue 'BACKUP_ALLOW_UNENCRYPTED' $File
-    if ($optOut -in @('true', 'TRUE', '1', 'yes')) { return }
+    if ($optOut -in @('true', 'TRUE', '1', 'yes')) { return $false }
 
     Set-AfctEnvFlag 'BACKUP_ENCRYPTION_KEY' (New-AfctSecret) $File
     Write-AfctInfo "generated a backup-encryption key; backups are now encrypted. Keep $File somewhere safe and separate: without it an encrypted backup cannot be restored."
+    return $true
 }
 
 function Read-AfctEnvValue {

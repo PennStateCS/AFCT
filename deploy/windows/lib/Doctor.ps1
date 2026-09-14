@@ -40,8 +40,13 @@ function Invoke-AfctDoctor {
         Write-AfctSuccess 'Docker Desktop daemon is reachable'
         $ok++
         if (Test-Path -LiteralPath $RuntimeCompose) {
-            Invoke-AfctCompose config | Out-Null
-            if (& $check 'Docker Compose configuration is valid' ($LASTEXITCODE -eq 0)) { $ok++ } else { $warn++ }
+            # Bounded: doctor is what somebody runs when the deployment is already
+            # misbehaving, which is exactly when this call is most likely not to return.
+            $cfg = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerCommandTimeout) config
+            if ($cfg.TimedOut) {
+                Write-AfctWarn 'Docker did not respond while validating the Compose configuration'
+                $warn++
+            } elseif (& $check 'Docker Compose configuration is valid' ($cfg.ExitCode -eq 0)) { $ok++ } else { $warn++ }
             # Every expected service, not just the application. After an interrupted
             # install the useful question is which part of the stack did not come up, and
             # reporting only the app is how a missing nginx or worker stayed invisible.

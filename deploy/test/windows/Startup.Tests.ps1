@@ -164,7 +164,7 @@ Describe 'Start-AfctStack' {
         }
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $true
-                               ExpectedTag = 'v1.0.0'; ImageMatches = $true }
+                               ExpectedTag = 'v1.0.0'; ImageMatches = $true; OptionalWarnings = @() }
         }
         { Start-AfctStack -TimeoutSeconds 30 } | Should -Not -Throw
     }
@@ -175,7 +175,7 @@ Describe 'Start-AfctStack' {
         }
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
-                               ExpectedTag = 'v1.0.0'; ImageMatches = $true }
+                               ExpectedTag = 'v1.0.0'; ImageMatches = $true; OptionalWarnings = @() }
         }
         { Start-AfctStack -TimeoutSeconds 30 } | Should -Throw '*did not finish starting*'
     }
@@ -188,7 +188,7 @@ Describe 'Start-AfctStack' {
         }
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $true
-                               ExpectedTag = 'v1.0.0'; ImageMatches = $false }
+                               ExpectedTag = 'v1.0.0'; ImageMatches = $false; OptionalWarnings = @() }
         }
         { Start-AfctStack -TimeoutSeconds 30 } | Should -Throw '*did not finish starting*'
     }
@@ -365,6 +365,54 @@ Describe 'Docker inspection cannot hang' {
         Start-Sleep -Seconds 1
         @(Get-CimInstance Win32_Process -Filter "Name='PING.EXE'" -ErrorAction SilentlyContinue |
             Where-Object { $_.CommandLine -and $_.CommandLine -match '-n 121' }).Count | Should -Be 0
+    }
+
+    It 'fails the preflight with a message when compose config never answers' {
+        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        $env:AFCT_DOCKER_COMMAND_TIMEOUT = '2'
+        try { { Test-AfctComposeConfig } | Should -Throw '*did not respond*' }
+        finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
+    }
+
+    It 'gives up on a bind-mount probe that never answers' {
+        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        $env:AFCT_DOCKER_COMMAND_TIMEOUT = '2'
+        try {
+            $started = Get-Date
+            Test-AfctDockerBindMount 'alpine:3.20' 'C:\afct' | Should -BeFalse
+            ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 30
+        } finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
+    }
+
+    <#
+      The bind-mount probe is the one command in the installer carrying both a -v and a -d.
+      Written as loose tokens, PowerShell binds them to the common -Verbose and -Debug
+      parameters and docker receives a run with no volume and no test flag: the same silent
+      misbinding that produced the original hang. The argument array is what prevents it.
+    #>
+    It 'sends the bind-mount volume and test flags through to docker' {
+        Use-DockerShim "@echo off`r`necho %*`r`nexit /b 0"
+        $r = Invoke-AfctDockerBounded -DockerArgs @(
+            'run', '--rm', '--volume', 'C:\afct:/afct-bind-check:ro', 'alpine:3.20',
+            'test', '-d', '/afct-bind-check')
+        $line = (@($r.StdOut) -join ' ')
+        $line | Should -Match '--volume'
+        $line | Should -Match '-d'
+        $line | Should -Match '/afct-bind-check'
+    }
+
+    It 'gives up on an image-presence check that never answers' {
+        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        $env:AFCT_DOCKER_COMMAND_TIMEOUT = '2'
+        try { Test-AfctDockerImagePresent 'alpine:3.20' | Should -BeFalse }
+        finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
+    }
+
+    It 'reports a pull that never finishes as a failure rather than waiting' {
+        Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
+        $env:AFCT_DOCKER_PULL_TIMEOUT = '2'
+        try { Invoke-AfctDockerPull 'alpine:3.20' | Should -Not -Be 0 }
+        finally { Remove-Item Env:\AFCT_DOCKER_PULL_TIMEOUT -ErrorAction SilentlyContinue }
     }
 
     It 'records the timeout in the diagnostics bundle instead of an empty file' {
@@ -581,7 +629,7 @@ Describe 'Wait-AfctHealth' {
     It 'returns once every service is ready' {
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $true
-                               ExpectedTag = ''; ImageMatches = $true }
+                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
         }
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
         { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Not -Throw
@@ -590,7 +638,7 @@ Describe 'Wait-AfctHealth' {
     It 'names an unhealthy application as the reason' {
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
-                               ExpectedTag = ''; ImageMatches = $true }
+                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
         }
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|unhealthy' }
         { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Throw '*unhealthy state*'
@@ -599,7 +647,7 @@ Describe 'Wait-AfctHealth' {
     It 'fails fast on a crash loop instead of waiting out the timeout' {
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
-                               ExpectedTag = ''; ImageMatches = $true }
+                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
         }
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'restarting|none' }
         { Wait-AfctHealth -TimeoutSeconds 300 } | Should -Throw '*crash loop*'
@@ -609,7 +657,7 @@ Describe 'Wait-AfctHealth' {
     It 'reports an application that stopped before becoming healthy' {
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
-                               ExpectedTag = ''; ImageMatches = $true }
+                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
         }
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'exited|none' }
         { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Throw '*stopped before becoming healthy*'
@@ -619,9 +667,12 @@ Describe 'Wait-AfctHealth' {
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{
                 Services = @([pscustomobject]@{ Name = 'nginx'; Label = 'nginx'; Status = 'missing'
-                                                Health = 'none'; Image = ''; Ready = $false ; Versioned = $true; ExpectedImageTag = 'v1.2.3'; ActualImageTag = 'v1.2.3'; ImageMatches = $true })
+                                                Health = 'none'; Image = ''; Ready = $false
+                                                Required = $true; Versioned = $true
+                                                ExpectedImageTag = 'v1.2.3'; ActualImageTag = ''
+                                                ImageMatches = $true })
                 AllReady = $false; AppReady = $false; HttpOk = $false
-                ExpectedTag = ''; ImageMatches = $true }
+                ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
         }
         Mock -CommandName Get-AfctAppContainerState -MockWith { $null }
         { Wait-AfctHealth -TimeoutSeconds 3 } | Should -Throw '*nginx: missing*'
@@ -639,14 +690,18 @@ Describe 'Wait-AfctHealth' {
             [pscustomobject]@{
                 Services = @(
                     [pscustomobject]@{ Name = 'postgres'; Label = 'PostgreSQL'; Status = 'running'
-                                       Health = 'healthy'; Image = 'p'; Ready = $true ; Versioned = $true; ExpectedImageTag = 'v1.2.3'; ActualImageTag = 'v1.2.3'; ImageMatches = $true },
+                                       Health = 'healthy'; Image = 'p:v1.2.3'; Ready = $true
+                                       Required = $true; Versioned = $false; ExpectedImageTag = ''
+                                       ActualImageTag = 'v1.2.3'; ImageMatches = $true },
                     [pscustomobject]@{ Name = 'app'; Label = 'AFCT application'
                                        Status = 'running'
                                        Health = $(if ($ready) { 'healthy' } else { 'starting' })
-                                       Image = 'a'; Ready = $ready }
+                                       Image = 'a:v1.2.3'; Ready = $ready
+                                       Required = $true; Versioned = $true; ExpectedImageTag = 'v1.2.3'
+                                       ActualImageTag = 'v1.2.3'; ImageMatches = $true }
                 )
                 AllReady = $ready; AppReady = $ready; HttpOk = $ready
-                ExpectedTag = ''; ImageMatches = $true }
+                ExpectedTag = 'v1.2.3'; ImageMatches = $true; OptionalWarnings = @() }
         }
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
 
@@ -676,7 +731,7 @@ Describe 'HTTP health is part of being ready' {
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $true
-                               ExpectedTag = ''; ImageMatches = $true }
+                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
         }
     }
 
@@ -760,6 +815,172 @@ Describe 'The shared startup budget' {
   nothing about it. A rerun that skipped `up` because everything looked healthy would leave
   the deployment permanently running a configuration that no longer exists.
 #>
+<#
+  The startup timeout has to be a real deadline, not a count of sleeps.
+
+  Two things were wrong. A remaining budget of zero was read as "no value supplied" and
+  replaced with another full timeout, so a Compose call that used all 300 seconds bought 300
+  more. And elapsed time was tracked by adding the poll interval each pass, counting none of
+  the real work: two bounded Docker calls per service per pass, plus an HTTP probe allowed
+  ten seconds of its own. A nominal five minutes could run for a quarter of an hour.
+#>
+Describe 'The startup deadline is wall-clock' {
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Get-AfctAppContainerState -MockWith { $null }
+        Mock -CommandName Get-AfctStackState -MockWith {
+            [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
+                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
+        }
+    }
+
+    It 'does not hand out a second full timeout when nothing is left' {
+        # The whole budget was spent by Compose. Real sleeps, no mock, so a reset to the
+        # configured 300 would take five minutes and blow the test's own limit.
+        $script:HealthTimeout = 300
+        $started = Get-Date
+        { Wait-AfctHealth -TimeoutSeconds 0 } | Should -Throw '*did not finish starting*'
+        ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 30
+    }
+
+    <#
+      Time spent inside the loop counts. Each pass here burns two seconds of real time in
+      the Docker inspection, so a four-second budget is gone after about two passes, where
+      counting sleeps alone would have allowed four.
+    #>
+    It 'charges slow Docker inspection against the budget' {
+        $script:HealthInterval = 1
+        $script:calls = 0
+        Mock -CommandName Get-AfctStackState -MockWith {
+            $script:calls++
+            Start-Sleep -Seconds 2
+            [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false; HttpOk = $false
+                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
+        }
+        $started = Get-Date
+        { Wait-AfctHealth -TimeoutSeconds 4 } | Should -Throw
+        $spent = ((Get-Date) - $started).TotalSeconds
+        # Bounded by the budget plus one pass of overshoot, not by four sleeps plus four
+        # two-second inspections.
+        $spent | Should -BeLessThan 12
+        $script:calls | Should -BeLessThan 5
+    }
+
+    It 'charges a slow HTTP probe against the budget' {
+        $script:HealthInterval = 1
+        Mock -CommandName Get-AfctStackState -MockWith {
+            [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true; HttpOk = $false
+                               ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
+        }
+        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
+        $script:probes = 0
+        Mock -CommandName Test-AfctHttpHealth -MockWith {
+            $script:probes++
+            Start-Sleep -Seconds 2
+            return $false
+        }
+        $started = Get-Date
+        { Wait-AfctHealth -TimeoutSeconds 4 } | Should -Throw '*web service never answered*'
+        ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 12
+        $script:probes | Should -BeLessThan 5
+    }
+
+    It 'is not extended by heartbeat reporting' {
+        $script:HealthInterval = 1
+        $started = Get-Date
+        { Wait-AfctHealth -TimeoutSeconds 3 } | Should -Throw
+        ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 12
+    }
+
+    It 'still uses the configured total when no budget is passed at all' {
+        $script:HealthTimeout = 2
+        $script:HealthInterval = 1
+        { Wait-AfctHealth } | Should -Throw '*within 2 seconds*'
+    }
+
+    AfterAll {
+        $script:HealthTimeout = 30
+        $script:HealthInterval = 1
+    }
+}
+
+<#
+  Every required service has to be on the expected release before startup can succeed.
+
+  AFCT's services are built and published together, so a healthy stack running a new app
+  against a release-old worker is two releases sharing a database. Readiness and HTTP alone
+  used to be enough to call that a finished deployment.
+#>
+Describe 'Version agreement is part of a successful startup' {
+    BeforeAll {
+        # Defined in BeforeAll, not the Describe body: Pester runs a Mock's scriptblock in a
+        # scope that cannot see functions declared inline during discovery.
+        function New-VersionState {
+            param([string]$Stale = '')
+            $rows = @()
+            foreach ($name in 'app', 'worker', 'nginx', 'db-backup') {
+                $tag = 'v1.0.0'
+                if ($name -eq $Stale) { $tag = 'v0.9.9' }
+                $rows += [pscustomobject]@{
+                    Name = $name; Label = $name; Status = 'running'; Health = 'healthy'
+                    Image = "img:$tag"; Ready = $true; Required = $true; Versioned = $true
+                    ExpectedImageTag = 'v1.0.0'; ActualImageTag = $tag
+                    ImageMatches = ($tag -eq 'v1.0.0')
+                }
+            }
+            [pscustomobject]@{
+                Services = $rows; AllReady = $true; AppReady = $true; HttpOk = $true
+                ExpectedTag = 'v1.0.0'
+                ImageMatches = (@($rows | Where-Object { -not $_.ImageMatches }).Count -eq 0)
+                OptionalWarnings = @()
+            }
+        }
+    }
+
+    BeforeEach {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Start-Sleep -MockWith { }
+        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
+        # HTTP answers throughout, so a pass or fail here is about versions and nothing else.
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+    }
+
+    It 'succeeds when every required service is on the expected release' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-VersionState }
+        { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Not -Throw
+    }
+
+    It 'fails, naming the service, when <_> is on an older release' -ForEach @('app', 'worker', 'nginx', 'db-backup') {
+        $target = $_
+        Mock -CommandName Get-AfctStackState -MockWith { New-VersionState -Stale $target }
+        # Named, with both versions, because "something is stale" sends somebody looking
+        # through five containers by hand.
+        { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Throw "*$target is running on v0.9.9; expected v1.0.0*"
+    }
+
+    It 'does not let a responding web service cover for a stale worker' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-VersionState -Stale 'worker' }
+        { Wait-AfctHealth -TimeoutSeconds 30 } | Should -Throw '*not all on the expected release*'
+        Should -Invoke Write-AfctSuccess -Exactly 0 -ParameterFilter { $Message -match 'responding at' }
+    }
+
+    <#
+      And it fails immediately rather than waiting out the clock. A container does not change
+      its image while you watch it, so the answer is not going to improve.
+    #>
+    It 'fails at once instead of waiting out the timeout' {
+        Mock -CommandName Get-AfctStackState -MockWith { New-VersionState -Stale 'nginx' }
+        { Wait-AfctHealth -TimeoutSeconds 300 } | Should -Throw
+        Should -Invoke Get-AfctStackState -Exactly 1
+    }
+}
+
 Describe 'Sync-AfctRuntimeCompose reports whether it changed anything' {
     BeforeEach {
         Mock -CommandName Write-AfctInfo -MockWith { }

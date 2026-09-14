@@ -20,24 +20,57 @@ function Assert-AfctStack {
     Assert-AfctDockerReady
 }
 
+# The persistent volume names this deployment would reuse.
+#
+# Read straight out of the Compose file's top-level `volumes:` block rather than asked of
+# `docker compose config --volumes`, and that is the whole point of this function existing.
+# `config` interpolates the environment, so it fails when .env.production is missing, which
+# is precisely the situation the caller below is trying to detect. The guard that protects a
+# database from being orphaned cannot be the one that goes quiet when the configuration is
+# gone.
+#
+# The names in that block are literals, so no interpolation is needed to read them.
+function Get-AfctDeclaredVolumes {
+    if (-not (Test-Path -LiteralPath $RuntimeCompose)) { return @() }
+    $names = @()
+    $inVolumes = $false
+    foreach ($line in (Get-Content -LiteralPath $RuntimeCompose -ErrorAction SilentlyContinue)) {
+        if ($line -match '^volumes:\s*$') { $inVolumes = $true; continue }
+        if (-not $inVolumes) { continue }
+        # Any other top-level key ends the block.
+        if ($line -match '^\S') { break }
+        if ($line -match '^\s{2}([A-Za-z0-9][A-Za-z0-9._-]*):') { $names += $Matches[1] }
+    }
+    return $names
+}
+
 # Existing AFCT data volumes but a missing/incomplete config: generating new credentials
 # would orphan the database, so route the user to `recover`.
 function Test-AfctDataWithoutConfig {
     if ((Test-Path -LiteralPath $EnvFile) -and (Test-AfctEnvFileComplete $EnvFile)) { return $false }
     if (-not (Test-AfctDockerReady)) { return $false }
-    if (-not (Test-Path -LiteralPath $RuntimeCompose)) { return $false }
-    $volumes = Invoke-AfctCompose config --volumes
-    if ($LASTEXITCODE -ne 0 -or -not $volumes) { return $false }
+
+    $volumes = Get-AfctDeclaredVolumes
+    if (-not $volumes) { return $false }
+
     # Match only the volumes THIS project would reuse. Compose names them "<project>_<volume>",
     # so an exact name match ignores AFCT volumes left behind by an install under a different
     # project name (harmless leftovers that must not block a fresh, non-colliding install).
     # Matching by suffix across every project was the old bug.
     $project = Get-AfctComposeProject
     if (-not $project) { return $false }
-    $existing = & docker volume ls --format '{{.Name}}' 2>&1 | ForEach-Object { "$_" }
+
+    # Bounded, and a non-answering daemon reads as "cannot tell", not as "no data": the
+    # caller treats false as permission to generate new credentials, so guessing in that
+    # direction is the one guess this must never make. Test-AfctDockerReady above has
+    # already established the daemon answers.
+    $listed = Invoke-AfctDockerBounded volume ls --format '{{.Name}}'
+    if ($listed.TimedOut -or $listed.ExitCode -ne 0) { return $false }
+    $existing = @($listed.StdOut | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+
     foreach ($volume in $volumes) {
         if (-not $volume) { continue }
-        if (@($existing) -contains "${project}_$volume") { return $true }
+        if ($existing -contains "${project}_$volume") { return $true }
     }
     return $false
 }
@@ -177,10 +210,15 @@ function Invoke-AfctInstall {
     if ($existingComplete -and -not $Reconfigure) {
         # A complete config already exists: warn about ports only if fresh, then just deploy.
         Write-AfctInfo "using the existing $EnvFile. Pass -Reconfigure to replace managed settings."
-        # This path deploys without rewriting the file, so the key has to be topped up here.
-        Confirm-AfctSecretKey $EnvFile
-        Confirm-AfctBackupKey $EnvFile
-        Invoke-AfctDeployWithDiagnostics -ForceReconcile:$composeChanged
+        # This path deploys without rewriting the file, so the keys have to be topped up
+        # here. Either one that actually writes has changed the environment the running
+        # containers were started with, so the stack has to be handed the new value instead
+        # of being left alone as healthy. Called, not written, is not a change: an existing
+        # key returns false and nothing is recreated.
+        $secretAdded = [bool](Confirm-AfctSecretKey $EnvFile)
+        $backupAdded = [bool](Confirm-AfctBackupKey $EnvFile)
+        $force = $composeChanged -or $secretAdded -or $backupAdded
+        Invoke-AfctDeployWithDiagnostics -ForceReconcile:$force
         $cfg = @{
             AppUrl = (Read-AfctEnvValue 'NEXTAUTH_URL' $EnvFile)
             AdminEmail = (Read-AfctEnvValue 'ADMIN_EMAIL' $EnvFile)
@@ -208,12 +246,18 @@ function Invoke-AfctInstall {
     Backup-AfctEnvFile $EnvFile | Out-Null
     Write-AfctEnvironmentFile $EnvFile $cfg $EnvExample $InstallerVersion
     Write-AfctSuccess "Configuration written to $EnvFile."
+    # The configuration the containers were started with has just been replaced, so this
+    # deployment always reconciles. Without it, `afctctl install -Reconfigure` against a
+    # healthy stack whose Compose file happened not to change wrote a new .env.production
+    # and then skipped `up`, leaving the containers running the settings the operator had
+    # just replaced and nothing on screen to say so.
+    $envRewritten = $true
 
     # Fresh install only: pin to a published release before pulling images. Reconfigure
     # leaves the running version alone.
     if (-not $reconfiguring) { Set-AfctReleasePin }
 
-    Invoke-AfctDeployWithDiagnostics -ForceReconcile:$composeChanged
+    Invoke-AfctDeployWithDiagnostics -ForceReconcile:($composeChanged -or $envRewritten)
     Show-AfctCompletion $cfg
     Invoke-AfctMaybeEnableUpdater -WithUpdater:$WithUpdater -NonInteractive:$NonInteractive
 }

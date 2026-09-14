@@ -155,14 +155,14 @@ Describe 'Wait-AfctHealth failure modes' {
         Mock -CommandName Start-Sleep -MockWith { }
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false
-                               HttpOk = $false; ExpectedTag = ''; ImageMatches = $true }
+                               HttpOk = $false; ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
         }
     }
 
     It 'returns when every service is ready' {
         Mock -CommandName Get-AfctStackState -MockWith {
             [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true
-                               HttpOk = $true; ExpectedTag = ''; ImageMatches = $true }
+                               HttpOk = $true; ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
         }
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
         Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
