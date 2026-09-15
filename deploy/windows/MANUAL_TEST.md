@@ -55,15 +55,17 @@ pull-from-cold has not been observed end to end.
 
 ## Startup behaviour
 
-| #   | Item                                                                | Status | Notes                                                                                            |
-| --- | ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
-| 1   | Install prints a stage line per service, not one silent line        | NT     | PostgreSQL, app, worker, nginx                                                                   |
-| 2   | A long stage prints a status heartbeat about every 30s              | T      | download and container-start heartbeats both fire; elapsed label fixed since                     |
-| 3   | Install finishes; `docker ps` shows all five containers             | T      | all five containers healthy and the install reports ready (reached via the already-running path) |
-| 4   | Rerunning the installer on a healthy stack skips the startup        | T      | "AFCT is already running and healthy at the expected version"; no restart, no registry call      |
-| 5   | Rerunning it preserves the database (sign in with the same account) | NT     |                                                                                                  |
-| 6   | Startup failure writes a diagnostics archive and names its path     | T      | archive written and full path printed, on pull and startup failures                              |
-| 7   | `shared\install.log` has a readable trace and no secrets in it      | T      | timestamped trace with exit codes; admin password and every _SECRET_/_KEY_/_TOKEN_ value absent  |
+| #   | Item                                                                | Status | Notes                                                                                             |
+| --- | ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| 1   | Install prints a stage line per service, not one silent line        | NT     | PostgreSQL, app, worker, nginx                                                                    |
+| 2   | A long stage prints a status heartbeat about every 30s              | T      | download and container-start heartbeats both fire; elapsed label fixed since                      |
+| 3   | Install finishes; `docker ps` shows all five containers             | T      | all five containers healthy and the install reports ready (reached via the already-running path)  |
+| 4   | Rerunning the installer on a healthy stack skips the startup        | T      | "AFCT is already running and healthy at the expected version"; no restart, no registry call       |
+| 5   | Rerunning it preserves the database (sign in with the same account) | NT     |                                                                                                   |
+| 8   | The health check passes against the default self-signed certificate | T      | verified via `afctctl doctor` before and after the fix; no CI coverage, so re-check every release |
+| 9   | The same install run under `pwsh` 7 rather than Windows PowerShell  | NT     | the certificate bypass takes a different branch there; no `pwsh` on VM 210                        |
+| 6   | Startup failure writes a diagnostics archive and names its path     | T      | archive written and full path printed, on pull and startup failures                               |
+| 7   | `shared\install.log` has a readable trace and no secrets in it      | T      | timestamped trace with exit codes; admin password and every _SECRET_/_KEY_/_TOKEN_ value absent   |
 
 ## Operational commands
 
@@ -129,3 +131,12 @@ The Windows updater is experimental. These items validate it on real hardware.
 - The updater sidecar end to end (Docker socket, bind mounts, runtime Compose replacement,
   self-recreation, backups, restore points).
 - Browser behavior for the self-signed certificate warning.
+- **An HTTPS request to a real self-signed endpoint.** This is the gap that let the health
+  probe ship broken: it returned false against a stack that was serving correctly, which
+  meant no install could report success. The suite covers which certificate mechanism the
+  host needs and how a failure is classified, but nothing in CI actually completes a TLS
+  handshake against AFCT's own certificate. Item 5 under Startup behaviour below is the only
+  coverage there is, so treat it as required rather than optional.
+- **PowerShell 7 as the host.** `install.ps1` runs the controller in-process, so
+  `pwsh .\install-windows.ps1` runs the whole install under 7, where the certificate
+  bypass works differently. Both paths exist in the code; only the 5.1 one has been run.
