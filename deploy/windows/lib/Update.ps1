@@ -60,6 +60,27 @@ function Get-AfctReleaseTags {
 # build) so a box runs a reproducible version. An explicit AFCT_APP_TAG is honored only if
 # it names a real release (validated against the manifest when reachable). An existing
 # release pin is left alone.
+# Which release this deployment should be running, right now.
+#
+# Compose resolves `${AFCT_APP_TAG:-main}` from the process environment first and the
+# --env-file second, so anything that asks "is the right version running" has to resolve it
+# the same way or it will disagree with the containers it is looking at.
+#
+# The case that made this matter: a cross-version update exports AFCT_APP_TAG for the new
+# release and only writes it back into .env.production once the update succeeds. Reading the
+# file alone during that window answers with the OLD release, so a timeout-recovery check
+# would look at correctly-started new containers and call them stale.
+#
+# `main` is the last resort because that is the compose file's own default; a deployment with
+# no pin anywhere is running main by definition, not running nothing.
+function Get-AfctEffectiveAppTag {
+    $fromProcess = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
+    if (-not [string]::IsNullOrWhiteSpace($fromProcess)) { return $fromProcess }
+    $fromFile = Read-AfctEnvValue 'AFCT_APP_TAG' $EnvFile
+    if (-not [string]::IsNullOrWhiteSpace($fromFile)) { return $fromFile }
+    return 'main'
+}
+
 function Set-AfctReleasePin {
     $existing = Read-AfctEnvValue 'AFCT_APP_TAG' $EnvFile
     if ($existing -and $existing -cne 'main') { return }
@@ -137,10 +158,11 @@ function Restore-AfctPreviousImages {
         & docker image tag $entry.Id $entry.Reference *> $null
         if ($LASTEXITCODE -ne 0) { return $false }
     }
-    Invoke-AfctCompose up -d | Out-Null
-    if ($LASTEXITCODE -ne 0) { return $false }
-    try { Wait-AfctHealth; Write-AfctSuccess 'The previous AFCT images were restored successfully.'; return $true }
-    catch { return $false }
+    # The bounded starter, like every other path that brings the stack up, so a rollback
+    # cannot be the one place that waits on a wedged CLI forever.
+    try { Invoke-AfctStartAndWait } catch { return $false }
+    Write-AfctSuccess 'The previous AFCT images were restored successfully.'
+    return $true
 }
 
 # Delete AFCT images that are neither running nor needed for rollback. Protected images are
@@ -234,9 +256,7 @@ function Restore-AfctPreviousRelease {
     $saved = [Environment]::GetEnvironmentVariable('AFCT_APP_TAG')
     try {
         $env:AFCT_APP_TAG = $Tag
-        Invoke-AfctCompose up -d | Out-Null
-        if ($LASTEXITCODE -ne 0) { return $false }
-        Wait-AfctHealth
+        Invoke-AfctStartAndWait
         Write-AfctSuccess "The previously pinned AFCT release ($Tag) was restored."
         return $true
     } catch {
@@ -266,7 +286,7 @@ function Invoke-AfctUpdate {
 
     $ok = $true
     $failReason = ''
-    try { Start-AfctStack; Wait-AfctHealth } catch {
+    try { Invoke-AfctStartAndWait } catch {
         $ok = $false
         $failReason = ($_.Exception.Message -replace '^afct-fatal:\s*', '')
     }
@@ -288,7 +308,7 @@ function Invoke-AfctUpdate {
     # a different tag can simply redeploy the old tag, which still names the old images. A
     # same-tag update cannot: the pull moved the tag, so the recorded image IDs are the only way
     # back. Trying the image snapshot first in the cross-tag case redeploys the FAILING tag (it
-    # is still the effective one, so `up -d` resolves to it), which burns a second full health
+    # is still the effective one, so `up --detach` resolves to it), which burns a second full health
     # timeout and, if that attempt happened to pass, reported a rollback while running the new
     # version. Matches do_update in deploy/unix/lib/update.sh.
     if ($targetTag -cne $prevTag) {
@@ -313,7 +333,9 @@ function Start-AfctUpdater {
     else { Invoke-AfctCompose pull $UpdaterService | Out-Null; $code = $LASTEXITCODE }
     if ($code -ne 0) { return $false }
     Write-AfctInfo 'starting the updater...'
-    Invoke-AfctCompose up -d $UpdaterService | Out-Null
+    # --detach, not -d: a literal -d binds to the common -Verbose/-Debug parameter set and
+    # never reaches docker, which would leave this attached to the sidecar's logs forever.
+    Invoke-AfctCompose up --detach $UpdaterService | Out-Null
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -336,7 +358,28 @@ function Invoke-AfctEnableUpdater {
 # Non-fatal: the base stack is already healthy. EXPERIMENTAL on Windows.
 function Invoke-AfctMaybeEnableUpdater {
     param([bool]$WithUpdater, [bool]$NonInteractive)
-    if ((Read-AfctEnvValue 'AFCT_UPDATER_ENABLED' $EnvFile) -eq 'true') { return }
+    if ((Read-AfctEnvValue 'AFCT_UPDATER_ENABLED' $EnvFile) -eq 'true') {
+        # "The flag says enabled" was taken as "the updater is running", so a deployment
+        # whose updater container had gone (an interrupted install, a manual removal) was
+        # never repaired: the enable path declined because the flag was already true, and
+        # nothing else looked. Ask the container, not the file.
+        #
+        # Repaired, not enforced. The updater is optional and experimental on Windows, and
+        # AFCT itself is already up by the time this runs, so a sidecar that will not start
+        # is worth saying out loud and nothing more.
+        $parsed = ConvertFrom-AfctServiceState (Get-AfctServiceState $UpdaterService)
+        if ($parsed.Status -eq 'missing') {
+            Write-AfctWarn 'the in-app updater is enabled in the configuration but its container is not running; starting it.'
+            if (Start-AfctUpdater) { Write-AfctSuccess 'In-app updater restarted.' }
+            else { Write-AfctWarn "the in-app updater could not be started. AFCT is unaffected; run 'afctctl enable-updater' to retry, or 'afctctl disable-updater' to turn it off." }
+        } elseif ($parsed.Status -eq 'unknown') {
+            # Repairing on a state nobody read would recreate a container that may be fine.
+            # Saying nothing would be worse: the operator would never learn the check was
+            # skipped. Report it and leave the sidecar alone.
+            Write-AfctWarn "could not tell whether the in-app updater is running ($($parsed.Reason)); leaving it alone. Check it with 'afctctl status'."
+        }
+        return
+    }
     if (-not $WithUpdater) {
         if ($NonInteractive -or [Console]::IsInputRedirected) { return }
         Write-AfctInfo 'Optional: the in-app updater sidecar lets admins upgrade and downgrade AFCT from'

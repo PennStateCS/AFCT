@@ -136,42 +136,67 @@ Describe 'Environment' {
 }
 
 # Wait-AfctHealth reads the controller globals; the docker-facing seams
-# (Get-AfctAppContainerState, Test-AfctHttpHealth) are mocked so each failure mode can be
-# driven without a daemon.
+# (Get-AfctStackState, Get-AfctAppContainerState, Test-AfctHttpHealth) are mocked so each
+# failure mode can be driven without a daemon. The whole-stack observer is stubbed as
+# "nothing is ready yet" so each test below is decided by the application state it sets,
+# which is the thing it is about; the ready path has its own coverage in Startup.Tests.ps1.
 Describe 'Wait-AfctHealth failure modes' {
     BeforeAll {
-        $script:HealthTimeout = 30
+        $script:HealthTimeout = 5
         $script:HealthInterval = 1
         $script:AppService = 'app'
         $script:HealthPath = '/api/health'
+        # The loop reads the app out of the whole-stack reading rather than inspecting it
+        # again, so a fail-fast case is driven by the app's row, not by a separate seam.
+        function New-AppState {
+            param([string]$Status, [string]$Health = 'healthy')
+            $app = [pscustomobject]@{
+                Name = 'app'; Label = 'AFCT application'; Status = $Status; Health = $Health
+                Image = 'img:v1'; Ready = ($Status -eq 'running' -and $Health -eq 'healthy')
+                Required = $true; Versioned = $true; ExpectedImageTag = 'v1'
+                ActualImageTag = 'v1'; ImageMatches = $true
+            }
+            [pscustomobject]@{
+                Services = @($app); AllReady = $app.Ready; AppReady = $app.Ready; HttpOk = $false
+                ExpectedTag = 'v1'; ImageMatches = $true; OptionalWarnings = @()
+            }
+        }
     }
     BeforeEach {
         Mock -CommandName Write-AfctInfo -MockWith { }
         Mock -CommandName Write-AfctSuccess -MockWith { }
         Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
         Mock -CommandName Start-Sleep -MockWith { }
+        Mock -CommandName Get-AfctStackState -MockWith {
+            [pscustomobject]@{ Services = @(); AllReady = $false; AppReady = $false
+                               HttpOk = $false; ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
+        }
     }
 
-    It 'returns when the container is healthy' {
+    It 'returns when every service is ready' {
+        Mock -CommandName Get-AfctStackState -MockWith {
+            [pscustomobject]@{ Services = @(); AllReady = $true; AppReady = $true
+                               HttpOk = $true; ExpectedTag = ''; ImageMatches = $true; OptionalWarnings = @() }
+        }
         Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|healthy' }
         Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
         { Wait-AfctHealth } | Should -Not -Throw
     }
     It 'names an unhealthy container as the reason' {
-        Mock -CommandName Get-AfctAppContainerState -MockWith { 'running|unhealthy' }
+        Mock -CommandName Get-AfctStackState -MockWith { New-AppState -Status 'running' -Health 'unhealthy' }
         { Wait-AfctHealth } | Should -Throw '*unhealthy state*'
     }
     It 'fails fast on a crash loop instead of waiting out the timeout' {
-        Mock -CommandName Get-AfctAppContainerState -MockWith { 'restarting|none' }
+        Mock -CommandName Get-AfctStackState -MockWith { New-AppState -Status 'restarting' -Health 'none' }
         { Wait-AfctHealth } | Should -Throw '*crash loop*'
-        Should -Invoke Get-AfctAppContainerState -Exactly 3
+        Should -Invoke Get-AfctStackState -Exactly 3
     }
-    It 'still reports a plain timeout when the container never appears' {
-        $script:HealthTimeout = 3
+    It 'still reports a timeout when the container never appears' {
+        $script:HealthTimeout = 2
         try {
-            Mock -CommandName Get-AfctAppContainerState -MockWith { $null }
-            { Wait-AfctHealth } | Should -Throw '*did not become healthy*'
-        } finally { $script:HealthTimeout = 30 }
+            { Wait-AfctHealth } | Should -Throw '*did not finish starting*'
+        } finally { $script:HealthTimeout = 5 }
     }
 }
 

@@ -12,7 +12,14 @@ Set-StrictMode -Version Latest
 # throws; used by read-only/soft paths such as uninstall and diagnostics.
 function Test-AfctDockerReady {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return $false }
-    try { & docker info *> $null; return ($LASTEXITCODE -eq 0) } catch { return $false }
+    # Bounded, because `docker info` against a half-started or wedged Docker Desktop does not
+    # answer at all. This is called from uninstall and diagnostics, which run precisely when
+    # something is already wrong, so a daemon that never replies has to read as "not ready"
+    # rather than as a place to wait forever.
+    try {
+        $r = Invoke-AfctDockerBounded info
+        return ((-not $r.TimedOut) -and $r.ExitCode -eq 0)
+    } catch { return $false }
 }
 
 # Resolve the Compose project name (keeps data volumes attached). Persisted in deploy.state
@@ -53,26 +60,275 @@ function Set-AfctRuntimeComposeEnv {
     $env:AFCT_RUNTIME_SHARED_DIR = ((Split-Path -Parent $EnvFile) -replace '\\', '/')
 }
 
+# NEVER pass a literal -d or -v to these helpers. Use --detach and --volumes.
+#
+# This is what made a Windows install hang for hours. `Invoke-AfctCompose up -d` looks like
+# it runs `docker compose up -d`, and it does not: the `[Parameter()]` attribute below makes
+# this an advanced function, which gives it PowerShell's common parameters, and a literal
+# `-d` is an unambiguous prefix of `-Debug`. PowerShell binds it there and it never reaches
+# docker. The command that actually ran was `docker compose up`, attached, which starts every
+# container and then streams their logs until interrupted. Docker Desktop showed the whole
+# stack running while the installer sat on one line forever, because from Compose's point of
+# view it was doing exactly what it was told.
+#
+# `-v` goes the same way, to `-Verbose`, which is how `down -v` in the uninstall path quietly
+# stopped removing the volumes it was asked to remove.
+#
+# Only literal tokens bind: a flag built into a variable is passed through. That is why this
+# survived review and testing and only showed up on a real machine. Short flags that collide
+# with no common parameter (-q, -f, -sf, -p) are safe, but the long form is the rule here so
+# nobody has to remember which ones those are.
+#
 # Invoke `docker compose` and return its combined output as strings. $LASTEXITCODE holds the
 # child exit code afterward. Never throws on a nonzero compose exit.
 function Invoke-AfctCompose {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    # ComposeArgs, not Args: $Args is an automatic variable, and a parameter that shadows it
+    # reads back unreliably, which among other things makes this seam untestable. Position 0
+    # keeps every existing positional call site working unchanged.
+    param([Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$ComposeArgs)
     Set-AfctRuntimeComposeEnv
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { & docker @(Get-AfctComposeBaseArgs) @Args 2>&1 | ForEach-Object { "$_" } }
+    try { & docker @(Get-AfctComposeBaseArgs) @ComposeArgs 2>&1 | ForEach-Object { "$_" } }
     finally { $ErrorActionPreference = $eap }
 }
 
 # Same, but let output flow to the console so docker can draw its own progress bars. Returns
 # the child exit code.
 function Invoke-AfctComposeConsole {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
+    param([Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$ComposeArgs)
     Set-AfctRuntimeComposeEnv
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
-    try { & docker @(Get-AfctComposeBaseArgs) @Args | Out-Host } finally { $ErrorActionPreference = $eap }
+    try { & docker @(Get-AfctComposeBaseArgs) @ComposeArgs | Out-Host } finally { $ErrorActionPreference = $eap }
     return $LASTEXITCODE
+}
+
+# --------------------------------------------------------------------------- #
+# Bounded compose invocation
+# --------------------------------------------------------------------------- #
+# Starting the stack had no upper bound of any kind. The documented AFCT_HEALTH_TIMEOUT
+# governs the health wait, which does not begin until the CLI returns, so a CLI that never
+# returns is waited on forever.
+#
+# The swallowed `-d` above is what made that happen in practice, and it is fixed. This exists
+# because "the CLI came back" should not have been taken on trust in the first place: an
+# installer that can wait forever will eventually wait forever for some other reason, and an
+# instructor watching a frozen window has no way to tell the difference. A deadline means the
+# caller always gets an answer, and capturing the child's streams to files keeps this
+# process's pipeline out of the path of Compose's progress renderer as well.
+
+# How long any single Docker inspection may take before it is assumed wedged. Short, because
+# every command bounded by it answers in well under a second on a working daemon; the only
+# thing this number changes is how long a broken one can hold the installer.
+function Get-AfctDockerCommandTimeout {
+    $v = [int]([Environment]::GetEnvironmentVariable('AFCT_DOCKER_COMMAND_TIMEOUT'))
+    if ($v -le 0) { $v = 20 }
+    return $v
+}
+
+# Run a native command with its output captured to files and a hard deadline.
+#
+# Returns @{ ExitCode; TimedOut; StdOut; StdErr; Seconds }. Never throws: the caller decides
+# what a nonzero code or a timeout means. On a timeout the whole process tree is killed and
+# ExitCode is $null.
+#
+# -OnHeartbeat is called roughly every -HeartbeatSeconds while the wait runs long, with the
+# elapsed seconds and the paths of the captured streams, so a caller can keep the terminal
+# alive (and show real progress from the capture) without this function knowing anything
+# about what it is running.
+function Invoke-AfctNativeBounded {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList,
+        [int]$TimeoutSeconds,
+        [scriptblock]$OnHeartbeat,
+        [int]$HeartbeatSeconds = 30
+    )
+    $stamp = [Guid]::NewGuid().ToString('N')
+    $outFile = Join-Path ([IO.Path]::GetTempPath()) "afct-native-$stamp.out"
+    $errFile = Join-Path ([IO.Path]::GetTempPath()) "afct-native-$stamp.err"
+    $started = Get-Date
+    try {
+        # Quote here rather than handing Start-Process the array. -ArgumentList joins an
+        # array with spaces and quotes nothing, so the compose file path alone breaks the
+        # command for anybody whose profile directory has a space in it ("C:\Users\Jane
+        # Doe\..."), which is most people with a two-word name.
+        $proc = Start-Process -FilePath $FilePath -ArgumentList (ConvertTo-AfctCommandLine $ArgumentList) `
+            -NoNewWindow -PassThru `
+            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+        # Touch the handle. Start-Process -PassThru hands back a Process object that has not
+        # cached the native handle, and without it .ExitCode reads as $null even after a
+        # clean exit; every successful startup would then look like a failed one. Reading
+        # .Handle once is what caches it.
+        $null = $proc.Handle
+
+        # Waited in slices rather than one long block, purely so a heartbeat can fire. The
+        # deadline is unchanged: the slices add up to exactly $TimeoutSeconds.
+        $slice = $HeartbeatSeconds
+        if ($slice -le 0 -or $slice -gt $TimeoutSeconds) { $slice = $TimeoutSeconds }
+        $waited = 0
+        $exited = $false
+        while ($waited -lt $TimeoutSeconds) {
+            $chunk = [Math]::Min($slice, $TimeoutSeconds - $waited)
+            if ($proc.WaitForExit($chunk * 1000)) { $exited = $true; break }
+            $waited += $chunk
+            if ($OnHeartbeat -and $waited -lt $TimeoutSeconds) { & $OnHeartbeat $waited $outFile $errFile }
+        }
+
+        if (-not $exited) {
+            Stop-AfctProcessTree $proc.Id
+            # Give the kill a moment to land so the output files are closed before they are
+            # read; a failure to reap is not worth failing the install over.
+            try { $proc.WaitForExit(5000) | Out-Null } catch { }
+            return @{
+                ExitCode = $null
+                TimedOut = $true
+                StdOut   = (Read-AfctTextFile $outFile)
+                StdErr   = (Read-AfctTextFile $errFile)
+                Seconds  = [int]((Get-Date) - $started).TotalSeconds
+            }
+        }
+        # The parameterless wait after a timed one, as .NET asks, so the child is fully
+        # reaped and ExitCode is populated rather than null.
+        $proc.WaitForExit()
+        return @{
+            ExitCode = $proc.ExitCode
+            TimedOut = $false
+            StdOut   = (Read-AfctTextFile $outFile)
+            StdErr   = (Read-AfctTextFile $errFile)
+            Seconds  = [int]((Get-Date) - $started).TotalSeconds
+        }
+    } finally {
+        Remove-Item -LiteralPath $outFile, $errFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# A pull can legitimately take a long time: the AFCT application image alone is about 4.7 GB.
+# Bounded all the same, because "downloading" and "wedged" look identical from outside and
+# an installer that can never return is the thing this whole file exists to prevent.
+function Get-AfctDockerPullTimeout {
+    $v = [int]([Environment]::GetEnvironmentVariable('AFCT_DOCKER_PULL_TIMEOUT'))
+    if ($v -le 0) { $v = 1800 }
+    return $v
+}
+
+# A plain `docker ...` call with a short deadline. For inspection: reading state, versions,
+# and anything collected while something has already gone wrong. A wedged daemon answers
+# none of these, and an installer that hangs while reporting a hang is worse than useless.
+function Invoke-AfctDockerBounded {
+    param(
+        [int]$TimeoutSeconds = 0,
+        [Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$DockerArgs
+    )
+    if ($TimeoutSeconds -le 0) { $TimeoutSeconds = Get-AfctDockerCommandTimeout }
+    return Invoke-AfctNativeBounded -FilePath 'docker' -ArgumentList $DockerArgs -TimeoutSeconds $TimeoutSeconds
+}
+
+# A `docker compose ...` call with a deadline, carrying this deployment's project, profile,
+# compose file and env file.
+function Invoke-AfctComposeBounded {
+    param(
+        [int]$TimeoutSeconds,
+        [scriptblock]$OnHeartbeat,
+        # Named ComposeArgs, not Args: $Args is an automatic variable, and a parameter that
+        # shadows it reads back unreliably (notably inside a test double).
+        #
+        # Position 0 on this one, so the compose verb is the only thing that binds
+        # positionally. Without it `Invoke-AfctComposeBounded -TimeoutSeconds 30 up --detach`
+        # hands "up" to whichever scalar parameter happens to come next in the declaration,
+        # which is the same class of silent misbinding as the -d that started all this.
+        [Parameter(Position = 0, ValueFromRemainingArguments = $true)][string[]]$ComposeArgs
+    )
+    Set-AfctRuntimeComposeEnv
+
+    # Deterministic, non-interactive output for this one call. Compose reads both from the
+    # environment, and a version that does not know them ignores them, so no capability
+    # detection is needed. Scoped to this call: the image pull deliberately keeps Docker's
+    # interactive progress, which works well and is the one place a long wait is explained.
+    $savedAnsi = [Environment]::GetEnvironmentVariable('COMPOSE_ANSI')
+    $savedProgress = [Environment]::GetEnvironmentVariable('COMPOSE_PROGRESS')
+    $env:COMPOSE_ANSI = 'never'
+    $env:COMPOSE_PROGRESS = 'plain'
+    try {
+        $all = @(Get-AfctComposeBaseArgs) + @($ComposeArgs)
+        return Invoke-AfctNativeBounded -FilePath 'docker' -ArgumentList $all `
+            -TimeoutSeconds $TimeoutSeconds -OnHeartbeat $OnHeartbeat
+    } finally {
+        if ($null -eq $savedAnsi) { Remove-Item Env:\COMPOSE_ANSI -ErrorAction SilentlyContinue }
+        else { $env:COMPOSE_ANSI = $savedAnsi }
+        if ($null -eq $savedProgress) { Remove-Item Env:\COMPOSE_PROGRESS -ErrorAction SilentlyContinue }
+        else { $env:COMPOSE_PROGRESS = $savedProgress }
+    }
+}
+
+# Build a Windows command line from an argument list.
+#
+# Anything containing whitespace or a quote is wrapped, and the backslash-before-quote rule
+# CommandLineToArgvW uses is honoured, so a path ending in a backslash does not escape the
+# closing quote. Without this, an install prefix with a space in it produces a command line
+# docker reads as extra arguments.
+function ConvertTo-AfctCommandLine {
+    param([string[]]$Arguments)
+    $parts = @()
+    foreach ($arg in $Arguments) {
+        if ($null -eq $arg) { continue }
+        if ($arg.Length -gt 0 -and $arg -notmatch '[\s"]') { $parts += $arg; continue }
+        $escaped = $arg -replace '(\\*)"', '$1$1\"'
+        $escaped = $escaped -replace '(\\+)$', '$1$1'
+        $parts += '"' + $escaped + '"'
+    }
+    return ($parts -join ' ')
+}
+
+# Read a captured stream as an array of lines. Missing or unreadable is an empty array, not
+# an error: this only ever runs while reporting something that already went wrong.
+function Read-AfctTextFile {
+    param([string]$Path)
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) { return @() }
+        return @(Get-Content -LiteralPath $Path -ErrorAction Stop)
+    } catch { return @() }
+}
+
+# Kill a stuck CLI and everything it started.
+#
+# The tree, not the process: `docker compose` runs the Compose binary as a child, so killing
+# docker.exe alone leaves that child behind still holding the same job. `taskkill /T` is the
+# Windows way to take the whole tree.
+#
+# This ends a *client* process. Containers belong to the Docker daemon and keep running
+# exactly as they were; nothing here stops, removes or recreates anything, and no volume is
+# touched. That is the entire reason a watchdog is safe to have: the worst case is that AFCT
+# stops watching a job the daemon has already finished.
+function Stop-AfctProcessTree {
+    param([int]$ProcessId)
+    # Traced on failure. A kill that did not work leaves a compose client still holding the
+    # capture files, and the next thing to go wrong is a deletion that "mysteriously" fails;
+    # without this line there is nothing in the trace connecting the two.
+    try {
+        & taskkill /PID $ProcessId /T /F *> $null
+        if ($LASTEXITCODE -ne 0) { Write-AfctTrace "taskkill on PID $ProcessId exited $LASTEXITCODE; the process may still be running" }
+    } catch {
+        Write-AfctTrace "could not stop PID $ProcessId : $($_.Exception.Message)"
+    }
+}
+
+# Does the installed Compose understand `up --wait`?
+#
+# Recorded rather than used. `up -d --wait` blocks until Compose decides the stack is up,
+# which would put the whole startup back behind one opaque call and take away the staged
+# progress an installer needs to not look frozen; and `--wait-timeout` bounds Compose's
+# waiting, not a process that has stopped making progress, which is the failure actually
+# seen. The bound comes from the watchdog above instead. Knowing whether the option exists
+# is still worth having in the deployment trace.
+function Test-AfctComposeSupportsWait {
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $out = & docker compose up --help 2>&1 | ForEach-Object { "$_" } }
+    finally { $ErrorActionPreference = $eap }
+    foreach ($line in @($out)) { if ($line -match '--wait\b') { return $true } }
+    return $false
 }
 
 # Fatal Docker Desktop preflight: the CLI must exist, the daemon must answer, and Compose v2
@@ -81,12 +337,36 @@ function Assert-AfctDockerReady {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw 'afct-fatal: Docker Desktop is not installed. Install it: https://docs.docker.com/desktop/install/windows-install/'
     }
-    & docker info *> $null
-    if ($LASTEXITCODE -ne 0) {
+    # Both bounded: a preflight that hangs is the same outcome for the operator as a failed
+    # one, except that nothing tells them so.
+    #
+    # Retried rather than given a longer single bound. `docker info` on a healthy Docker
+    # Desktop was measured between 1.7s and 23s on the same machine within minutes, the slow
+    # readings arriving exactly when the installer asks: right after a large pull, or while
+    # the engine is still settling. One bounded attempt turned that into "Docker Desktop did
+    # not respond" and ended the install. A retry tells slow apart from wedged, which a
+    # bigger timeout cannot do: it only makes the wedged case take longer.
+    $attempts = [int]([Environment]::GetEnvironmentVariable('AFCT_DOCKER_READY_ATTEMPTS'))
+    if ($attempts -le 0) { $attempts = 3 }
+    $info = $null
+    for ($try = 1; $try -le $attempts; $try++) {
+        $info = Invoke-AfctDockerBounded info
+        if (-not $info.TimedOut) { break }
+        Write-AfctTrace "docker info did not answer within its bound (attempt $try of $attempts)"
+        if ($try -lt $attempts) {
+            # Said out loud. Silent retries are just a longer hang from where the operator sits.
+            Write-AfctInfo "Docker Desktop has not answered yet; waiting and trying again ($try of $attempts)..."
+            Start-Sleep -Seconds 5
+        }
+    }
+    if ($info.TimedOut) {
+        throw "afct-fatal: Docker Desktop did not respond, after $attempts attempts. It may still be starting up, or it may need to be restarted. Wait for the Docker Desktop window to say it is running, then try again."
+    }
+    if ($info.ExitCode -ne 0) {
         throw 'afct-fatal: Docker is installed, but its daemon is not reachable. Start Docker Desktop and try again.'
     }
-    & docker compose version *> $null
-    if ($LASTEXITCODE -ne 0) {
+    $cv = Invoke-AfctDockerBounded compose version
+    if ($cv.TimedOut -or $cv.ExitCode -ne 0) {
         throw 'afct-fatal: Docker Compose v2 was not found. Update Docker Desktop (it includes Compose).'
     }
 }
@@ -180,10 +460,10 @@ function Test-AfctDockerImagePresent {
     # terminating NativeCommandError, which would crash the check instead of returning
     # false. Soften it locally, exactly as the compose wrappers above do, and read the
     # child exit code afterward.
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try { & docker image inspect $Image *> $null } finally { $ErrorActionPreference = $eap }
-    return ($LASTEXITCODE -eq 0)
+    # Bounded: this runs in the install preflight, before anything has started, so a
+    # non-answering daemon here stops the install before it begins rather than during it.
+    $r = Invoke-AfctDockerBounded image inspect $Image
+    return ((-not $r.TimedOut) -and $r.ExitCode -eq 0)
 }
 
 # Pull the bind-check image. Docker's (noisy, non-secret) output goes to the install log when
@@ -193,16 +473,12 @@ function Invoke-AfctDockerPull {
     param([string]$Image)
     # A failed pull writes to stderr and exits non-zero; soften ErrorActionPreference so
     # that surfaces as a return code the caller can report, not a terminating error.
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        if (-not [string]::IsNullOrEmpty($LogFile)) {
-            & docker pull $Image *>> $LogFile
-        } else {
-            & docker pull $Image *> $null
-        }
-    } finally { $ErrorActionPreference = $eap }
-    return $LASTEXITCODE
+    $r = Invoke-AfctDockerBounded -TimeoutSeconds (Get-AfctDockerPullTimeout) pull $Image
+    if (-not [string]::IsNullOrEmpty($LogFile)) {
+        Add-AfctLogLine ("docker pull $Image => " + $(if ($r.TimedOut) { 'timed out' } else { "exit $($r.ExitCode)" })) $LogFile
+    }
+    if ($r.TimedOut) { return 1 }
+    return $r.ExitCode
 }
 
 # True when Docker Desktop can bind-mount $Dir read-only. Mounts the directory and checks it
@@ -211,11 +487,20 @@ function Test-AfctDockerBindMount {
     param([string]$Image, [string]$Dir)
     # A blocked mount makes `docker run` exit non-zero with stderr; soften
     # ErrorActionPreference so the check returns false instead of throwing.
-    $eap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try { & docker run --rm -v "${Dir}:/afct-bind-check:ro" $Image test -d /afct-bind-check *> $null }
-    finally { $ErrorActionPreference = $eap }
-    return ($LASTEXITCODE -eq 0)
+    # Bounded: a blocked mount can leave `docker run` waiting rather than failing, and this
+    # is a preflight whose entire purpose is to fail fast with a clear message.
+    #
+    # The argument list is passed as an explicit array, not as loose tokens, and that is not
+    # style. This command carries both a `-v` and a `-d`, and written loosely PowerShell
+    # would bind them to the common -Verbose and -Debug parameters and hand docker a command
+    # with no volume and no test flag: the same silent misbinding that made the installer
+    # hang in the first place. Inside an array literal they are values, and nothing can eat
+    # them.
+    $r = Invoke-AfctDockerBounded -DockerArgs @(
+        'run', '--rm', '--volume', "${Dir}:/afct-bind-check:ro", $Image,
+        'test', '-d', '/afct-bind-check'
+    )
+    return ((-not $r.TimedOut) -and $r.ExitCode -eq 0)
 }
 
 # Heuristic: a UNC path or a non-fixed (network/removable) drive is a soft warning, because
@@ -257,11 +542,34 @@ function Assert-AfctBindMounts {
         if (Test-AfctPathIsNetworkish $dir) {
             Write-AfctWarn "the installation directory is on a network or removable drive ($dir). Docker Desktop may not mount it reliably; a local path such as $(Join-Path $env:LOCALAPPDATA 'AFCT') is recommended."
         }
-        if (-not (Test-AfctDockerBindMount -Image $img -Dir $dir)) {
+        # Retried before it is called a file-sharing problem. Docker Desktop answers
+        # `docker version` before its file sharing is ready, so an install started as soon
+        # as the whale stops spinning failed here and was told to go and edit a sharing
+        # list. The identical mount succeeded minutes later with nothing changed.
+        $mountAttempts = [int]([Environment]::GetEnvironmentVariable('AFCT_BIND_CHECK_ATTEMPTS'))
+        if ($mountAttempts -le 0) { $mountAttempts = 3 }
+        $mounted = $false
+        for ($try = 1; $try -le $mountAttempts; $try++) {
+            if (Test-AfctDockerBindMount -Image $img -Dir $dir) { $mounted = $true; break }
+            Write-AfctTrace "bind-mount check failed for $dir (attempt $try of $mountAttempts)"
+            if ($try -lt $mountAttempts) {
+                Write-AfctInfo "Docker Desktop could not mount $dir yet; waiting and trying again ($try of $mountAttempts)..."
+                Start-Sleep -Seconds 5
+            }
+        }
+        if (-not $mounted) {
             $rec = Join-Path $env:LOCALAPPDATA 'AFCT'
-            throw ("afct-fatal: Docker Desktop could not mount the installation directory: $dir. " +
+            $message = "afct-fatal: Docker Desktop could not mount the installation directory after $mountAttempts attempts: $dir. " +
                 "Docker Desktop can only bind-mount host paths on its file-sharing list; the current drive or path may not be available to it, and network or removable drives may not work reliably. " +
-                "Fix this by adding the directory under Docker Desktop > Settings > Resources > File sharing, or reinstall using the default prefix ($rec), which is local and already shared.")
+                'Fix this by adding the directory under Docker Desktop > Settings > Resources > File sharing'
+            # Suggesting the default prefix is useless when that is where it already failed,
+            # and it reads as nonsense to somebody who never chose a prefix at all.
+            if ($dir -like "$rec*") {
+                $message += ". This is the default location, so file sharing is the likely cause rather than the path; check that Docker Desktop has finished starting, then run the installer again."
+            } else {
+                $message += ", or reinstall using the default prefix ($rec), which is local and already shared."
+            }
+            throw $message
         }
     }
 }

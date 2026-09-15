@@ -28,7 +28,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$InstallerVersion = '2.4.3'
+$InstallerVersion = '2.5.0'
 
 # --- resolve this controller's release, lib, and install-root layout ---------------------
 $BinDir     = $PSScriptRoot
@@ -94,6 +94,40 @@ if (-not [string]::IsNullOrEmpty($recordPath)) {
     exit 0
 }
 
+# --- deployment trace ---------------------------------------------------------------------
+# Stamp the environment this run happened in at the top of shared\install.log, so a log
+# collected weeks later still says which tooling, which Docker, and which Compose project
+# produced it. Facts only: nothing here reads the environment file, so no configured value
+# can reach the log through this path.
+# A one-line answer from a bounded docker call, for the log header.
+function Format-AfctTraceResult {
+    param($Result)
+    if ($Result.TimedOut) { return 'did not respond' }
+    if ($Result.ExitCode -ne 0) { return 'unavailable' }
+    $line = (@($Result.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
+    if (-not $line) { return 'unknown' }
+    return $line.Trim()
+}
+
+function Write-AfctRunHeader {
+    param([string]$Command)
+    Write-AfctTrace '---'
+    Write-AfctTrace "afctctl $Command (deployment tool $InstallerVersion)"
+    Write-AfctTrace "prefix: $Prefix"
+    if (Get-Command docker -ErrorAction SilentlyContinue) {
+        # Bounded: this runs before every operational command, including the ones an
+        # operator reaches for when Docker Desktop is already misbehaving. Writing a header
+        # is never worth blocking the command it heads.
+        $dv = Invoke-AfctDockerBounded version --format '{{.Server.Version}}'
+        $cv = Invoke-AfctDockerBounded compose version --short
+        Write-AfctTrace ("docker engine: " + (Format-AfctTraceResult $dv))
+        Write-AfctTrace ("docker compose: " + (Format-AfctTraceResult $cv))
+    } else {
+        Write-AfctTrace 'docker: not on PATH'
+    }
+    Write-AfctTrace "compose project: $(Get-AfctComposeProject)"
+}
+
 function Show-AfctUsage {
     @"
 afctctl: AFCT deployment control (Windows)
@@ -143,6 +177,11 @@ if ($Help) { $Command = 'help' }
 # sees a clean one-line error and the process exits nonzero, rather than a PowerShell stack
 # trace. Any other exception is unexpected and re-thrown.
 try {
+    # Only the commands that change or inspect a deployment are worth a header; `help` and
+    # `version` run constantly and would fill the log with noise.
+    if ($Command -in 'install', 'update', 'restart', 'stop', 'self-update', 'doctor', 'diagnostics', 'recover', 'enable-updater', 'disable-updater') {
+        Write-AfctRunHeader $Command
+    }
     switch ($Command) {
         'help'            { Show-AfctUsage; break }
         'version'         { Show-AfctVersion; break }
@@ -167,6 +206,10 @@ try {
     }
 } catch {
     $msg = "$($_.Exception.Message)"
+    # Already printed where it happened (a startup failure prints its reason before
+    # collecting diagnostics, so the reason appears above the archive path). Exit nonzero
+    # without saying it twice.
+    if ($msg -like 'afct-reported:*') { exit 1 }
     if ($msg -like 'afct-fatal:*') {
         Write-AfctError ($msg -replace '^afct-fatal:\s*', '')
         exit 1

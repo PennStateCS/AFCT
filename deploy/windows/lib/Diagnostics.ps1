@@ -10,13 +10,18 @@ Set-StrictMode -Version Latest
 
 # Copy an env file with the values of known-sensitive keys replaced. Comments and blank
 # lines are preserved. Matches by key name (case-insensitive).
+#
+# The pattern has to be wide enough to catch a key nobody thought of and narrow enough to
+# leave the settings that make the bundle worth reading. Matching a bare "AUTH" would redact
+# NEXTAUTH_URL, which is the address the operator configured and the first thing anybody
+# looking at a broken deployment wants to see; NEXTAUTH_SECRET is caught by SECRET anyway.
 function Copy-AfctRedactedEnv {
     param([string]$Source, [string]$Destination)
     $out = foreach ($line in Get-Content -LiteralPath $Source -ErrorAction SilentlyContinue) {
         if ($line -match '^\s*#' -or $line -match '^\s*$') { $line }
         elseif ($line -match '=') {
             $key = ($line -split '=', 2)[0]
-            if ($key.Trim().ToUpper() -match 'PASSWORD|SECRET|TOKEN|PRIVATE|CREDENTIAL|DATABASE_URL|API_KEY') { "$key=***REDACTED***" }
+            if ($key.Trim().ToUpper() -match 'PASSWORD|PASSWD|SECRET|TOKEN|PRIVATE|CREDENTIAL|DATABASE_URL|API_KEY|_KEY$|ENCRYPTION|PASSPHRASE|SALT') { "$key=***REDACTED***" }
             else { $line }
         }
         else { $line }
@@ -29,18 +34,66 @@ function Copy-AfctRedactedEnv {
 function Hide-AfctSecretsInTree {
     param([string]$Root, [string]$EnvFile)
     if (-not (Test-Path -LiteralPath $EnvFile)) { return }
+    # Every value worth hunting for by content, not only the four that used to be listed.
+    # The key-name pass above hides them inside the env copy; this pass catches the same
+    # values echoed anywhere else in the bundle, which is where they actually leak: a
+    # DATABASE_URL in a stack trace, a key in a container log line.
+    #
+    # Short values are skipped. Replacing a two-character string everywhere would corrupt
+    # unrelated text without protecting anything, and no real secret here is that short.
     $secrets = @()
-    foreach ($key in 'POSTGRES_PASSWORD', 'DATABASE_URL', 'NEXTAUTH_SECRET', 'ADMIN_PASSWORD') {
+    foreach ($key in 'POSTGRES_PASSWORD', 'DATABASE_URL', 'NEXTAUTH_SECRET', 'ADMIN_PASSWORD',
+                     'AFCT_SECRET_KEY', 'BACKUP_ENCRYPTION_KEY', 'BACKUP_PASSPHRASE',
+                     'SMTP_PASSWORD', 'GITHUB_TOKEN', 'REGISTRY_TOKEN') {
         $value = Read-AfctEnvValue $key $EnvFile
-        if ($value) { $secrets += $value }
+        if ($value -and $value.Length -ge 8) { $secrets += $value }
     }
     if (-not $secrets) { return }
+    # A file that could not be rewritten is a file that still has the secrets in it, inside
+    # an archive the operator is told to send to somebody. Silently skipping it was the one
+    # place in here where saying nothing could actually leak something, so a failure removes
+    # the file from the bundle and says which. Losing a file from a diagnostic archive is a
+    # far smaller problem than shipping an unredacted one.
     foreach ($file in Get-ChildItem -LiteralPath $Root -File -Recurse -ErrorAction SilentlyContinue) {
         try {
             $text = [System.IO.File]::ReadAllText($file.FullName)
             foreach ($secret in $secrets) { $text = $text.Replace($secret, '***REDACTED***') }
             [System.IO.File]::WriteAllText($file.FullName, $text)
-        } catch { }
+        } catch {
+            $name = $file.Name
+            try {
+                Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+                Write-AfctWarn "could not redact $name, so it was left out of the diagnostics archive: $($_.Exception.Message)"
+            } catch {
+                Write-AfctWarn "could not redact or remove $name. Do NOT share this archive: it may still contain passwords or keys."
+            }
+        }
+    }
+}
+
+# Run one bounded collection step and write what it produced into the bundle.
+#
+# A timeout is recorded as a file saying so, rather than an empty one or a missing one: the
+# difference between "Docker said nothing" and "Docker never answered" is most of the
+# diagnosis. Never throws, so one uncollectable item cannot cost the whole bundle.
+function Save-AfctDiagnosticCommand {
+    param([string]$BundleDir, [string]$Name, [scriptblock]$Collect)
+    $target = Join-Path $BundleDir $Name
+    try {
+        $result = & $Collect
+        if ($result.TimedOut) {
+            $lines = @(
+                'This command did not respond within its time limit and was stopped.',
+                'Docker Desktop was most likely unresponsive when these diagnostics were collected.',
+                'Partial output, if any, follows.',
+                ''
+            ) + @($result.StdOut) + @($result.StdErr)
+            Set-Content -LiteralPath "$target.timed-out.txt" -Encoding UTF8 -Value $lines
+            return
+        }
+        Set-Content -LiteralPath $target -Encoding UTF8 -Value (@($result.StdOut) + @($result.StdErr))
+    } catch {
+        Set-Content -LiteralPath "$target.failed.txt" -Encoding UTF8 -Value "Could not collect: $($_.Exception.Message)"
     }
 }
 
@@ -65,12 +118,28 @@ function Invoke-AfctDiagnostics {
     )
     Set-Content -LiteralPath (Join-Path $bundleDir 'system.txt') -Value $sysLines -Encoding UTF8
 
+    <#
+      Every Docker call here is bounded, and this is the reason the bounding exists.
+
+      Diagnostics run after something has already failed, which is exactly when the daemon
+      is most likely to be wedged. Unbounded, the installer would print "Collecting
+      diagnostics..." and hang there forever, having replaced a reported failure with an
+      unreported one. A command that does not answer records that it did not answer and the
+      collection moves on: a bundle that says "docker info timed out" is a useful bundle.
+    #>
     if (Test-AfctDockerReady) {
-        & docker version *>&1 | Set-Content (Join-Path $bundleDir 'docker-version.txt')
-        & docker info *>&1 | Set-Content (Join-Path $bundleDir 'docker-info.txt')
+        Save-AfctDiagnosticCommand $bundleDir 'docker-version.txt' { Invoke-AfctDockerBounded version }
+        Save-AfctDiagnosticCommand $bundleDir 'docker-info.txt'    { Invoke-AfctDockerBounded info }
         if (Test-Path -LiteralPath $RuntimeCompose) {
-            Invoke-AfctCompose ps *>&1 | Set-Content (Join-Path $bundleDir 'compose-ps.txt')
-            Invoke-AfctCompose logs --no-color --tail 400 *>&1 | Set-Content (Join-Path $bundleDir 'compose-logs.txt')
+            Save-AfctDiagnosticCommand $bundleDir 'compose-ps.txt' {
+                Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerCommandTimeout) ps
+            }
+            # Logs get a longer allowance than an inspection: 400 lines from six services is
+            # real work even on a healthy daemon, and this is the single most useful file in
+            # the bundle.
+            Save-AfctDiagnosticCommand $bundleDir 'compose-logs.txt' {
+                Invoke-AfctComposeBounded -TimeoutSeconds ((Get-AfctDockerCommandTimeout) * 3) logs --no-color --tail 400
+            }
         }
     } else {
         Set-Content -LiteralPath (Join-Path $bundleDir 'docker-unavailable.txt') -Value 'Docker Desktop was unavailable or its daemon could not be reached.'

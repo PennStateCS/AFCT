@@ -98,3 +98,53 @@ Describe 'Assert-AfctBindMounts' {
         Get-AfctBindCheckImage | Should -Be 'alpine:3.20'
     }
 }
+
+<#
+  Docker Desktop answers `docker version` before its file sharing is ready, so an install
+  started as soon as the whale stops spinning failed the mount check and was told to go and
+  edit a sharing list. The identical mount succeeded minutes later with nothing changed.
+#>
+Describe 'The bind-mount retry and what it blames' {
+    BeforeEach {
+        Mock -CommandName Test-AfctDockerImagePresent -MockWith { $true }
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+    }
+
+    It 'accepts a mount that only works on a later attempt' {
+        $script:tries = 0
+        Mock -CommandName Test-AfctDockerBindMount -MockWith {
+            $script:tries++
+            return ($script:tries -ge 2)
+        }
+        { Assert-AfctBindMounts @($Shared) } | Should -Not -Throw
+        $script:tries | Should -BeGreaterThan 1
+    }
+
+    It 'does not tell you to reinstall to the prefix that just failed' {
+        # The default prefix IS the failing path here, so "reinstall using the default
+        # prefix" is advice that changes nothing and reads as nonsense to somebody who never
+        # chose a prefix.
+        $env:AFCT_BIND_CHECK_ATTEMPTS = '1'
+        try {
+            $default = Join-Path $env:LOCALAPPDATA 'AFCT'
+            New-Item -ItemType Directory -Path $default -Force | Out-Null
+            Mock -CommandName Test-AfctDockerBindMount -MockWith { $false }
+            $err = $null
+            try { Assert-AfctBindMounts @($default) } catch { $err = "$($_.Exception.Message)" }
+            $err | Should -Match 'could not mount'
+            $err | Should -Not -Match 'reinstall using the default prefix'
+            $err | Should -Match 'default location'
+        } finally { Remove-Item Env:\AFCT_BIND_CHECK_ATTEMPTS -ErrorAction SilentlyContinue }
+    }
+
+    It 'still suggests the default prefix for a genuinely unusual path' {
+        $env:AFCT_BIND_CHECK_ATTEMPTS = '1'
+        try {
+            Mock -CommandName Test-AfctDockerBindMount -MockWith { $false }
+            $err = $null
+            try { Assert-AfctBindMounts @($Shared) } catch { $err = "$($_.Exception.Message)" }
+            $err | Should -Match 'reinstall using the default prefix'
+        } finally { Remove-Item Env:\AFCT_BIND_CHECK_ATTEMPTS -ErrorAction SilentlyContinue }
+    }
+}
