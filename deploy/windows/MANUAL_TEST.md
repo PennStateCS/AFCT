@@ -26,23 +26,23 @@ pull-from-cold has not been observed end to end.
 
 ## Basic installation
 
-| #   | Item                                                                           | Status | Notes                                                                                                  |
-| --- | ------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------ |
-| 1   | Windows 11                                                                     | T      | Win11 Pro 25H2 build 26200                                                                             |
-| 2   | Windows 10 (if available)                                                      | NT     |                                                                                                        |
-| 3   | Docker Desktop missing (clear install guidance)                                | NT     |                                                                                                        |
-| 4   | Docker Desktop installed but stopped (clear "start it" message)                | NT     |                                                                                                        |
-| 5   | Fresh install via `install-windows.ps1`                                        | B      | bootstrap, config, startup and the success report all verified; a cold pull is blocked by this network |
-| 6   | Repeated install (idempotent; active release unchanged)                        | T      | same release id, not re-extracted                                                                      |
-| 7   | Custom prefix (`-Prefix`)                                                      | NT     |                                                                                                        |
-| 8   | Prefix containing spaces                                                       | NT     |                                                                                                        |
-| 9   | `https://localhost` access                                                     | T      | HTTPS 200 from the box; browser look is still a manual check                                           |
-| 10  | LAN IP access from another device (firewall allows 80/443)                     | NT     |                                                                                                        |
-| 11  | Self-signed certificate warning behaves as documented                          | NT     |                                                                                                        |
-| 12  | Login with generated administrator credentials                                 | NT     |                                                                                                        |
-| 13  | Non-interactive install (`-NonInteractive` + env vars/password file)           | T      | ADMIN_PASSWORD_FILE + APP_URL/ADMIN_EMAIL                                                              |
-| 14  | `Set-ExecutionPolicy`-restricted machine: `-ExecutionPolicy Bypass` path works | NT     |                                                                                                        |
-| 15  | WSL 2 unavailable: Docker Desktop guidance is clear                            | NT     |                                                                                                        |
+| #   | Item                                                                           | Status | Notes                                                                                   |
+| --- | ------------------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------- |
+| 1   | Windows 11                                                                     | T      | Win11 Pro 25H2 build 26200                                                              |
+| 2   | Windows 10 (if available)                                                      | NT     |                                                                                         |
+| 3   | Docker Desktop missing (clear install guidance)                                | NT     |                                                                                         |
+| 4   | Docker Desktop installed but stopped (clear "start it" message)                | NT     |                                                                                         |
+| 5   | Fresh install via `install-windows.ps1`                                        | T      | full startup observed end to end, ending "The web service is responding at /api/health" |
+| 6   | Repeated install (idempotent; active release unchanged)                        | T      | same release id, not re-extracted                                                       |
+| 7   | Custom prefix (`-Prefix`)                                                      | NT     |                                                                                         |
+| 8   | Prefix containing spaces                                                       | NT     |                                                                                         |
+| 9   | `https://localhost` access                                                     | T      | HTTPS 200 from the box; browser look is still a manual check                            |
+| 10  | LAN IP access from another device (firewall allows 80/443)                     | NT     |                                                                                         |
+| 11  | Self-signed certificate warning behaves as documented                          | NT     |                                                                                         |
+| 12  | Login with generated administrator credentials                                 | NT     |                                                                                         |
+| 13  | Non-interactive install (`-NonInteractive` + env vars/password file)           | T      | ADMIN_PASSWORD_FILE + APP_URL/ADMIN_EMAIL                                               |
+| 14  | `Set-ExecutionPolicy`-restricted machine: `-ExecutionPolicy Bypass` path works | NT     |                                                                                         |
+| 15  | WSL 2 unavailable: Docker Desktop guidance is clear                            | NT     |                                                                                         |
 
 ## Command availability
 
@@ -57,7 +57,7 @@ pull-from-cold has not been observed end to end.
 
 | #   | Item                                                                | Status | Notes                                                                                             |
 | --- | ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------- |
-| 1   | Install prints a stage line per service, not one silent line        | NT     | PostgreSQL, app, worker, nginx                                                                    |
+| 1   | Install prints a stage line per service, not one silent line        | T      | one line per service on the way up and again when each is healthy                                 |
 | 2   | A long stage prints a status heartbeat about every 30s              | T      | download and container-start heartbeats both fire; elapsed label fixed since                      |
 | 3   | Install finishes; `docker ps` shows all five containers             | T      | all five containers healthy and the install reports ready (reached via the already-running path)  |
 | 4   | Rerunning the installer on a healthy stack skips the startup        | T      | "AFCT is already running and healthy at the expected version"; no restart, no registry call       |
@@ -94,19 +94,19 @@ pull-from-cold has not been observed end to end.
 
 ## Docker Desktop behavior
 
-| #   | Item                                                                               | Status | Notes                                                                                   |
-| --- | ---------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------- |
-| 1   | Restart Docker Desktop                                                             | NT     |                                                                                         |
-| 2   | Restart Windows                                                                    | NT     |                                                                                         |
-| 3   | AFCT containers recover after Docker Desktop starts                                | NT     |                                                                                         |
-| 4   | Bind-mount preflight: default prefix mounts cleanly                                | NT     |                                                                                         |
-| 5   | Bind-mount preflight: custom prefix INSIDE an allowed file-sharing path works      | NT     |                                                                                         |
-| 6   | Bind-mount preflight: custom prefix OUTSIDE the allowed path fails, names the path | NT     |                                                                                         |
-| 7   | Bind-mount preflight: network/removable-drive path warns (and fails the mount)     | NT     |                                                                                         |
-| 8   | Image-pull failure is reported as a network problem, NOT file sharing              | T      | correctly not blamed on file sharing; but recommends `docker login` for a network fault |
-| 9   | Path-sharing failure is reported as file sharing, NOT a download problem           | NT     | Choose a non-shared prefix                                                              |
-| 10  | `AFCT_BIND_CHECK_IMAGE` override uses an already-present image                     | NT     |                                                                                         |
-| 11  | Low disk space: install warns, update refuses before pulling                       | T      | install warned below 15 GB                                                              |
+| #   | Item                                                                               | Status | Notes                                                                      |
+| --- | ---------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------- |
+| 1   | Restart Docker Desktop                                                             | NT     |                                                                            |
+| 2   | Restart Windows                                                                    | NT     |                                                                            |
+| 3   | AFCT containers recover after Docker Desktop starts                                | NT     |                                                                            |
+| 4   | Bind-mount preflight: default prefix mounts cleanly                                | NT     |                                                                            |
+| 5   | Bind-mount preflight: custom prefix INSIDE an allowed file-sharing path works      | NT     |                                                                            |
+| 6   | Bind-mount preflight: custom prefix OUTSIDE the allowed path fails, names the path | NT     |                                                                            |
+| 7   | Bind-mount preflight: network/removable-drive path warns (and fails the mount)     | NT     |                                                                            |
+| 8   | Image-pull failure is reported as a network problem, NOT file sharing              | T      | reported as a registry problem, and the install continued on cached images |
+| 9   | Path-sharing failure is reported as file sharing, NOT a download problem           | NT     | Choose a non-shared prefix                                                 |
+| 10  | `AFCT_BIND_CHECK_IMAGE` override uses an already-present image                     | NT     |                                                                            |
+| 11  | Low disk space: install warns, update refuses before pulling                       | T      | install warned below 15 GB                                                 |
 
 ## Experimental updater
 
