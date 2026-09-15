@@ -196,40 +196,76 @@ function Get-AfctImageTag {
     return $ref.Substring($colon + 1)
 }
 
-# Read one service's container state as "<status>|<health>|<image>".
+# Read one service's container state as "<status>|<health>|<image>|<reason>".
+#
+# Two different answers used to come back as the same string. Every failure here returned
+# 'missing|none|', so "the daemon answered and there is no such container" and "I never
+# found out" were indistinguishable, and a stack with four healthy containers was reported
+# to the operator as `postgres: missing, app: missing, worker: missing, nginx: missing,
+# db-backup: missing`. That is a confident wrong answer, which is worse than no answer.
+#
+# `missing` now means only what it says. Everything unverifiable is `unknown` and carries
+# the reason it is unknown. Both are still not-ready, so nothing downstream becomes more
+# permissive: this changes what is printed, not what is allowed.
 function Get-AfctServiceState {
     param([string]$Service, [AllowNull()][Nullable[DateTime]]$Deadline)
 
     $bound = Get-AfctCallTimeout $Deadline
-    if ($bound -le 0) { return 'missing|none|' }
+    if ($bound -le 0) { return 'unknown|none||not checked, the time budget was already spent' }
 
     $ps = Invoke-AfctComposeBounded -TimeoutSeconds $bound ps -q $Service
-    if ($ps.TimedOut -or $ps.ExitCode -ne 0) { return 'missing|none|' }
+    if ($ps.TimedOut) { return "unknown|none||Docker did not answer within ${bound}s while looking for the container" }
+    if ($ps.ExitCode -ne 0) { return "unknown|none||Docker could not list the container (exit $($ps.ExitCode))" }
+
+    # The daemon answered and named no container. This is the one real 'missing'.
     $id = (@($ps.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
-    if (-not $id) { return 'missing|none|' }
+    if (-not $id) { return 'missing|none||' }
 
     $bound = Get-AfctCallTimeout $Deadline
-    if ($bound -le 0) { return 'missing|none|' }
+    if ($bound -le 0) { return 'unknown|none||not inspected, the time budget ran out after the container was found' }
     $inspect = Invoke-AfctDockerBounded -TimeoutSeconds $bound inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}' $id.Trim()
-    if ($inspect.TimedOut -or $inspect.ExitCode -ne 0) { return 'missing|none|' }
+    if ($inspect.TimedOut) { return "unknown|none||Docker did not answer within ${bound}s while inspecting the container" }
+    if ($inspect.ExitCode -ne 0) { return "unknown|none||Docker could not inspect the container (exit $($inspect.ExitCode))" }
     $state = (@($inspect.StdOut) | Where-Object { $_ -and $_.Trim() } | Select-Object -First 1)
-    if (-not $state) { return 'missing|none|' }
-    return $state.Trim()
+    if (-not $state) { return 'unknown|none||Docker returned nothing when asked about the container' }
+    return ($state.Trim() + '|')
+}
+
+# Parse a service-state string into its four fields, tolerating a short one.
+#
+# Indexing past the end of a -split result is a terminating error under Set-StrictMode, so a
+# state string carrying fewer fields than expected would crash the caller outright. That is
+# the worst possible failure for the code whose whole job is reporting state, and it is an
+# easy one to reintroduce: any caller or test double that returns the older three-field form
+# would do it. Missing fields read as empty instead.
+function ConvertFrom-AfctServiceState {
+    param([string]$State)
+    $parts = @("$State" -split '\|', 4)
+    while ($parts.Count -lt 4) { $parts += '' }
+    return [pscustomobject]@{
+        Status = $parts[0]
+        Health = $parts[1]
+        Image  = $parts[2]
+        Reason = $parts[3]
+    }
 }
 
 function Get-AfctAppContainerState {
     param([AllowNull()][Nullable[DateTime]]$Deadline)
-    $parts = (Get-AfctServiceState -Service $AppService -Deadline $Deadline) -split '\|', 3
-    if ($parts[0] -eq 'missing') { return $null }
-    return "$($parts[0])|$($parts[1])"
+    $parsed = ConvertFrom-AfctServiceState (Get-AfctServiceState -Service $AppService -Deadline $Deadline)
+    # Only a real absence is $null. 'unknown' is carried through with its reason so the
+    # caller can say it could not tell, rather than assert the container is not running.
+    if ($parsed.Status -eq 'missing') { return $null }
+    return "$($parsed.Status)|$($parsed.Health)|$($parsed.Reason)"
 }
 
 function Test-AfctServiceReady {
     param([string]$State, [bool]$RequiresHealth)
-    $parts = $State -split '\|', 3
-    if ($parts[0] -ne 'running') { return $false }
+    # Requires the literal 'running', so 'unknown' is never ready. Fail closed.
+    $parsed = ConvertFrom-AfctServiceState $State
+    if ($parsed.Status -ne 'running') { return $false }
     if (-not $RequiresHealth) { return $true }
-    return ($parts[1] -eq 'healthy')
+    return ($parsed.Health -eq 'healthy')
 }
 
 # --------------------------------------------------------------------------- #
@@ -287,12 +323,14 @@ function Get-AfctStackState {
     $optionalWarnings = @()
     foreach ($svc in $expected) {
         $state = Get-AfctServiceState -Service $svc.Name -Deadline $Deadline
-        $parts = $state -split '\|', 3
+        $parsed = ConvertFrom-AfctServiceState $state
         $ready = Test-AfctServiceReady -State $state -RequiresHealth $svc.RequiresHealth
 
-        $actualTag = Get-AfctImageTag $parts[2]
+        $actualTag = Get-AfctImageTag $parsed.Image
         $matches = $true
-        if ($svc.Versioned -and $parts[0] -ne 'missing' -and $actualTag) {
+        # Only compare tags for a container we actually read. 'missing' and 'unknown' both
+        # yield no image, so neither can claim a version mismatch.
+        if ($svc.Versioned -and $parsed.Status -eq 'running' -and $actualTag) {
             $matches = ($actualTag -ceq $wantTag)
         }
         if ($svc.Required) {
@@ -306,9 +344,10 @@ function Get-AfctStackState {
         $services += [pscustomobject]@{
             Name             = $svc.Name
             Label            = $svc.Label
-            Status           = $parts[0]
-            Health           = $parts[1]
-            Image            = $parts[2]
+            Status           = $parsed.Status
+            Health           = $parsed.Health
+            Image            = $parsed.Image
+            Reason           = $parsed.Reason
             Ready            = $ready
             Required         = $svc.Required
             Versioned        = $svc.Versioned
@@ -353,7 +392,10 @@ function Format-AfctStackState {
     $parts = @()
     foreach ($svc in $State.Services) {
         $text = "$($svc.Name): $($svc.Status)"
-        if ($svc.Health -and $svc.Health -ne 'none') { $text += " ($($svc.Health))" }
+        # An unknown state without its reason is the old bug in a new word: it still reads
+        # as a finding about the container rather than about the check.
+        if ($svc.Status -eq 'unknown' -and $svc.Reason) { $text += " ($($svc.Reason))" }
+        elseif ($svc.Health -and $svc.Health -ne 'none') { $text += " ($($svc.Health))" }
         $parts += $text
     }
     return ($parts -join ', ')

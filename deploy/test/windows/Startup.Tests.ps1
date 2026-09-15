@@ -391,12 +391,20 @@ Describe 'Docker inspection cannot hang' {
         finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
     }
 
-    It 'reads a service as missing when compose ps or inspect never answers' {
+    <#
+      A daemon that never answers leaves the state unread, which is not the same as reading
+      it and finding nothing. Reporting both as "missing" is how a stack with four healthy
+      containers came out as "postgres: missing, app: missing, ..." after a timeout.
+    #>
+    It 'reads a service as unknown, not missing, when compose ps never answers' {
         Use-DockerShim "@echo off`r`nping -n 120 127.0.0.1 >nul`r`nexit /b 0"
         $env:AFCT_DOCKER_COMMAND_TIMEOUT = '2'
         try {
             $started = Get-Date
-            Get-AfctServiceState 'app' | Should -Be 'missing|none|'
+            $state = Get-AfctServiceState 'app'
+            $state | Should -Match '^unknown\|'
+            # And carries why, because "unknown" with no reason is barely better.
+            (ConvertFrom-AfctServiceState $state).Reason | Should -Not -BeNullOrEmpty
             ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 30
         } finally { Remove-Item Env:\AFCT_DOCKER_COMMAND_TIMEOUT -ErrorAction SilentlyContinue }
     }
@@ -802,6 +810,11 @@ Describe 'Test-AfctServiceReady' {
         Test-AfctServiceReady -State 'running|starting|img' -RequiresHealth $true | Should -BeFalse
         Test-AfctServiceReady -State 'running|none|img'    -RequiresHealth $false | Should -BeTrue
         Test-AfctServiceReady -State 'exited|none|img'     -RequiresHealth $false | Should -BeFalse
+        Test-AfctServiceReady -State 'missing|none||'      -RequiresHealth $false | Should -BeFalse
+        # Unread is not ready. Fail closed: this is what stops "unknown" becoming permission.
+        Test-AfctServiceReady -State 'unknown|none||timed out' -RequiresHealth $false | Should -BeFalse
+        Test-AfctServiceReady -State 'unknown|none||timed out' -RequiresHealth $true  | Should -BeFalse
+        # A short state string must read as empty fields, never throw under StrictMode.
         Test-AfctServiceReady -State 'missing|none|'       -RequiresHealth $false | Should -BeFalse
     }
 
@@ -1322,7 +1335,7 @@ Describe 'The deadline caps the whole inspection, not each call' {
         Mock -CommandName Invoke-AfctDockerBounded -MockWith {
             @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1'); StdErr = @(); Seconds = 0 }
         }
-        Get-AfctServiceState -Service 'app' -Deadline ((Get-Date).AddSeconds(-1)) | Should -Be 'missing|none|'
+        Get-AfctServiceState -Service 'app' -Deadline ((Get-Date).AddSeconds(-1)) | Should -Match '^unknown\|'
         Should -Invoke Invoke-AfctComposeBounded -Exactly 0
         Should -Invoke Invoke-AfctDockerBounded -Exactly 0
     }
@@ -1341,7 +1354,7 @@ Describe 'The deadline caps the whole inspection, not each call' {
         Mock -CommandName Invoke-AfctDockerBounded -MockWith {
             @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1'); StdErr = @(); Seconds = 0 }
         }
-        Get-AfctServiceState -Service 'app' -Deadline $script:deadline | Should -Be 'missing|none|'
+        Get-AfctServiceState -Service 'app' -Deadline $script:deadline | Should -Match '^unknown\|'
         # The second call never ran, because by then there was nothing left to give it.
         Should -Invoke Invoke-AfctDockerBounded -Exactly 0
     }
@@ -1689,5 +1702,58 @@ Describe 'Explaining why a health request failed' {
         $err = $null
         try { throw [System.Net.WebException]::new('The underlying connection was closed: Could not establish trust relationship for the SSL/TLS secure channel.') } catch { $err = $_ }
         Get-AfctHttpFailureReason $err | Should -Match 'TLS or certificate failure'
+    }
+}
+
+<#
+  Telling "there is no such container" apart from "I never found out".
+
+  Both used to come back as 'missing|none|'. A post-timeout recovery check then reported a
+  stack whose containers were up and healthy as entirely missing, which sent the operator
+  looking for containers that were running. Both are still not-ready; only the reporting
+  changed.
+#>
+Describe 'Unknown is not missing' {
+    It 'parses a full state string into its four fields' {
+        $p = ConvertFrom-AfctServiceState 'running|healthy|img:v1|'
+        $p.Status | Should -Be 'running'
+        $p.Health | Should -Be 'healthy'
+        $p.Image  | Should -Be 'img:v1'
+        $p.Reason | Should -BeNullOrEmpty
+    }
+
+    It 'pads a short state string instead of throwing under StrictMode' {
+        # Indexing past the end of a -split result is a terminating error here, so a
+        # three-field string (any older caller or test double) would crash the installer.
+        $p = ConvertFrom-AfctServiceState 'missing|none|'
+        $p.Status | Should -Be 'missing'
+        $p.Reason | Should -BeNullOrEmpty
+    }
+
+    It 'keeps the reason out of the image field' {
+        # The reason must never land in the image slot: a 3-way split would put it there,
+        # and the tag comparison would then read it as a version.
+        $p = ConvertFrom-AfctServiceState 'unknown|none||Docker did not answer within 10s'
+        $p.Image  | Should -BeNullOrEmpty
+        $p.Reason | Should -Be 'Docker did not answer within 10s'
+        Get-AfctImageTag $p.Image | Should -BeNullOrEmpty
+    }
+
+    It 'shows the reason when it formats an unknown service' {
+        $state = [pscustomobject]@{ Services = @(
+            [pscustomobject]@{ Name = 'app'; Status = 'unknown'; Health = 'none'; Reason = 'Docker did not answer within 10s' }
+            [pscustomobject]@{ Name = 'nginx'; Status = 'running'; Health = 'healthy'; Reason = '' }
+        ) }
+        $text = Format-AfctStackState $state
+        $text | Should -Match 'app: unknown \(Docker did not answer within 10s\)'
+        $text | Should -Match 'nginx: running \(healthy\)'
+    }
+
+    It 'still reports a genuinely absent container as missing' {
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 0 }
+        }
+        # The daemon answered and named no container. That, and only that, is missing.
+        Get-AfctServiceState -Service 'app' | Should -Match '^missing\|'
     }
 }

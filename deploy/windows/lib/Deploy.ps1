@@ -280,7 +280,13 @@ function Show-AfctStatus {
     Invoke-AfctCompose ps | ForEach-Object { Write-Host $_ }
     $state = Get-AfctAppContainerState
     if (-not $state) { Write-AfctWarn "the $AppService container is not running."; exit 1 }
-    $containerState, $healthState = $state -split '\|', 2
+    $containerState, $healthState, $reason = $state -split '\|', 3
+    # "unknown" on its own would read as a fact about AFCT. Say that the check did not
+    # complete, and why, and still exit nonzero: an unread state is not a healthy one.
+    if ($containerState -eq 'unknown') {
+        Write-AfctWarn "could not determine the state of the $AppService container: $reason"
+        exit 1
+    }
     Write-AfctInfo "application state: $containerState"
     Write-AfctInfo "application health: $healthState"
 }

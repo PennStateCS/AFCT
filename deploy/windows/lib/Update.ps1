@@ -367,11 +367,16 @@ function Invoke-AfctMaybeEnableUpdater {
         # Repaired, not enforced. The updater is optional and experimental on Windows, and
         # AFCT itself is already up by the time this runs, so a sidecar that will not start
         # is worth saying out loud and nothing more.
-        $state = Get-AfctServiceState $UpdaterService
-        if (($state -split '\|', 3)[0] -eq 'missing') {
+        $parsed = ConvertFrom-AfctServiceState (Get-AfctServiceState $UpdaterService)
+        if ($parsed.Status -eq 'missing') {
             Write-AfctWarn 'the in-app updater is enabled in the configuration but its container is not running; starting it.'
             if (Start-AfctUpdater) { Write-AfctSuccess 'In-app updater restarted.' }
             else { Write-AfctWarn "the in-app updater could not be started. AFCT is unaffected; run 'afctctl enable-updater' to retry, or 'afctctl disable-updater' to turn it off." }
+        } elseif ($parsed.Status -eq 'unknown') {
+            # Repairing on a state nobody read would recreate a container that may be fine.
+            # Saying nothing would be worse: the operator would never learn the check was
+            # skipped. Report it and leave the sidecar alone.
+            Write-AfctWarn "could not tell whether the in-app updater is running ($($parsed.Reason)); leaving it alone. Check it with 'afctctl status'."
         }
         return
     }

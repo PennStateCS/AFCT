@@ -88,6 +88,11 @@ function Invoke-AfctDoctor {
                     continue
                 }
                 if ($svc.Status -eq 'missing') { Write-AfctWarn "$($svc.Label) is not running" }
+                elseif ($svc.Status -eq 'unknown') {
+                    # Doctor is read-only and exists to be trusted. "is unknown" would read
+                    # as a diagnosis; this says the check did not complete, and why.
+                    Write-AfctWarn "$($svc.Label): could not be checked ($($svc.Reason))"
+                }
                 else {
                     $label = "$($svc.Label) is $($svc.Status)"
                     if ($svc.Health -and $svc.Health -ne 'none') { $label += " ($($svc.Health))" }
