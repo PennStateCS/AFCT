@@ -73,6 +73,22 @@ function Test-AfctComposeConfig {
 # It costs Docker's own progress bars, so the heartbeat reads the last line out of the
 # capture and prints it: not a bar, but a real answer to "is it still doing something", and
 # a number the operator can watch move.
+# Elapsed time for a heartbeat line.
+#
+# Floor, not [int]: PowerShell's [int] rounds half to even, so [int](90/60) is 2 and a
+# 90-second wait announced itself as "2m". With a 30-second heartbeat that also made
+# consecutive lines repeat (2m, 2m, 2m) and jump (3m, then 4m at 3m30s). Two identical
+# consecutive lines read as a hang, which is the exact thing these heartbeats exist to rule
+# out, so the seconds are kept.
+function Format-AfctElapsed {
+    param([int]$Seconds)
+    if ($Seconds -lt 60) { return "${Seconds}s" }
+    $minutes = [math]::Floor($Seconds / 60)
+    $rest = $Seconds - ($minutes * 60)
+    if ($rest -eq 0) { return "${minutes}m" }
+    return "${minutes}m${rest}s"
+}
+
 function Get-AfctImages {
     Write-AfctInfo 'downloading AFCT container images...'
     $required = @(Get-AfctExpectedServices | Where-Object { $_.Required } | ForEach-Object { $_.Name })
@@ -80,9 +96,7 @@ function Get-AfctImages {
     $heartbeat = {
         param($elapsed, $outPath, $errPath)
         $line = Get-AfctLastProgressLine $outPath $errPath
-        $minutes = [int]($elapsed / 60)
-        $for = "${elapsed}s"
-        if ($minutes -ge 1) { $for = "${minutes}m" }
+        $for = Format-AfctElapsed $elapsed
         if ($line) { Write-AfctInfo "still downloading after ${for}: $line" }
         else { Write-AfctInfo "still downloading after ${for}..." }
     }
@@ -95,7 +109,11 @@ function Get-AfctImages {
     }
     if ($result.ExitCode -ne 0) {
         Show-AfctComposeFailure $result
-        throw "afct-fatal: container images could not be downloaded. Check the network and registry authentication. If the images are private, run 'docker login ghcr.io' and re-run."
+        # Docker's own message is printed immediately above by Show-AfctComposeFailure, so
+        # this points at it rather than asserting a cause. It used to lead with
+        # "run docker login", which sent people to fix authentication when what actually
+        # happened here was a name-resolution failure inside Docker Desktop.
+        throw "afct-fatal: the AFCT container images could not be downloaded. Docker's own message is above, and it usually says which: most often the registry could not be reached, and occasionally it needs a sign-in ('docker login ghcr.io'). Nothing on this machine was changed; run the installer again once the connection is working, and anything already downloaded is kept."
     }
     Write-AfctSuccess 'Container images downloaded.'
 
@@ -422,40 +440,149 @@ function Start-AfctOptionalServices {
     }
 }
 
+# Show what Docker actually said when a Compose call failed.
+#
+# stderr comes first and is never crowded out. During a pull, stdout is hundreds of
+# per-layer progress lines, so taking the last 12 of the two concatenated buried the reason:
+# a real "failed to copy: ... i/o timeout" was pushed off the end by "Downloading 1.049MB"
+# repeated, and the operator was shown progress where the cause should have been.
 function Show-AfctComposeFailure {
     param($Result)
-    $lines = @($Result.StdErr) + @($Result.StdOut) | Where-Object { $_ -and $_.Trim() }
+    $errLines = @($Result.StdErr) | Where-Object { $_ -and $_.Trim() }
+    $outLines = @($Result.StdOut) | Where-Object { $_ -and $_.Trim() }
+
+    # Per-layer progress says nothing once the call has failed. Dropped only when something
+    # else survives, so a failure whose entire output is progress still shows the operator
+    # something rather than nothing.
+    $informative = @($outLines | Where-Object {
+        $_ -notmatch '^\s*\S+\s+(Pulling fs layer|Waiting|Downloading|Extracting|Verifying Checksum|Download complete|Pull complete|Already exists)\s*$' -and
+        $_ -notmatch '^\s*\S+\s+(Downloading|Extracting)\s+\S+\s*$'
+    })
+    if ($informative) { $outLines = $informative }
+
+    $lines = @($errLines | Select-Object -Last 12)
+    $room = 12 - $lines.Count
+    if ($room -gt 0 -and $outLines) { $lines += @($outLines | Select-Object -Last $room) }
     if (-not $lines) { return }
     Write-AfctInfo 'Docker reported:'
-    foreach ($line in (@($lines) | Select-Object -Last 12)) {
+    foreach ($line in $lines) {
         Write-Host "  $line"
         Write-AfctTrace "docker: $line"
     }
 }
 
+# True when this host's Invoke-WebRequest can be told to skip certificate validation
+# directly. PowerShell 7 can; Windows PowerShell 5.1 cannot, and needs the policy below.
+function Test-AfctSkipCertSupported {
+    $cmd = Get-Command Invoke-WebRequest -ErrorAction SilentlyContinue
+    if (-not $cmd) { return $false }
+    return $cmd.Parameters.ContainsKey('SkipCertificateCheck')
+}
+
+# Make this process accept the self-signed certificate AFCT starts with, returning whatever
+# policy was in place so the caller can put it back (or $null when nothing was changed).
+#
+# Which mechanism works depends on the host, and picking the wrong one fails silently: the
+# request just errors and the installer reports that the web service never answered.
+#
+#   Windows PowerShell 5.1 - Invoke-WebRequest is WebRequest-based. Assigning a ScriptBlock
+#   to ServerCertificateValidationCallback does NOT work here: the request runs off-thread,
+#   the ScriptBlock cannot be invoked from it, and it surfaces as "The underlying connection
+#   was closed: An unexpected error occurred on a send." That is what shipped, and it made
+#   the probe fail against a stack that was serving correctly. A compiled ICertificatePolicy
+#   is honoured. It is obsolete in .NET, and it is what works on this host.
+#
+#   PowerShell 7+ - Invoke-WebRequest is HttpClient-based and ignores ServicePointManager
+#   entirely, so only -SkipCertificateCheck has any effect. The controller really can run
+#   there: install.ps1 invokes it in-process, so `pwsh .\install-windows.ps1` runs all of
+#   this under 7.
+function Enable-AfctSelfSignedTrust {
+    if (Test-AfctSkipCertSupported) { return $null }
+    try {
+        if (-not ('AfctTrustAllCertificates' -as [type])) {
+            Add-Type -TypeDefinition @'
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
+public class AfctTrustAllCertificates : ICertificatePolicy {
+    public bool CheckValidationResult(ServicePoint sp, X509Certificate cert, WebRequest req, int problem) { return true; }
+}
+'@
+        }
+    } catch {
+        # Constrained Language Mode and other locked-down hosts refuse Add-Type. Traced, not
+        # thrown: this runs inside the health wait, and the operator needs to know the probe
+        # was hobbled rather than be told AFCT is unreachable.
+        Write-AfctTrace "health probe: could not compile the certificate policy: $($_.Exception.Message)"
+        return $null
+    }
+    $prev = [System.Net.ServicePointManager]::CertificatePolicy
+    [System.Net.ServicePointManager]::CertificatePolicy = New-Object AfctTrustAllCertificates
+    return $prev
+}
+
+# Say why a health request failed, in the terms that change what the operator does next:
+# nothing is listening yet, the TLS handshake failed, or AFCT answered with an error status.
+function Get-AfctHttpFailureReason {
+    param($ErrorRecord)
+    $ex = $ErrorRecord.Exception
+    try {
+        if ($ex.Response -and $ex.Response.StatusCode) { return "answered HTTP $([int]$ex.Response.StatusCode)" }
+    } catch { }
+    $detail = "$($ex.Message)"
+    $status = ''
+    try { $status = "$($ex.Status)" } catch { }
+    if ($status -match 'TrustFailure|SecureChannelFailure') { return "TLS or certificate failure: $detail" }
+    if ($status -match 'ConnectFailure')                    { return "nothing listening yet: $detail" }
+    if ($status -match 'Timeout')                           { return "timed out: $detail" }
+    if ($detail -match 'actively refused|ConnectionRefused|No connection could be made') { return "nothing listening yet: $detail" }
+    if ($detail -match 'SSL|TLS|certificate|secure channel|underlying connection was closed') { return "TLS or certificate failure: $detail" }
+    return $detail
+}
+
 # Best-effort end-to-end check that nginx serves the app. Self-signed cert on first boot, so
-# bypass cert validation for this one localhost call (restored afterward).
+# certificate validation is bypassed for this one localhost call and restored afterward.
 function Test-AfctHttpHealth {
     param([AllowNull()][Nullable[DateTime]]$Deadline)
 
-    $prev = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
-    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    $skipCert     = Test-AfctSkipCertSupported
+    $prevPolicy   = Enable-AfctSelfSignedTrust
+    $prevProtocol = [System.Net.ServicePointManager]::SecurityProtocol
     try {
+        # 5.1 still negotiates SSL3/TLS1.0 by default on some builds while nginx offers
+        # TLS 1.2. Ignored by 7, which does not read ServicePointManager.
+        try { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 }
+        catch { Write-AfctTrace "health probe: could not select TLS 1.2: $($_.Exception.Message)" }
+
         foreach ($scheme in 'https', 'http') {
             $budget = 10
             if ($null -ne $Deadline) {
                 $left = Get-AfctRemainingSeconds $Deadline
-                if ($left -le 0) { return $false }
+                if ($left -le 0) {
+                    Write-AfctTrace 'health probe: skipped, no time left in the budget'
+                    return $false
+                }
                 $budget = [Math]::Min(10, [Math]::Max(1, $left))
             }
+            $request = @{
+                Uri             = "${scheme}://localhost$HealthPath"
+                TimeoutSec      = $budget
+                UseBasicParsing = $true
+            }
+            if ($skipCert) { $request['SkipCertificateCheck'] = $true }
             try {
-                Invoke-WebRequest -Uri "${scheme}://localhost$HealthPath" -TimeoutSec $budget -UseBasicParsing | Out-Null
+                Invoke-WebRequest @request | Out-Null
+                Write-AfctTrace "health probe: $scheme answered"
                 return $true
-            } catch { }
+            } catch {
+                # Never silent. This is the check that decides whether the install succeeded,
+                # and "the web service did not answer" on its own tells nobody anything.
+                Write-AfctTrace "health probe: $scheme failed: $(Get-AfctHttpFailureReason $_)"
+            }
         }
         return $false
     } finally {
-        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prev
+        if ($null -ne $prevPolicy) { [System.Net.ServicePointManager]::CertificatePolicy = $prevPolicy }
+        [System.Net.ServicePointManager]::SecurityProtocol = $prevProtocol
     }
 }
 

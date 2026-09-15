@@ -1382,10 +1382,19 @@ Describe 'The deadline caps the whole inspection, not each call' {
     <#
       Two schemes at ten seconds each is twenty seconds, which a startup with two seconds
       left cannot afford.
+
+      The request is mocked to burn its own TimeoutSec rather than relying on nothing being
+      listening on localhost. That assumption is false on any machine where AFCT is actually
+      deployed, and while the probe was broken the test passed there for the wrong reason:
+      every request failed, so "both schemes failed" was true no matter what the budget did.
     #>
     It 'keeps both HTTP probes inside the remaining budget' {
+        Mock -CommandName Invoke-WebRequest -MockWith {
+            param($Uri, $TimeoutSec)
+            Start-Sleep -Seconds $TimeoutSec
+            throw 'no route to host'
+        }
         $started = Get-Date
-        # Nothing is listening, so both schemes fail; the question is how long that takes.
         Test-AfctHttpHealth -Deadline ((Get-Date).AddSeconds(2)) | Should -BeFalse
         ((Get-Date) - $started).TotalSeconds | Should -BeLessThan 10
     }
@@ -1603,5 +1612,82 @@ Describe 'Diagnostics redaction' {
         )
         Hide-AfctSecretsInTree $root $env2
         (Get-Content -LiteralPath (Join-Path $root 'compose-logs.txt') -Raw) | Should -Not -Match 'SUPERSECRET'
+    }
+}
+
+<#
+  The health probe's certificate handling.
+
+  This is the check that decides whether an install succeeded: Wait-AfctHealth returns
+  successfully only through it, and every other exit is a throw. It shipped using a
+  ScriptBlock on ServerCertificateValidationCallback, which Windows PowerShell 5.1 does not
+  honour when Invoke-WebRequest runs the request off-thread, so the probe failed against a
+  stack that was serving correctly and the installer could never report success on the
+  default self-signed certificate.
+
+  None of these make a network request. The mechanism choice and the failure classification
+  are what is testable without a daemon; that the probe actually accepts a self-signed
+  certificate can only be proved against a real endpoint, and it is a manual checklist item.
+#>
+Describe 'The health probe certificate handling' {
+    It 'picks the mechanism this host actually honours' {
+        # 5.1 has no -SkipCertificateCheck and needs the compiled policy; 7+ ignores
+        # ServicePointManager entirely and needs the switch. Choosing wrong fails silently.
+        $expected = (Get-Command Invoke-WebRequest).Parameters.ContainsKey('SkipCertificateCheck')
+        Test-AfctSkipCertSupported | Should -Be $expected
+    }
+
+    It 'installs a certificate policy on hosts without -SkipCertificateCheck' {
+        if (Test-AfctSkipCertSupported) { Set-ItResult -Skipped -Because 'this host uses -SkipCertificateCheck'; return }
+        $prev = [System.Net.ServicePointManager]::CertificatePolicy
+        try {
+            $returned = Enable-AfctSelfSignedTrust
+            [System.Net.ServicePointManager]::CertificatePolicy | Should -Not -BeNullOrEmpty
+            [System.Net.ServicePointManager]::CertificatePolicy.GetType().Name | Should -Be 'AfctTrustAllCertificates'
+            # Returns the previous policy so the caller can put it back.
+            $returned | Should -Be $prev
+        } finally {
+            [System.Net.ServicePointManager]::CertificatePolicy = $prev
+        }
+    }
+
+    It 'restores the certificate policy and protocol afterwards' {
+        $policyBefore   = [System.Net.ServicePointManager]::CertificatePolicy
+        $protocolBefore = [System.Net.ServicePointManager]::SecurityProtocol
+        # Whether the probe succeeds is irrelevant here, and deliberately not asserted: this
+        # suite also runs on machines with AFCT deployed, where it does succeed.
+        Test-AfctHttpHealth -Deadline ((Get-Date).AddSeconds(2)) | Out-Null
+        [System.Net.ServicePointManager]::CertificatePolicy | Should -Be $policyBefore
+        [System.Net.ServicePointManager]::SecurityProtocol   | Should -Be $protocolBefore
+    }
+
+    It 'gives up without a request when the deadline has already passed' {
+        # Reported, not silent: a probe that never ran must not look like one that failed.
+        Test-AfctHttpHealth -Deadline ((Get-Date).AddSeconds(-1)) | Should -BeFalse
+    }
+}
+
+Describe 'Explaining why a health request failed' {
+    # "the web service did not answer" on its own tells an operator nothing. These are the
+    # three distinctions that change what they do next.
+    It 'reports an HTTP status when AFCT answered' {
+        $err = $null
+        try { throw [System.Net.WebException]::new('nope') } catch { $err = $_ }
+        # A WebException with no Response falls through to the message, which is the point:
+        # it must never claim a status it did not see.
+        Get-AfctHttpFailureReason $err | Should -Not -Match 'answered HTTP'
+    }
+
+    It 'calls a refused connection "nothing listening yet"' {
+        $err = $null
+        try { throw [System.Net.WebException]::new('No connection could be made because the target machine actively refused it') } catch { $err = $_ }
+        Get-AfctHttpFailureReason $err | Should -Match 'nothing listening yet'
+    }
+
+    It 'calls a handshake failure a TLS or certificate failure' {
+        # This exact message is the signature of the bug that prompted all of this.
+        $err = $null
+        try { throw [System.Net.WebException]::new('The underlying connection was closed: Could not establish trust relationship for the SSL/TLS secure channel.') } catch { $err = $_ }
+        Get-AfctHttpFailureReason $err | Should -Match 'TLS or certificate failure'
     }
 }
