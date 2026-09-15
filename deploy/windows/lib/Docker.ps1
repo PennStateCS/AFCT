@@ -303,7 +303,15 @@ function Read-AfctTextFile {
 # stops watching a job the daemon has already finished.
 function Stop-AfctProcessTree {
     param([int]$ProcessId)
-    try { & taskkill /PID $ProcessId /T /F *> $null } catch { }
+    # Traced on failure. A kill that did not work leaves a compose client still holding the
+    # capture files, and the next thing to go wrong is a deletion that "mysteriously" fails;
+    # without this line there is nothing in the trace connecting the two.
+    try {
+        & taskkill /PID $ProcessId /T /F *> $null
+        if ($LASTEXITCODE -ne 0) { Write-AfctTrace "taskkill on PID $ProcessId exited $LASTEXITCODE; the process may still be running" }
+    } catch {
+        Write-AfctTrace "could not stop PID $ProcessId : $($_.Exception.Message)"
+    }
 }
 
 # Does the installed Compose understand `up --wait`?
@@ -331,9 +339,28 @@ function Assert-AfctDockerReady {
     }
     # Both bounded: a preflight that hangs is the same outcome for the operator as a failed
     # one, except that nothing tells them so.
-    $info = Invoke-AfctDockerBounded info
+    #
+    # Retried rather than given a longer single bound. `docker info` on a healthy Docker
+    # Desktop was measured between 1.7s and 23s on the same machine within minutes, the slow
+    # readings arriving exactly when the installer asks: right after a large pull, or while
+    # the engine is still settling. One bounded attempt turned that into "Docker Desktop did
+    # not respond" and ended the install. A retry tells slow apart from wedged, which a
+    # bigger timeout cannot do: it only makes the wedged case take longer.
+    $attempts = [int]([Environment]::GetEnvironmentVariable('AFCT_DOCKER_READY_ATTEMPTS'))
+    if ($attempts -le 0) { $attempts = 3 }
+    $info = $null
+    for ($try = 1; $try -le $attempts; $try++) {
+        $info = Invoke-AfctDockerBounded info
+        if (-not $info.TimedOut) { break }
+        Write-AfctTrace "docker info did not answer within its bound (attempt $try of $attempts)"
+        if ($try -lt $attempts) {
+            # Said out loud. Silent retries are just a longer hang from where the operator sits.
+            Write-AfctInfo "Docker Desktop has not answered yet; waiting and trying again ($try of $attempts)..."
+            Start-Sleep -Seconds 5
+        }
+    }
     if ($info.TimedOut) {
-        throw 'afct-fatal: Docker Desktop did not respond. It may still be starting up, or it may need to be restarted. Wait for the Docker Desktop window to say it is running, then try again.'
+        throw "afct-fatal: Docker Desktop did not respond, after $attempts attempts. It may still be starting up, or it may need to be restarted. Wait for the Docker Desktop window to say it is running, then try again."
     }
     if ($info.ExitCode -ne 0) {
         throw 'afct-fatal: Docker is installed, but its daemon is not reachable. Start Docker Desktop and try again.'
@@ -515,11 +542,34 @@ function Assert-AfctBindMounts {
         if (Test-AfctPathIsNetworkish $dir) {
             Write-AfctWarn "the installation directory is on a network or removable drive ($dir). Docker Desktop may not mount it reliably; a local path such as $(Join-Path $env:LOCALAPPDATA 'AFCT') is recommended."
         }
-        if (-not (Test-AfctDockerBindMount -Image $img -Dir $dir)) {
+        # Retried before it is called a file-sharing problem. Docker Desktop answers
+        # `docker version` before its file sharing is ready, so an install started as soon
+        # as the whale stops spinning failed here and was told to go and edit a sharing
+        # list. The identical mount succeeded minutes later with nothing changed.
+        $mountAttempts = [int]([Environment]::GetEnvironmentVariable('AFCT_BIND_CHECK_ATTEMPTS'))
+        if ($mountAttempts -le 0) { $mountAttempts = 3 }
+        $mounted = $false
+        for ($try = 1; $try -le $mountAttempts; $try++) {
+            if (Test-AfctDockerBindMount -Image $img -Dir $dir) { $mounted = $true; break }
+            Write-AfctTrace "bind-mount check failed for $dir (attempt $try of $mountAttempts)"
+            if ($try -lt $mountAttempts) {
+                Write-AfctInfo "Docker Desktop could not mount $dir yet; waiting and trying again ($try of $mountAttempts)..."
+                Start-Sleep -Seconds 5
+            }
+        }
+        if (-not $mounted) {
             $rec = Join-Path $env:LOCALAPPDATA 'AFCT'
-            throw ("afct-fatal: Docker Desktop could not mount the installation directory: $dir. " +
+            $message = "afct-fatal: Docker Desktop could not mount the installation directory after $mountAttempts attempts: $dir. " +
                 "Docker Desktop can only bind-mount host paths on its file-sharing list; the current drive or path may not be available to it, and network or removable drives may not work reliably. " +
-                "Fix this by adding the directory under Docker Desktop > Settings > Resources > File sharing, or reinstall using the default prefix ($rec), which is local and already shared.")
+                'Fix this by adding the directory under Docker Desktop > Settings > Resources > File sharing'
+            # Suggesting the default prefix is useless when that is where it already failed,
+            # and it reads as nonsense to somebody who never chose a prefix at all.
+            if ($dir -like "$rec*") {
+                $message += ". This is the default location, so file sharing is the likely cause rather than the path; check that Docker Desktop has finished starting, then run the installer again."
+            } else {
+                $message += ", or reinstall using the default prefix ($rec), which is local and already shared."
+            }
+            throw $message
         }
     }
 }
