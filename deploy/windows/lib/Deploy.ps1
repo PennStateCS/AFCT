@@ -48,7 +48,14 @@ function Get-AfctDeclaredVolumes {
 # would orphan the database, so route the user to `recover`.
 function Test-AfctDataWithoutConfig {
     if ((Test-Path -LiteralPath $EnvFile) -and (Test-AfctEnvFileComplete $EnvFile)) { return $false }
-    if (-not (Test-AfctDockerReady)) { return $false }
+
+    # Deliberately NOT short-circuited on "is Docker ready?". That check is one bounded
+    # `docker info`, and a slow daemon that misses the bound used to return $false here,
+    # which is permission to generate fresh credentials: the same branch as "I looked and
+    # there is nothing", for a question nobody actually answered. The bounded `volume ls`
+    # below is the real check and it fails closed, so an unavailable daemon now stops the
+    # install with a message instead of quietly risking the database. Callers reach this
+    # only after Assert-AfctDockerReady has already passed.
 
     $volumes = Get-AfctDeclaredVolumes
     if (-not $volumes) { return $false }

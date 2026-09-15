@@ -401,9 +401,19 @@ Describe 'Existing data volumes without configuration' {
         { Test-AfctDataWithoutConfig } | Should -Throw '*could not verify whether existing data volumes*'
     }
 
-    It 'does not claim there is data when Docker is unavailable' {
+    <#
+      An unreachable daemon must not read as "there is no data". It used to: a bounded
+      `docker info` that missed its deadline returned $false here, which is permission to
+      generate fresh database credentials against whatever volumes are actually there. The
+      question was never answered, so the only safe answer is to stop.
+    #>
+    It 'refuses to continue when Docker itself is unavailable' {
+        Remove-Item -LiteralPath $EnvFile -Force -ErrorAction SilentlyContinue
         Mock -CommandName Test-AfctDockerReady -MockWith { $false }
-        Test-AfctDataWithoutConfig | Should -BeFalse
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 20 }
+        }
+        { Test-AfctDataWithoutConfig } | Should -Throw '*could not verify whether existing data volumes*'
     }
 }
 
