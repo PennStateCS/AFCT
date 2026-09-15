@@ -782,6 +782,17 @@ function Wait-AfctHealth {
 
         foreach ($svc in $state.Services) {
             if ($svc.Status -eq 'missing') { continue }
+            # Announced as what it is. A service whose state could not be read is not a
+            # service that is starting, and saying "starting" would be inventing progress
+            # from a failed check. Said once, then the poll carries on and usually resolves
+            # it on the next pass.
+            if ($svc.Status -eq 'unknown') {
+                if (-not $announced.ContainsKey("$($svc.Name):unknown")) {
+                    $announced["$($svc.Name):unknown"] = $true
+                    Write-AfctInfo "$($svc.Label): could not be checked yet ($($svc.Reason)); still waiting."
+                }
+                continue
+            }
             if ($svc.Ready) {
                 if (-not $announced.ContainsKey("$($svc.Name):ready")) {
                     $announced["$($svc.Name):ready"] = $true

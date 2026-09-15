@@ -1969,3 +1969,21 @@ Describe 'The whole-stack snapshot' {
         $script:order[0] | Should -Be 'http'
     }
 }
+
+Describe 'What the health wait says about a service it could not read' {
+    It 'does not call an unreadable service "starting"' {
+        # Observed on a real run: the snapshot timed out under post-startup load and every
+        # service was announced as "is starting...", which is progress nobody had verified.
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctSuccess -MockWith { }
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Start-Sleep -MockWith { }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $false }
+        Mock -CommandName Get-AfctServiceState -MockWith { 'unknown|none||Docker did not answer within 20s' }
+
+        { Wait-AfctHealth -TimeoutSeconds 1 } | Should -Throw
+        Should -Invoke Write-AfctInfo -ParameterFilter { $Message -match 'could not be checked yet' }
+        Should -Invoke Write-AfctInfo -Times 0 -ParameterFilter { $Message -match 'is starting\.\.\.' }
+    }
+}
