@@ -18,29 +18,31 @@ Last updated: 2026-09-14, run on VM 210 (Win11 Pro 25H2 build 26200, Docker Desk
 Compose v5.3.1) against a bundle built from this branch (deployment tool 2.5.0, release
 v0.9.10). Items not marked were not reached.
 
-Several items are **B**: the install never reports success on a default self-signed
-install, because the health probe cannot pass. Everything gated behind a successful
-install is therefore blocked rather than failing on its own merits.
+First run (bundle 75a4bb03fac8) found that the install could never report success on a
+default self-signed certificate. Re-tested after the fix (bundle c0ffb8bcb3e1) and the
+success path now works. Items still **B** are blocked by this network, not by the code:
+ghcr.io's blob CDN resolves IPv6-only from inside the container here, so a full
+pull-from-cold has not been observed end to end.
 
 ## Basic installation
 
-| #   | Item                                                                           | Status | Notes                                                                  |
-| --- | ------------------------------------------------------------------------------ | ------ | ---------------------------------------------------------------------- |
-| 1   | Windows 11                                                                     | T      | Win11 Pro 25H2 build 26200                                             |
-| 2   | Windows 10 (if available)                                                      | NT     |                                                                        |
-| 3   | Docker Desktop missing (clear install guidance)                                | NT     |                                                                        |
-| 4   | Docker Desktop installed but stopped (clear "start it" message)                | NT     |                                                                        |
-| 5   | Fresh install via `install-windows.ps1`                                        | B      | bootstrap/config/startup all ran; never reports success (health probe) |
-| 6   | Repeated install (idempotent; active release unchanged)                        | T      | same release id, not re-extracted                                      |
-| 7   | Custom prefix (`-Prefix`)                                                      | NT     |                                                                        |
-| 8   | Prefix containing spaces                                                       | NT     |                                                                        |
-| 9   | `https://localhost` access                                                     | T      | HTTPS 200 from the box; browser look is still a manual check           |
-| 10  | LAN IP access from another device (firewall allows 80/443)                     | NT     |                                                                        |
-| 11  | Self-signed certificate warning behaves as documented                          | NT     |                                                                        |
-| 12  | Login with generated administrator credentials                                 | NT     |                                                                        |
-| 13  | Non-interactive install (`-NonInteractive` + env vars/password file)           | T      | ADMIN_PASSWORD_FILE + APP_URL/ADMIN_EMAIL                              |
-| 14  | `Set-ExecutionPolicy`-restricted machine: `-ExecutionPolicy Bypass` path works | NT     |                                                                        |
-| 15  | WSL 2 unavailable: Docker Desktop guidance is clear                            | NT     |                                                                        |
+| #   | Item                                                                           | Status | Notes                                                                                                  |
+| --- | ------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------ |
+| 1   | Windows 11                                                                     | T      | Win11 Pro 25H2 build 26200                                                                             |
+| 2   | Windows 10 (if available)                                                      | NT     |                                                                                                        |
+| 3   | Docker Desktop missing (clear install guidance)                                | NT     |                                                                                                        |
+| 4   | Docker Desktop installed but stopped (clear "start it" message)                | NT     |                                                                                                        |
+| 5   | Fresh install via `install-windows.ps1`                                        | B      | bootstrap, config, startup and the success report all verified; a cold pull is blocked by this network |
+| 6   | Repeated install (idempotent; active release unchanged)                        | T      | same release id, not re-extracted                                                                      |
+| 7   | Custom prefix (`-Prefix`)                                                      | NT     |                                                                                                        |
+| 8   | Prefix containing spaces                                                       | NT     |                                                                                                        |
+| 9   | `https://localhost` access                                                     | T      | HTTPS 200 from the box; browser look is still a manual check                                           |
+| 10  | LAN IP access from another device (firewall allows 80/443)                     | NT     |                                                                                                        |
+| 11  | Self-signed certificate warning behaves as documented                          | NT     |                                                                                                        |
+| 12  | Login with generated administrator credentials                                 | NT     |                                                                                                        |
+| 13  | Non-interactive install (`-NonInteractive` + env vars/password file)           | T      | ADMIN_PASSWORD_FILE + APP_URL/ADMIN_EMAIL                                                              |
+| 14  | `Set-ExecutionPolicy`-restricted machine: `-ExecutionPolicy Bypass` path works | NT     |                                                                                                        |
+| 15  | WSL 2 unavailable: Docker Desktop guidance is clear                            | NT     |                                                                                                        |
 
 ## Command availability
 
@@ -53,31 +55,31 @@ install is therefore blocked rather than failing on its own merits.
 
 ## Startup behaviour
 
-| #   | Item                                                                | Status | Notes                                                                                           |
-| --- | ------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------- |
-| 1   | Install prints a stage line per service, not one silent line        | NT     | PostgreSQL, app, worker, nginx                                                                  |
-| 2   | A long stage prints a status heartbeat about every 30s              | T      | download and container-start heartbeats both fire; download label repeats/rounds wrong          |
-| 3   | Install finishes; `docker ps` shows all five containers             | B      | all five containers reach healthy, but the install never reports success                        |
-| 4   | Rerunning the installer on a healthy stack skips the startup        | B      | reached the check; it said "web service did not answer" and restarted a healthy stack           |
-| 5   | Rerunning it preserves the database (sign in with the same account) | NT     |                                                                                                 |
-| 6   | Startup failure writes a diagnostics archive and names its path     | T      | archive written and full path printed, on pull and startup failures                             |
-| 7   | `shared\install.log` has a readable trace and no secrets in it      | T      | timestamped trace with exit codes; admin password and every _SECRET_/_KEY_/_TOKEN_ value absent |
+| #   | Item                                                                | Status | Notes                                                                                            |
+| --- | ------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| 1   | Install prints a stage line per service, not one silent line        | NT     | PostgreSQL, app, worker, nginx                                                                   |
+| 2   | A long stage prints a status heartbeat about every 30s              | T      | download and container-start heartbeats both fire; elapsed label fixed since                     |
+| 3   | Install finishes; `docker ps` shows all five containers             | T      | all five containers healthy and the install reports ready (reached via the already-running path) |
+| 4   | Rerunning the installer on a healthy stack skips the startup        | T      | "AFCT is already running and healthy at the expected version"; no restart, no registry call      |
+| 5   | Rerunning it preserves the database (sign in with the same account) | NT     |                                                                                                  |
+| 6   | Startup failure writes a diagnostics archive and names its path     | T      | archive written and full path printed, on pull and startup failures                              |
+| 7   | `shared\install.log` has a readable trace and no secrets in it      | T      | timestamped trace with exit codes; admin password and every _SECRET_/_KEY_/_TOKEN_ value absent  |
 
 ## Operational commands
 
-| #   | Command                                                               | Status | Notes                                       |
-| --- | --------------------------------------------------------------------- | ------ | ------------------------------------------- |
-| 1   | `afctctl status`                                                      | T      | correct table, app state and health         |
-| 2   | `afctctl doctor`                                                      | T      | 13 checks; failures are worded as successes |
-| 3   | `afctctl logs` (Ctrl+C stops following, stack keeps running)          | NT     |                                             |
-| 4   | `afctctl restart`                                                     | NT     |                                             |
-| 5   | `afctctl stop`                                                        | NT     |                                             |
-| 6   | `afctctl update`                                                      | NT     |                                             |
-| 7   | `afctctl update` rolls back on a failed health check                  | NT     | Simulate with a bad tag/image               |
-| 8   | `afctctl self-update` (tooling switches, data untouched)              | NT     |                                             |
-| 9   | `afctctl diagnostics` (archive under shared\, secrets redacted)       | NT     |                                             |
-| 10  | `afctctl recover` restores a backup when `.env.production` is missing | NT     |                                             |
-| 11  | `afctctl reconfigure` preserves infrastructure secrets                | NT     | `afctctl install -Reconfigure`              |
+| #   | Command                                                               | Status | Notes                                                            |
+| --- | --------------------------------------------------------------------- | ------ | ---------------------------------------------------------------- |
+| 1   | `afctctl status`                                                      | T      | correct table, app state and health                              |
+| 2   | `afctctl doctor`                                                      | T      | 13 checks, per-service versions, and failures now say what to do |
+| 3   | `afctctl logs` (Ctrl+C stops following, stack keeps running)          | NT     |                                                                  |
+| 4   | `afctctl restart`                                                     | NT     |                                                                  |
+| 5   | `afctctl stop`                                                        | NT     |                                                                  |
+| 6   | `afctctl update`                                                      | NT     |                                                                  |
+| 7   | `afctctl update` rolls back on a failed health check                  | NT     | Simulate with a bad tag/image                                    |
+| 8   | `afctctl self-update` (tooling switches, data untouched)              | NT     |                                                                  |
+| 9   | `afctctl diagnostics` (archive under shared\, secrets redacted)       | NT     |                                                                  |
+| 10  | `afctctl recover` restores a backup when `.env.production` is missing | NT     |                                                                  |
+| 11  | `afctctl reconfigure` preserves infrastructure secrets                | NT     | `afctctl install -Reconfigure`                                   |
 
 ## Uninstall
 
