@@ -156,13 +156,13 @@ AFCT is a group of containers that work together, so Docker Desktop shows it as 
 
 ### If startup takes too long
 
-The installer stops rather than waiting forever, and collects a diagnostic archive for you when it does. If it is still running and you want to know what it is waiting for, open a second PowerShell window and run:
+The installer stops rather than waiting forever, and collects a diagnostic archive for you when it does. Before it gives up on Docker Desktop it retries a few times and says so, because a busy Docker Desktop can take far longer to answer than a broken one. If it is still running and you want to know what it is waiting for, open a second PowerShell window and run:
 
 ```powershell
 & "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" doctor
 ```
 
-`afctctl doctor` checks each part of AFCT and prints one line per service, so you can see which one has not come up. It only looks; it never changes anything.
+`afctctl doctor` checks each part of AFCT and prints one line per service, so you can see which one has not come up. It only looks; it never changes anything. A line that begins with `WARNING:` describes what is wrong and what to do about it. If a check could not be completed at all, it says so and why, rather than reporting the service as missing: "could not be checked" and "not running" are different answers and AFCT will not give you one in place of the other.
 
 If something is wrong and you want to send the details to someone, create a support archive:
 
@@ -170,7 +170,11 @@ If something is wrong and you want to send the details to someone, create a supp
 & "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" diagnostics
 ```
 
-The archive is written to `%LOCALAPPDATA%\AFCT\shared` and the command prints its full path. Known passwords and keys are removed from it, but it still describes your computer and your AFCT configuration, so look through it before sending it to anyone.
+The archive is written to `%LOCALAPPDATA%\AFCT\shared` and the command prints its full path. Known passwords and keys are removed from it, but it still describes your computer and your AFCT configuration, so look through it before sending it to anyone. If any file in the archive could not have its secrets removed, that file is left out and the command tells you which one, so the archive is never quietly shipped with a password still in it.
+
+### If the images cannot be downloaded
+
+If AFCT cannot reach the image registry but every image it needs is already on the computer, the installation continues with those and says so, naming each one it used. This is what lets a machine that has run AFCT before be reinstalled without a working internet connection. It also means a newer build published under the same version name has not been downloaded: run `afctctl update` once the connection is working. If any required image is genuinely absent, the installer stops instead, because the stack could not start.
 
 ## Step 6: Run `afctctl`
 
