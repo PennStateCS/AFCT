@@ -14,64 +14,70 @@ applicable. Do not mark an item Tested unless it was actually run.
 Windows is a testing/evaluation/development/demonstration target. Linux remains the
 recommended production platform.
 
-Last updated: 2026-07-27. Everything below is **NT** until run on real hardware.
+Last updated: 2026-09-14, run on VM 210 (Win11 Pro 25H2 build 26200, Docker Desktop 29.6.2,
+Compose v5.3.1) against a bundle built from this branch (deployment tool 2.5.0, release
+v0.9.10). Items not marked were not reached.
+
+Several items are **B**: the install never reports success on a default self-signed
+install, because the health probe cannot pass. Everything gated behind a successful
+install is therefore blocked rather than failing on its own merits.
 
 ## Basic installation
 
-| #   | Item                                                                           | Status | Notes |
-| --- | ------------------------------------------------------------------------------ | ------ | ----- |
-| 1   | Windows 11                                                                     | NT     |       |
-| 2   | Windows 10 (if available)                                                      | NT     |       |
-| 3   | Docker Desktop missing (clear install guidance)                                | NT     |       |
-| 4   | Docker Desktop installed but stopped (clear "start it" message)                | NT     |       |
-| 5   | Fresh install via `install-windows.ps1`                                        | NT     |       |
-| 6   | Repeated install (idempotent; active release unchanged)                        | NT     |       |
-| 7   | Custom prefix (`-Prefix`)                                                      | NT     |       |
-| 8   | Prefix containing spaces                                                       | NT     |       |
-| 9   | `https://localhost` access                                                     | NT     |       |
-| 10  | LAN IP access from another device (firewall allows 80/443)                     | NT     |       |
-| 11  | Self-signed certificate warning behaves as documented                          | NT     |       |
-| 12  | Login with generated administrator credentials                                 | NT     |       |
-| 13  | Non-interactive install (`-NonInteractive` + env vars/password file)           | NT     |       |
-| 14  | `Set-ExecutionPolicy`-restricted machine: `-ExecutionPolicy Bypass` path works | NT     |       |
-| 15  | WSL 2 unavailable: Docker Desktop guidance is clear                            | NT     |       |
+| #   | Item                                                                           | Status | Notes                                                                  |
+| --- | ------------------------------------------------------------------------------ | ------ | ---------------------------------------------------------------------- |
+| 1   | Windows 11                                                                     | T      | Win11 Pro 25H2 build 26200                                             |
+| 2   | Windows 10 (if available)                                                      | NT     |                                                                        |
+| 3   | Docker Desktop missing (clear install guidance)                                | NT     |                                                                        |
+| 4   | Docker Desktop installed but stopped (clear "start it" message)                | NT     |                                                                        |
+| 5   | Fresh install via `install-windows.ps1`                                        | B      | bootstrap/config/startup all ran; never reports success (health probe) |
+| 6   | Repeated install (idempotent; active release unchanged)                        | T      | same release id, not re-extracted                                      |
+| 7   | Custom prefix (`-Prefix`)                                                      | NT     |                                                                        |
+| 8   | Prefix containing spaces                                                       | NT     |                                                                        |
+| 9   | `https://localhost` access                                                     | T      | HTTPS 200 from the box; browser look is still a manual check           |
+| 10  | LAN IP access from another device (firewall allows 80/443)                     | NT     |                                                                        |
+| 11  | Self-signed certificate warning behaves as documented                          | NT     |                                                                        |
+| 12  | Login with generated administrator credentials                                 | NT     |                                                                        |
+| 13  | Non-interactive install (`-NonInteractive` + env vars/password file)           | T      | ADMIN_PASSWORD_FILE + APP_URL/ADMIN_EMAIL                              |
+| 14  | `Set-ExecutionPolicy`-restricted machine: `-ExecutionPolicy Bypass` path works | NT     |                                                                        |
+| 15  | WSL 2 unavailable: Docker Desktop guidance is clear                            | NT     |                                                                        |
 
 ## Command availability
 
-| #   | Item                                                                  | Status | Notes                              |
-| --- | --------------------------------------------------------------------- | ------ | ---------------------------------- |
-| 1   | Full-path launch: `& "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" status` | NT     | On a machine whose execution policy was never changed |
-| 2   | `afctctl status` from `C:\`, not from any AFCT directory              | NT     | Proves it needs no `cd`             |
-| 3   | `afctctl status` after adding bin to PATH                             | NT     |                                    |
-| 4   | Installer did NOT modify PATH automatically                           | NT     | Should be a deliberate manual step |
+| #   | Item                                                                  | Status | Notes                                              |
+| --- | --------------------------------------------------------------------- | ------ | -------------------------------------------------- |
+| 1   | Full-path launch: `& "$env:LOCALAPPDATA\AFCT\bin\afctctl.cmd" status` | T      | ran from the full path, execution policy untouched |
+| 2   | `afctctl status` from `C:\`, not from any AFCT directory              | T      | ran from `C:\`; no `cd` needed                     |
+| 3   | `afctctl status` after adding bin to PATH                             | NT     |                                                    |
+| 4   | Installer did NOT modify PATH automatically                           | NT     | Should be a deliberate manual step                 |
 
 ## Startup behaviour
 
-| #   | Item                                                                  | Status | Notes                          |
-| --- | --------------------------------------------------------------------- | ------ | ------------------------------ |
-| 1   | Install prints a stage line per service, not one silent line          | NT     | PostgreSQL, app, worker, nginx |
-| 2   | A long stage prints a status heartbeat about every 30s                | NT     |                                |
-| 3   | Install finishes; `docker ps` shows all five containers               | NT     | The `--detach` regression      |
-| 4   | Rerunning the installer on a healthy stack skips the startup          | NT     | Should say "already running"   |
-| 5   | Rerunning it preserves the database (sign in with the same account)   | NT     |                                |
-| 6   | Startup failure writes a diagnostics archive and names its path       | NT     | Force by stopping Docker mid-run |
-| 7   | `shared\install.log` has a readable trace and no secrets in it        | NT     | Search it for the admin password |
+| #   | Item                                                                | Status | Notes                                                                                           |
+| --- | ------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------- |
+| 1   | Install prints a stage line per service, not one silent line        | NT     | PostgreSQL, app, worker, nginx                                                                  |
+| 2   | A long stage prints a status heartbeat about every 30s              | T      | download and container-start heartbeats both fire; download label repeats/rounds wrong          |
+| 3   | Install finishes; `docker ps` shows all five containers             | B      | all five containers reach healthy, but the install never reports success                        |
+| 4   | Rerunning the installer on a healthy stack skips the startup        | B      | reached the check; it said "web service did not answer" and restarted a healthy stack           |
+| 5   | Rerunning it preserves the database (sign in with the same account) | NT     |                                                                                                 |
+| 6   | Startup failure writes a diagnostics archive and names its path     | T      | archive written and full path printed, on pull and startup failures                             |
+| 7   | `shared\install.log` has a readable trace and no secrets in it      | T      | timestamped trace with exit codes; admin password and every _SECRET_/_KEY_/_TOKEN_ value absent |
 
 ## Operational commands
 
-| #   | Command                                                               | Status | Notes                          |
-| --- | --------------------------------------------------------------------- | ------ | ------------------------------ |
-| 1   | `afctctl status`                                                      | NT     |                                |
-| 2   | `afctctl doctor`                                                      | NT     |                                |
-| 3   | `afctctl logs` (Ctrl+C stops following, stack keeps running)          | NT     |                                |
-| 4   | `afctctl restart`                                                     | NT     |                                |
-| 5   | `afctctl stop`                                                        | NT     |                                |
-| 6   | `afctctl update`                                                      | NT     |                                |
-| 7   | `afctctl update` rolls back on a failed health check                  | NT     | Simulate with a bad tag/image  |
-| 8   | `afctctl self-update` (tooling switches, data untouched)              | NT     |                                |
-| 9   | `afctctl diagnostics` (archive under shared\, secrets redacted)       | NT     |                                |
-| 10  | `afctctl recover` restores a backup when `.env.production` is missing | NT     |                                |
-| 11  | `afctctl reconfigure` preserves infrastructure secrets                | NT     | `afctctl install -Reconfigure` |
+| #   | Command                                                               | Status | Notes                                       |
+| --- | --------------------------------------------------------------------- | ------ | ------------------------------------------- |
+| 1   | `afctctl status`                                                      | T      | correct table, app state and health         |
+| 2   | `afctctl doctor`                                                      | T      | 13 checks; failures are worded as successes |
+| 3   | `afctctl logs` (Ctrl+C stops following, stack keeps running)          | NT     |                                             |
+| 4   | `afctctl restart`                                                     | NT     |                                             |
+| 5   | `afctctl stop`                                                        | NT     |                                             |
+| 6   | `afctctl update`                                                      | NT     |                                             |
+| 7   | `afctctl update` rolls back on a failed health check                  | NT     | Simulate with a bad tag/image               |
+| 8   | `afctctl self-update` (tooling switches, data untouched)              | NT     |                                             |
+| 9   | `afctctl diagnostics` (archive under shared\, secrets redacted)       | NT     |                                             |
+| 10  | `afctctl recover` restores a backup when `.env.production` is missing | NT     |                                             |
+| 11  | `afctctl reconfigure` preserves infrastructure secrets                | NT     | `afctctl install -Reconfigure`              |
 
 ## Uninstall
 
@@ -84,19 +90,19 @@ Last updated: 2026-07-27. Everything below is **NT** until run on real hardware.
 
 ## Docker Desktop behavior
 
-| #   | Item                                                                               | Status | Notes                                 |
-| --- | ---------------------------------------------------------------------------------- | ------ | ------------------------------------- |
-| 1   | Restart Docker Desktop                                                             | NT     |                                       |
-| 2   | Restart Windows                                                                    | NT     |                                       |
-| 3   | AFCT containers recover after Docker Desktop starts                                | NT     |                                       |
-| 4   | Bind-mount preflight: default prefix mounts cleanly                                | NT     |                                       |
-| 5   | Bind-mount preflight: custom prefix INSIDE an allowed file-sharing path works      | NT     |                                       |
-| 6   | Bind-mount preflight: custom prefix OUTSIDE the allowed path fails, names the path | NT     |                                       |
-| 7   | Bind-mount preflight: network/removable-drive path warns (and fails the mount)     | NT     |                                       |
-| 8   | Image-pull failure is reported as a network problem, NOT file sharing              | NT     | Block the registry; check the message |
-| 9   | Path-sharing failure is reported as file sharing, NOT a download problem           | NT     | Choose a non-shared prefix            |
-| 10  | `AFCT_BIND_CHECK_IMAGE` override uses an already-present image                     | NT     |                                       |
-| 11  | Low disk space: install warns, update refuses before pulling                       | NT     |                                       |
+| #   | Item                                                                               | Status | Notes                                                                                   |
+| --- | ---------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------- |
+| 1   | Restart Docker Desktop                                                             | NT     |                                                                                         |
+| 2   | Restart Windows                                                                    | NT     |                                                                                         |
+| 3   | AFCT containers recover after Docker Desktop starts                                | NT     |                                                                                         |
+| 4   | Bind-mount preflight: default prefix mounts cleanly                                | NT     |                                                                                         |
+| 5   | Bind-mount preflight: custom prefix INSIDE an allowed file-sharing path works      | NT     |                                                                                         |
+| 6   | Bind-mount preflight: custom prefix OUTSIDE the allowed path fails, names the path | NT     |                                                                                         |
+| 7   | Bind-mount preflight: network/removable-drive path warns (and fails the mount)     | NT     |                                                                                         |
+| 8   | Image-pull failure is reported as a network problem, NOT file sharing              | T      | correctly not blamed on file sharing; but recommends `docker login` for a network fault |
+| 9   | Path-sharing failure is reported as file sharing, NOT a download problem           | NT     | Choose a non-shared prefix                                                              |
+| 10  | `AFCT_BIND_CHECK_IMAGE` override uses an already-present image                     | NT     |                                                                                         |
+| 11  | Low disk space: install warns, update refuses before pulling                       | T      | install warned below 15 GB                                                              |
 
 ## Experimental updater
 
