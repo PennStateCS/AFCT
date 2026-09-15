@@ -64,7 +64,7 @@ pull-from-cold has not been observed end to end.
 | 5   | Rerunning it preserves the database (sign in with the same account) | NT     |                                                                                                   |
 | 8   | The health check passes against the default self-signed certificate | T      | verified via `afctctl doctor` before and after the fix; no CI coverage, so re-check every release |
 | 9   | The same install run under `pwsh` 7 rather than Windows PowerShell  | NT     | the certificate bypass takes a different branch there; no `pwsh` on VM 210                        |
-| 6   | Startup failure writes a diagnostics archive and names its path     | T      | archive written and full path printed, on pull and startup failures                               |
+| 6   | Startup failure writes a diagnostics archive and names its path     | T      | archive written and named; recovery after a forced Compose timeout verified both ways             |
 | 7   | `shared\install.log` has a readable trace and no secrets in it      | T      | timestamped trace with exit codes; admin password and every _SECRET_/_KEY_/_TOKEN_ value absent   |
 
 ## Operational commands
