@@ -49,12 +49,25 @@ function Hide-AfctSecretsInTree {
         if ($value -and $value.Length -ge 8) { $secrets += $value }
     }
     if (-not $secrets) { return }
+    # A file that could not be rewritten is a file that still has the secrets in it, inside
+    # an archive the operator is told to send to somebody. Silently skipping it was the one
+    # place in here where saying nothing could actually leak something, so a failure removes
+    # the file from the bundle and says which. Losing a file from a diagnostic archive is a
+    # far smaller problem than shipping an unredacted one.
     foreach ($file in Get-ChildItem -LiteralPath $Root -File -Recurse -ErrorAction SilentlyContinue) {
         try {
             $text = [System.IO.File]::ReadAllText($file.FullName)
             foreach ($secret in $secrets) { $text = $text.Replace($secret, '***REDACTED***') }
             [System.IO.File]::WriteAllText($file.FullName, $text)
-        } catch { }
+        } catch {
+            $name = $file.Name
+            try {
+                Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+                Write-AfctWarn "could not redact $name, so it was left out of the diagnostics archive: $($_.Exception.Message)"
+            } catch {
+                Write-AfctWarn "could not redact or remove $name. Do NOT share this archive: it may still contain passwords or keys."
+            }
+        }
     }
 }
 
