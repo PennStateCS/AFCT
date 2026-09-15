@@ -89,7 +89,37 @@ function Format-AfctElapsed {
     return "${minutes}m${rest}s"
 }
 
+# The image each required service will actually run, read from the resolved Compose
+# configuration so it reflects the pin in force rather than a guess. Returns nothing at all
+# on any incomplete answer: a partial list would understate what has to be present, which is
+# the one way this check could be dangerous.
+function Get-AfctRequiredImages {
+    $required = @(Get-AfctExpectedServices | Where-Object { $_.Required } | ForEach-Object { $_.Name })
+    $r = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerCommandTimeout) config --format json
+    if ($r.TimedOut -or $r.ExitCode -ne 0) { return @() }
+    $json = (@($r.StdOut) -join "`n")
+    if (-not "$json".Trim()) { return @() }
+    try { $cfg = "$json" | ConvertFrom-Json } catch { return @() }
+    if (-not ($cfg.PSObject.Properties.Name -contains 'services')) { return @() }
+    $services = $cfg.services
+    $images = @()
+    foreach ($name in $required) {
+        if (-not ($services.PSObject.Properties.Name -contains $name)) { return @() }
+        $svc = $services.$name
+        if (-not ($svc.PSObject.Properties.Name -contains 'image')) { return @() }
+        $ref = [string]$svc.image
+        if (-not $ref) { return @() }
+        $images += [pscustomobject]@{ Service = $name; Image = $ref }
+    }
+    return $images
+}
+
 function Get-AfctImages {
+    # The fallback below is offered on the install path only. `afctctl update` must never
+    # take it: on a same-tag update it would find the images it is already running, continue,
+    # and report "update completed" having updated nothing.
+    param([switch]$AllowCachedFallback)
+
     Write-AfctInfo 'downloading AFCT container images...'
     $required = @(Get-AfctExpectedServices | Where-Object { $_.Required } | ForEach-Object { $_.Name })
 
@@ -104,11 +134,34 @@ function Get-AfctImages {
     $result = Invoke-AfctComposeBounded -TimeoutSeconds (Get-AfctDockerPullTimeout) `
         -OnHeartbeat $heartbeat -ComposeArgs (@('pull') + $required)
 
-    if ($result.TimedOut) {
-        throw "afct-fatal: the container images were still downloading after $([int]((Get-AfctDockerPullTimeout) / 60)) minutes and the download was stopped. Check the network connection, then run the installer again; anything already downloaded is kept."
-    }
-    if ($result.ExitCode -ne 0) {
-        Show-AfctComposeFailure $result
+    if ($result.TimedOut -or $result.ExitCode -ne 0) {
+        if (-not $result.TimedOut) { Show-AfctComposeFailure $result }
+
+        # An unreachable registry is not the same as a missing image. Every image this
+        # release needs may already be on the machine, in which case AFCT is installable and
+        # refusing to install it helps nobody. Only ever all-or-nothing, and only against the
+        # references Compose itself resolved, so a wrong pin still fails.
+        if ($AllowCachedFallback) {
+            $images = Get-AfctRequiredImages
+            if ($images) {
+                $absent = @($images | Where-Object { -not (Test-AfctDockerImagePresent $_.Image) })
+                if (-not $absent) {
+                    Write-AfctWarn 'the images could not be downloaded, but every image this release needs is already on this machine, so the installation is continuing with those.'
+                    foreach ($i in $images) { Write-AfctWarn "  using the local copy of $($i.Image)" }
+                    # Said plainly, because this is the one thing the check cannot know: a
+                    # tag can be re-pushed, and without the registry there is no way to tell
+                    # a current local image from a stale one carrying the same name.
+                    Write-AfctWarn "if a newer build was published under the same tag, it has NOT been downloaded. Run 'afctctl update' once the connection is working."
+                    Write-AfctTrace 'pull failed; continued with locally present images'
+                    return
+                }
+                Write-AfctTrace "pull failed and $($absent.Count) required image(s) are absent locally: $(($absent | ForEach-Object { $_.Image }) -join ', ')"
+            }
+        }
+
+        if ($result.TimedOut) {
+            throw "afct-fatal: the container images were still downloading after $([int]((Get-AfctDockerPullTimeout) / 60)) minutes and the download was stopped. Check the network connection, then run the installer again; anything already downloaded is kept."
+        }
         # Docker's own message is printed immediately above by Show-AfctComposeFailure, so
         # this points at it rather than asserting a cause. It used to lead with
         # "run docker login", which sent people to fix authentication when what actually
@@ -748,7 +801,7 @@ function Invoke-AfctStartAndWait {
 
 function Invoke-AfctDeployStack {
     Test-AfctComposeConfig
-    Get-AfctImages
+    Get-AfctImages -AllowCachedFallback
     Invoke-AfctStartAndWait
 }
 

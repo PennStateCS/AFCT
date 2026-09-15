@@ -1757,3 +1757,102 @@ Describe 'Unknown is not missing' {
         Get-AfctServiceState -Service 'app' | Should -Match '^missing\|'
     }
 }
+
+<#
+  Continuing when the registry is unreachable but every image is already here.
+
+  A pull failure used to end the install even with all five images on the machine, which is
+  an AFCT that was installable and was not installed. The fallback is all-or-nothing, reads
+  the references Compose itself resolved, and is offered on the install path only.
+#>
+Describe 'A pull failure when the images are already present' {
+    BeforeEach {
+        Mock -CommandName Write-AfctWarn -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Get-AfctRequiredImages -MockWith {
+            @(
+                [pscustomobject]@{ Service = 'app';    Image = 'ghcr.io/x/afct-dashboard:v1' }
+                [pscustomobject]@{ Service = 'nginx';  Image = 'ghcr.io/x/afct-nginx:v1' }
+            )
+        }
+    }
+
+    It 'continues when every required image is on the machine' {
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 1; TimedOut = $false; StdOut = @(); StdErr = @('i/o timeout'); Seconds = 5 }
+        }
+        Mock -CommandName Test-AfctDockerImagePresent -MockWith { $true }
+        { Get-AfctImages -AllowCachedFallback } | Should -Not -Throw
+        # And says which copies it used, and what it cannot know about them.
+        Should -Invoke Write-AfctWarn -ParameterFilter { $Message -match 'already on this machine' }
+        Should -Invoke Write-AfctWarn -ParameterFilter { $Message -match 'has NOT been downloaded' }
+    }
+
+    It 'still fails when any required image is absent' {
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 1; TimedOut = $false; StdOut = @(); StdErr = @('i/o timeout'); Seconds = 5 }
+        }
+        # All-or-nothing: one absent image means the stack cannot start, so the pull failure
+        # is still the real problem.
+        Mock -CommandName Test-AfctDockerImagePresent -MockWith { param($Image) $Image -notmatch 'nginx' }
+        { Get-AfctImages -AllowCachedFallback } | Should -Throw '*could not be downloaded*'
+    }
+
+    It 'does not offer the fallback to the update path' {
+        # afctctl update calls Get-AfctImages without the switch. If it took this branch on a
+        # same-tag update it would find the images it is already running, continue, and
+        # report "update completed" having updated nothing.
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 1; TimedOut = $false; StdOut = @(); StdErr = @('i/o timeout'); Seconds = 5 }
+        }
+        Mock -CommandName Test-AfctDockerImagePresent -MockWith { $true }
+        { Get-AfctImages } | Should -Throw '*could not be downloaded*'
+    }
+
+    It 'refuses the fallback when the image list could not be resolved' {
+        # An incomplete list would understate what has to be present, so no list means no
+        # fallback rather than a guess.
+        Mock -CommandName Invoke-AfctComposeBounded -MockWith {
+            @{ ExitCode = 1; TimedOut = $false; StdOut = @(); StdErr = @('i/o timeout'); Seconds = 5 }
+        }
+        Mock -CommandName Get-AfctRequiredImages -MockWith { @() }
+        Mock -CommandName Test-AfctDockerImagePresent -MockWith { $true }
+        { Get-AfctImages -AllowCachedFallback } | Should -Throw '*could not be downloaded*'
+    }
+}
+
+<#
+  Retrying before declaring Docker Desktop dead.
+
+  `docker info` on a working Docker Desktop was measured between 1.7s and 23s on the same
+  machine within minutes, the slow readings arriving exactly when the installer asks. One
+  bounded attempt turned that into "Docker Desktop did not respond" and ended the install.
+#>
+Describe 'The Docker preflight retry' {
+    It 'succeeds when a later attempt answers' {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        $script:calls = 0
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            $script:calls++
+            # First attempt times out, second answers: slow, not wedged.
+            if ($script:calls -eq 1) { return @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 20 } }
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('ok'); StdErr = @(); Seconds = 1 }
+        }
+        { Assert-AfctDockerReady } | Should -Not -Throw
+        # The wait is announced. A silent retry is just a longer hang from where the operator sits.
+        Should -Invoke Write-AfctInfo -ParameterFilter { $Message -match 'has not answered yet' }
+    }
+
+    It 'gives up after the configured number of attempts and says how many' {
+        Mock -CommandName Write-AfctInfo -MockWith { }
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        $env:AFCT_DOCKER_READY_ATTEMPTS = '2'
+        try {
+            Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+                @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 20 }
+            }
+            { Assert-AfctDockerReady } | Should -Throw '*after 2 attempts*'
+        } finally { Remove-Item Env:\AFCT_DOCKER_READY_ATTEMPTS -ErrorAction SilentlyContinue }
+    }
+}
