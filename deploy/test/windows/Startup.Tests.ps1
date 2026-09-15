@@ -792,6 +792,13 @@ Describe 'The optional updater and the core health budget' {
         Set-Content -LiteralPath $EnvFile -Encoding UTF8 -Value @(
             'AFCT_APP_TAG=v1.2.3', 'AFCT_UPDATER_ENABLED=true')
 
+        # Get-AfctStackState takes a whole-project snapshot before it reads any service, so
+        # without this the snapshot would make real Docker calls and spend the very budget
+        # these tests measure. Empty and cheap: the per-service double below is what drives
+        # the states here.
+        Mock -CommandName Get-AfctStackSnapshot -MockWith {
+            [pscustomobject]@{ Failed = $false; Reason = ''; Services = @{} }
+        }
         # Required services answer at once; the updater's inspection outlasts the budget.
         Mock -CommandName Get-AfctServiceState -MockWith {
             # Thread::Sleep, not Start-Sleep: the loop's own poll sleep is mocked away to

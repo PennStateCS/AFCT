@@ -418,7 +418,16 @@ function Get-AfctCallTimeout {
 # failure mode: did the containers finish starting even though the CLI never returned?
 function Get-AfctStartupRecoveryTimeout {
     $v = [int]([Environment]::GetEnvironmentVariable('AFCT_STARTUP_RECOVERY_TIMEOUT'))
-    if ($v -le 0) { $v = 10 }
+    # Ten seconds could not answer the question it was asked. The check is one HTTP probe
+    # plus a two-call stack reading, and on a machine busy enough to have missed the startup
+    # deadline in the first place, `docker ps` alone can take twenty. Observed: the probe
+    # spent the allowance and every service came back "not checked, the time budget was
+    # already spent", which is honest but useless.
+    #
+    # Still bounded by a fixed three calls, not by the size of the stack. The old
+    # per-service reading was two calls each, so raising it then would have meant ten full
+    # allowances and a second startup timeout; that is no longer what this budget buys.
+    if ($v -le 0) { $v = 45 }
     return $v
 }
 
