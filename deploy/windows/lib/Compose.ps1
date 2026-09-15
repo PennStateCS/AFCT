@@ -249,6 +249,67 @@ function Get-AfctImageTag {
     return $ref.Substring($colon + 1)
 }
 
+# Read every container in this Compose project in two Docker calls.
+#
+# The per-service read costs two calls each, so five services is ten. On a slow machine
+# `docker compose ps -q` alone measured 23 seconds against `docker inspect`'s 2.5, which is
+# why a ten-second recovery budget could never finish, and why the health poll spent much of
+# its 300-second allowance re-reading the same stack every five seconds. The whole project
+# comes back in about 2.3 seconds this way.
+#
+# Deliberately `docker ps` rather than `compose ps`: the compose plugin is the slow part and
+# the project label carries everything needed. `-a` matters, because a container Compose
+# created but never started must still be seen; that is what keeps a real absence
+# distinguishable from an unread state.
+#
+# Returns Failed with a reason rather than throwing. The caller turns that into one
+# 'unknown' per service, so a snapshot that could not be taken is reported as exactly that,
+# never as a stack that is not there.
+function Get-AfctStackSnapshot {
+    param([AllowNull()][Nullable[DateTime]]$Deadline)
+
+    $fail = {
+        param([string]$Why)
+        [pscustomobject]@{ Failed = $true; Reason = $Why; Services = @{} }
+    }
+
+    $project = Get-AfctComposeProject
+    if (-not $project) { return (& $fail 'the Compose project name could not be determined') }
+
+    $bound = Get-AfctCallTimeout $Deadline
+    if ($bound -le 0) { return (& $fail 'not checked, the time budget was already spent') }
+    $ps = Invoke-AfctDockerBounded -TimeoutSeconds $bound ps -a --filter "label=com.docker.compose.project=$project" --format '{{.ID}}'
+    if ($ps.TimedOut)        { return (& $fail "Docker did not answer within ${bound}s while listing this project's containers") }
+    if ($ps.ExitCode -ne 0)  { return (& $fail "Docker could not list this project's containers (exit $($ps.ExitCode))") }
+
+    $ids = @(@($ps.StdOut) | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
+    # The daemon answered and this project has no containers at all. Not a failure: every
+    # service is then genuinely missing, which is a real answer.
+    if (-not $ids) { return [pscustomobject]@{ Failed = $false; Reason = ''; Services = @{} } }
+
+    $bound = Get-AfctCallTimeout $Deadline
+    if ($bound -le 0) { return (& $fail 'not inspected, the time budget ran out after the containers were listed') }
+    # The service name comes from .Config.Labels, which is a map. The same label on
+    # `docker ps` is a flat comma-joined string that cannot be indexed, and a template
+    # carrying double quotes has to go through the bounded wrapper or PowerShell strips them
+    # before docker ever sees it.
+    $tpl = '{{index .Config.Labels "com.docker.compose.service"}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.Config.Image}}'
+    $inspect = Invoke-AfctDockerBounded -TimeoutSeconds $bound -DockerArgs (@('inspect', '--format', $tpl) + $ids)
+    if ($inspect.TimedOut)       { return (& $fail "Docker did not answer within ${bound}s while inspecting this project's containers") }
+    if ($inspect.ExitCode -ne 0) { return (& $fail "Docker could not inspect this project's containers (exit $($inspect.ExitCode))") }
+
+    $map = @{}
+    foreach ($row in @($inspect.StdOut)) {
+        $line = "$row".Trim()
+        if (-not $line) { continue }
+        $f = @($line -split '\|', 4)
+        while ($f.Count -lt 4) { $f += '' }
+        # f = service, status, health, image -> the state string is status|health|image|reason
+        if ($f[0]) { $map[$f[0]] = "$($f[1])|$($f[2])|$($f[3])|" }
+    }
+    return [pscustomobject]@{ Failed = $false; Reason = ''; Services = $map }
+}
+
 # Read one service's container state as "<status>|<health>|<image>|<reason>".
 #
 # Two different answers used to come back as the same string. Every failure here returned
@@ -261,7 +322,16 @@ function Get-AfctImageTag {
 # the reason it is unknown. Both are still not-ready, so nothing downstream becomes more
 # permissive: this changes what is printed, not what is allowed.
 function Get-AfctServiceState {
-    param([string]$Service, [AllowNull()][Nullable[DateTime]]$Deadline)
+    param([string]$Service, [AllowNull()][Nullable[DateTime]]$Deadline, $Snapshot)
+
+    # Answered from a whole-project reading when one was taken. Same answers, same rules,
+    # two Docker calls for the entire stack instead of two per service.
+    if ($null -ne $Snapshot) {
+        if ($Snapshot.Failed) { return "unknown|none||$($Snapshot.Reason)" }
+        if ($Snapshot.Services.ContainsKey($Service)) { return $Snapshot.Services[$Service] }
+        # The project was read and this service had no container in it.
+        return 'missing|none||'
+    }
 
     $bound = Get-AfctCallTimeout $Deadline
     if ($bound -le 0) { return 'unknown|none||not checked, the time budget was already spent' }
@@ -370,12 +440,22 @@ function Get-AfctStackState {
     $expected = @(Get-AfctExpectedServices)
     if ($RequiredOnly) { $expected = @($expected | Where-Object { $_.Required }) }
 
+    # The HTTP probe runs first, not last. It is the strongest single signal that AFCT is
+    # actually working and by far the cheapest (under a second), and running it last meant a
+    # slow inspection could spend the whole budget and leave nothing for the one question
+    # the operator cares about.
+    $httpOk = $false
+    if (-not $SkipHttp) { $httpOk = (Test-AfctHttpHealth -Deadline $Deadline) }
+
+    $snapshot = Get-AfctStackSnapshot -Deadline $Deadline
+    if ($snapshot.Failed) { Write-AfctTrace "stack snapshot unavailable: $($snapshot.Reason)" }
+
     $services = @()
     $allReady = $true
     $allMatch = $true
     $optionalWarnings = @()
     foreach ($svc in $expected) {
-        $state = Get-AfctServiceState -Service $svc.Name -Deadline $Deadline
+        $state = Get-AfctServiceState -Service $svc.Name -Deadline $Deadline -Snapshot $snapshot
         $parsed = ConvertFrom-AfctServiceState $state
         $ready = Test-AfctServiceReady -State $state -RequiresHealth $svc.RequiresHealth
 
@@ -410,8 +490,6 @@ function Get-AfctStackState {
         }
     }
     $app = $services | Where-Object { $_.Name -eq $AppService } | Select-Object -First 1
-    $httpOk = $false
-    if (-not $SkipHttp) { $httpOk = (Test-AfctHttpHealth -Deadline $Deadline) }
 
     return [pscustomobject]@{
         Services         = $services

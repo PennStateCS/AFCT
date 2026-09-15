@@ -679,13 +679,23 @@ Describe 'The optional updater and the recovery grace period' {
             if ($line -match 'up --detach') {
                 return @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 30 }
             }
-            # The updater's own inspection eats the whole grace period; every required
-            # service answers at once.
-            if ($line -match 'updater') { Start-Sleep -Seconds 5 }
             @{ ExitCode = 0; TimedOut = $false; StdOut = @('cid'); StdErr = @(); Seconds = 0 }
         }
+        # The whole project is read in one pair of calls now, so no single service can eat
+        # the grace period on its own. The updater is simply in the reading like anything
+        # else, and a slow read costs everyone equally rather than starving the probe.
         Mock -CommandName Invoke-AfctDockerBounded -MockWith {
-            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1.2.3'); StdErr = @(); Seconds = 0 }
+            param($TimeoutSeconds, $DockerArgs)
+            if (@($DockerArgs) -contains 'ps') {
+                return @{ ExitCode = 0; TimedOut = $false; StdOut = @('id1','id2','id3','id4','id5','id6'); StdErr = @(); Seconds = 0 }
+            }
+            @{ ExitCode = 0; TimedOut = $false; StdErr = @(); Seconds = 0; StdOut = @(
+                'postgres|running|healthy|img:v1.2.3'
+                'app|running|healthy|img:v1.2.3'
+                'worker|running|none|img:v1.2.3'
+                'nginx|running|healthy|img:v1.2.3'
+                'db-backup|running|healthy|img:v1.2.3'
+                'updater|restarting|none|img:v1.2.3') }
         }
         # The web service is answering the whole time, which is the point: the only reason
         # recovery could fail here is that nothing was left to ask it with. The stand-in
@@ -708,13 +718,21 @@ Describe 'The optional updater and the recovery grace period' {
             if ($line -match 'up --detach') {
                 return @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 30 }
             }
-            if ($line -match 'updater') {
-                return @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 0 }
-            }
             @{ ExitCode = 0; TimedOut = $false; StdOut = @('cid'); StdErr = @(); Seconds = 0 }
         }
+        # The updater simply has no container in the project reading, which is a real
+        # 'missing' and must still not fail an installation.
         Mock -CommandName Invoke-AfctDockerBounded -MockWith {
-            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1.2.3'); StdErr = @(); Seconds = 0 }
+            param($TimeoutSeconds, $DockerArgs)
+            if (@($DockerArgs) -contains 'ps') {
+                return @{ ExitCode = 0; TimedOut = $false; StdOut = @('id1','id2','id3','id4','id5'); StdErr = @(); Seconds = 0 }
+            }
+            @{ ExitCode = 0; TimedOut = $false; StdErr = @(); Seconds = 0; StdOut = @(
+                'postgres|running|healthy|img:v1.2.3'
+                'app|running|healthy|img:v1.2.3'
+                'worker|running|none|img:v1.2.3'
+                'nginx|running|healthy|img:v1.2.3'
+                'db-backup|running|healthy|img:v1.2.3') }
         }
         Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
 
@@ -722,20 +740,27 @@ Describe 'The optional updater and the recovery grace period' {
     }
 
     It 'still fails recovery when a required service is not ready' {
-        # The optional path must not become cover for a real failure.
+        # The optional path must not become cover for a real failure. nginx is absent from
+        # the project reading, so this has to fail for that reason and not because the
+        # double happened to be unreadable.
         $env:AFCT_STARTUP_RECOVERY_TIMEOUT = '4'
         Mock -CommandName Invoke-AfctComposeBounded -MockWith {
             $line = (@($ComposeArgs) -join ' ')
             if ($line -match 'up --detach') {
                 return @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 30 }
             }
-            if ($line -match 'nginx') {
-                return @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 0 }
-            }
             @{ ExitCode = 0; TimedOut = $false; StdOut = @('cid'); StdErr = @(); Seconds = 0 }
         }
         Mock -CommandName Invoke-AfctDockerBounded -MockWith {
-            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img:v1.2.3'); StdErr = @(); Seconds = 0 }
+            param($TimeoutSeconds, $DockerArgs)
+            if (@($DockerArgs) -contains 'ps') {
+                return @{ ExitCode = 0; TimedOut = $false; StdOut = @('id1','id2','id3','id4'); StdErr = @(); Seconds = 0 }
+            }
+            @{ ExitCode = 0; TimedOut = $false; StdErr = @(); Seconds = 0; StdOut = @(
+                'postgres|running|healthy|img:v1.2.3'
+                'app|running|healthy|img:v1.2.3'
+                'worker|running|none|img:v1.2.3'
+                'db-backup|running|healthy|img:v1.2.3') }
         }
         Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
 
@@ -1359,16 +1384,25 @@ Describe 'The deadline caps the whole inspection, not each call' {
         Should -Invoke Invoke-AfctDockerBounded -Exactly 0
     }
 
-    It 'hands each successive service less, never the same remainder again' {
+    It 'hands each successive call less, never the same remainder again' {
+        # Aimed at Get-AfctServiceState directly. Get-AfctStackState no longer reads services
+        # one at a time (it takes one whole-project snapshot), but this function is still used
+        # on its own for the updater check and for `afctctl status`, and the shared deadline
+        # has to keep shrinking across its calls.
         $script:granted = New-Object System.Collections.ArrayList
         Mock -CommandName Invoke-AfctComposeBounded -MockWith {
             $null = $script:granted.Add($TimeoutSeconds)
             Start-Sleep -Milliseconds 1100
-            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 1 }
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('cid'); StdErr = @(); Seconds = 1 }
         }
-        Get-AfctStackState -SkipHttp -Deadline ((Get-Date).AddSeconds(4)) | Out-Null
-        # Each service asked the clock for itself, so the allowances shrink rather than
-        # repeating. A single reused remainder would show the same number five times.
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            $null = $script:granted.Add($TimeoutSeconds)
+            Start-Sleep -Milliseconds 1100
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @('running|healthy|img'); StdErr = @(); Seconds = 1 }
+        }
+        $deadline = (Get-Date).AddSeconds(4)
+        Get-AfctServiceState -Service 'app' -Deadline $deadline | Out-Null
+        Get-AfctServiceState -Service 'nginx' -Deadline $deadline | Out-Null
         @($script:granted).Count | Should -BeGreaterThan 1
         @($script:granted)[0] | Should -BeGreaterThan (@($script:granted)[-1])
     }
@@ -1854,5 +1888,84 @@ Describe 'The Docker preflight retry' {
             }
             { Assert-AfctDockerReady } | Should -Throw '*after 2 attempts*'
         } finally { Remove-Item Env:\AFCT_DOCKER_READY_ATTEMPTS -ErrorAction SilentlyContinue }
+    }
+}
+
+<#
+  Reading the whole stack in two Docker calls.
+
+  Two calls per service meant ten for five services, and on a slow machine `compose ps -q`
+  alone took 23 seconds against `docker inspect`'s 2.5. That is why a ten-second recovery
+  budget could never finish whatever the stack was doing, and why the health poll re-spent
+  much of its allowance every five seconds.
+#>
+Describe 'The whole-stack snapshot' {
+    BeforeEach {
+        Mock -CommandName Write-AfctTrace -MockWith { }
+        Mock -CommandName Test-AfctHttpHealth -MockWith { $true }
+        Set-Content -LiteralPath $EnvFile -Value @('AFCT_APP_TAG=v1.2.3') -Encoding UTF8
+        Remove-Item Env:\AFCT_APP_TAG -ErrorAction SilentlyContinue
+    }
+
+    It 'reads every service with two Docker calls, not two per service' {
+        $script:dockerCalls = 0
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            $script:dockerCalls++
+            if ($script:dockerCalls -eq 1) {
+                return @{ ExitCode = 0; TimedOut = $false; StdOut = @('id1', 'id2', 'id3', 'id4', 'id5'); StdErr = @(); Seconds = 1 }
+            }
+            @{ ExitCode = 0; TimedOut = $false; StdErr = @(); Seconds = 1; StdOut = @(
+                'postgres|running|healthy|postgres:15-alpine@sha256:abc'
+                'app|running|healthy|ghcr.io/x/afct-dashboard:v1.2.3'
+                'worker|running|none|ghcr.io/x/afct-dashboard:v1.2.3'
+                'nginx|running|healthy|ghcr.io/x/afct-nginx:v1.2.3'
+                'db-backup|running|healthy|ghcr.io/x/afct-backup:v1.2.3') }
+        }
+        $s = Get-AfctStackState -SkipHttp
+        $s.AllReady | Should -BeTrue
+        # Two calls for five services. The old path made two each, and the compose half of
+        # those was the slow one.
+        $script:dockerCalls | Should -Be 2
+    }
+
+    It 'calls a service missing when the project was read and it was not in it' {
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            param($TimeoutSeconds, $DockerArgs)
+            if (@($DockerArgs) -contains 'ps') {
+                return @{ ExitCode = 0; TimedOut = $false; StdOut = @('id1'); StdErr = @(); Seconds = 1 }
+            }
+            @{ ExitCode = 0; TimedOut = $false; StdErr = @(); Seconds = 1; StdOut = @(
+                'app|running|healthy|ghcr.io/x/afct-dashboard:v1.2.3') }
+        }
+        $s = Get-AfctStackState -SkipHttp
+        ($s.Services | Where-Object { $_.Name -eq 'nginx' }).Status | Should -Be 'missing'
+        $s.AllReady | Should -BeFalse
+    }
+
+    It 'calls every service unknown, with the reason, when the snapshot fails' {
+        # The distinction that matters: a stack nobody could read is not a stack that is gone.
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            @{ ExitCode = $null; TimedOut = $true; StdOut = @(); StdErr = @(); Seconds = 20 }
+        }
+        $s = Get-AfctStackState -SkipHttp
+        $s.AllReady | Should -BeFalse
+        foreach ($svc in $s.Services) {
+            $svc.Status | Should -Be 'unknown'
+            $svc.Reason | Should -Not -BeNullOrEmpty
+        }
+        (Format-AfctStackState $s) | Should -Match 'unknown \('
+    }
+
+    It 'probes HTTP before spending the budget on inspections' {
+        # The probe is the strongest signal and the cheapest. Running it last let a slow
+        # inspection consume the whole budget and leave nothing for the real question.
+        $script:order = New-Object System.Collections.ArrayList
+        Mock -CommandName Test-AfctHttpHealth -MockWith { [void]$script:order.Add('http'); $true }
+        Mock -CommandName Invoke-AfctDockerBounded -MockWith {
+            [void]$script:order.Add('docker')
+            @{ ExitCode = 0; TimedOut = $false; StdOut = @(); StdErr = @(); Seconds = 1 }
+        }
+        Get-AfctStackState | Out-Null
+        $script:order[0] | Should -Be 'http'
     }
 }
